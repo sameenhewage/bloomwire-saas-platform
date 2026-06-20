@@ -83,16 +83,24 @@ conversation engine.
 
 ---
 
-## Phase 2 — Tenant Readiness / Data Consistency 🔄 Current
+## Phase 2 — Tenant Readiness / Data Consistency ✅ Done
 
 ### Goal
 
 Make tenant metadata consistent so every Chatwoot account can be represented as a
 Bloomwire business without missing rows or duplicates.
 
-### Current next coding slice
+### Delivered slice
 
 `feature/bloomwire-business-profile-backfill`
+
+- Idempotent `Bloomwire::BusinessProfileBackfill` service + `bloomwire:business_profiles:backfill`
+  rake task.
+- Creates exactly one `BloomwireBusinessProfile` per account missing one, with defaults
+  `status = setup_pending` and `onboarding_status = not_started`.
+- Verified: acceptance RED, edge/security RED, GREEN (29 examples, 0 failures), DB proof
+  (missing profiles -> 0, no duplicates), and MCP/browser proof (Super Admin Businesses lists
+  all tenants). Chatwoot conversation/message/contact counts unchanged.
 
 ### Acceptance truth
 
@@ -142,11 +150,15 @@ Required RED tests before implementation:
 
 ---
 
-## Phase 3 — Business Onboarding / Tenant Setup ⏳ Later
+## Phase 3 — Business Onboarding / Tenant Setup 🔄 Current
 
-Do not implement before Phase 2 is complete.
+Phase 2 is complete. This is now the active phase.
 
-Candidate scope later:
+### Current next coding slice
+
+Business Onboarding / Tenant Setup
+
+Candidate scope:
 
 - tenant setup flow,
 - profile creation/attachment,
@@ -218,8 +230,8 @@ Candidate scope later:
 ## Current checkpoint
 
 ```text
-Current phase: Phase 2 — Tenant Readiness / Data Consistency
-Next coding slice: feature/bloomwire-business-profile-backfill
+Current phase: Phase 3 — Business Onboarding / Tenant Setup
+Next coding slice: Business Onboarding / Tenant Setup
 Required workflow: Independent TDD Workflow
-Do not start yet: onboarding, roles engine, WhatsApp setup, billing, analytics, operational polish
+Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
 ```
