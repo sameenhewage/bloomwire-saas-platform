@@ -1,0 +1,50 @@
+# Bloomwire System Overview
+
+An interactive, self-contained **living document** that explains the whole
+Bloomwire + Chatwoot system end-to-end: what Bloomwire is, what Chatwoot does
+inside it, tenants, accounts, roles, the white console vs the black workspace,
+data ownership, what has been built, and the changelog.
+
+It is **not** a marketing page — it is an architecture/product understanding
+document for the founder/developer team.
+
+## How to open it locally
+
+The document is a single self-contained `index.html` (HTML + CSS + JavaScript,
+**no external/CDN dependencies**), so you can open it directly:
+
+- **Easiest:** double-click `index.html`, or drag it into any browser.
+- **From a file URL:** open
+  `projects/bloomwire-chatwoot-platform/docs/system-overview/index.html`.
+- **Via a local static server (optional):**
+  ```bash
+  # from this folder
+  python3 -m http.server 8000
+  # then visit http://localhost:8000/index.html
+  ```
+
+No build step, no install, no network access is required.
+
+## What's inside
+
+- **Mental model** — `Bloomwire = SaaS layer`, `Chatwoot = conversation engine`,
+  `Chatwoot account = tenant`, `business profile = SaaS metadata`.
+- **Tenants** — Dialog / Mobitel / Hutch isolation example.
+- **Why there are multiple admins** — Super Admin vs Owner/Admin vs Supervisor
+  vs Agent vs Customer.
+- **White Console vs Black Workspace** — `/super_admin/...` vs
+  `/app/accounts/:accountId/...`.
+- **Data ownership** — what Chatwoot owns vs what Bloomwire owns (no data
+  duplication).
+- **Current build state** — Slice 0 / Slice 1 / Slice 2 (expandable).
+- **Permission matrix** — role × capability.
+- **Request flow** — a message's journey from customer to tenant health.
+- **Changelog** — timeline of changes.
+
+## Maintenance rule (important)
+
+This is a **living document**. When the system changes, update this document in
+the **same PR**. No major architecture, role, tenant, permission, or route
+change is allowed without updating this overview — and every change must add a
+**changelog** entry (date, slice name, what changed, files/areas touched, what
+was intentionally not changed).
