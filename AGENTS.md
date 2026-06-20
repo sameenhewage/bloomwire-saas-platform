@@ -219,6 +219,17 @@ clarify -> define scope -> shared context -> PRD (if needed)
 The **WebApp Orchestrator** decides the next step and routes work. No agent
 jumps straight to implementation without scope and context.
 
+For risk-sensitive slices (multi-tenancy, permissions, auth, customer data, API
+DTOs, DB writes, analytics), use the **Independent TDD Workflow**: the test
+agents write failing tests **before** the builder implements, so the builder
+cannot reshape the requirement with convenient tests. See
+`docs/agents/independent-tdd-workflow.md`.
+
+```
+Orchestrator -> Acceptance Test Agent (RED) -> Edge & Security Test Agent (RED)
+             -> Fullstack Builder Agent (GREEN) -> QA Review -> Code Review -> Handoff
+```
+
 ---
 
 ## Agents in this repository
@@ -229,7 +240,9 @@ jumps straight to implementation without scope and context.
 | Product Discovery Agent | Clarifies business/product needs, users, workflows, success criteria. |
 | Solution Architect Agent | Thinks about boundaries, data ownership, auth, tenancy, scalability. |
 | Prototype Agent | Builds disposable prototypes only when requested. |
-| Fullstack Builder Agent | Implements one vertical slice at a time. |
+| Acceptance Test Agent | Writes failing tests for the agreed business/acceptance contract **before** implementation; does not write production code. |
+| Edge & Security Test Agent | Writes failing edge-case, tenancy, permission, and safe-DTO/security tests **before** implementation; red-teams the slice. |
+| Fullstack Builder Agent | Implements one vertical slice at a time; must not delete, weaken, or rewrite independent tests without approval. |
 | QA Review Agent | Reviews changes, outputs PASS / FAIL with reasons. |
 | Code Review Agent | Reviews a PR diff line-by-line (correctness, standards, security, scope) before promotion; outputs APPROVE / REQUEST CHANGES. |
 | Handoff Agent | Summarizes work, files, tests, risks, next steps. |

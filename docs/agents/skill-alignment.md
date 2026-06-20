@@ -12,17 +12,24 @@ live in `.claude/skills/`.
 | Product Discovery Agent | `grill-me`, `grill-with-docs`, `to-prd` |
 | Solution Architect Agent | `improve-codebase-architecture`, `zoom-out`, `grill-with-docs` (for ADRs later) |
 | Prototype Agent | `prototype` |
+| Acceptance Test Agent | `tdd`, `to-issues` |
+| Edge & Security Test Agent | `tdd`, `diagnose`, `review` |
 | Fullstack Builder Agent | `tdd`, `to-issues` |
 | QA Review Agent | `review`, `diagnose` |
+| Code Review Agent | `review` |
 | Handoff Agent | `handoff` |
 
 ## By workflow
 
 | Workflow | Skill sequence |
 | -------- | -------------- |
-| `new-feature-workflow` | `grill-me` -> `to-prd` -> `to-issues` -> `prototype` (if useful) -> `tdd` -> `review` -> `handoff` |
-| `bugfix-workflow` | `diagnose` -> `tdd` -> `review` -> `handoff` |
+| `new-feature-workflow` | `grill-me` -> `to-prd` -> `to-issues` -> `prototype` (if useful) -> independent `tdd` tests -> builder implementation -> `review` -> `handoff` |
+| `bugfix-workflow` | `diagnose` -> independent `tdd` regression tests -> builder fix -> `review` -> `handoff` |
+| `independent-tdd-workflow` | Acceptance Test Agent -> Edge & Security Test Agent -> Fullstack Builder Agent -> QA Review Agent -> Code Review Agent -> Handoff Agent |
 | `review-workflow` | `review` |
+
+See `docs/agents/independent-tdd-workflow.md` for the RED/GREEN workflow and
+builder guardrails.
 
 ## Cross-cutting / repo setup
 

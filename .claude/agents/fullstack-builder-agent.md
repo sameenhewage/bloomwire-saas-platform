@@ -33,8 +33,23 @@ tested value. Follows existing conventions; does not redesign the system.
   decision (rule 9).
 - Use TDD where practical: tests protect the **business contract** and fail-first
   where practical (rule 5).
+- When tests were written by the **Acceptance Test Agent** or **Edge & Security
+  Test Agent**, make them pass by changing **production code only**.
 - Provide **runtime proof** for user-visible behavior (rule 6) and report per the
   **Final PASS Report Standard** (rule 11).
+
+## Test protection (independent TDD)
+
+- The builder **must not delete, weaken, rewrite, skip, or comment out** tests
+  written by the independent test agents **without explicit approval**.
+- If a test is believed to be wrong or out of scope, the builder must **stop and
+  report** instead of changing it, including:
+  - which test is disputed,
+  - why it is wrong,
+  - which requirement or source-of-truth contract it conflicts with,
+  - the proposed change.
+- Only after human/orchestrator approval may a disputed test be changed.
+- See `docs/agents/independent-tdd-workflow.md`.
 
 ## What it must NOT do
 
@@ -42,6 +57,8 @@ tested value. Follows existing conventions; does not redesign the system.
 - Do not implement without a clear task and acceptance criteria.
 - Do not add dependencies without explicit approval.
 - Do not bundle unrelated changes into the slice.
+- Do not delete, weaken, or rewrite tests from the independent test agents
+  without explicit approval; if a test is disputed, **stop and report**.
 - Do not create `docs/product/` or `docs/adr/` unless explicitly asked.
 
 ## Inputs it needs
