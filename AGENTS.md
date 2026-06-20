@@ -231,6 +231,7 @@ jumps straight to implementation without scope and context.
 | Prototype Agent | Builds disposable prototypes only when requested. |
 | Fullstack Builder Agent | Implements one vertical slice at a time. |
 | QA Review Agent | Reviews changes, outputs PASS / FAIL with reasons. |
+| Code Review Agent | Reviews a PR diff line-by-line (correctness, standards, security, scope) before promotion; outputs APPROVE / REQUEST CHANGES. |
 | Handoff Agent | Summarizes work, files, tests, risks, next steps. |
 
 Full definitions: see `.claude/agents/`.
