@@ -154,13 +154,44 @@ Required RED tests before implementation:
 
 Phase 2 is complete. This is now the active phase.
 
-### Current next coding slice
+### Current slice — Bloomwire Tenant Setup Foundation
 
-Business Onboarding / Tenant Setup
+`feature/bloomwire-tenant-setup-foundation`
 
-Candidate scope:
+Smallest backend foundation so a platform operator can initialize tenant setup
+for one Chatwoot account that has (or should have) a `BloomwireBusinessProfile`.
+This is **not** the full onboarding wizard.
 
-- tenant setup flow,
+**Acceptance truth**
+
+- User expects operators to start preparing a business tenant for onboarding
+  once the business profile exists.
+- Current system has profiles + `onboarding_status` but no safe initializer that
+  moves a tenant from `not_started` to `in_progress`.
+- Done means a platform-safe service initializes setup for one account/profile,
+  ensures the profile exists, moves `onboarding_status` `not_started -> in_progress`,
+  stays idempotent, never downgrades `completed`, and never copies Chatwoot data.
+
+**In scope**
+
+- `Bloomwire::TenantSetupInitializer` service +
+  `bloomwire:tenant_setup:initialize[ACCOUNT_ID]` rake task.
+- Ensure exactly one profile per account (Phase 2 defaults when creating).
+- `not_started -> in_progress`; `in_progress` and `completed` left unchanged.
+- Returns a safe summary result only.
+
+**Out of scope**
+
+- Full onboarding wizard, WhatsApp/channel setup, billing, roles/permissions
+  engine, AI/human workflow, profile edit UI, staff invite flow, industry preset
+  engine, Chatwoot conversation/message/contact duplication.
+
+**Status:** delivered on `feature/bloomwire-tenant-setup-foundation` and verified
+(acceptance RED, edge/security RED, GREEN 48 examples, DB + browser proof).
+Awaiting review/integration into `version_1`.
+
+### Later Phase 3 slices
+
 - profile creation/attachment,
 - onboarding step tracking,
 - staff invite preparation,
@@ -231,7 +262,7 @@ Candidate scope later:
 
 ```text
 Current phase: Phase 3 — Business Onboarding / Tenant Setup
-Next coding slice: Business Onboarding / Tenant Setup
+Current slice: Bloomwire Tenant Setup Foundation (delivered on branch, in review)
 Required workflow: Independent TDD Workflow
 Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
 ```
