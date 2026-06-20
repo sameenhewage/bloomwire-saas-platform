@@ -219,3 +219,54 @@ Chatwoot inbox/conversations UI is unchanged; this only **adds** a page.
   `contacts`, account) all **HTTP 200**. **Open Inbox** navigates to
   `/app/accounts/1/dashboard`; the existing conversations page still works.
 - `pnpm eslint` on all touched files: **clean**.
+
+---
+
+## Slice: Bloomwire Business Profiles + Super Admin Businesses List
+
+First Bloomwire SaaS **tenant metadata** layer. One Chatwoot `account` = one
+Bloomwire business tenant. We add metadata **around** accounts — we do not
+duplicate Chatwoot conversation/contact/message data. The existing Super Admin
+Console (Accounts, Users, etc.) is unchanged; this only **adds** a page.
+
+- **DB:** `bloomwire_business_profiles` (`account_id` unique FK → `accounts`,
+  `industry`, `plan_name`, `status` default `setup_pending`, `onboarding_status`
+  default `not_started`). Indexes: unique `account_id`, `status`,
+  `onboarding_status`. Migration `20260620150000_create_bloomwire_business_profiles.rb`.
+- **Model:** `BloomwireBusinessProfile` — `belongs_to :account`; validates
+  `account_id` presence + uniqueness, `status` / `onboarding_status` inclusion;
+  scopes `active`, `setup_pending`. `Account has_one :bloomwire_business_profile`.
+- **Super Admin (administrate gem):** route
+  `resources :bloomwire_business_profiles, only: [:index, :show], path: 'bloomwire/businesses'`;
+  controller `super_admin/bloomwire_business_profiles_controller.rb` (list/show
+  only, no create/edit/delete); `bloomwire_business_profile_dashboard.rb`; sidebar
+  item **"Bloomwire Businesses"** in `super_admin/application/_navigation.html.erb`.
+  The `account` column links to the existing Super Admin account page.
+
+### Seed a demo profile (local dev)
+```bash
+bundle exec rails runner '
+  a = Account.find(1)
+  p = BloomwireBusinessProfile.find_or_initialize_by(account_id: a.id)
+  p.update!(industry: "Retail / E-commerce", plan_name: "Pro",
+            status: "active", onboarding_status: "completed")
+'
+```
+
+### Verify
+1. Boot services; sign in to Super Admin at `/super_admin/sign_in`
+   (`john@acme.inc` / `Password1!`).
+2. Visit `/super_admin/bloomwire/businesses`.
+3. Expect: **"Bloomwire Businesses"** sidebar item; table columns Id, Account,
+   Industry, Plan Name, Status, Onboarding Status, Created At; a row for the seed
+   account linking to its Super Admin account page.
+
+### Runtime proof captured
+- `db:migrate` ran clean. Profile created (account "Acme Inc", `active`,
+  `completed`). `/super_admin/bloomwire/businesses` renders (**HTTP 200**) with
+  nav item, 7 columns, and the row; the `account` cell links to
+  `/super_admin/accounts/1`. Show page renders. Existing `/super_admin/accounts`
+  (2 rows) and `/super_admin/users` (3 rows) still work. The only console errors
+  (`mini-profiler` 500, legacy `packs/js/sdk.js` 404) are **pre-existing** on all
+  Super Admin pages, not from this slice.
+- Specs: model + request specs **12 examples, 0 failures**.
