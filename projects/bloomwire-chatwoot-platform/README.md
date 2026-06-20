@@ -29,8 +29,8 @@ business-management layer around it.
 - **Phase:** documentation + architecture foundation only.
 - **No application code** has been written for Bloomwire.
 - **Chatwoot source has not been imported** into this project yet.
-- Chatwoot source integration/import strategy will be decided in a separate
-  baseline PR before any Bloomwire application feature work begins.
+- Chatwoot source integration/import strategy will be decided in the runtime
+  baseline slice before any Bloomwire application feature work begins.
 
 ## How work is organized
 
@@ -59,16 +59,22 @@ feature/*  →  version_1  →  develop  →  main
 - `version_1`, `develop`, and `main` are **protected** (PR + 1 approval).
 - Never push directly to a protected branch.
 
-## First implementation direction
+## Fast demo path
 
-After this documentation foundation is merged, the first real slice is:
+The next work should stay lean and prove the product quickly:
 
-> **Bloomwire Business Profile + Super Admin Business List** — let Bloomwire
-> admins see business tenants enriched with SaaS metadata (business name,
-> industry, plan, status, onboarding status, created date).
+1. **Slice 0 — Chatwoot Runtime Baseline**
+   - prove Chatwoot CE can boot in the chosen repo/environment;
+   - prove login and basic inbox/conversation path;
+   - define the VPS/HTTPS demo path;
+   - no Bloomwire SaaS features yet.
+2. **Slice 1 — Bloomwire Business Profile + Super Admin Business List**
+   - let Bloomwire admins see business tenants enriched with SaaS metadata
+     (business name, industry, plan, status, onboarding status, created date).
 
-Before that slice starts, complete **Slice 0 — Chatwoot Runtime Baseline** if
-Chatwoot source is not already present and running in the repo/environment.
+See:
 
-See `docs/product/04-prd-first-slice.md`. It is documented, **not implemented**,
-in this PR.
+- `docs/product/05-prd-slice-0-chatwoot-runtime-baseline.md`
+- `docs/product/04-prd-first-slice.md`
+
+Both slices are documented only in this PR. Implementation is separate.
