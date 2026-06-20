@@ -1,0 +1,225 @@
+# 05 — Development Phases
+
+This document is the execution source of truth for Bloomwire development phases.
+It is not a marketing roadmap. It defines the current development phase, completed
+work, allowed next slice, and work that must not start yet.
+
+## Mandatory rule
+
+Before any new coding slice starts, this document must show:
+
+- the current phase,
+- the next slice,
+- what is in scope,
+- what is out of scope,
+- the required verification process.
+
+Do not start implementation from chat memory alone.
+
+## Status legend
+
+- ✅ Done — implemented and merged into `version_1`.
+- 🔄 Current — active development phase.
+- ⏳ Later — planned direction, not active yet.
+- ❌ Out of scope — do not implement without explicit approval.
+
+---
+
+## Phase 0 — Platform Foundation ✅ Done
+
+### Goal
+
+Prove Chatwoot CE can run as the embedded conversation engine and document the
+Bloomwire source-of-truth rules before adding SaaS features.
+
+### Completed
+
+- PR #1 — Platform foundation and runtime baseline.
+- Chatwoot CE baseline documented.
+- Project context added.
+- Source-of-truth rules documented.
+
+### Key decisions
+
+- Chatwoot owns conversations, messages, contacts, channels, accounts, users,
+  account membership, inboxes, teams, labels, campaigns, automation rules, and
+  reporting events.
+- Bloomwire owns SaaS control-plane metadata around Chatwoot.
+- No Chatwoot Enterprise code.
+- No duplicated Chatwoot conversation, message, or contact history.
+
+---
+
+## Phase 1 — First Bloomwire SaaS Layer ✅ Done
+
+### Goal
+
+Add the first visible Bloomwire SaaS layer while keeping Chatwoot as the
+conversation engine.
+
+### Completed
+
+- PR #2 — Bloomwire Account Overview page.
+- PR #3 — Bloomwire Business Profiles + Super Admin Businesses List.
+- PR #4 — Interactive Bloomwire System Overview living document.
+- PR #5 — Independent TDD workflow agents.
+
+### What exists now
+
+- `/app/accounts/:accountId/bloomwire/overview`
+- `bloomwire_business_profiles`
+- `/super_admin/bloomwire/businesses`
+- System Overview living document
+- Independent TDD workflow for risky coding slices
+
+### Not included yet
+
+- No business profile create/edit/delete UI.
+- No billing automation.
+- No custom roles/permissions engine.
+- No WhatsApp setup flow.
+- No AI bot builder.
+- No Chatwoot data duplication.
+
+---
+
+## Phase 2 — Tenant Readiness / Data Consistency 🔄 Current
+
+### Goal
+
+Make tenant metadata consistent so every Chatwoot account can be represented as a
+Bloomwire business without missing rows or duplicates.
+
+### Current next coding slice
+
+`feature/bloomwire-business-profile-backfill`
+
+### Acceptance truth
+
+- User expects every Chatwoot business tenant to appear in Bloomwire Super Admin
+  business views with safe default metadata.
+- Current system supports business profiles, but accounts without a
+  `bloomwire_business_profile` can be missing from Bloomwire business views.
+- Done means existing accounts can be backfilled safely, repeat runs do not create
+  duplicates, and default metadata is correct.
+
+### In scope
+
+- Backfill missing `bloomwire_business_profiles` for existing accounts.
+- Ensure one profile per account.
+- Preserve defaults:
+  - `status = setup_pending`
+  - `onboarding_status = not_started`
+- Make the backfill idempotent.
+- Confirm Super Admin Businesses can represent all expected tenants.
+
+### Out of scope
+
+- No onboarding wizard.
+- No profile edit UI.
+- No billing enforcement.
+- No custom roles/permissions engine.
+- No WhatsApp setup.
+- No AI workflow changes.
+- No Chatwoot conversation/message/contact copying.
+
+### Required process
+
+This is a coding slice. Use the independent TDD workflow:
+
+```text
+Acceptance Test Agent -> Edge & Security Test Agent -> Fullstack Builder Agent
+-> QA Review Agent -> Code Review Agent -> Handoff Agent
+```
+
+Required RED tests before implementation:
+
+- missing profile backfill,
+- default values,
+- idempotency,
+- duplicate prevention,
+- no copied Chatwoot conversation/contact/message data.
+
+---
+
+## Phase 3 — Business Onboarding / Tenant Setup ⏳ Later
+
+Do not implement before Phase 2 is complete.
+
+Candidate scope later:
+
+- tenant setup flow,
+- profile creation/attachment,
+- onboarding step tracking,
+- staff invite preparation,
+- industry preset selection.
+
+---
+
+## Phase 4 — Roles & Permissions Engine ⏳ Later
+
+Do not implement yet.
+
+Candidate scope later:
+
+- platform roles,
+- tenant roles,
+- permission matrix,
+- backend-enforced authorization.
+
+Frontend hiding is UX only. Backend enforcement is mandatory.
+
+---
+
+## Phase 5 — Channels / WhatsApp Setup ⏳ Later
+
+Do not implement yet.
+
+Candidate scope later:
+
+- channel setup status,
+- WhatsApp checklist/setup flow,
+- Chatwoot inbox/channel mapping,
+- readiness checks.
+
+One Chatwoot inbox = one connected channel.
+
+---
+
+## Phase 6 — Analytics / Usage / Billing Metadata ⏳ Later
+
+Do not implement yet.
+
+Candidate scope later:
+
+- usage summaries sourced from Chatwoot,
+- plan metadata,
+- subscription status metadata,
+- audit-log preparation.
+
+Summaries are allowed. Raw Chatwoot conversation/message/contact data must not be
+copied into Bloomwire tables.
+
+---
+
+## Phase 7 — Operational Workflow Polish ⏳ Later
+
+Do not implement yet.
+
+Candidate scope later:
+
+- assistant status surfaces,
+- operator controls,
+- escalation monitoring UX,
+- workflow visibility.
+
+---
+
+## Current checkpoint
+
+```text
+Current phase: Phase 2 — Tenant Readiness / Data Consistency
+Next coding slice: feature/bloomwire-business-profile-backfill
+Required workflow: Independent TDD Workflow
+Do not start yet: onboarding, roles engine, WhatsApp setup, billing, analytics, operational polish
+```
