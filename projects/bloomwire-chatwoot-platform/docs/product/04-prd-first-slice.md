@@ -6,6 +6,13 @@
 
 **Bloomwire Business Profile + Super Admin Business List**
 
+## Prerequisite slice
+
+Before implementing this slice, complete **Slice 0 — Chatwoot Runtime Baseline**
+if Chatwoot source is not already present and running in the repo/environment.
+That prerequisite should prove the Chatwoot baseline boots and is ready for
+Bloomwire feature work without adding SaaS features yet.
+
 ## Why this slice first
 
 It is the smallest end-to-end piece that proves the Bloomwire SaaS layer can sit
