@@ -3,8 +3,8 @@
 Proof that a runnable Chatwoot Community Edition baseline exists in this repo and
 boots locally, so Bloomwire can be built on top of it for fast client testing.
 
-> Status: **Backend + frontend boot verified. Login screen verified. Authenticated
-> login pending valid credentials.**
+> Status: **COMPLETE — Backend + frontend boot verified. Authenticated login
+> verified. Dashboard + inbox + conversation screen verified with real data.**
 
 ---
 
@@ -102,10 +102,37 @@ bundle exec sidekiq -C config/sidekiq.yml # worker
 ## Login / basic UI result
 
 - **Login screen: VERIFIED** (renders, no console errors).
-- **Authenticated login: NOT YET VERIFIED** — valid credentials for the 2
-  existing users are not known to the agent. Passwords were **not** guessed and
-  PII was **not** inspected.
-- **Inbox/conversation screen: NOT YET VERIFIED** — gated behind authentication.
+- **Authenticated login: VERIFIED.**
+- **Dashboard: VERIFIED** — redirected to `/app/accounts/1/dashboard` after login.
+- **Inbox + conversation screen: VERIFIED** — inbox "Acme Support" (web widget)
+  and conversation `#1` open with the full message thread rendered.
+
+### Login method used
+
+- A **local-only development admin** was created via Rails console (not a
+  production secret; credentials are local-dev only and are **not** committed).
+  - Email: `dev-admin@bloomwire.local` (a `.local` dev address).
+  - Password: a throwaway local dev value, **not** recorded in this repo.
+  - Linked as `administrator` on account `1` ("Acme Inc"), `confirmed_at` set.
+- The 2 pre-existing users were **not** modified and their PII was **not**
+  inspected (only structural counts were read).
+- No application code was changed to enable login — only a dev user row was added
+  via console, which is local dev data, not a Bloomwire feature or schema change.
+
+### Authenticated runtime proof
+
+- Post-login URL: `http://127.0.0.1:3000/app/accounts/1/dashboard`.
+- Conversation opened: `http://127.0.0.1:3000/app/accounts/1/conversations/1`
+  (contact "jane", web-widget inbox, full message thread visible).
+- **Console: no errors.**
+- **Network: all 25 core API requests returned HTTP 200**, including:
+  - `GET /auth/validate_token` (200)
+  - `GET /api/v1/accounts/1/` (200)
+  - `GET /api/v1/accounts/1/conversations?status=open&assignee_type=me...` (200)
+  - `GET /api/v1/accounts/1/conversations/1` (200)
+  - `GET /api/v1/accounts/1/conversations/1/messages?before=8` (200)
+  - `agents`, `teams`, `labels`, `assignable_agents`, `attachments` (all 200)
+  - `POST /api/v1/accounts/1/conversations/1/update_last_seen` (200)
 
 ## Console / network issues checked
 
@@ -116,7 +143,10 @@ bundle exec sidekiq -C config/sidekiq.yml # worker
 - Docker is not installed on this machine; the baseline was booted **natively**
   (this is fine and maintainable). A Docker path can be added later if needed.
 - Node default on bare PATH is v10; you must `nvm use 24.15.0` before booting.
-- Authenticated/inbox verification is blocked only by missing credentials.
+- Login was verified with a **local dev admin** created via console; production
+  credential provisioning is a separate concern handled later.
+- Only the existing seed dataset (1 account/inbox/conversation under "Acme Inc")
+  was available to verify the inbox screen.
 
 ## What was NOT implemented (per Slice 0 constraints)
 
@@ -129,12 +159,28 @@ bundle exec sidekiq -C config/sidekiq.yml # worker
 
 ## Next recommended action
 
-1. To verify authenticated login + inbox, use a known set of credentials. Fastest
-   maintainable options (developer choice, run from `app/` with Node 24 active):
-   - Reset a password for an existing user via `bin/rails console`, **or**
-   - Create a dev admin via Chatwoot's seed (`bundle exec rails db:seed`) if the
-     environment is intended to be seedable.
-2. Then load `http://127.0.0.1:3000/app/login`, sign in, and confirm the inbox /
-   conversation screen renders (capture a screenshot).
-3. After authenticated proof, this Slice 0 baseline is complete and a PR into
-   `version_1` can be opened.
+- Slice 0 is **complete**: the Chatwoot CE baseline boots and a full authenticated
+  session (dashboard + inbox + conversation) is verified with real data.
+- When the branch owner is ready, open a PR from `feature/platform-foundation`
+  into `version_1` covering the platform-foundation docs **and** this runtime
+  baseline (no PR has been opened yet, per instruction).
+- The next product slice remains **"Bloomwire Business Profile + Super Admin
+  Business List"** (`docs/product/04-prd-first-slice.md`).
+
+## How to reproduce the authenticated session locally
+
+```bash
+# From app/ with Node 24 active (nvm use 24.15.0):
+# create/reset a LOCAL dev admin (choose your own throwaway password):
+bundle exec rails runner '
+  acct = Account.first
+  u = User.find_or_initialize_by(email: "dev-admin@bloomwire.local")
+  u.name ||= "Bloomwire Dev Admin"
+  u.password = ENV.fetch("DEV_PW"); u.password_confirmation = ENV.fetch("DEV_PW")
+  u.confirmed_at ||= Time.current; u.save!
+  AccountUser.find_or_create_by!(account: acct, user: u){ |x| x.role = :administrator }
+'
+# then visit http://127.0.0.1:3000/app/login and sign in.
+```
+
+> Set `DEV_PW` in your shell only; do not commit it.
