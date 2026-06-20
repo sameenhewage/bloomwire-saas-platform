@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bloomwire System Overview — Living Document</title>
+<style>
+  :root {
+    --bg: #070a12;
+    --bg-2: #0b1020;
+    --panel: rgba(255, 255, 255, 0.04);
+    --panel-2: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #e8ecf5;
+    --muted: #97a2bd;
+    --faint: #6b7799;
+    --brand: #7c9cff;
+    --brand-2: #b389ff;
+    --teal: #38e8c8;
+    --amber: #ffce6b;
+    --green: #43e08a;
+    --red: #ff7a8a;
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(1100px 700px at 12% -8%, rgba(124, 156, 255, 0.16), transparent 60%),
+      radial-gradient(900px 600px at 92% 4%, rgba(179, 137, 255, 0.14), transparent 60%),
+      radial-gradient(700px 500px at 80% 100%, rgba(56, 232, 200, 0.08), transparent 60%),
+      var(--bg);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--brand); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  code, .mono {
+    font-family: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    font-size: 0.86em;
+  }
+  .pill-code {
+    background: rgba(124, 156, 255, 0.12);
+    border: 1px solid rgba(124, 156, 255, 0.28);
+    color: #cdd9ff;
+    padding: 1px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---------- Living-doc banner ---------- */
+  .living-banner {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+    background: linear-gradient(90deg, rgba(124, 156, 255, 0.18), rgba(179, 137, 255, 0.18));
+    border-bottom: 1px solid var(--border-strong);
+  }
+  .living-banner .wrap {
+    display: flex; align-items: center; gap: 14px;
+    padding-top: 10px; padding-bottom: 10px;
+  }
+  .living-tag {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-weight: 700; font-size: 13px; letter-spacing: 0.3px;
+    text-transform: uppercase;
+    background: #fff; color: #11142a;
+    padding: 5px 11px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .living-tag .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 0 rgba(67, 224, 138, 0.7);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(67, 224, 138, 0.6); }
+    70% { box-shadow: 0 0 0 9px rgba(67, 224, 138, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(67, 224, 138, 0); }
+  }
+  .living-banner p { margin: 0; font-size: 13.5px; color: #e9ecf8; }
+
+  /* ---------- Hero ---------- */
+  header.hero { padding: 64px 0 26px; }
+  .eyebrow {
+    display: inline-block; font-size: 12.5px; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--brand);
+    border: 1px solid var(--border-strong); border-radius: 999px;
+    padding: 6px 14px; margin-bottom: 20px;
+    background: var(--panel);
+  }
+  .hero h1 {
+    font-size: clamp(32px, 5vw, 54px); line-height: 1.05; margin: 0 0 16px;
+    letter-spacing: -1px;
+    background: linear-gradient(120deg, #fff 20%, var(--brand) 70%, var(--brand-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .lede { font-size: clamp(16px, 2vw, 19px); color: var(--muted); max-width: 720px; }
+
+  .mental-model {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    margin-top: 34px;
+  }
+  .mm-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; position: relative;
+    transition: transform .25s ease, border-color .25s ease, background .25s ease;
+  }
+  .mm-card:hover { transform: translateY(-4px); border-color: var(--border-strong); background: var(--panel-2); }
+  .mm-card .ico { font-size: 26px; }
+  .mm-card h4 { margin: 10px 0 4px; font-size: 15px; }
+  .mm-card p { margin: 0; font-size: 13px; color: var(--muted); }
+  .mm-card .eq {
+    position: absolute; right: -11px; top: 50%; transform: translateY(-50%);
+    font-size: 20px; color: var(--brand); z-index: 2;
+  }
+  .mm-card:last-child .eq { display: none; }
+
+  /* ---------- Sticky tab nav ---------- */
+  nav.tabs {
+    position: sticky; top: 49px; z-index: 40;
+    background: rgba(7, 10, 18, 0.82); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  nav.tabs .wrap { display: flex; gap: 6px; overflow-x: auto; padding-top: 10px; padding-bottom: 10px; }
+  nav.tabs button {
+    flex: 0 0 auto; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
+    color: var(--muted); background: transparent; border: 1px solid transparent;
+    padding: 8px 14px; border-radius: 999px; transition: all .2s ease; white-space: nowrap;
+  }
+  nav.tabs button:hover { color: var(--text); background: var(--panel); }
+  nav.tabs button.active {
+    color: #fff; background: linear-gradient(120deg, rgba(124,156,255,.25), rgba(179,137,255,.25));
+    border-color: var(--border-strong);
+  }
+
+  /* ---------- Panels / sections ---------- */
+  main { padding: 30px 0 80px; }
+  .panel { display: none; animation: fade .4s ease; }
+  .panel.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  section.block { margin: 34px 0; }
+  h2.sec {
+    font-size: 24px; margin: 0 0 6px; letter-spacing: -0.4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2.sec .num {
+    font-size: 13px; color: var(--brand); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 2px 8px; background: var(--panel);
+  }
+  .sec-sub { color: var(--muted); margin: 0 0 20px; max-width: 760px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow);
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* ---------- Tenant diagram ---------- */
+  .tenant-diagram { margin-top: 8px; }
+  .platform-bar {
+    border: 1px dashed var(--border-strong); border-radius: 14px;
+    padding: 14px 18px; text-align: center; background: rgba(179,137,255,.07);
+    margin-bottom: 8px;
+  }
+  .platform-bar strong { color: var(--brand-2); }
+  .flow-down { text-align: center; color: var(--faint); font-size: 22px; line-height: 1; margin: 2px 0 10px;}
+  .tenants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .tenant {
+    border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+    background: var(--panel); transition: transform .25s ease, border-color .25s ease;
+  }
+  .tenant:hover { transform: translateY(-5px); border-color: var(--border-strong); }
+  .tenant .head {
+    padding: 14px 16px; font-weight: 700; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tenant .head .badge {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px;
+  }
+  .tenant .body { padding: 14px 16px; font-size: 13px; color: var(--muted); }
+  .tenant .body .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .tenant.dialog .head { background: rgba(255, 122, 138, 0.10); }
+  .tenant.mobitel .head { background: rgba(56, 232, 200, 0.10); }
+  .tenant.hutch .head { background: rgba(255, 206, 107, 0.10); }
+  .isolation-note {
+    margin-top: 16px; border-left: 3px solid var(--red); background: rgba(255,122,138,.07);
+    padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 13.5px;
+  }
+
+  /* ---------- Role badges ---------- */
+  .role-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; border-radius: 999px;
+    padding: 3px 10px; border: 1px solid var(--border-strong);
+  }
+  .rb-super { background: rgba(179,137,255,.14); color: #d6c2ff; border-color: rgba(179,137,255,.4); }
+  .rb-owner { background: rgba(124,156,255,.14); color: #c5d2ff; border-color: rgba(124,156,255,.4); }
+  .rb-admin { background: rgba(56,232,200,.12); color: #a9f4e6; border-color: rgba(56,232,200,.35); }
+  .rb-super-visor { background: rgba(255,206,107,.12); color: #ffe2a6; border-color: rgba(255,206,107,.35); }
+  .rb-agent { background: rgba(67,224,138,.12); color: #b5f3cf; border-color: rgba(67,224,138,.35); }
+  .rb-customer { background: rgba(151,162,189,.12); color: #cdd4e6; border-color: var(--border-strong); }
+
+  .admin-card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .admin-card .ahead {
+    display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+  }
+  .admin-card .abody { padding: 14px 18px; }
+  .admin-card ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+  .admin-card ul li { margin: 5px 0; }
+
+  /* ---------- White vs Black ---------- */
+  .uimap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ui-white, .ui-black {
+    border-radius: 14px; padding: 20px; border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+  .ui-white { background: linear-gradient(180deg, #f4f6fc, #dfe4f2); color: #11142a; }
+  .ui-white .muted2 { color: #4a5170; }
+  .ui-black { background: linear-gradient(180deg, #11152400, #0a0d18); color: var(--text); border-color: var(--border-strong); }
+  .ui-white h4, .ui-black h4 { margin: 0 0 4px; font-size: 17px; }
+  .url-chip {
+    display: inline-block; font-family: monospace; font-size: 12.5px;
+    padding: 5px 10px; border-radius: 8px; margin: 8px 0 12px;
+  }
+  .ui-white .url-chip { background: #11142a; color: #cdd9ff; }
+  .ui-black .url-chip { background: rgba(124,156,255,.14); color: #cdd9ff; border: 1px solid rgba(124,156,255,.3); }
+  .ui-white ul, .ui-black ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+
+  /* ---------- Data ownership ---------- */
+  .own-col h4 { display: flex; align-items: center; gap: 8px; }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    font-size: 12.5px; font-family: monospace; padding: 5px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+  }
+  .chip.cw { border-color: rgba(124,156,255,.32); }
+  .chip.bw { border-color: rgba(56,232,200,.32); }
+  .chip.later { opacity: .65; border-style: dashed; }
+  .rule-box {
+    margin-top: 18px; border: 1px solid rgba(255,122,138,.4); background: rgba(255,122,138,.08);
+    border-radius: 12px; padding: 14px 18px; font-size: 14px;
+  }
+
+  /* ---------- Expandable build slices ---------- */
+  .accordion { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 12px; background: var(--panel); }
+  .accordion .acc-head {
+    display: flex; align-items: center; gap: 12px; padding: 15px 18px; cursor: pointer;
+    user-select: none; transition: background .2s ease;
+  }
+  .accordion .acc-head:hover { background: var(--panel-2); }
+  .accordion .acc-head .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+  .accordion .acc-head .title { font-weight: 700; }
+  .accordion .acc-head .tag {
+    margin-left: auto; font-size: 11px; color: var(--green);
+    border: 1px solid rgba(67,224,138,.4); border-radius: 999px; padding: 2px 9px;
+    background: rgba(67,224,138,.08);
+  }
+  .accordion .acc-head .chev { color: var(--faint); transition: transform .25s ease; }
+  .accordion.open .acc-head .chev { transform: rotate(90deg); }
+  .accordion .acc-body { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+  .accordion .acc-body-inner { padding: 0 18px 18px; color: var(--muted); font-size: 13.5px; }
+  .accordion .acc-body-inner h5 { color: var(--text); margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* ---------- Permission matrix ---------- */
+  .matrix-scroll { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+  table.matrix { border-collapse: collapse; width: 100%; min-width: 880px; font-size: 13px; }
+  table.matrix th, table.matrix td { padding: 11px 12px; text-align: center; border-bottom: 1px solid var(--border); }
+  table.matrix thead th {
+    position: sticky; top: 0; background: #0d1222; color: var(--muted);
+    font-weight: 600; font-size: 12px; z-index: 2;
+  }
+  table.matrix tbody th {
+    text-align: left; position: sticky; left: 0; background: #0d1222;
+    font-weight: 600; white-space: nowrap; z-index: 1;
+  }
+  table.matrix tbody tr:hover td { background: rgba(255,255,255,.03); }
+  .v { font-weight: 700; border-radius: 6px; padding: 3px 8px; font-size: 11.5px; display: inline-block; }
+  .v-yes { background: rgba(67,224,138,.16); color: #8ff0bb; }
+  .v-no { background: rgba(255,122,138,.14); color: #ffb0bb; }
+  .v-own { background: rgba(124,156,255,.16); color: #c5d2ff; }
+  .v-lim { background: rgba(255,206,107,.16); color: #ffe2a6; }
+  .v-later { background: rgba(151,162,189,.14); color: #c4ccdf; border: 1px dashed var(--border-strong); }
+
+  /* ---------- Request flow ---------- */
+  .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; align-items: stretch; margin-top: 8px; }
+  .flow-step {
+    position: relative; border: 1px solid var(--border); border-radius: 14px; padding: 16px 12px;
+    background: var(--panel); text-align: center; opacity: 0; transform: translateY(10px);
+  }
+  .flow-step.in { animation: rise .5s ease forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .flow-step .fico {
+    width: 42px; height: 42px; margin: 0 auto 8px; border-radius: 11px;
+    display: grid; place-items: center; font-size: 20px;
+    background: var(--panel-2); border: 1px solid var(--border);
+  }
+  .flow-step h5 { margin: 0 0 4px; font-size: 13px; }
+  .flow-step p { margin: 0; font-size: 11.5px; color: var(--faint); }
+  .flow-step .arrow {
+    position: absolute; right: -9px; top: 50%; transform: translateY(-50%);
+    color: var(--brand); font-size: 18px; z-index: 2;
+  }
+  .flow-step:last-child .arrow { display: none; }
+  .flow-step.owner-cw { border-color: rgba(124,156,255,.4); }
+  .flow-step.owner-bw { border-color: rgba(56,232,200,.4); }
+  .flow-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 16px; font-size: 12.5px; color: var(--muted); }
+  .flow-legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .lg-dot { width: 11px; height: 11px; border-radius: 3px; }
+
+  /* ---------- Changelog timeline ---------- */
+  .timeline { position: relative; margin-top: 10px; padding-left: 26px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px;
+    background: linear-gradient(180deg, var(--brand), var(--brand-2), transparent);
+  }
+  .tl-item { position: relative; margin-bottom: 18px; }
+  .tl-item::before {
+    content: ""; position: absolute; left: -23px; top: 5px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--bg); border: 2px solid var(--brand);
+  }
+  .tl-item.next::before { border-color: var(--amber); background: var(--bg); }
+  .tl-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--panel); }
+  .tl-card .date { font-family: monospace; font-size: 12px; color: var(--brand); }
+  .tl-card.next .date { color: var(--amber); }
+  .tl-card h4 { margin: 4px 0 8px; font-size: 16px; }
+  .tl-card dl { display: grid; grid-template-columns: 130px 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+  .tl-card dt { color: var(--faint); }
+  .tl-card dd { margin: 0; color: var(--muted); }
+
+  .callout {
+    border: 1px solid var(--border-strong); border-radius: 12px; padding: 14px 18px;
+    background: var(--panel); font-size: 13.5px; color: var(--muted); margin-top: 16px;
+  }
+  .callout strong { color: var(--text); }
+
+  footer.foot { border-top: 1px solid var(--border); padding: 30px 0 60px; color: var(--faint); font-size: 13px; }
+  footer.foot .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  .note-missing { color: var(--amber); font-size: 13px; }
+
+  @media (max-width: 900px) {
+    .mental-model { grid-template-columns: 1fr 1fr; }
+    .mm-card .eq { display: none; }
+    .grid-2, .grid-3, .uimap, .tenants { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr 1fr; }
+    .flow-step .arrow { display: none; }
+    .tl-card dl { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .mental-model { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Living document banner -->
+<div class="living-banner">
+  <div class="wrap">
+    <span class="living-tag"><span class="dot"></span> Living Document</span>
+    <p>When the system changes, this document must be updated in the same PR. No major architecture, role, tenant, permission, or route change is allowed without updating this overview.</p>
+  </div>
+</div>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Bloomwire · System Overview</span>
+    <h1>The whole Bloomwire&nbsp;+&nbsp;Chatwoot story, end&#8209;to&#8209;end.</h1>
+    <p class="lede">A living architecture &amp; product-understanding document for the founder/developer team. It explains what Bloomwire is, what Chatwoot does inside it, how companies become tenants, who can see what, and what has been built so far — in plain language.</p>
+
+    <div class="mental-model">
+      <div class="mm-card">
+        <div class="ico">&#127760;</div>
+        <h4>Bloomwire</h4>
+        <p>The SaaS business layer — the product customers buy.</p>
+        <span class="eq">=</span>
+      </div>
+      <div class="mm-card">
+        <div class="ico">&#128172;</div>
+        <h4>Chatwoot</h4>
+        <p>The conversation engine running inside Bloomwire.</p>
+        <span class="eq">&rarr;</span>
+      </div>
+      <div class="mm-card">
+        <div class="ico">&#127970;</div>
+        <h4>Chatwoot Account</h4>
+        <p>One account = one Bloomwire tenant / company.</p>
+        <span class="eq">+</span>
+      </div>
+      <div class="mm-card">
+        <div class="ico">&#129513;</div>
+        <h4>Business Profile</h4>
+        <p>Bloomwire SaaS metadata describing that company.</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="tabs">
+  <div class="wrap" id="tabBar">
+    <button class="active" data-tab="model">Mental Model</button>
+    <button data-tab="tenants">Tenants</button>
+    <button data-tab="admins">Why Many Admins</button>
+    <button data-tab="uimap">White vs Black</button>
+    <button data-tab="data">Data Ownership</button>
+    <button data-tab="built">Current Build</button>
+    <button data-tab="permissions">Permission Matrix</button>
+    <button data-tab="flow">Request Flow</button>
+    <button data-tab="changelog">Changelog</button>
+  </div>
+</nav>
+
+<main>
+  <div class="wrap">
+
+    <!-- ===== TAB: MENTAL MODEL ===== -->
+    <div class="panel active" id="tab-model">
+      <section class="block">
+        <h2 class="sec"><span class="num">01</span> One-line mental model</h2>
+        <p class="sec-sub">If you remember nothing else, remember these four equivalences. They explain how the two systems relate.</p>
+        <div class="card">
+          <div class="grid-2" style="gap:14px">
+            <div class="card" style="box-shadow:none">
+              <h4 style="margin:0 0 6px">&#127760; Bloomwire = SaaS business layer</h4>
+              <p style="margin:0;color:var(--muted);font-size:14px">Bloomwire is an omnichannel customer-service <strong>SaaS platform</strong>. It adds the business/control surface: tenants, plans, onboarding, analytics, permissions.</p>
+            </div>
+            <div class="card" style="box-shadow:none">
+              <h4 style="margin:0 0 6px">&#128172; Chatwoot = conversation engine inside Bloomwire</h4>
+              <p style="margin:0;color:var(--muted);font-size:14px">Chatwoot Community Edition is the <strong>base engine</strong> for inboxes, conversations, messages, contacts and channels. Bloomwire is built <em>on top of it</em>, not as a fork.</p>
+            </div>
+            <div class="card" style="box-shadow:none">
+              <h4 style="margin:0 0 6px">&#127970; Chatwoot Account = Bloomwire Tenant / Company</h4>
+              <p style="margin:0;color:var(--muted);font-size:14px">Each Chatwoot <span class="pill-code">account</span> represents <strong>one company</strong> (one tenant). Dialog, Mobitel and Hutch are each their own account.</p>
+            </div>
+            <div class="card" style="box-shadow:none">
+              <h4 style="margin:0 0 6px">&#129513; Bloomwire Business Profile = SaaS metadata for that company</h4>
+              <p style="margin:0;color:var(--muted);font-size:14px">A <span class="pill-code">bloomwire_business_profiles</span> row hangs off the account and stores SaaS metadata: industry, plan, status, onboarding. It never replaces the account.</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <strong>Plain-language version:</strong> Bloomwire is the shop. Chatwoot is the engine inside the shop that actually moves the messages. Every company that signs up gets its own private engine (its account), and Bloomwire keeps a little index card (its business profile) describing that company.
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: TENANTS ===== -->
+    <div class="panel" id="tab-tenants">
+      <section class="block">
+        <h2 class="sec"><span class="num">02</span> Tenants — Dialog, Mobitel &amp; Hutch</h2>
+        <p class="sec-sub">A <strong>tenant</strong> is one company living inside Bloomwire. Each tenant is a separate Chatwoot account with its own staff, inboxes and conversations. Tenants are isolated from each other.</p>
+
+        <div class="card tenant-diagram">
+          <div class="platform-bar">
+            &#128081; <strong>Bloomwire Platform / Super Admin</strong> — the only layer that can see across all tenants
+          </div>
+          <div class="flow-down">&#8595;</div>
+          <div class="tenants">
+            <div class="tenant dialog">
+              <div class="head">&#128242; Dialog <span class="badge">account #A</span></div>
+              <div class="body">
+                <div class="row">&#128101; Dialog owner, admins, agents</div>
+                <div class="row">&#128172; Dialog conversations only</div>
+                <div class="row">&#128241; Dialog channels/inboxes</div>
+              </div>
+            </div>
+            <div class="tenant mobitel">
+              <div class="head">&#128242; Mobitel <span class="badge">account #B</span></div>
+              <div class="body">
+                <div class="row">&#128101; Mobitel owner, admins, agents</div>
+                <div class="row">&#128172; Mobitel conversations only</div>
+                <div class="row">&#128241; Mobitel channels/inboxes</div>
+              </div>
+            </div>
+            <div class="tenant hutch">
+              <div class="head">&#128242; Hutch <span class="badge">account #C</span></div>
+              <div class="body">
+                <div class="row">&#128101; Hutch owner, admins, agents</div>
+                <div class="row">&#128172; Hutch conversations only</div>
+                <div class="row">&#128241; Hutch channels/inboxes</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="isolation-note">
+            &#128274; <strong>Tenant isolation rule.</strong> These are three <strong>separate tenants</strong> and must <strong>not</strong> share normal business agents.
+            Dialog agents see only Dialog conversations · Mobitel agents see only Mobitel conversations · Hutch agents see only Hutch conversations.
+            <br/>Only the <strong>Bloomwire Platform Admin / Super Admin</strong> can see across all tenants.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: ADMINS ===== -->
+    <div class="panel" id="tab-admins">
+      <section class="block">
+        <h2 class="sec"><span class="num">03</span> Why there are multiple admins</h2>
+        <p class="sec-sub">"Admin" means different things at different layers. This is the most common source of confusion, so here is each layer, who it belongs to, and where it works.</p>
+
+        <div class="grid-2">
+          <div class="admin-card">
+            <div class="ahead"><span class="role-badge rb-super">&#128081; Bloomwire Platform Admin / Super Admin</span></div>
+            <div class="abody"><ul>
+              <li>Belongs to the <strong>Bloomwire team</strong> (the platform operators).</li>
+              <li>Uses the white <span class="pill-code">/super_admin/...</span> console.</li>
+              <li>Sees <strong>all tenants</strong> and manages all businesses.</li>
+              <li>Manages platform-level settings.</li>
+              <li><strong>Should not</strong> be used by client agents.</li>
+            </ul></div>
+          </div>
+
+          <div class="admin-card">
+            <div class="ahead"><span class="role-badge rb-owner">&#128100; Business Owner / Business Admin</span></div>
+            <div class="abody"><ul>
+              <li>Belongs to <strong>one tenant / company</strong>.</li>
+              <li>Uses the black <span class="pill-code">/app/accounts/:accountId/...</span> workspace.</li>
+              <li>Sees <strong>only their own business</strong>.</li>
+              <li>Manages staff, inbox, channels, reports &amp; business settings — depending on permissions.</li>
+            </ul></div>
+          </div>
+
+          <div class="admin-card">
+            <div class="ahead"><span class="role-badge rb-super-visor">&#128064; Supervisor</span></div>
+            <div class="abody"><ul>
+              <li>Belongs to <strong>one business</strong>.</li>
+              <li>Sees team-level conversations / reports depending on permissions.</li>
+              <li>Does <strong>not</strong> see platform admin pages.</li>
+            </ul></div>
+          </div>
+
+          <div class="admin-card">
+            <div class="ahead"><span class="role-badge rb-agent">&#127911; Agent</span></div>
+            <div class="abody"><ul>
+              <li>Belongs to <strong>one business</strong>.</li>
+              <li>Handles conversations.</li>
+              <li>Sees only assigned / allowed inboxes &amp; conversations.</li>
+              <li>Is <strong>not</strong> a platform admin.</li>
+            </ul></div>
+          </div>
+
+          <div class="admin-card" style="grid-column:1 / -1">
+            <div class="ahead"><span class="role-badge rb-customer">&#129489; Customer</span></div>
+            <div class="abody"><ul>
+              <li>External WhatsApp / Messenger / Instagram / etc. user.</li>
+              <li><strong>Never logs into</strong> the Bloomwire dashboard.</li>
+              <li>Talks to the business through channels only.</li>
+            </ul></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: UI MAP ===== -->
+    <div class="panel" id="tab-uimap">
+      <section class="block">
+        <h2 class="sec"><span class="num">04</span> White Console vs Black Workspace</h2>
+        <p class="sec-sub">There are two completely different UI areas. Knowing which one you are in tells you who it is for and what data it shows.</p>
+        <div class="uimap">
+          <div class="ui-white">
+            <h4>&#9889; White Console</h4>
+            <span class="url-chip">/super_admin/...</span>
+            <p class="muted2" style="margin:0 0 8px">Bloomwire / Chatwoot platform admin area.</p>
+            <ul class="muted2">
+              <li>For <strong>platform operators</strong> (the Bloomwire team).</li>
+              <li>Spans <strong>all businesses</strong> / tenants.</li>
+              <li>Manages accounts, users, platform settings, and Bloomwire Businesses.</li>
+              <li>Built on the administrate gem (the classic light Super Admin UI).</li>
+            </ul>
+          </div>
+          <div class="ui-black">
+            <h4>&#127761; Black Workspace</h4>
+            <span class="url-chip">/app/accounts/:accountId/...</span>
+            <p style="margin:0 0 8px;color:var(--muted)">The business's daily workspace.</p>
+            <ul style="color:var(--muted)">
+              <li>For <strong>owner / admin / supervisor / agent</strong> of one tenant.</li>
+              <li>Scoped to <strong>one account</strong> (one company).</li>
+              <li>Inbox, conversations, contacts, reports, channels.</li>
+              <li>Plus <strong>Bloomwire Overview</strong> at <span class="pill-code">/app/accounts/:accountId/bloomwire/overview</span>.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">
+          <strong>Rule of thumb:</strong> the URL tells you the layer. <span class="pill-code">/super_admin</span> = platform-wide, Bloomwire team only. <span class="pill-code">/app/accounts/:id</span> = one tenant, that company's staff only.
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: DATA OWNERSHIP ===== -->
+    <div class="panel" id="tab-data">
+      <section class="block">
+        <h2 class="sec"><span class="num">05</span> Data ownership</h2>
+        <p class="sec-sub">Chatwoot owns the conversation world. Bloomwire owns only the SaaS metadata around it. This boundary is non-negotiable.</p>
+        <div class="grid-2">
+          <div class="card own-col">
+            <h4>&#128172; <span style="color:var(--brand)">Chatwoot</span> owns (source of truth)</h4>
+            <p style="color:var(--muted);font-size:13.5px;margin:6px 0 0">All messaging, conversation, contact and channel data lives here.</p>
+            <div class="chip-list">
+              <span class="chip cw">accounts</span>
+              <span class="chip cw">users</span>
+              <span class="chip cw">account_users</span>
+              <span class="chip cw">inboxes</span>
+              <span class="chip cw">conversations</span>
+              <span class="chip cw">messages</span>
+              <span class="chip cw">contacts</span>
+              <span class="chip cw">teams</span>
+              <span class="chip cw">labels</span>
+              <span class="chip cw">reports / conversation data</span>
+            </div>
+          </div>
+          <div class="card own-col">
+            <h4>&#129513; <span style="color:var(--teal)">Bloomwire</span> owns (SaaS metadata)</h4>
+            <p style="color:var(--muted);font-size:13.5px;margin:6px 0 0">Control-layer metadata that hangs off the tenant. <span class="note-missing">Dashed = planned, not yet built.</span></p>
+            <div class="chip-list">
+              <span class="chip bw">business profile metadata</span>
+              <span class="chip bw">plan / status</span>
+              <span class="chip bw">onboarding status</span>
+              <span class="chip bw later">tenant health</span>
+              <span class="chip bw later">usage analytics</span>
+              <span class="chip bw later">audit logs</span>
+              <span class="chip bw later">feature flags</span>
+              <span class="chip bw later">SaaS-specific permissions</span>
+            </div>
+          </div>
+        </div>
+        <div class="rule-box">
+          &#9888;&#65039; <strong>Hard rule:</strong> Do <strong>not</strong> duplicate Chatwoot messages, contacts or conversations into Bloomwire tables. Bloomwire references Chatwoot data by its identifiers and reads it live — it never copies it.
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: BUILT ===== -->
+    <div class="panel" id="tab-built">
+      <section class="block">
+        <h2 class="sec"><span class="num">06</span> Current build state</h2>
+        <p class="sec-sub">What actually exists today. Click any slice to expand details. All three slices below are complete and runtime-verified.</p>
+
+        <!-- Slice 0 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 0 — Platform foundation</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Chatwoot CE runtime verified (boots and logs in).</li>
+              <li>Docs / context added (project <span class="pill-code">CONTEXT.md</span>, runtime baseline).</li>
+              <li>Source-of-truth rules defined (Chatwoot owns conversations; Bloomwire owns metadata).</li>
+              <li>No Enterprise code used.</li>
+              <li>No message / contact duplication.</li>
+            </ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 1 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 1 — Bloomwire Account Overview</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Route: <span class="pill-code">/app/accounts/:accountId/bloomwire/overview</span></li>
+              <li>The first visible SaaS UI <strong>inside the business workspace</strong> (black area).</li>
+              <li>Shows account name, channels, open/total conversations and contacts — read live from existing Chatwoot APIs.</li>
+              <li>Existing Chatwoot inbox is unchanged; this only <strong>adds</strong> a page.</li>
+            </ul>
+            <h5>Key file</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">app/javascript/dashboard/routes/dashboard/bloomwire/Overview.vue</span></li></ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 2 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 2 — Bloomwire Business Profiles</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Table: <span class="pill-code">bloomwire_business_profiles</span> (one-to-one with a Chatwoot account).</li>
+              <li>Links to Chatwoot <span class="pill-code">accounts</span> via a unique <span class="pill-code">account_id</span> foreign key.</li>
+              <li>Super Admin route: <span class="pill-code">/super_admin/bloomwire/businesses</span> (white console).</li>
+              <li>Super Admin <strong>list / show only</strong> — no create / edit / delete.</li>
+              <li>Tracks industry, plan, status and onboarding status.</li>
+            </ul>
+            <h5>Key files</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li><span class="pill-code">db/migrate/20260620150000_create_bloomwire_business_profiles.rb</span></li>
+              <li><span class="pill-code">app/models/bloomwire_business_profile.rb</span></li>
+              <li><span class="pill-code">app/controllers/super_admin/bloomwire_business_profiles_controller.rb</span></li>
+              <li><span class="pill-code">app/dashboards/bloomwire_business_profile_dashboard.rb</span></li>
+            </ul>
+          </div></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: PERMISSIONS ===== -->
+    <div class="panel" id="tab-permissions">
+      <section class="block">
+        <h2 class="sec"><span class="num">07</span> Permission matrix</h2>
+        <p class="sec-sub">Who can do what. <strong>Own tenant only</strong> = scoped to their company. <strong>Limited</strong> = depends on granted permissions. <strong>Later</strong> = planned, not yet enforced. Backend enforces all of this — frontend hiding is UX only.</p>
+        <div class="matrix-scroll">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>Role \ Capability</th>
+                <th>View all tenants</th>
+                <th>View own tenant</th>
+                <th>Manage tenant metadata</th>
+                <th>Manage staff</th>
+                <th>Manage channels</th>
+                <th>View conversations</th>
+                <th>Reply to conversations</th>
+                <th>View reports</th>
+                <th>View audit logs</th>
+                <th>Access /super_admin</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th><span class="role-badge rb-super">&#128081; Super Admin</span></th>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-later">Later</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+              </tr>
+              <tr>
+                <th><span class="role-badge rb-owner">&#128100; Business Owner</span></th>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-own">Own only</span></td>
+                <td><span class="v v-later">Later</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-later">Later</span></td>
+                <td><span class="v v-no">No</span></td>
+              </tr>
+              <tr>
+                <th><span class="role-badge rb-admin">&#128736; Business Admin</span></th>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-own">Own only</span></td>
+                <td><span class="v v-later">Later</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-later">Later</span></td>
+                <td><span class="v v-no">No</span></td>
+              </tr>
+              <tr>
+                <th><span class="role-badge rb-super-visor">&#128064; Supervisor</span></th>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-own">Own only</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-lim">Limited</span></td>
+                <td><span class="v v-lim">Limited</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-yes">Yes</span></td>
+                <td><span class="v v-later">Later</span></td>
+                <td><span class="v v-no">No</span></td>
+              </tr>
+              <tr>
+                <th><span class="role-badge rb-agent">&#127911; Agent</span></th>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-own">Own only</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-lim">Limited</span></td>
+                <td><span class="v v-lim">Limited</span></td>
+                <td><span class="v v-lim">Limited</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+              </tr>
+              <tr>
+                <th><span class="role-badge rb-customer">&#129489; Customer</span></th>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+                <td><span class="v v-no">No</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <strong>Note:</strong> the Super Admin operates the platform, not individual customer chats — replying to conversations is a tenant-staff action, so it is marked <span class="v v-no" style="font-size:11px">No</span> for Super Admin by design. Audit logs are a planned Bloomwire capability (<span class="v v-later" style="font-size:11px">Later</span>).
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: FLOW ===== -->
+    <div class="panel" id="tab-flow">
+      <section class="block">
+        <h2 class="sec"><span class="num">08</span> Request flow — a message's journey</h2>
+        <p class="sec-sub">What happens when a customer sends a WhatsApp message. Notice the owner of each step: blue = Chatwoot, teal = Bloomwire.</p>
+        <div class="flow" id="flowStrip">
+          <div class="flow-step owner-cw" data-i="0">
+            <div class="fico">&#128241;</div><h5>Customer sends</h5><p>WhatsApp / Messenger / IG message</p><span class="arrow">&rarr;</span>
+          </div>
+          <div class="flow-step owner-cw" data-i="1">
+            <div class="fico">&#128229;</div><h5>Channel receives</h5><p>Chatwoot channel / inbox</p><span class="arrow">&rarr;</span>
+          </div>
+          <div class="flow-step owner-cw" data-i="2">
+            <div class="fico">&#128190;</div><h5>Stored</h5><p>Chatwoot conversation + message</p><span class="arrow">&rarr;</span>
+          </div>
+          <div class="flow-step owner-cw" data-i="3">
+            <div class="fico">&#127911;</div><h5>Handled</h5><p>Agent / AI inside tenant workspace</p><span class="arrow">&rarr;</span>
+          </div>
+          <div class="flow-step owner-bw" data-i="4">
+            <div class="fico">&#129513;</div><h5>Read as metadata</h5><p>Bloomwire Overview / analytics</p><span class="arrow">&rarr;</span>
+          </div>
+          <div class="flow-step owner-bw" data-i="5">
+            <div class="fico">&#128081;</div><h5>Tenant health</h5><p>Super Admin sees status, not private chats*</p>
+          </div>
+        </div>
+        <div class="flow-legend">
+          <span><span class="lg-dot" style="background:var(--brand)"></span> Chatwoot owns this step</span>
+          <span><span class="lg-dot" style="background:var(--teal)"></span> Bloomwire owns this step</span>
+        </div>
+        <div class="callout">
+          * The Bloomwire Super Admin sees <strong>tenant health / status</strong>, not individual private chats — unless that visibility is explicitly designed and approved later. Bloomwire reads metadata; it does not copy the conversation.
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== TAB: CHANGELOG ===== -->
+    <div class="panel" id="tab-changelog">
+      <section class="block">
+        <h2 class="sec"><span class="num">09</span> Changelog</h2>
+        <p class="sec-sub">Every future system change must update this changelog in the same PR. Each entry records the date, slice, what changed, files/areas touched, and what was intentionally not changed.</p>
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Platform Foundation</h4>
+              <dl>
+                <dt>What changed</dt><dd>Verified Chatwoot CE runtime; added project context &amp; source-of-truth rules.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">projects/bloomwire-chatwoot-platform/CONTEXT.md</span>, runtime baseline docs.</dd>
+                <dt>Not changed</dt><dd>No Enterprise code; no message/contact duplication; no Chatwoot core behavior.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Bloomwire Account Overview</h4>
+              <dl>
+                <dt>What changed</dt><dd>First SaaS UI inside the business workspace at <span class="pill-code">/app/accounts/:accountId/bloomwire/overview</span>; reads account/channels/conversations/contacts live.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">dashboard/routes/dashboard/bloomwire/Overview.vue</span>, dashboard routes &amp; sidebar, i18n.</dd>
+                <dt>Not changed</dt><dd>Existing Chatwoot inbox/conversations UI untouched; no new backend; no data duplicated.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Bloomwire Business Profiles + Super Admin Businesses List</h4>
+              <dl>
+                <dt>What changed</dt><dd>New <span class="pill-code">bloomwire_business_profiles</span> table linked 1:1 to accounts; Super Admin list/show at <span class="pill-code">/super_admin/bloomwire/businesses</span> tracking industry/plan/status/onboarding.</dd>
+                <dt>Files / areas</dt><dd>Migration, model, administrate dashboard, super_admin controller, route, sidebar nav, specs.</dd>
+                <dt>Not changed</dt><dd>List/show only (no create/edit/delete); existing Super Admin pages intact; no sensitive data exposed; no data duplicated.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item next">
+            <div class="tl-card next">
+              <span class="date">Next</span>
+              <h4>Backfill / auto-create business profiles or tenant setup workflow</h4>
+              <dl>
+                <dt>What changes</dt><dd>A safe way to create a Bloomwire business profile per account (backfill task + guarded creation) or a guided tenant setup workflow.</dd>
+                <dt>Files / areas</dt><dd>TBD — likely a backfill rake/runner task and/or guarded <span class="pill-code">Account</span> hook; Super Admin show detail.</dd>
+                <dt>Will not change</dt><dd>No data duplication; no Enterprise code; backend-enforced permissions.</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Bloomwire System Overview · Living Document · self-contained HTML/CSS/JS · no external dependencies.</span>
+    <span>Built on Chatwoot Community Edition. Update this doc in the same PR as any system change.</span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    "use strict";
+
+    // ---- Tabs ----
+    var tabBar = document.getElementById("tabBar");
+    var buttons = Array.prototype.slice.call(tabBar.querySelectorAll("button"));
+    var panels = Array.prototype.slice.call(document.querySelectorAll(".panel"));
+
+    function activate(name) {
+      buttons.forEach(function (b) { b.classList.toggle("active", b.dataset.tab === name); });
+      panels.forEach(function (p) { p.classList.toggle("active", p.id === "tab-" + name); });
+      if (name === "flow") animateFlow();
+      if (history.replaceState) history.replaceState(null, "", "#" + name);
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () { activate(b.dataset.tab); window.scrollTo({ top: tabBarOffset(), behavior: "smooth" }); });
+    });
+
+    function tabBarOffset() {
+      var nav = document.querySelector("nav.tabs");
+      return nav ? nav.offsetTop : 0;
+    }
+
+    // Honor deep link on load
+    var initial = (location.hash || "").replace("#", "");
+    var validTabs = buttons.map(function (b) { return b.dataset.tab; });
+    if (initial && validTabs.indexOf(initial) !== -1) { activate(initial); }
+
+    // ---- Accordions (expandable build slices) ----
+    document.querySelectorAll(".accordion .acc-head").forEach(function (head) {
+      head.addEventListener("click", function () {
+        var acc = head.parentElement;
+        var body = acc.querySelector(".acc-body");
+        var open = acc.classList.toggle("open");
+        body.style.maxHeight = open ? body.scrollHeight + "px" : "0px";
+      });
+    });
+
+    // ---- Request flow animation ----
+    var flowAnimated = false;
+    function animateFlow() {
+      var steps = document.querySelectorAll("#flowStrip .flow-step");
+      steps.forEach(function (s) { s.classList.remove("in"); });
+      // re-trigger
+      void document.getElementById("flowStrip").offsetWidth;
+      steps.forEach(function (s, i) {
+        setTimeout(function () { s.classList.add("in"); }, i * 160);
+      });
+      flowAnimated = true;
+    }
+    // animate flow once if it loads as the active tab
+    if (document.getElementById("tab-flow").classList.contains("active")) animateFlow();
+
+    // ---- Console hygiene ----
+    if (window.console && console.log) {
+      console.log("%cBloomwire System Overview", "color:#7c9cff;font-weight:bold;font-size:13px", "— living document loaded. No external network calls.");
+    }
+  })();
+</script>
+</body>
+</html>
