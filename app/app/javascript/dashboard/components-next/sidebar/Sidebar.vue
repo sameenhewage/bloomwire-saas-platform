@@ -316,6 +316,13 @@ const reportRoutes = computed(() => newReportRoutes());
 const menuItems = computed(() => {
   return [
     {
+      name: 'Bloomwire Overview',
+      label: t('SIDEBAR.BLOOMWIRE_OVERVIEW'),
+      icon: 'i-lucide-layout-dashboard',
+      to: accountScopedRoute('bloomwire_overview'),
+      activeOn: ['bloomwire_overview'],
+    },
+    {
       name: 'Inbox',
       label: t('SIDEBAR.INBOX'),
       icon: 'i-lucide-inbox',

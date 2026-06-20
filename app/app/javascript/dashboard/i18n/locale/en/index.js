@@ -1,4 +1,5 @@
 import advancedFilters from './advancedFilters.json';
+import bloomwire from './bloomwire.json';
 import agentBots from './agentBots.json';
 import agentMgmt from './agentMgmt.json';
 import attributesMgmt from './attributesMgmt.json';
@@ -44,6 +45,7 @@ import sessionLimit from './sessionLimit.json';
 import yearInReview from './yearInReview.json';
 
 export default {
+  ...bloomwire,
   ...advancedFilters,
   ...agentBots,
   ...agentMgmt,
