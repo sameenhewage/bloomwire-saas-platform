@@ -29,8 +29,8 @@ business-management layer around it.
 - **Phase:** documentation + architecture foundation only.
 - **No application code** has been written for Bloomwire.
 - **Chatwoot source has not been imported** into this project yet.
-- The base Chatwoot CE code currently lives under the repo's `app/` directory as
-  a reference; Bloomwire integration is a later, deliberate step.
+- Chatwoot source integration/import strategy will be decided in a separate
+  baseline PR before any Bloomwire application feature work begins.
 
 ## How work is organized
 
@@ -66,6 +66,9 @@ After this documentation foundation is merged, the first real slice is:
 > **Bloomwire Business Profile + Super Admin Business List** — let Bloomwire
 > admins see business tenants enriched with SaaS metadata (business name,
 > industry, plan, status, onboarding status, created date).
+
+Before that slice starts, complete **Slice 0 — Chatwoot Runtime Baseline** if
+Chatwoot source is not already present and running in the repo/environment.
 
 See `docs/product/04-prd-first-slice.md`. It is documented, **not implemented**,
 in this PR.
