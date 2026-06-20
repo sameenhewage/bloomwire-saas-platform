@@ -1,6 +1,9 @@
 # 04 — PRD: First Implementation Slice
 
-> **Status: documented only. Not implemented in this PR.**
+> **Status: implemented and merged into `version_1` via PR #3.**
+>
+> This file is the historical PRD for the first implementation slice. Current
+> phase tracking lives in `05-development-phases.md`.
 
 ## Slice name
 
@@ -24,35 +27,34 @@ Chatwoot conversation data.
 ## Acceptance truth (rule 1)
 
 - **User expects:** Bloomwire admins to see business tenants with SaaS metadata.
-- **Current system does:** only has Chatwoot accounts and **no** Bloomwire SaaS
-  metadata.
-- **Done means:** a Super Admin can view businesses with **business name,
-  industry, plan, status, onboarding status, and created date**.
+- **System needed:** Chatwoot accounts enriched with Bloomwire SaaS metadata.
+- **Done means:** a Super Admin can view businesses with business name, industry,
+  plan, status, onboarding status, and created date.
 
-## Scope of this slice (when implemented later)
+## Implemented scope
 
-- A Bloomwire-owned business profile record (`bloomwire_` prefixed table) linked
-  to a Chatwoot account (the tenant).
-- Fields: business name, industry, plan, status, onboarding status, created
-  date.
-- A Super Admin "Business List" view that lists tenants with those fields.
-- Backend-enforced access: only platform roles (Super Admin / Ops) can view the
-  full list.
+- A Bloomwire-owned business profile record linked to a Chatwoot account.
+- Business metadata fields for industry, plan, status, and onboarding status.
+- A Super Admin Business List / Show view.
+- Backend route under the Super Admin namespace.
 
 ## Explicitly NOT in this slice
 
-- No billing automation, no plan enforcement logic.
-- No editing of Chatwoot conversation/contact data.
-- No duplication of Chatwoot conversation/message/contact history.
+- No billing automation or plan enforcement.
+- No create/edit/delete UI for business profiles.
+- No editing or copying of Chatwoot conversation, contact, or message data.
 - No Chatwoot Enterprise dependency.
 
-## Verification the slice will require (later, rule 6)
+## Verification completed
 
-- Runtime proof the Business List renders real tenant rows with correct
-  metadata.
-- Source-of-truth check: Chatwoot account count maps correctly to listed
-  tenants, or safe exclusions are explained.
-- Safe DTO check: no raw internal IDs, phone numbers, or tokens exposed in the
-  API powering the list.
+- Super Admin Businesses list rendered real tenant rows with business metadata.
+- Existing Super Admin Accounts and Users pages still worked.
+- Model and request specs passed.
+- Source-of-truth rule preserved.
 
-> This document defines the slice. Implementation is a separate, future PR.
+## Next phase
+
+See `05-development-phases.md`.
+
+Current phase after this slice: **Phase 2 — Tenant Readiness / Data Consistency**.
+Next coding slice: `feature/bloomwire-business-profile-backfill`.
