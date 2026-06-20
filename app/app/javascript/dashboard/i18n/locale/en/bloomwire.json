@@ -1,0 +1,29 @@
+{
+  "BLOOMWIRE": {
+    "OVERVIEW": {
+      "SUBTITLE": "Bloomwire business overview",
+      "STATUS_CONNECTED": "Runtime connected",
+      "PLACEHOLDER": "—",
+      "CARDS": {
+        "ACCOUNT_NAME": "Account name",
+        "CHANNELS": "Connected channels",
+        "OPEN_CONVERSATIONS": "Open conversations",
+        "TOTAL_CONVERSATIONS": "Total conversations",
+        "CONTACTS": "Contacts"
+      },
+      "CHANNELS": {
+        "TITLE": "Channels",
+        "EMPTY": "No channels connected yet."
+      },
+      "ABOUT": {
+        "TITLE": "How Bloomwire works",
+        "CHATWOOT": "Chatwoot powers your conversations, inboxes, and contacts — it stays the source of truth for all messaging data.",
+        "BLOOMWIRE": "Bloomwire adds the SaaS layer on top: business dashboards, onboarding, usage analytics, roles, audit, and plans are coming next."
+      },
+      "CTA": {
+        "OPEN_INBOX": "Open Inbox",
+        "HINT": "Jump back into the Chatwoot conversations workspace."
+      }
+    }
+  }
+}

@@ -184,3 +184,38 @@ bundle exec rails runner '
 ```
 
 > Set `DEV_PW` in your shell only; do not commit it.
+
+---
+
+## Slice: Bloomwire Account Overview (first SaaS UI)
+
+First visible Bloomwire SaaS surface inside the Chatwoot account workspace. The
+Chatwoot inbox/conversations UI is unchanged; this only **adds** a page.
+
+- **Route:** `/app/accounts/:accountId/bloomwire/overview` (name
+  `bloomwire_overview`).
+- **Sidebar:** new top item **"Bloomwire Overview"**.
+- **Files:** `dashboard/routes/dashboard/bloomwire/Overview.vue` +
+  `bloomwire.routes.js`; menu item in `components-next/sidebar/Sidebar.vue`;
+  route wired in `dashboard.routes.js`; i18n in `i18n/locale/en/bloomwire.json`
+  (+ `SIDEBAR.BLOOMWIRE_OVERVIEW` in `settings.json`, registered in
+  `i18n/locale/en/index.js`).
+- **Data (read-only, reuses existing Chatwoot APIs, no new backend):** account
+  name from the accounts store; channels from `inboxes/getInboxes`; open & total
+  conversations from `GET conversations/meta?status=...`; contacts from
+  `GET contacts` meta count. No Chatwoot data is duplicated; no raw
+  phone/token/vendor/internal IDs are surfaced.
+
+### Verify
+1. Boot services (see above) and sign in as the local dev admin.
+2. Visit `/app/accounts/1/bloomwire/overview`.
+3. Expect: header + "Runtime connected" badge, 5 summary cards, channel list,
+   "How Bloomwire works" block, and an **Open Inbox** button that returns to the
+   Chatwoot conversations workspace.
+
+### Runtime proof captured
+- Page renders; sidebar item appears; account name + 5 cards + channel list
+  render. **Console: no errors.** Core API calls (`conversations/meta` x4,
+  `contacts`, account) all **HTTP 200**. **Open Inbox** navigates to
+  `/app/accounts/1/dashboard`; the existing conversations page still works.
+- `pnpm eslint` on all touched files: **clean**.
