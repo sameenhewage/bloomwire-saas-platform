@@ -66,4 +66,12 @@ class BloomwireBusinessProfile < ApplicationRecord
     state = summary.all_completed ? 'all done' : "current: #{summary.current_step.to_s.humanize}"
     "#{summary.completed} of #{summary.total} steps completed · #{state}"
   end
+
+  # Safe, read-only label describing whether the tenant's underlying Chatwoot
+  # setup is ready. Reads existing Chatwoot inboxes only; never creates/configures
+  # Chatwoot data. Readiness logic is owned by Bloomwire::ChatwootReadiness; we
+  # pass +self+ so it does not re-query for the (already loaded) profile.
+  def chatwoot_readiness
+    Bloomwire::ChatwootReadiness.new(account, profile: self).status
+  end
 end

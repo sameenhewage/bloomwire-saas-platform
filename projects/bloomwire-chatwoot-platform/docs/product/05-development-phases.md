@@ -225,9 +225,9 @@ onboarding wizard UI.
 **Status:** ✅ merged into `version_1` (PR #9). Verified — acceptance RED,
 edge/security RED, GREEN 70 examples, RuboCop clean, DB + browser proof.
 
-### Current slice — Bloomwire Onboarding Step Status UI
+### Completed slice — Bloomwire Onboarding Step Status UI
 
-`feature/bloomwire-onboarding-step-status-ui` (off `version_1`)
+`feature/bloomwire-onboarding-step-status-ui` (merged into `version_1` via PR #10)
 
 Smallest Super Admin UI surface that makes the existing onboarding step tracking
 visible to platform operators. This is **not** the onboarding wizard.
@@ -256,8 +256,44 @@ visible to platform operators. This is **not** the onboarding wizard.
   roles/permissions, AI/human workflow, staff invite flow, industry preset
   engine, Chatwoot conversation/message/contact copy, dev DB cleanup.
 
-**Status:** delivered on `feature/bloomwire-onboarding-step-status-ui` and verified
-(acceptance RED, edge/security RED, GREEN 83 examples, RuboCop clean, DB + browser
+**Status:** ✅ merged into `version_1` (PR #10). Verified — acceptance RED,
+edge/security RED, GREEN 83 examples, RuboCop clean, DB + browser proof.
+
+### Current slice — Bloomwire Chatwoot Readiness Mapping
+
+`feature/bloomwire-chatwoot-readiness-mapping` (off `version_1`)
+
+Read-only mapping that shows operators whether a tenant's underlying Chatwoot
+setup is ready. Chatwoot still owns accounts/inboxes/channels/conversations/
+contacts/messages — this slice only reads existing state.
+
+**Acceptance truth**
+
+- User expects operators to see, per Bloomwire business, whether the underlying
+  Chatwoot tenant setup is ready.
+- Current system surfaces onboarding progress but nothing about Chatwoot setup
+  readiness.
+- Done means the Bloomwire Businesses index/show pages show a safe readiness
+  label computed read-only from existing Chatwoot data, with no creation/config
+  of inboxes/channels and no exposure of conversation/message/contact data.
+
+**In scope**
+
+- Read-only `Bloomwire::ChatwootReadiness` service returning a safe status label
+  (Ready / Needs inbox/channel / No Chatwoot account / No Bloomwire profile).
+- `BloomwireBusinessProfile#chatwoot_readiness` delegate; `chatwoot_readiness`
+  column on the Administrate index + show pages; controller eager-loads
+  `account: :inboxes` to avoid N+1.
+- Tenant isolation + safe DTO (label only, no ids/records).
+
+**Out of scope**
+
+- WhatsApp/channel/inbox/webhook creation or configuration, billing,
+  roles/permissions, AI/human workflow, staff invite flow, full onboarding
+  wizard, Chatwoot conversation/message/contact copy, dev DB cleanup.
+
+**Status:** delivered on `feature/bloomwire-chatwoot-readiness-mapping` and verified
+(acceptance RED, edge/security RED, GREEN 99 examples, RuboCop clean, DB + browser
 proof). Awaiting review/integration into `version_1`.
 
 ### Later Phase 3 slices
@@ -331,8 +367,8 @@ Candidate scope later:
 
 ```text
 Current phase: Phase 3 — Business Onboarding / Tenant Setup
-Current slice: Bloomwire Onboarding Step Status UI (delivered on branch, in review)
-Last merged: Bloomwire Onboarding Step Tracking (PR #9 -> version_1)
+Current slice: Bloomwire Chatwoot Readiness Mapping (delivered on branch, in review)
+Last merged: Bloomwire Onboarding Step Status UI (PR #10 -> version_1)
 Required workflow: Independent TDD Workflow
 Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
 ```

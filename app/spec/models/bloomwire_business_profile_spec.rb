@@ -114,4 +114,18 @@ RSpec.describe BloomwireBusinessProfile do
       expect(profile.onboarding_progress).to eq('1 of 1 steps completed · all done')
     end
   end
+
+  describe '#chatwoot_readiness' do
+    let(:profile) { create(:bloomwire_business_profile) }
+
+    it 'is "Needs inbox/channel" when the account has no inbox' do
+      expect(profile.chatwoot_readiness).to eq('Needs inbox/channel')
+    end
+
+    it 'is "Ready" when the account has at least one inbox' do
+      create(:inbox, account: profile.account)
+
+      expect(profile.chatwoot_readiness).to eq('Ready')
+    end
+  end
 end

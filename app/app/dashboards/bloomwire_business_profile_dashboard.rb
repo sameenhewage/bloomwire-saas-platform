@@ -11,6 +11,7 @@ class BloomwireBusinessProfileDashboard < Administrate::BaseDashboard
     status: Field::Select.with_options(collection: BloomwireBusinessProfile::STATUSES),
     onboarding_status: Field::Select.with_options(collection: BloomwireBusinessProfile::ONBOARDING_STATUSES),
     onboarding_progress: Field::String.with_options(searchable: false, truncate: 120),
+    chatwoot_readiness: Field::String.with_options(searchable: false),
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -25,6 +26,7 @@ class BloomwireBusinessProfileDashboard < Administrate::BaseDashboard
     status
     onboarding_status
     onboarding_progress
+    chatwoot_readiness
     created_at
   ].freeze
 
@@ -38,6 +40,7 @@ class BloomwireBusinessProfileDashboard < Administrate::BaseDashboard
     status
     onboarding_status
     onboarding_progress
+    chatwoot_readiness
     created_at
     updated_at
   ].freeze
