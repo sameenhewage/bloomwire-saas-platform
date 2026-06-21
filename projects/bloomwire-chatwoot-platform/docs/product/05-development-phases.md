@@ -154,9 +154,9 @@ Required RED tests before implementation:
 
 Phase 2 is complete. This is now the active phase.
 
-### Current slice — Bloomwire Tenant Setup Foundation
+### Completed slice — Bloomwire Tenant Setup Foundation
 
-`feature/bloomwire-tenant-setup-foundation`
+`feature/bloomwire-tenant-setup-foundation` (merged into `version_1` via PR #8)
 
 Smallest backend foundation so a platform operator can initialize tenant setup
 for one Chatwoot account that has (or should have) a `BloomwireBusinessProfile`.
@@ -186,14 +186,49 @@ This is **not** the full onboarding wizard.
   engine, AI/human workflow, profile edit UI, staff invite flow, industry preset
   engine, Chatwoot conversation/message/contact duplication.
 
-**Status:** delivered on `feature/bloomwire-tenant-setup-foundation` and verified
-(acceptance RED, edge/security RED, GREEN 48 examples, DB + browser proof).
-Awaiting review/integration into `version_1`.
+**Status:** ✅ merged into `version_1` (PR #8). Verified — acceptance RED,
+edge/security RED, GREEN, DB + browser proof.
+
+### Current slice — Bloomwire Onboarding Step Tracking
+
+`feature/bloomwire-onboarding-step-tracking` (off `version_1`)
+
+Backend-only tracking of onboarding steps for a `BloomwireBusinessProfile`, so an
+operator can see and advance where a tenant is in setup. This is **not** the
+onboarding wizard UI.
+
+**Acceptance truth**
+
+- User expects each business profile to have a known, ordered set of onboarding
+  steps whose completion can be tracked and advanced safely.
+- Current system tracks only a coarse `onboarding_status`; there is no per-step
+  record of what is done.
+- Done means a backend service seeds the default ordered steps for a profile
+  (idempotently), can advance to the next pending step, is tenant-scoped, and
+  returns a safe summary only.
+
+**In scope**
+
+- `bloomwire_onboarding_steps` table + `BloomwireOnboardingStep` model
+  (`has_many` from `BloomwireBusinessProfile`), with `step_key`, `status`,
+  `position`, unique per profile.
+- `Bloomwire::OnboardingStepTracker` service (ensure default steps, advance,
+  safe summary) + `bloomwire:onboarding:*` rake tasks.
+- Idempotent seeding/advancement; safe failures for missing account/profile.
+
+**Out of scope**
+
+- Onboarding wizard UI, WhatsApp/channel setup, billing, roles/permissions,
+  AI/human workflow, staff invite flow, industry preset engine, and any
+  Chatwoot conversation/message/contact duplication.
+
+**Status:** delivered on `feature/bloomwire-onboarding-step-tracking` and verified
+(acceptance RED, edge/security RED, GREEN 70 examples, RuboCop clean, DB + browser
+proof). Awaiting review/integration into `version_1`.
 
 ### Later Phase 3 slices
 
 - profile creation/attachment,
-- onboarding step tracking,
 - staff invite preparation,
 - industry preset selection.
 
@@ -262,7 +297,8 @@ Candidate scope later:
 
 ```text
 Current phase: Phase 3 — Business Onboarding / Tenant Setup
-Current slice: Bloomwire Tenant Setup Foundation (delivered on branch, in review)
+Current slice: Bloomwire Onboarding Step Tracking (delivered on branch, in review)
+Last merged: Bloomwire Tenant Setup Foundation (PR #8 -> version_1)
 Required workflow: Independent TDD Workflow
 Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
 ```

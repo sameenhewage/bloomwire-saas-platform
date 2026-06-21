@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_20_150000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_21_000000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -272,6 +272,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_20_150000) do
     t.index ["account_id"], name: "index_bloomwire_business_profiles_on_account_id", unique: true
     t.index ["onboarding_status"], name: "index_bloomwire_business_profiles_on_onboarding_status"
     t.index ["status"], name: "index_bloomwire_business_profiles_on_status"
+  end
+
+  create_table "bloomwire_onboarding_steps", force: :cascade do |t|
+    t.bigint "bloomwire_business_profile_id", null: false
+    t.string "step_key", null: false
+    t.string "status", default: "pending", null: false
+    t.integer "position", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["bloomwire_business_profile_id", "step_key"], name: "index_bloomwire_onboarding_steps_on_profile_and_key", unique: true
+    t.index ["bloomwire_business_profile_id"], name: "idx_on_bloomwire_business_profile_id_5927964855"
   end
 
   create_table "calls", force: :cascade do |t|
@@ -1359,6 +1370,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_20_150000) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "bloomwire_business_profiles", "accounts"
+  add_foreign_key "bloomwire_onboarding_steps", "bloomwire_business_profiles"
   add_foreign_key "inboxes", "portals"
   add_foreign_key "user_sessions", "users"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).
