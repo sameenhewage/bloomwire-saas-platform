@@ -108,4 +108,78 @@ RSpec.describe 'Super Admin Bloomwire Businesses', type: :request do
       expect(response.body).to include('Needs inbox/channel')
     end
   end
+
+  describe 'manual tenant activation' do
+    let!(:pending_account) { create(:account, name: 'Pending Co') }
+    let!(:pending_profile) do
+      create(:bloomwire_business_profile, account: pending_account,
+                                          status: 'setup_pending', onboarding_status: 'in_progress')
+    end
+
+    def make_ready(target)
+      create(:inbox, account: target.account)
+      BloomwireOnboardingStep::DEFAULT_STEPS.each_with_index do |key, index|
+        create(:bloomwire_onboarding_step, bloomwire_business_profile: target,
+                                           step_key: key, status: 'completed', position: index)
+      end
+    end
+
+    context 'when it is an unauthenticated user' do
+      it 'does not activate the tenant' do
+        post "/super_admin/bloomwire/businesses/#{pending_profile.id}/activate"
+
+        expect(response).to have_http_status(:redirect)
+        expect(pending_profile.reload.status).to eq('setup_pending')
+      end
+    end
+
+    context 'when it is an authenticated super admin' do
+      before { sign_in(super_admin, scope: :super_admin) }
+
+      it 'shows the activation action on the show page for a pending tenant' do
+        get "/super_admin/bloomwire/businesses/#{pending_profile.id}"
+
+        expect(response).to have_http_status(:success)
+        expect(response.body).to include('Activate tenant')
+      end
+
+      it 'activates a ready tenant and reports success' do
+        make_ready(pending_profile)
+
+        post "/super_admin/bloomwire/businesses/#{pending_profile.id}/activate"
+
+        expect(response).to have_http_status(:redirect)
+        expect(pending_profile.reload.status).to eq('active')
+        expect(pending_profile.onboarding_status).to eq('completed')
+
+        follow_redirect!
+        expect(response.body).to include('Tenant activated')
+      end
+
+      it 'shows a safe failure and does not activate a not-ready tenant' do
+        post "/super_admin/bloomwire/businesses/#{pending_profile.id}/activate"
+
+        expect(response).to have_http_status(:redirect)
+        expect(pending_profile.reload.status).to eq('setup_pending')
+        expect(pending_profile.onboarding_status).to eq('in_progress')
+
+        follow_redirect!
+        expect(response.body).to include('Cannot activate')
+      end
+
+      it 'is idempotent for an already-active tenant' do
+        active_account = create(:account, name: 'Already Active Co')
+        active_profile = create(:bloomwire_business_profile, account: active_account,
+                                                             status: 'active', onboarding_status: 'completed')
+
+        post "/super_admin/bloomwire/businesses/#{active_profile.id}/activate"
+
+        expect(response).to have_http_status(:redirect)
+        expect(active_profile.reload.status).to eq('active')
+
+        follow_redirect!
+        expect(response.body).to include('already active')
+      end
+    end
+  end
 end

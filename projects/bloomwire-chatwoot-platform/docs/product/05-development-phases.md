@@ -259,9 +259,9 @@ visible to platform operators. This is **not** the onboarding wizard.
 **Status:** ✅ merged into `version_1` (PR #10). Verified — acceptance RED,
 edge/security RED, GREEN 83 examples, RuboCop clean, DB + browser proof.
 
-### Current slice — Bloomwire Chatwoot Readiness Mapping
+### Completed slice — Bloomwire Chatwoot Readiness Mapping
 
-`feature/bloomwire-chatwoot-readiness-mapping` (off `version_1`)
+`feature/bloomwire-chatwoot-readiness-mapping` (merged into `version_1` via PR #11)
 
 Read-only mapping that shows operators whether a tenant's underlying Chatwoot
 setup is ready. Chatwoot still owns accounts/inboxes/channels/conversations/
@@ -292,8 +292,49 @@ contacts/messages — this slice only reads existing state.
   roles/permissions, AI/human workflow, staff invite flow, full onboarding
   wizard, Chatwoot conversation/message/contact copy, dev DB cleanup.
 
-**Status:** delivered on `feature/bloomwire-chatwoot-readiness-mapping` and verified
-(acceptance RED, edge/security RED, GREEN 99 examples, RuboCop clean, DB + browser
+**Status:** ✅ merged into `version_1` (PR #11). Verified — acceptance RED,
+edge/security RED, GREEN 99 examples, RuboCop clean, DB + browser proof.
+
+### Current slice — Bloomwire Manual Tenant Activation
+
+`feature/bloomwire-manual-tenant-activation` (off `version_1`)
+
+The final Phase 3 readiness-lifecycle step: a backend-enforced Super Admin action
+that lets operators activate a tenant only once it is actually ready. Activation
+is a control-plane status change only — it never builds Chatwoot functionality.
+
+**Acceptance truth**
+
+- User expects a safe way to manually activate a tenant from the Super Admin
+  Bloomwire business detail page once setup is complete.
+- Current system shows readiness/onboarding but has no activation action; nothing
+  enforces "only activate when ready".
+- Done means activation is backend-enforced (not just UI): it succeeds only when
+  the profile exists, Chatwoot is Ready, and onboarding steps exist and are all
+  completed; on success `status: setup_pending -> active` and
+  `onboarding_status -> completed`; an already-active tenant is idempotent; a
+  blocked activation mutates nothing and shows a safe reason; no Chatwoot
+  inbox/channel/webhook is created and no conversation/message/contact data is
+  copied or exposed.
+
+**In scope**
+
+- Backend `Bloomwire::TenantActivation` service (safe reason codes:
+  profile_not_found / chatwoot_not_ready / onboarding_steps_missing /
+  onboarding_incomplete).
+- `POST .../bloomwire/businesses/:id/activate` member route + controller action
+  with safe success/failure flash.
+- Show-page activation panel/button (Administrate show override).
+- Tenant isolation + safe DTO (no raw ids/data in flashes).
+
+**Out of scope**
+
+- WhatsApp setup, channel/inbox/webhook creation, billing, roles/permissions,
+  AI/human workflow, staff invite flow, full onboarding wizard, Chatwoot
+  conversation/message/contact copy, dev DB cleanup.
+
+**Status:** delivered on `feature/bloomwire-manual-tenant-activation` and verified
+(acceptance RED, edge/security RED, GREEN 121 examples, RuboCop clean, DB + browser
 proof). Awaiting review/integration into `version_1`.
 
 ### Later Phase 3 slices
@@ -367,8 +408,8 @@ Candidate scope later:
 
 ```text
 Current phase: Phase 3 — Business Onboarding / Tenant Setup
-Current slice: Bloomwire Chatwoot Readiness Mapping (delivered on branch, in review)
-Last merged: Bloomwire Onboarding Step Status UI (PR #10 -> version_1)
+Current slice: Bloomwire Manual Tenant Activation (delivered on branch, in review)
+Last merged: Bloomwire Chatwoot Readiness Mapping (PR #11 -> version_1)
 Required workflow: Independent TDD Workflow
 Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
 ```

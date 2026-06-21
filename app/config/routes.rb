@@ -688,8 +688,10 @@ Rails.application.routes.draw do
         delete :avatar, on: :member, action: :destroy_avatar
       end
 
-      # Bloomwire SaaS tenant metadata (list/show only for this slice)
-      resources :bloomwire_business_profiles, only: [:index, :show], path: 'bloomwire/businesses'
+      # Bloomwire SaaS tenant metadata (list/show + manual activation gate)
+      resources :bloomwire_business_profiles, only: [:index, :show], path: 'bloomwire/businesses' do
+        post :activate, on: :member
+      end
 
       resources :access_tokens, only: [:index, :show]
       resources :installation_configs, only: [:index, :new, :create, :show, :edit, :update]
