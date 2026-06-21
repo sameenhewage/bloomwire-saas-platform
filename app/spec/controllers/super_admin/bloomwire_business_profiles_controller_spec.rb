@@ -78,4 +78,34 @@ RSpec.describe 'Super Admin Bloomwire Businesses', type: :request do
       expect(response.body).to include('1 of 2 steps completed')
     end
   end
+
+  describe 'chatwoot readiness visibility' do
+    before { sign_in(super_admin, scope: :super_admin) }
+
+    it 'shows the chatwoot readiness column and "Needs inbox/channel" when there is no inbox' do
+      get '/super_admin/bloomwire/businesses'
+
+      expect(response).to have_http_status(:success)
+      expect(response.body).to include('Chatwoot Readiness')
+      expect(response.body).to include('Needs inbox/channel')
+    end
+
+    it 'shows "Ready" when the account has an inbox' do
+      create(:inbox, account: account)
+
+      get '/super_admin/bloomwire/businesses'
+
+      expect(response).to have_http_status(:success)
+      expect(response.body).to include('Chatwoot Readiness')
+      expect(response.body).to include('Ready')
+    end
+
+    it 'shows the chatwoot readiness on the show page' do
+      get "/super_admin/bloomwire/businesses/#{profile.id}"
+
+      expect(response).to have_http_status(:success)
+      expect(response.body.downcase).to include('chatwoot readiness')
+      expect(response.body).to include('Needs inbox/channel')
+    end
+  end
 end

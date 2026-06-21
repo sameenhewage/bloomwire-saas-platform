@@ -1,13 +1,14 @@
 require 'rails_helper'
 
-# Edge & security coverage for the Super Admin Bloomwire onboarding step status UI.
+# Edge & security coverage for the Super Admin Bloomwire businesses pages
+# (onboarding step status + Chatwoot readiness mapping).
 #
-# Guarantees (see AGENTS.md rules 1, 6, 8 and this slice's Product Truth Gate):
+# Guarantees (see AGENTS.md rules 1, 6, 8 and these slices' Product Truth Gate):
 # - Missing onboarding steps are handled safely (no crash, safe label).
-# - Only a safe summary label is surfaced (counts + humanized step key); no raw
-#   onboarding-step records or internal ids are exposed.
-# - No Chatwoot conversation/message/contact data leaks onto the Bloomwire page.
-RSpec.describe 'Super Admin Bloomwire onboarding step status (edge & security)', type: :request do
+# - Only safe summary labels are surfaced (onboarding progress + Chatwoot
+#   readiness); no raw records or internal ids are exposed.
+# - No Chatwoot inbox/conversation/message/contact data leaks onto the page.
+RSpec.describe 'Super Admin Bloomwire businesses (edge & security)', type: :request do
   let!(:super_admin) { create(:super_admin) }
   let!(:account) { create(:account, name: 'Globex Corp') }
   let!(:profile) { create(:bloomwire_business_profile, account: account) }
@@ -66,6 +67,33 @@ RSpec.describe 'Super Admin Bloomwire onboarding step status (edge & security)',
 
       get "/super_admin/bloomwire/businesses/#{profile.id}"
       expect(response.body).not_to include('Leaky Secret Contact')
+    end
+  end
+
+  describe 'chatwoot readiness — safe label without data leakage (security)' do
+    before do
+      create(:inbox, account: account, name: 'Secret Inbox Name')
+      create(:contact, account: account, name: 'Leaky Readiness Contact')
+      create(:message, account: account, content: 'Leaky readiness message body')
+    end
+
+    it 'shows a safe readiness label on the index without leaking Chatwoot data' do
+      get '/super_admin/bloomwire/businesses'
+
+      expect(response.body).to include('Chatwoot Readiness')
+      expect(response.body).to include('Ready')
+      expect(response.body).not_to include('Secret Inbox Name')
+      expect(response.body).not_to include('Leaky Readiness Contact')
+      expect(response.body).not_to include('Leaky readiness message body')
+    end
+
+    it 'shows a safe readiness label on the show page without leaking Chatwoot data' do
+      get "/super_admin/bloomwire/businesses/#{profile.id}"
+
+      expect(response.body.downcase).to include('chatwoot readiness')
+      expect(response.body).not_to include('Secret Inbox Name')
+      expect(response.body).not_to include('Leaky Readiness Contact')
+      expect(response.body).not_to include('Leaky readiness message body')
     end
   end
 end
