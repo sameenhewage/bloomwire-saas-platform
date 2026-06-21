@@ -10,6 +10,7 @@ class BloomwireBusinessProfileDashboard < Administrate::BaseDashboard
     plan_name: Field::String,
     status: Field::Select.with_options(collection: BloomwireBusinessProfile::STATUSES),
     onboarding_status: Field::Select.with_options(collection: BloomwireBusinessProfile::ONBOARDING_STATUSES),
+    onboarding_progress: Field::String.with_options(searchable: false, truncate: 120),
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -23,6 +24,7 @@ class BloomwireBusinessProfileDashboard < Administrate::BaseDashboard
     plan_name
     status
     onboarding_status
+    onboarding_progress
     created_at
   ].freeze
 
@@ -35,6 +37,7 @@ class BloomwireBusinessProfileDashboard < Administrate::BaseDashboard
     plan_name
     status
     onboarding_status
+    onboarding_progress
     created_at
     updated_at
   ].freeze
