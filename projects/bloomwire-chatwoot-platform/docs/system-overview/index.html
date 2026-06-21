@@ -648,7 +648,7 @@
           &#9888;&#65039; <strong>Hard rule:</strong> Do <strong>not</strong> duplicate Chatwoot messages, contacts or conversations into Bloomwire tables. Bloomwire references Chatwoot data by its identifiers and reads it live — it never copies it.
         </div>
         <div class="callout">
-          &#129409; <strong>Enterprise boundary &amp; telemetry (ADR 0002):</strong> Bloomwire builds only on Chatwoot <strong>Community Edition</strong>. It must <strong>not</strong> run Chatwoot Enterprise calling code (under <span class="pill-code">app/enterprise/</span>, gated by <span class="pill-code">channel_voice</span>) in production without a valid Chatwoot Enterprise subscription, and must not depend on the Enterprise <span class="pill-code">Call</span> model, the <span class="pill-code">calls</span> table, or Enterprise voice routes/services. ChatwootHub outbound telemetry should be disabled/removed in production for <strong>privacy / security / SaaS isolation</strong>. Decision only — implementation is parked/future; <strong>not</strong> a licensing bypass, and Enterprise features still require a valid license.
+          &#129409; <strong>Enterprise boundary &amp; telemetry (ADR 0002):</strong> Bloomwire builds only on Chatwoot <strong>Community Edition</strong>. It must <strong>not</strong> run Chatwoot Enterprise calling code (under <span class="pill-code">app/enterprise/</span>, gated by <span class="pill-code">channel_voice</span>) in production without a valid Chatwoot Enterprise subscription, and must not depend on the Enterprise <span class="pill-code">Call</span> model, the <span class="pill-code">calls</span> table, or Enterprise voice routes/services. ChatwootHub outbound telemetry is now <strong>disabled by default in production</strong> (<span class="pill-code">BLOOMWIRE_DISABLE_CHATWOOT_HUB</span>) for <strong>privacy / security / SaaS isolation</strong>; Enterprise-overlay removal remains parked. <strong>Not</strong> a licensing bypass, and Enterprise features still require a valid license.
         </div>
       </section>
     </div>
@@ -1084,6 +1084,18 @@
                 <dt>What changed</dt><dd>Documentation-only decision: Chatwoot CE/OSS stays source of truth; <strong>no Chatwoot Enterprise calling code in production without a valid Enterprise subscription</strong>; no dependency on <span class="pill-code">app/enterprise/</span> voice / WhatsApp-call services, the Enterprise <span class="pill-code">Call</span> model, the <span class="pill-code">calls</span> table, or the <span class="pill-code">channel_voice</span> flag; any future calling is Bloomwire-owned on public Twilio / Meta APIs; ChatwootHub outbound telemetry to be disabled/removed in production for privacy / security / SaaS isolation.</dd>
                 <dt>Files / areas</dt><dd><span class="pill-code">docs/adr/0002-bloomwire-enterprise-boundary-and-telemetry.md</span>, <span class="pill-code">CONTEXT.md</span>, <span class="pill-code">docs/product/05-development-phases.md</span>, system-overview <span class="pill-code">README.md</span> + this document.</dd>
                 <dt>Not changed</dt><dd>Decision only — implementation parked/future. No app behavior, code, config, migration, telemetry, or Enterprise overlay changed. Not a licensing bypass; Enterprise features still require a valid license.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-21</span>
+              <h4>Implemented ChatwootHub outbound isolation (security)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Bloomwire production now runs with <strong>ChatwootHub outbound communication disabled by default</strong>: a centralized <span class="pill-code">ChatwootHub.outbound_disabled?</span> guard (env <span class="pill-code">BLOOMWIRE_DISABLE_CHATWOOT_HUB</span>, secure-by-default in production; <span class="pill-code">BLOOMWIRE_ALLOW_CHATWOOT_HUB_PUSH</span> to permit the push relay) blocks the <span class="pill-code">/ping</span>, installation-metadata sync, aggregate counts, pricing-plan sync, telemetry events, and push relay. For privacy / security / SaaS isolation / customer-data protection.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">lib/chatwoot_hub.rb</span>, <span class="pill-code">app/jobs/internal/check_new_versions_job.rb</span>, specs under <span class="pill-code">spec/lib/bloomwire/</span>, ADR 0002 + project docs.</dd>
+                <dt>Proof</dt><dd>RED → GREEN (25 examples, 0 failures), RuboCop clean; a production-simulated runner shows <strong>zero</strong> posts to <span class="pill-code">hub.2.chatwoot.com</span> under isolation; Super Admin Accounts/Businesses load in-browser.</dd>
+                <dt>Not changed</dt><dd>Enterprise overlay and <span class="pill-code">channel_voice</span> untouched/unused. Not a licensing bypass; Enterprise features still require a valid license.</dd>
               </dl>
             </div>
           </div>

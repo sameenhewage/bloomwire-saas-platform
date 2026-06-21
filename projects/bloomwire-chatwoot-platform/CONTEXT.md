@@ -42,7 +42,8 @@ project.
 ## Enterprise boundary, calling & ChatwootHub telemetry (see ADR 0002)
 
 Decision recorded in `docs/adr/0002-bloomwire-enterprise-boundary-and-telemetry.md`.
-**Implementation is parked/future; nothing here changes app behavior yet.**
+**ChatwootHub outbound isolation is now implemented** (see the telemetry bullet);
+**Enterprise-overlay removal and any calling feature remain parked/future.**
 
 - **No Enterprise calling code in production without a license.** The vendored
   Chatwoot build (`4.15.1`) ships Twilio Voice + WhatsApp Calling, but that code
@@ -58,11 +59,16 @@ Decision recorded in `docs/adr/0002-bloomwire-enterprise-boundary-and-telemetry.
   services/controllers/`bloomwire_` tables, **no copied Enterprise logic**, and at
   most an **OSS-safe Chatwoot timeline note/activity** via the public messages
   API.
-- **ChatwootHub telemetry:** Bloomwire production should run with **ChatwootHub
-  outbound communication disabled/removed unless explicitly approved**, for
-  **privacy, security, SaaS isolation, and customer-data protection**. This is
-  **not** a licensing bypass and does **not** permit Enterprise feature use —
-  **Enterprise features still require a valid license/subscription.**
+- **ChatwootHub telemetry (implemented):** Bloomwire production runs with
+  **ChatwootHub outbound communication disabled by default** via the centralized
+  `ChatwootHub.outbound_disabled?` guard (env `BLOOMWIRE_DISABLE_CHATWOOT_HUB`,
+  secure-by-default in `production`; `BLOOMWIRE_ALLOW_CHATWOOT_HUB_PUSH` to permit
+  the push relay). Under isolation, no `/ping`, installation-metadata sync,
+  aggregate counts, pricing-plan sync, or telemetry events leave the instance.
+  This is for **privacy, security, SaaS isolation, and customer-data
+  protection** — it is **not** a licensing bypass and does **not** permit
+  Enterprise feature use; **Enterprise features still require a valid
+  license/subscription.**
 
 ## Security / safe DTO contract (extends global rule 8)
 

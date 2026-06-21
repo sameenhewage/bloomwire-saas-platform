@@ -100,7 +100,9 @@ security, SaaS isolation, and customer-data protection** reasons.
 
 As a hard Bloomwire security requirement, **Bloomwire production should run with
 ChatwootHub outbound communication disabled/removed unless explicitly approved.**
-The intended target state (to be implemented later, see parked tasks) is:
+This is now **implemented** (see *Implementation status* below) via a centralized
+`ChatwootHub.outbound_disabled?` guard that is **secure-by-default in production**.
+The target state is:
 
 - no `/ping` to `hub.2.chatwoot.com`,
 - no installation metadata sync,
@@ -121,22 +123,35 @@ usage, avoiding detection, or bypassing the Chatwoot license. The absence of
 constitute permission to run Enterprise code in production. Enterprise calling in
 production requires a subscription — full stop.
 
-## Parked future implementation tasks (NOT done yet)
+## Implementation status & remaining tasks
 
-These are recorded for later execution. **None are implemented by this ADR.**
+**Slice delivered 2026-06-21 — ChatwootHub outbound isolation** (branch
+`feature/bloomwire-chatwoothub-outbound-isolation`):
 
-- **A.** Audit the exact ChatwootHub call sites and a production-safe way to
-  disable/remove ChatwootHub outbound calls.
-- **B.** Add production-safe configuration to disable ChatwootHub outbound calls
-  (and audit a production-safe way to disable/remove the Enterprise overlay).
-- **C.** Prevent the daily production ping / plan sync from running in production.
-- **D.** Verify no outbound traffic to `hub.2.chatwoot.com` in production.
-- **E.** Verify OSS Chatwoot inbox / conversation / message / contact flows still
-  work with telemetry disabled and with the Enterprise overlay disabled/removed.
-- **F.** Keep the Enterprise overlay disabled/removed from the production build
-  while Bloomwire is not licensed and not using Enterprise features.
-- **G.** Design a Bloomwire-owned calling architecture separately if/when calls
-  become a required product feature (per Decision 4).
+- **A. Done** — exact ChatwootHub call sites audited: `sync_with_hub`,
+  `register_instance`, `send_push`, `emit_event`, and the daily
+  `Internal::CheckNewVersionsJob` (with its Enterprise plan-sync override).
+- **B. Done** — production-safe config added: `BLOOMWIRE_DISABLE_CHATWOOT_HUB`
+  (secure-by-default: isolated in `production` when unset) plus an explicit
+  `BLOOMWIRE_ALLOW_CHATWOOT_HUB_PUSH` override for the push relay. A single
+  centralized predicate `ChatwootHub.outbound_disabled?` gates every outbound
+  method.
+- **C. Done** — the daily `Internal::CheckNewVersionsJob` returns early under
+  isolation, so the production ping / plan sync never runs.
+- **D. Done (simulated)** — verified via a production-simulated runner with a
+  `RestClient.post` spy: **zero** posts to `hub.2.chatwoot.com` under isolation;
+  `/ping` is attempted only when isolation is explicitly disabled. Real
+  production network verification remains an ops checklist item.
+- **E. Done** — specs create and read OSS account/inbox/contact/conversation/
+  message under isolation; Super Admin Accounts + Bloomwire Businesses pages
+  verified loading in-browser with only known dev console noise.
+- **F. Parked** — removing/disabling the Enterprise overlay from the production
+  build (this slice does **not** touch the overlay).
+- **G. Parked** — designing a Bloomwire-owned calling architecture if calling
+  becomes required.
+
+The Enterprise overlay was intentionally **not** removed or modified, and
+`channel_voice` / Enterprise calling code remain untouched and unused.
 
 ## Consequences
 
@@ -152,10 +167,14 @@ These are recorded for later execution. **None are implemented by this ADR.**
 
 ## Status of code
 
-- **No application code, configuration, migration, schema, spec, telemetry, or
-  Enterprise-overlay change is introduced by this ADR.** Implementation of the
-  parked tasks (A–G) is **future work** and will be done in separate, reviewed
-  slices.
+- **The ChatwootHub outbound isolation guard is implemented** (see *Implementation
+  status* above): `app/lib/chatwoot_hub.rb` (predicate + per-method guards) and
+  `app/app/jobs/internal/check_new_versions_job.rb` (job guard), with acceptance
+  and edge/security specs under `app/spec/lib/bloomwire/`.
+- **No migration, schema, or Enterprise-overlay change** was made. `channel_voice`
+  and Enterprise calling code are untouched and remain unused. This is **not** a
+  licensing bypass and does **not** permit Enterprise feature use — **Enterprise
+  features still require a valid Chatwoot Enterprise subscription/license.**
 
 ## References
 

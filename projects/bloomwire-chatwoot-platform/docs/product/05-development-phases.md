@@ -462,9 +462,10 @@ Candidate scope later:
 
 ## Cross-cutting parked decision — Enterprise boundary & ChatwootHub telemetry (ADR 0002)
 
-Recorded in `../adr/0002-bloomwire-enterprise-boundary-and-telemetry.md`. This is a
-**decision with parked / future implementation** — **no app behavior, code,
-config, migration, schema, spec, or telemetry has been changed.**
+Recorded in `../adr/0002-bloomwire-enterprise-boundary-and-telemetry.md`. The
+**ChatwootHub outbound isolation** part of this decision is now **implemented**
+(slice below); **Enterprise-overlay removal and any calling feature remain
+parked/future.**
 
 - **Chatwoot CE / OSS stays the source of truth** for accounts, inboxes, contacts,
   conversations, messages, labels, teams, and the normal support workflow.
@@ -476,22 +477,35 @@ config, migration, schema, spec, or telemetry has been changed.**
   state, the `channel_voice` flag, or any Enterprise routes/services/controllers.
 - **Any future calling is Bloomwire-owned (clean-room)** via public Twilio /
   Meta APIs, with at most an OSS-safe Chatwoot timeline note/activity.
-- **ChatwootHub outbound telemetry** should be disabled/removed in Bloomwire
-  production unless explicitly approved — for **privacy, security, SaaS
-  isolation, and customer-data protection**. This is **not** a licensing bypass
-  and does **not** permit Enterprise feature use; **Enterprise features still
-  require a valid license.**
+- **ChatwootHub outbound telemetry (implemented)** is disabled by default in
+  Bloomwire production via the centralized `ChatwootHub.outbound_disabled?` guard
+  (`BLOOMWIRE_DISABLE_CHATWOOT_HUB`, secure-by-default in production;
+  `BLOOMWIRE_ALLOW_CHATWOOT_HUB_PUSH` to allow the push relay) — for **privacy,
+  security, SaaS isolation, and customer-data protection**. This is **not** a
+  licensing bypass and does **not** permit Enterprise feature use; **Enterprise
+  features still require a valid license.**
 
-### Parked future tasks (not started)
+### Delivered slice — ChatwootHub outbound isolation ✅
 
-- **A.** Audit exact ChatwootHub call sites + a production-safe disable path.
-- **B.** Add production-safe config to disable ChatwootHub outbound calls; audit a
-  production-safe way to disable/remove the Enterprise overlay.
-- **C.** Prevent the daily production ping / plan sync from running in production.
-- **D.** Verify no outbound traffic to `hub.2.chatwoot.com` in production.
-- **E.** Verify OSS inbox / conversation / message / contact flows still work with
-  telemetry disabled and the Enterprise overlay disabled/removed.
-- **F.** Keep the Enterprise overlay disabled/removed from production while not
+`feature/bloomwire-chatwoothub-outbound-isolation`
+
+- **A. ✅** ChatwootHub call sites audited (`sync_with_hub`, `register_instance`,
+  `send_push`, `emit_event`, daily `Internal::CheckNewVersionsJob`).
+- **B. ✅** `BLOOMWIRE_DISABLE_CHATWOOT_HUB` (secure-by-default in production) +
+  `BLOOMWIRE_ALLOW_CHATWOOT_HUB_PUSH`; one centralized
+  `ChatwootHub.outbound_disabled?` predicate gates every outbound method.
+- **C. ✅** the daily job returns early under isolation (no ping / plan sync).
+- **D. ✅ (simulated)** runner + `RestClient.post` spy: zero posts to
+  `hub.2.chatwoot.com` under isolation; real-prod network check is an ops item.
+- **E. ✅** OSS account/inbox/contact/conversation/message verified (specs +
+  Super Admin Accounts/Businesses pages in-browser).
+- Verified: acceptance RED → GREEN, edge/security RED → GREEN (25 examples, 0
+  failures), RuboCop clean, runtime runner + browser proof. Enterprise overlay
+  and `channel_voice` untouched.
+
+### Still parked (not started)
+
+- **F.** Remove/disable the Enterprise overlay from the production build while not
   licensed and not using Enterprise features.
 - **G.** Design a Bloomwire-owned calling architecture separately if calling
   becomes required.
@@ -505,5 +519,5 @@ Current phase: Phase 4 — Roles & Permissions Engine
 Current position: Phase 4 Slice 1 (Permission Foundation / AccessPolicy) merged; next Phase 4 slice not started
 Last merged: Bloomwire Permission Foundation / Access Policy (PR #13 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, ChatwootHub telemetry removal (parked — see ADR 0002)
+Do not start yet: WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
 ```
