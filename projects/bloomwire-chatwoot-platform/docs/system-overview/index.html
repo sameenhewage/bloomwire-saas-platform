@@ -1099,14 +1099,25 @@
               </dl>
             </div>
           </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-21</span>
+              <h4>Recorded Permission &amp; Channel-Control Boundary decision (ADR 0003)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Documentation-only decision separating <strong>platform</strong> vs <strong>tenant-admin</strong> responsibilities: Bloomwire / Super Admin owns tenant/account creation, tenant activation, and channel/inbox enablement; tenant admins manage their own teams/users/memberships only. <strong>Raw Chatwoot setup pages are not exposed to enterprise clients by default</strong> (Add Inbox; API/WhatsApp/SMS/Facebook/Instagram/Telegram setup; WhatsApp Call Beta; New Account). <strong>Team management &ne; channel-creation permission.</strong> A future per-tenant capability model (<span class="pill-code">allow_*</span> toggles) will enable opt-in self-service. Phase 4 locks down who can create tenants/channels; Phase 5 builds the controlled customer-facing Channel Readiness / WhatsApp Setup flow.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">docs/adr/0003-bloomwire-permission-and-channel-control-boundary.md</span>, <span class="pill-code">CONTEXT.md</span>, <span class="pill-code">docs/product/05-development-phases.md</span>, system-overview <span class="pill-code">README.md</span> + this document; cross-reference added to ADR 0002.</dd>
+                <dt>Not changed</dt><dd>Decision only — parked/future (Phase 4.3–4.5 + Phase 5). No app behavior, code, config, migration, schema, spec, feature flag, or frontend hiding. Chatwoot CE stays source of truth; no conversation/message/contact duplication.</dd>
+              </dl>
+            </div>
+          </div>
           <div class="tl-item next">
             <div class="tl-card next">
               <span class="date">Next</span>
-              <h4>Phase 4 — later permission slices (not started)</h4>
+              <h4>Phase 4 — tenant/channel-control lockdowns &amp; later permission slices (not started)</h4>
               <dl>
-                <dt>What changes</dt><dd>Surface <span class="pill-code">Bloomwire::AccessPolicy</span> checks in tenant-facing UI (UX hiding only; the backend already enforces access), then expand toward platform/tenant roles and a permission matrix.</dd>
-                <dt>Files / areas</dt><dd>TBD — dashboard/controllers consuming the policy; Bloomwire roles/permission tables only when SaaS-specific custom staff permissions are required.</dd>
-                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; no Bloomwire roles tables yet.</dd>
+                <dt>What changes</dt><dd>Parked Phase 4.3–4.5 (ADR 0003): <strong>New Account / Tenant-Creation Lockdown</strong>, <strong>Channel / Inbox-Creation Lockdown</strong>, and a per-tenant <strong>Feature-Capabilities</strong> model — keeping raw Chatwoot setup platform-controlled by default. Then surface <span class="pill-code">Bloomwire::AccessPolicy</span> checks in tenant-facing UI (UX hiding only; the backend already enforces access) and expand toward platform/tenant roles and a permission matrix.</dd>
+                <dt>Files / areas</dt><dd>TBD — dashboard/controllers consuming the policy; a future <span class="pill-code">bloomwire_*</span> tenant-capabilities surface; Bloomwire roles/permission tables only when SaaS-specific custom staff permissions are required.</dd>
+                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; no Bloomwire roles or capabilities tables yet.</dd>
               </dl>
             </div>
           </div>
