@@ -84,6 +84,40 @@ Decision recorded in `docs/adr/0002-bloomwire-enterprise-boundary-and-telemetry.
 - Bloomwire SaaS metadata hangs off the Chatwoot account that represents the
   tenant; it never replaces it.
 
+## Permission & channel-control boundary (see ADR 0003)
+
+Decision recorded in `docs/adr/0003-bloomwire-permission-and-channel-control-boundary.md`.
+**Decision only — parked/future (Phase 4.3–4.5 + Phase 5); nothing here is
+implemented yet.** It separates platform responsibilities from tenant-admin
+responsibilities and keeps raw Chatwoot setup surfaces platform-controlled.
+
+- **Platform / Super Admin owns:** tenant/account creation, tenant activation,
+  channel/inbox setup approval, channel enablement rules
+  (WhatsApp/SMS/Email/Instagram/API), and enterprise/security/compliance config.
+- **Client tenant admin owns:** their tenant's users/agents (if allowed),
+  teams/departments, team memberships, and conversation workflow inside the tenant.
+- **Client tenant admin does NOT own by default:** new tenant/account creation,
+  arbitrary inbox/channel creation, API channel creation, WhatsApp/SMS/Facebook/
+  Instagram/Telegram setup, WhatsApp Call / Enterprise-gated features, or
+  platform-level settings.
+- **Raw Chatwoot channel setup pages are not exposed to enterprise clients by
+  default** (Settings → Inboxes → Add Inbox; API/WhatsApp/SMS/Facebook/Instagram/
+  Telegram setup; WhatsApp Call Beta; New Account). They must be gated by
+  Bloomwire permissions/capabilities.
+- **Team management ≠ channel-creation permission.** A team is an internal
+  department; an inbox/channel is an external customer communication connection.
+  Creating a team must never automatically grant WhatsApp/SMS/API channel creation.
+- **Future, opt-in self-service** is via a **planned** per-tenant capability model
+  (`allow_new_account_creation`, `allow_team_management`, `allow_agent_management`,
+  `allow_self_service_channel_setup`, `allow_whatsapp_setup`, `allow_sms_setup`,
+  `allow_email_setup`, `allow_instagram_setup`, `allow_api_channel_setup`,
+  `allow_whatsapp_calling`) — **no capabilities table or feature flags exist yet.**
+
+> Dialog-style enterprise tenants should not receive raw Chatwoot account/channel
+> setup access by default. Dialog admins may manage teams and users inside the
+> Dialog tenant, but tenant creation and channel/inbox setup remain
+> Bloomwire-controlled unless explicit tenant capabilities allow self-service setup.
+
 ## Implemented so far (current state)
 
 Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
@@ -116,6 +150,10 @@ Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
 - **No Chatwoot Enterprise / `custom_roles` dependency.**
 - **Bloomwire roles/permission tables are future-only** — to be added when
   SaaS-specific custom staff permissions become necessary.
+- **Tenant/channel-control lockdowns are decided but parked** (ADR 0003):
+  platform-vs-tenant ownership of tenant/channel creation, the "raw Chatwoot
+  setup not exposed by default" rule, and a future per-tenant capability model —
+  **documentation only, not implemented.**
 
 ### Implementation map (names)
 

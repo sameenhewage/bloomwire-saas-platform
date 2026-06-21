@@ -49,7 +49,13 @@ No build step, no install, no network access is required.
   subscription, ChatwootHub outbound communication disabled/removed in production
   (privacy / security / SaaS isolation), and any future calling built
   Bloomwire-owned on public Twilio / Meta APIs. Decision only — implementation is
-  parked/future.
+  parked/future. **ADR 0003** records the **permission & channel-control
+  boundary**: the platform owns tenant/account creation, activation, and
+  channel/inbox enablement; tenant admins manage their own teams/users only; raw
+  Chatwoot setup pages (Add Inbox; API/WhatsApp/SMS/Facebook/Instagram/Telegram;
+  WhatsApp Call Beta; New Account) are not exposed by default; a future per-tenant
+  capability model enables opt-in self-service. Decision only — parked/future
+  (Phase 4.3–4.5 + Phase 5).
 - **Changelog** — timeline of every completed slice.
 
 ## Maintenance rule (important)

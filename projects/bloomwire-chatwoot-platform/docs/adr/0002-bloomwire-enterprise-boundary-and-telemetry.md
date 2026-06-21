@@ -187,5 +187,7 @@ The Enterprise overlay was intentionally **not** removed or modified, and
   `app/enterprise/app/services/whatsapp/call_service.rb`,
   `app/enterprise/app/models/call.rb`, `app/config/routes.rb`,
   `app/db/schema.rb`, `app/app/models/message.rb`.
-- Related docs: `0001-technical-baseline.md`, `../../CONTEXT.md`,
+- Related docs: `0001-technical-baseline.md`,
+  `0003-bloomwire-permission-and-channel-control-boundary.md` (permission &
+  channel-control boundary — who may create tenants/channels), `../../CONTEXT.md`,
   `../product/05-development-phases.md`, `../system-overview/index.html`.

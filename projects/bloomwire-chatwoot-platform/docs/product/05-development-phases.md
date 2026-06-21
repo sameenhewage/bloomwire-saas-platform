@@ -347,7 +347,7 @@ edge/security RED, GREEN 121 examples, RuboCop clean, DB + browser proof.
 
 ---
 
-## Phase 4 — Roles & Permissions Engine � Current
+## Phase 4 — Roles, Permissions & Security Foundation � Current
 
 Backend enforcement is mandatory; frontend hiding is UX only.
 
@@ -397,6 +397,47 @@ Chatwoot Enterprise / `custom_roles` dependency**. Bloomwire-specific
 roles/permission tables are **future-only**, to be added when SaaS-specific custom
 staff permissions become necessary (see *Next / later Phase 4 slices*).
 
+### Already completed in Phase 4 (security foundation)
+
+- **AccessPolicy foundation** (PR #13) — backend, tenant-scoped permission policy
+  using the core Chatwoot `AccountUser` role.
+- **ChatwootHub outbound isolation** — production runs with outbound telemetry off
+  by default (see ADR 0002 and the cross-cutting section below).
+- **Enterprise boundary / telemetry decision** (ADR 0002).
+
+### Parked next — tenant & channel control lockdowns (decision: ADR 0003)
+
+Decision recorded in `../adr/0003-bloomwire-permission-and-channel-control-boundary.md`.
+**Documentation/decision only — not implemented.** These slices lock down *who*
+may create tenants and channels, **before** any tenant-facing setup surface is
+built. Default posture is platform-controlled; raw Chatwoot setup pages are not
+exposed to enterprise clients by default.
+
+- **Phase 4.3 — New Account / Tenant Creation Lockdown** ⏳ Parked
+  - Tenant/account creation is **platform / Super-Admin-owned**; tenant admins do
+    **not** get Chatwoot's "New Account" affordance by default.
+- **Phase 4.4 — Channel / Inbox Creation Lockdown** ⏳ Parked
+  - Raw Chatwoot inbox/channel setup (Add Inbox; API / WhatsApp / SMS / Facebook /
+    Instagram / Telegram; WhatsApp Call Beta) is **not** exposed to enterprise
+    clients by default — it is Bloomwire-controlled.
+  - **Team management ≠ channel-creation permission.** A team is an internal
+    department; an inbox/channel is an external customer communication
+    connection. Creating a team must never automatically grant permission to
+    create WhatsApp/SMS/API channels.
+- **Phase 4.5 — Tenant Feature Capabilities** ⏳ Parked
+  - A **future** per-tenant capability model enabling controlled, opt-in
+    self-service (e.g. `allow_new_account_creation`, `allow_team_management`,
+    `allow_agent_management`, `allow_self_service_channel_setup`,
+    `allow_whatsapp_setup`, `allow_sms_setup`, `allow_email_setup`,
+    `allow_instagram_setup`, `allow_api_channel_setup`, `allow_whatsapp_calling`).
+    **No capabilities table or feature flags exist yet.**
+
+> Dialog-style enterprise tenants should not receive raw Chatwoot account/channel
+> setup access by default. Dialog admins may manage teams and users inside the
+> Dialog tenant, but tenant creation and channel/inbox setup remain
+> Bloomwire-controlled unless explicit tenant capabilities allow self-service
+> setup.
+
 ### Next / later Phase 4 slices (not started)
 
 - surface `Bloomwire::AccessPolicy` checks in tenant-facing UI (UX hiding only;
@@ -410,9 +451,12 @@ staff permissions become necessary (see *Next / later Phase 4 slices*).
 
 ---
 
-## Phase 5 — Channels / WhatsApp Setup ⏳ Later
+## Phase 5 — Controlled Channel Readiness / WhatsApp Setup Mapping ⏳ Later
 
-Do not implement yet.
+Do not implement yet. **Builds on the Phase 4 lockdowns (decision: ADR 0003):**
+
+> Phase 4 locks down who can create tenants/channels.
+> Phase 5 builds the controlled customer-facing Channel Readiness / WhatsApp Setup flow.
 
 Candidate scope later:
 
@@ -515,9 +559,9 @@ parked/future.**
 ## Current checkpoint
 
 ```text
-Current phase: Phase 4 — Roles & Permissions Engine
-Current position: Phase 4 Slice 1 (Permission Foundation / AccessPolicy) merged; next Phase 4 slice not started
+Current phase: Phase 4 — Roles, Permissions & Security Foundation
+Current position: Phase 4 Slice 1 (Permission Foundation / AccessPolicy) merged; Phase 4.3–4.5 tenant/channel-control lockdowns decided but parked (ADR 0003); next Phase 4 coding slice not started
 Last merged: Bloomwire Permission Foundation / Access Policy (PR #13 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
+Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
 ```
