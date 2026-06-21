@@ -423,6 +423,12 @@ Candidate scope later:
 
 One Chatwoot inbox = one connected channel.
 
+**Calling note (see ADR 0002):** if voice / WhatsApp calling ever enters scope, it
+must be **Bloomwire-owned** (public Twilio / Meta APIs, `bloomwire_` tables) and
+must **not** use Chatwoot's Enterprise calling code, the `channel_voice` flag, or
+the Enterprise `Call` model. Chatwoot Enterprise calling in production would
+require a valid Chatwoot Enterprise subscription.
+
 ---
 
 ## Phase 6 — Analytics / Usage / Billing Metadata ⏳ Later
@@ -454,6 +460,44 @@ Candidate scope later:
 
 ---
 
+## Cross-cutting parked decision — Enterprise boundary & ChatwootHub telemetry (ADR 0002)
+
+Recorded in `../adr/0002-bloomwire-enterprise-boundary-and-telemetry.md`. This is a
+**decision with parked / future implementation** — **no app behavior, code,
+config, migration, schema, spec, or telemetry has been changed.**
+
+- **Chatwoot CE / OSS stays the source of truth** for accounts, inboxes, contacts,
+  conversations, messages, labels, teams, and the normal support workflow.
+- **No Chatwoot Enterprise calling code in production without a valid Chatwoot
+  Enterprise subscription** (the calling code under `app/enterprise/` is
+  Enterprise-licensed).
+- **No dependency** on `app/enterprise/` voice controllers, WhatsApp calling
+  services, the Enterprise `Call` model, the `calls` table as Enterprise runtime
+  state, the `channel_voice` flag, or any Enterprise routes/services/controllers.
+- **Any future calling is Bloomwire-owned (clean-room)** via public Twilio /
+  Meta APIs, with at most an OSS-safe Chatwoot timeline note/activity.
+- **ChatwootHub outbound telemetry** should be disabled/removed in Bloomwire
+  production unless explicitly approved — for **privacy, security, SaaS
+  isolation, and customer-data protection**. This is **not** a licensing bypass
+  and does **not** permit Enterprise feature use; **Enterprise features still
+  require a valid license.**
+
+### Parked future tasks (not started)
+
+- **A.** Audit exact ChatwootHub call sites + a production-safe disable path.
+- **B.** Add production-safe config to disable ChatwootHub outbound calls; audit a
+  production-safe way to disable/remove the Enterprise overlay.
+- **C.** Prevent the daily production ping / plan sync from running in production.
+- **D.** Verify no outbound traffic to `hub.2.chatwoot.com` in production.
+- **E.** Verify OSS inbox / conversation / message / contact flows still work with
+  telemetry disabled and the Enterprise overlay disabled/removed.
+- **F.** Keep the Enterprise overlay disabled/removed from production while not
+  licensed and not using Enterprise features.
+- **G.** Design a Bloomwire-owned calling architecture separately if calling
+  becomes required.
+
+---
+
 ## Current checkpoint
 
 ```text
@@ -461,5 +505,5 @@ Current phase: Phase 4 — Roles & Permissions Engine
 Current position: Phase 4 Slice 1 (Permission Foundation / AccessPolicy) merged; next Phase 4 slice not started
 Last merged: Bloomwire Permission Foundation / Access Policy (PR #13 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI
+Do not start yet: WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, ChatwootHub telemetry removal (parked — see ADR 0002)
 ```

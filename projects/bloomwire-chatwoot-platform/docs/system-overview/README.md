@@ -43,6 +43,13 @@ No build step, no install, no network access is required.
 - **Permission matrix** — role × capability (backend-enforced; `AccessPolicy` is
   the first live slice, using core Chatwoot `AccountUser` roles, no Enterprise/custom_roles).
 - **Request flow** — a message's journey from customer to tenant health.
+- **Architecture decisions** — see `../adr/`; notably **ADR 0002** records the
+  **Enterprise calling boundary** and the **ChatwootHub telemetry** decision: no
+  Chatwoot Enterprise calling code in production without a valid Enterprise
+  subscription, ChatwootHub outbound communication disabled/removed in production
+  (privacy / security / SaaS isolation), and any future calling built
+  Bloomwire-owned on public Twilio / Meta APIs. Decision only — implementation is
+  parked/future.
 - **Changelog** — timeline of every completed slice.
 
 ## Maintenance rule (important)

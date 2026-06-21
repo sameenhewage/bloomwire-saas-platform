@@ -39,6 +39,31 @@ project.
 - **Roles and permissions must be backend-enforced**, never frontend-only.
   Frontend hiding is **UX only, not security**.
 
+## Enterprise boundary, calling & ChatwootHub telemetry (see ADR 0002)
+
+Decision recorded in `docs/adr/0002-bloomwire-enterprise-boundary-and-telemetry.md`.
+**Implementation is parked/future; nothing here changes app behavior yet.**
+
+- **No Enterprise calling code in production without a license.** The vendored
+  Chatwoot build (`4.15.1`) ships Twilio Voice + WhatsApp Calling, but that code
+  lives under `app/enterprise/` and is covered by the **Chatwoot Enterprise
+  License** — production use requires a **valid Chatwoot Enterprise
+  subscription**. Bloomwire holds no such subscription, so it must not run it.
+- **Do not depend on the Enterprise calling surface:** `app/enterprise/` voice
+  controllers, WhatsApp calling services, the Enterprise `Call` model, the
+  `calls` table as Enterprise-owned runtime state, the `channel_voice` feature
+  flag, or any Enterprise routes/services/controllers.
+- **Future calling must be Bloomwire-owned (clean-room):** public Twilio Voice
+  and Meta WhatsApp Cloud Calling APIs/SDKs, Bloomwire-owned
+  services/controllers/`bloomwire_` tables, **no copied Enterprise logic**, and at
+  most an **OSS-safe Chatwoot timeline note/activity** via the public messages
+  API.
+- **ChatwootHub telemetry:** Bloomwire production should run with **ChatwootHub
+  outbound communication disabled/removed unless explicitly approved**, for
+  **privacy, security, SaaS isolation, and customer-data protection**. This is
+  **not** a licensing bypass and does **not** permit Enterprise feature use —
+  **Enterprise features still require a valid license/subscription.**
+
 ## Security / safe DTO contract (extends global rule 8)
 
 - **No raw phone numbers, contact IDs, vendor IDs, tokens, or internal IDs**
