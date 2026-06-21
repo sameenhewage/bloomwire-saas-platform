@@ -1,0 +1,17 @@
+<section class="main-content__body">
+  <hr/>
+  <div class="pb-3">
+    <h2 class="attribute-label">Tenant activation</h2>
+
+    <% if profile.status == 'active' %>
+      <p>This tenant is active.</p>
+    <% else %>
+      <p>Activate this tenant once its Chatwoot setup is Ready and all onboarding steps are completed.</p>
+      <%= form_for([:activate, namespace, profile], method: :post, html: { class: "form" }) do |f| %>
+        <div class="form-actions">
+          <%= f.submit 'Activate tenant', data: { confirm: 'Activate this tenant now?' } %>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</section>

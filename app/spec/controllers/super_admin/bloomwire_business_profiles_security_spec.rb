@@ -96,4 +96,63 @@ RSpec.describe 'Super Admin Bloomwire businesses (edge & security)', type: :requ
       expect(response.body).not_to include('Leaky readiness message body')
     end
   end
+
+  describe 'manual tenant activation (edge & security)' do
+    let!(:pending_account) { create(:account, name: 'Pending Co') }
+    let!(:pending_profile) do
+      create(:bloomwire_business_profile, account: pending_account,
+                                          status: 'setup_pending', onboarding_status: 'in_progress')
+    end
+
+    def make_ready(target)
+      create(:inbox, account: target.account)
+      BloomwireOnboardingStep::DEFAULT_STEPS.each_with_index do |key, index|
+        create(:bloomwire_onboarding_step, bloomwire_business_profile: target,
+                                           step_key: key, status: 'completed', position: index)
+      end
+    end
+
+    it 'is tenant-scoped: activating one ready tenant does not activate another' do
+      other = create(:bloomwire_business_profile, account: create(:account, name: 'Other Ready Co'),
+                                                  status: 'setup_pending', onboarding_status: 'in_progress')
+      make_ready(pending_profile)
+      make_ready(other)
+
+      post "/super_admin/bloomwire/businesses/#{pending_profile.id}/activate"
+
+      expect(pending_profile.reload.status).to eq('active')
+      expect(other.reload.status).to eq('setup_pending')
+      expect(other.onboarding_status).to eq('in_progress')
+    end
+
+    it 'does not mutate the profile or leak Chatwoot data when activation fails' do
+      create(:inbox, account: pending_account, name: 'Secret Inbox Name')
+      create(:contact, account: pending_account, name: 'Leaky Contact')
+      create(:message, account: pending_account, content: 'Leaky message body')
+
+      post "/super_admin/bloomwire/businesses/#{pending_profile.id}/activate"
+      follow_redirect!
+
+      expect(pending_profile.reload.status).to eq('setup_pending')
+      expect(pending_profile.onboarding_status).to eq('in_progress')
+      expect(response.body).to include('Cannot activate')
+      expect(response.body).not_to include('Secret Inbox Name')
+      expect(response.body).not_to include('Leaky Contact')
+      expect(response.body).not_to include('Leaky message body')
+    end
+
+    it 'does not create Chatwoot inbox/channel/conversation/contact/message records' do
+      make_ready(pending_profile)
+
+      snapshot = lambda do
+        [Inbox.count, Channel::WebWidget.count, Conversation.count, Contact.count, Message.count]
+      end
+      before = snapshot.call
+
+      post "/super_admin/bloomwire/businesses/#{pending_profile.id}/activate"
+
+      expect(pending_profile.reload.status).to eq('active')
+      expect(snapshot.call).to eq(before)
+    end
+  end
 end
