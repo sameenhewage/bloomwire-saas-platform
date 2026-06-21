@@ -635,6 +635,7 @@
               <span class="chip bw">business profile metadata</span>
               <span class="chip bw">plan / status</span>
               <span class="chip bw">onboarding status</span>
+              <span class="chip bw">onboarding steps</span>
               <span class="chip bw later">tenant health</span>
               <span class="chip bw later">usage analytics</span>
               <span class="chip bw later">audit logs</span>
@@ -653,7 +654,7 @@
     <div class="panel" id="tab-built">
       <section class="block">
         <h2 class="sec"><span class="num">06</span> Current build state</h2>
-        <p class="sec-sub">What actually exists today. Click any slice to expand details. All three slices below are complete and runtime-verified.</p>
+        <p class="sec-sub">What actually exists today. Click any slice to expand details. Every slice below is complete and merged into <span class="pill-code">version_1</span> (Phases 0–4 Slice 1).</p>
 
         <!-- Slice 0 -->
         <div class="accordion">
@@ -705,6 +706,107 @@
               <li><span class="pill-code">app/controllers/super_admin/bloomwire_business_profiles_controller.rb</span></li>
               <li><span class="pill-code">app/dashboards/bloomwire_business_profile_dashboard.rb</span></li>
             </ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 3 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 3 — Tenant readiness backfill</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Idempotent backfill so every Chatwoot account has exactly one <span class="pill-code">bloomwire_business_profile</span>.</li>
+              <li>Defaults <span class="pill-code">status = setup_pending</span>, <span class="pill-code">onboarding_status = not_started</span>; re-runs create no duplicates.</li>
+            </ul>
+            <h5>Key service</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">Bloomwire::BusinessProfileBackfill</span> + rake <span class="pill-code">bloomwire:business_profiles:backfill</span></li></ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 4 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 4 — Tenant setup foundation</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Backend initializer to start tenant setup for one account (<span class="pill-code">not_started -&gt; in_progress</span>), idempotent.</li>
+              <li>Backend only — this is <strong>not</strong> the full onboarding wizard.</li>
+            </ul>
+            <h5>Key service</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">Bloomwire::TenantSetupInitializer</span> + rake <span class="pill-code">bloomwire:tenant_setup:initialize[ACCOUNT_ID]</span></li></ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 5 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 5 — Onboarding step tracking</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>New table <span class="pill-code">bloomwire_onboarding_steps</span> + model <span class="pill-code">BloomwireOnboardingStep</span> (<span class="pill-code">has_many</span> from the profile, one row per step).</li>
+              <li>Seed default steps, advance status, and produce a safe summary — backend only.</li>
+            </ul>
+            <h5>Key service</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">Bloomwire::OnboardingStepTracker</span> + rake <span class="pill-code">bloomwire:onboarding:*</span></li></ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 6 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 6 — Onboarding progress UI (Super Admin)</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Super Admin Businesses index/show display a safe onboarding-progress label (e.g. &ldquo;3 of 3 steps completed&rdquo;).</li>
+              <li>Read-only label only — no raw step records; controller eager-loads steps (no N+1).</li>
+            </ul>
+            <h5>Key method</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">BloomwireBusinessProfile#onboarding_progress</span></li></ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 7 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 7 — Chatwoot readiness mapping</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Super Admin shows a safe readiness label (Ready / Needs inbox/channel / No Chatwoot account / No Bloomwire profile).</li>
+              <li>Computed <strong>live</strong> from Chatwoot (inboxes/channels) — nothing copied or stored.</li>
+            </ul>
+            <h5>Key service</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">Bloomwire::ChatwootReadiness</span>; <span class="pill-code">BloomwireBusinessProfile#chatwoot_readiness</span></li></ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 8 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 8 — Manual tenant activation gate</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Backend-enforced Super Admin action that activates a tenant <strong>only</strong> when it is actually ready; safe reason codes on block.</li>
+              <li>Status change only — never creates Chatwoot inboxes/channels/webhooks or touches Chatwoot data.</li>
+            </ul>
+            <h5>Key files</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li><span class="pill-code">Bloomwire::TenantActivation</span></li>
+              <li><span class="pill-code">SuperAdmin::BloomwireBusinessProfilesController#activate</span> (<span class="pill-code">POST /super_admin/bloomwire/businesses/:id/activate</span>)</li>
+            </ul>
+          </div></div>
+        </div>
+
+        <!-- Slice 9 -->
+        <div class="accordion">
+          <div class="acc-head"><span class="status-dot"></span><span class="title">Slice 9 — Permission foundation (AccessPolicy)</span><span class="tag">Done</span><span class="chev">&#9656;</span></div>
+          <div class="acc-body"><div class="acc-body-inner">
+            <h5>What it delivered</h5>
+            <ul style="margin:0;padding-left:18px">
+              <li>Backend, tenant-scoped <span class="pill-code">Bloomwire::AccessPolicy</span> (<span class="pill-code">can?(action)</span>): Super Admin is platform-level; an account <em>administrator</em> may view only their own <em>active</em> tenant; <span class="pill-code">activate_tenant</span> is Super Admin only.</li>
+              <li>Reuses the core Chatwoot <span class="pill-code">AccountUser</span> role — <strong>no Bloomwire roles tables</strong> and <strong>no Enterprise/custom_roles</strong>.</li>
+            </ul>
+            <h5>Key file</h5>
+            <ul style="margin:0;padding-left:18px"><li><span class="pill-code">app/services/bloomwire/access_policy.rb</span></li></ul>
           </div></div>
         </div>
       </section>
@@ -896,6 +998,72 @@
           </div>
           <div class="tl-item">
             <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Business Profile Backfill / Tenant Readiness (Phase 2)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Idempotent backfill so every Chatwoot account has exactly one <span class="pill-code">bloomwire_business_profile</span> (defaults <span class="pill-code">setup_pending</span> / <span class="pill-code">not_started</span>); re-runs create no duplicates.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">Bloomwire::BusinessProfileBackfill</span> service + rake <span class="pill-code">bloomwire:business_profiles:backfill</span>, specs.</dd>
+                <dt>Not changed</dt><dd>No onboarding wizard; no profile edit UI; no Chatwoot conversation/message/contact copied.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Tenant Setup Foundation (Phase 3)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Backend initializer to start tenant setup for one account (<span class="pill-code">not_started -&gt; in_progress</span>), idempotent. Not the full wizard.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">Bloomwire::TenantSetupInitializer</span> service + rake <span class="pill-code">bloomwire:tenant_setup:initialize[ACCOUNT_ID]</span>, specs.</dd>
+                <dt>Not changed</dt><dd>No Chatwoot inbox/channel creation; no data duplicated; no UI added.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Onboarding Step Tracking (Phase 3)</h4>
+              <dl>
+                <dt>What changed</dt><dd>New table <span class="pill-code">bloomwire_onboarding_steps</span> + model <span class="pill-code">BloomwireOnboardingStep</span> (<span class="pill-code">has_many</span> from the profile); seed default steps, advance status, safe summary — backend only.</dd>
+                <dt>Files / areas</dt><dd>Migration, <span class="pill-code">BloomwireOnboardingStep</span>, <span class="pill-code">Bloomwire::OnboardingStepTracker</span> service + rake <span class="pill-code">bloomwire:onboarding:*</span>, specs.</dd>
+                <dt>Not changed</dt><dd>No onboarding wizard UI; no Chatwoot data copied.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Onboarding Progress UI in Super Admin (Phase 3)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Super Admin Businesses index/show display a safe onboarding-progress label (e.g. &ldquo;3 of 3 steps completed&rdquo;) via <span class="pill-code">BloomwireBusinessProfile#onboarding_progress</span>; controller eager-loads steps (no N+1).</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">BloomwireBusinessProfile</span>, Administrate dashboard + controller, specs.</dd>
+                <dt>Not changed</dt><dd>Read-only label only — no raw step records exposed; no data duplicated.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-20</span>
+              <h4>Added Chatwoot Readiness Mapping in Super Admin (Phase 3)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Super Admin shows a safe readiness label (Ready / Needs inbox/channel / No Chatwoot account / No Bloomwire profile), computed <strong>live</strong> from Chatwoot.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">Bloomwire::ChatwootReadiness</span> service; <span class="pill-code">BloomwireBusinessProfile#chatwoot_readiness</span>; dashboard + controller, specs.</dd>
+                <dt>Not changed</dt><dd>Label only — no ids/records; nothing copied or stored; Chatwoot untouched.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-21</span>
+              <h4>Added Manual Tenant Activation Gate (Phase 3)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Backend-enforced Super Admin action that activates a tenant <strong>only</strong> when actually ready (safe reason codes on block) via <span class="pill-code">POST /super_admin/bloomwire/businesses/:id/activate</span>.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">Bloomwire::TenantActivation</span> service; <span class="pill-code">SuperAdmin::BloomwireBusinessProfilesController#activate</span> + activation panel, specs.</dd>
+                <dt>Not changed</dt><dd>Status change only — never creates Chatwoot inboxes/channels/webhooks or touches Chatwoot data; no raw ids/data in flashes.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
               <span class="date">2026-06-21</span>
               <h4>Added Bloomwire Permission Foundation (Phase 4, Slice 1)</h4>
               <dl>
@@ -908,11 +1076,11 @@
           <div class="tl-item next">
             <div class="tl-card next">
               <span class="date">Next</span>
-              <h4>Backfill / auto-create business profiles or tenant setup workflow</h4>
+              <h4>Phase 4 — later permission slices (not started)</h4>
               <dl>
-                <dt>What changes</dt><dd>A safe way to create a Bloomwire business profile per account (backfill task + guarded creation) or a guided tenant setup workflow.</dd>
-                <dt>Files / areas</dt><dd>TBD — likely a backfill rake/runner task and/or guarded <span class="pill-code">Account</span> hook; Super Admin show detail.</dd>
-                <dt>Will not change</dt><dd>No data duplication; no Enterprise code; backend-enforced permissions.</dd>
+                <dt>What changes</dt><dd>Surface <span class="pill-code">Bloomwire::AccessPolicy</span> checks in tenant-facing UI (UX hiding only; the backend already enforces access), then expand toward platform/tenant roles and a permission matrix.</dd>
+                <dt>Files / areas</dt><dd>TBD — dashboard/controllers consuming the policy; Bloomwire roles/permission tables only when SaaS-specific custom staff permissions are required.</dd>
+                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; no Bloomwire roles tables yet.</dd>
               </dl>
             </div>
           </div>
