@@ -7,7 +7,9 @@ RSpec.describe Internal::CheckNewVersionsJob do
     data = { 'version' => '1.2.3' }
     allow(Rails.env).to receive(:production?).and_return(true)
     allow(ChatwootHub).to receive(:sync_with_hub).and_return(data)
-    job
+    with_modified_env BLOOMWIRE_DISABLE_CHATWOOT_HUB: 'false' do
+      job
+    end
     expect(ChatwootHub).to have_received(:sync_with_hub)
     expect(Redis::Alfred.get(Redis::Alfred::LATEST_CHATWOOT_VERSION)).to eq data['version']
   end

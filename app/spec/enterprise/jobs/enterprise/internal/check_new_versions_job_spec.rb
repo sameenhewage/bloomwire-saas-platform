@@ -15,7 +15,9 @@ RSpec.describe Internal::CheckNewVersionsJob do
     data = { 'version' => '1.2.3', 'plan' => 'enterprise', 'plan_quantity' => 1, 'chatwoot_support_website_token' => '123',
              'chatwoot_support_identifier_hash' => '123', 'chatwoot_support_script_url' => '123' }
     allow(ChatwootHub).to receive(:sync_with_hub).and_return(data)
-    job
+    with_modified_env BLOOMWIRE_DISABLE_CHATWOOT_HUB: 'false' do
+      job
+    end
     expect(InstallationConfig.find_by(name: 'INSTALLATION_PRICING_PLAN').value).to eq 'enterprise'
     expect(InstallationConfig.find_by(name: 'INSTALLATION_PRICING_PLAN_QUANTITY').value).to eq 1
     expect(InstallationConfig.find_by(name: 'CHATWOOT_SUPPORT_WEBSITE_TOKEN').value).to eq '123'
@@ -26,7 +28,9 @@ RSpec.describe Internal::CheckNewVersionsJob do
   it 'calls Internal::ReconcilePlanConfigService' do
     data = { 'version' => '1.2.3' }
     allow(ChatwootHub).to receive(:sync_with_hub).and_return(data)
-    job
+    with_modified_env BLOOMWIRE_DISABLE_CHATWOOT_HUB: 'false' do
+      job
+    end
     expect(reconsile_premium_config_service).to have_received(:perform)
   end
 end
