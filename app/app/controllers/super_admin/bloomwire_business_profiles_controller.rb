@@ -13,6 +13,8 @@ class SuperAdmin::BloomwireBusinessProfilesController < SuperAdmin::ApplicationC
     onboarding_incomplete: 'Cannot activate: onboarding is not complete.'
   }.freeze
 
+  ACTIVATION_NOT_AUTHORIZED = 'Not authorized to activate this tenant.'.freeze
+
   # Preload onboarding steps and each account's inboxes so the onboarding progress
   # and Chatwoot readiness columns do not trigger N+1 queries while rendering the
   # list/show pages.
@@ -20,11 +22,17 @@ class SuperAdmin::BloomwireBusinessProfilesController < SuperAdmin::ApplicationC
     super.includes(:onboarding_steps, account: :inboxes)
   end
 
-  # Manually activate a tenant. Activation is enforced by
-  # Bloomwire::TenantActivation: it only succeeds when the tenant is actually
-  # ready, and a blocked gate mutates nothing and surfaces a safe reason. It never
-  # creates/configures Chatwoot inboxes/channels/webhooks or touches Chatwoot data.
+  # Manually activate a tenant. Access is backend-enforced by
+  # Bloomwire::AccessPolicy (activate_tenant is a platform-level control), and the
+  # transition itself is enforced by Bloomwire::TenantActivation: it only succeeds
+  # when the tenant is actually ready, and a blocked gate mutates nothing and
+  # surfaces a safe reason. It never creates/configures Chatwoot
+  # inboxes/channels/webhooks or touches Chatwoot data.
   def activate
+    unless Bloomwire::AccessPolicy.new(user: current_super_admin, profile: requested_resource).can?(:activate_tenant)
+      return redirect_to [namespace, requested_resource], alert: ACTIVATION_NOT_AUTHORIZED
+    end
+
     result = Bloomwire::TenantActivation.new(requested_resource).activate
     redirect_to [namespace, requested_resource], **activation_flash(result)
   end

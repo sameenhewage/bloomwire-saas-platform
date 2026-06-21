@@ -155,4 +155,42 @@ RSpec.describe 'Super Admin Bloomwire businesses (edge & security)', type: :requ
       expect(snapshot.call).to eq(before)
     end
   end
+
+  describe 'activation is backend-enforced via Bloomwire::AccessPolicy (not frontend-only)' do
+    let!(:ready_account) { create(:account, name: 'Policy Ready Co') }
+    let!(:ready_profile) do
+      create(:bloomwire_business_profile, account: ready_account,
+                                          status: 'setup_pending', onboarding_status: 'in_progress')
+    end
+
+    before do
+      create(:inbox, account: ready_account)
+      BloomwireOnboardingStep::DEFAULT_STEPS.each_with_index do |key, index|
+        create(:bloomwire_onboarding_step, bloomwire_business_profile: ready_profile,
+                                           step_key: key, status: 'completed', position: index)
+      end
+    end
+
+    it 'refuses to activate a ready tenant when the backend policy denies, even for a signed-in super admin' do
+      denying = instance_double(Bloomwire::AccessPolicy, can?: false)
+      allow(Bloomwire::AccessPolicy).to receive(:new).and_return(denying)
+
+      post "/super_admin/bloomwire/businesses/#{ready_profile.id}/activate"
+
+      expect(ready_profile.reload.status).to eq('setup_pending')
+      follow_redirect!
+      expect(response.body).to match(/not authorized/i)
+    end
+
+    it 'consults the policy for :activate_tenant before activating' do
+      spy_policy = instance_double(Bloomwire::AccessPolicy)
+      allow(spy_policy).to receive(:can?).with(:activate_tenant).and_return(true)
+      allow(Bloomwire::AccessPolicy).to receive(:new).and_return(spy_policy)
+
+      post "/super_admin/bloomwire/businesses/#{ready_profile.id}/activate"
+
+      expect(spy_policy).to have_received(:can?).with(:activate_tenant)
+      expect(ready_profile.reload.status).to eq('active')
+    end
+  end
 end

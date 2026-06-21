@@ -714,7 +714,7 @@
     <div class="panel" id="tab-permissions">
       <section class="block">
         <h2 class="sec"><span class="num">07</span> Permission matrix</h2>
-        <p class="sec-sub">Who can do what. <strong>Own tenant only</strong> = scoped to their company. <strong>Limited</strong> = depends on granted permissions. <strong>Later</strong> = planned, not yet enforced. Backend enforces all of this — frontend hiding is UX only.</p>
+        <p class="sec-sub">Who can do what. <strong>Own tenant only</strong> = scoped to their company. <strong>Limited</strong> = depends on granted permissions. <strong>Later</strong> = planned, not yet enforced. Backend enforces all of this — frontend hiding is UX only. The first backend slice of this is live: <span class="pill-code">Bloomwire::AccessPolicy</span> (tenant-scoped, core <span class="pill-code">AccountUser</span> role only, no Enterprise/custom_roles) enforces tenant-metadata <em>view</em> (own active tenant, admin) and <span class="pill-code">activate_tenant</span> (Super Admin only).</p>
         <div class="matrix-scroll">
           <table class="matrix">
             <thead>
@@ -891,6 +891,17 @@
                 <dt>What changed</dt><dd>New <span class="pill-code">bloomwire_business_profiles</span> table linked 1:1 to accounts; Super Admin list/show at <span class="pill-code">/super_admin/bloomwire/businesses</span> tracking industry/plan/status/onboarding.</dd>
                 <dt>Files / areas</dt><dd>Migration, model, administrate dashboard, super_admin controller, route, sidebar nav, specs.</dd>
                 <dt>Not changed</dt><dd>List/show only (no create/edit/delete); existing Super Admin pages intact; no sensitive data exposed; no data duplicated.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-21</span>
+              <h4>Added Bloomwire Permission Foundation (Phase 4, Slice 1)</h4>
+              <dl>
+                <dt>What changed</dt><dd>New backend, tenant-scoped <span class="pill-code">Bloomwire::AccessPolicy</span> deciding who may use Bloomwire tenant features (<span class="pill-code">view_business_profile</span> / <span class="pill-code">view_onboarding_status</span> / <span class="pill-code">view_chatwoot_readiness</span> / <span class="pill-code">activate_tenant</span>). Super Admin is platform-level; an account <em>administrator</em> may view only their own <em>active</em> tenant; agents, non-members, and cross-tenant access are denied. The Super Admin activate endpoint is now backend-enforced through the policy.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">app/services/bloomwire/access_policy.rb</span>, super_admin businesses controller (activate guard), policy + controller specs.</dd>
+                <dt>Not changed</dt><dd>Membership read from core <span class="pill-code">AccountUser</span> role only — no Enterprise/custom_roles; no roles table or role-management UI; no Chatwoot conversation/message/contact data copied or exposed; no frontend-only enforcement.</dd>
               </dl>
             </div>
           </div>

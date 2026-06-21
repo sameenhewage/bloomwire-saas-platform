@@ -295,9 +295,9 @@ contacts/messages — this slice only reads existing state.
 **Status:** ✅ merged into `version_1` (PR #11). Verified — acceptance RED,
 edge/security RED, GREEN 99 examples, RuboCop clean, DB + browser proof.
 
-### Current slice — Bloomwire Manual Tenant Activation
+### Completed slice — Bloomwire Manual Tenant Activation
 
-`feature/bloomwire-manual-tenant-activation` (off `version_1`)
+`feature/bloomwire-manual-tenant-activation` (merged into `version_1` via PR #12)
 
 The final Phase 3 readiness-lifecycle step: a backend-enforced Super Admin action
 that lets operators activate a tenant only once it is actually ready. Activation
@@ -333,9 +333,8 @@ is a control-plane status change only — it never builds Chatwoot functionality
   AI/human workflow, staff invite flow, full onboarding wizard, Chatwoot
   conversation/message/contact copy, dev DB cleanup.
 
-**Status:** delivered on `feature/bloomwire-manual-tenant-activation` and verified
-(acceptance RED, edge/security RED, GREEN 121 examples, RuboCop clean, DB + browser
-proof). Awaiting review/integration into `version_1`.
+**Status:** ✅ merged into `version_1` (PR #12). Verified — acceptance RED,
+edge/security RED, GREEN 121 examples, RuboCop clean, DB + browser proof.
 
 ### Later Phase 3 slices
 
@@ -345,18 +344,57 @@ proof). Awaiting review/integration into `version_1`.
 
 ---
 
-## Phase 4 — Roles & Permissions Engine ⏳ Later
+## Phase 4 — Roles & Permissions Engine 🚧 In progress
 
-Do not implement yet.
+Backend enforcement is mandatory; frontend hiding is UX only.
 
-Candidate scope later:
+### Current slice — Bloomwire Permission Foundation / Access Policy
+
+`feature/bloomwire-permission-foundation` (off `version_1`)
+
+The smallest backend foundation for Bloomwire roles & permissions: define and
+enforce who may use Bloomwire tenant features, without building any
+role-management UI yet. Membership is read from the existing core Chatwoot
+AccountUser role — no Enterprise/custom_roles.
+
+**Acceptance truth**
+
+- User expects the system to know who can access Bloomwire tenant features and
+  what they may do, before tenant dashboard features are built.
+- Current system has tenant setup/readiness/activation but no access policy.
+- Done means a backend, tenant-scoped permission policy exists: Super Admin is
+  platform-level; an account administrator may view only their own *active*
+  tenant's metadata; agents, non-members, and cross-tenant access are denied;
+  tenant users cannot activate tenants; missing user/account/profile denies
+  safely; no frontend-only enforcement; no Enterprise/custom_roles; no Chatwoot
+  conversation/message/contact data copied or exposed.
+
+**In scope**
+
+- Backend `Bloomwire::AccessPolicy` (`user:` / `profile:` -> `can?(action)`),
+  actions `view_business_profile` / `view_onboarding_status` /
+  `view_chatwoot_readiness` / `activate_tenant`.
+- Wire the policy into the Super Admin activate endpoint (backend-enforced).
+- Acceptance + edge/security specs (allowed/denied, tenant isolation,
+  cross-tenant denial, safe failures, no Enterprise/custom_roles, no Chatwoot
+  data copy/expose).
+
+**Out of scope**
+
+- No roles table, no role-management UI, no staff invite flow, no billing, no
+  WhatsApp/channel setup, no AI workflow, no Enterprise/custom_roles, no Chatwoot
+  conversation/message/contact copy, no dev DB cleanup.
+
+**Status:** delivered on `feature/bloomwire-permission-foundation` and verified
+(acceptance RED, edge/security RED, GREEN 142 examples, RuboCop clean, DB +
+browser proof). Awaiting review/integration into `version_1`.
+
+### Later Phase 4 slices
 
 - platform roles,
 - tenant roles,
-- permission matrix,
-- backend-enforced authorization.
-
-Frontend hiding is UX only. Backend enforcement is mandatory.
+- permission-matrix surfaces,
+- per-action granular permissions.
 
 ---
 
@@ -407,9 +445,9 @@ Candidate scope later:
 ## Current checkpoint
 
 ```text
-Current phase: Phase 3 — Business Onboarding / Tenant Setup
-Current slice: Bloomwire Manual Tenant Activation (delivered on branch, in review)
-Last merged: Bloomwire Chatwoot Readiness Mapping (PR #11 -> version_1)
+Current phase: Phase 4 — Roles & Permissions Engine
+Current slice: Bloomwire Permission Foundation / Access Policy (delivered on branch, in review)
+Last merged: Bloomwire Manual Tenant Activation (PR #12 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
+Do not start yet: WhatsApp setup, billing, analytics, operational polish, full roles/permissions UI
 ```
