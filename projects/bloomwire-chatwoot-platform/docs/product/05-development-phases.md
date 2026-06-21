@@ -189,9 +189,9 @@ This is **not** the full onboarding wizard.
 **Status:** ✅ merged into `version_1` (PR #8). Verified — acceptance RED,
 edge/security RED, GREEN, DB + browser proof.
 
-### Current slice — Bloomwire Onboarding Step Tracking
+### Completed slice — Bloomwire Onboarding Step Tracking
 
-`feature/bloomwire-onboarding-step-tracking` (off `version_1`)
+`feature/bloomwire-onboarding-step-tracking` (merged into `version_1` via PR #9)
 
 Backend-only tracking of onboarding steps for a `BloomwireBusinessProfile`, so an
 operator can see and advance where a tenant is in setup. This is **not** the
@@ -222,8 +222,42 @@ onboarding wizard UI.
   AI/human workflow, staff invite flow, industry preset engine, and any
   Chatwoot conversation/message/contact duplication.
 
-**Status:** delivered on `feature/bloomwire-onboarding-step-tracking` and verified
-(acceptance RED, edge/security RED, GREEN 70 examples, RuboCop clean, DB + browser
+**Status:** ✅ merged into `version_1` (PR #9). Verified — acceptance RED,
+edge/security RED, GREEN 70 examples, RuboCop clean, DB + browser proof.
+
+### Current slice — Bloomwire Onboarding Step Status UI
+
+`feature/bloomwire-onboarding-step-status-ui` (off `version_1`)
+
+Smallest Super Admin UI surface that makes the existing onboarding step tracking
+visible to platform operators. This is **not** the onboarding wizard.
+
+**Acceptance truth**
+
+- User expects operators to see a tenant's onboarding step progress from the
+  Super Admin Bloomwire Businesses area.
+- Current system tracks steps in the backend (PR #9) but never surfaces them in
+  the UI.
+- Done means the Bloomwire Businesses index/show pages display a safe onboarding
+  progress summary (total, completed, current step, all-completed), missing steps
+  are handled safely, and no Chatwoot data is exposed.
+
+**In scope**
+
+- Read-only `BloomwireBusinessProfile#onboarding_step_summary` (value object) and
+  `#onboarding_progress` (safe label) computed from existing steps.
+- `onboarding_progress` column on the Administrate index + show pages; controller
+  eager-loads `:onboarding_steps` to avoid N+1.
+- Safe summary only (counts + humanized current step); no raw records/ids.
+
+**Out of scope**
+
+- WhatsApp/channel setup, inbox/channel engine, full onboarding wizard, billing,
+  roles/permissions, AI/human workflow, staff invite flow, industry preset
+  engine, Chatwoot conversation/message/contact copy, dev DB cleanup.
+
+**Status:** delivered on `feature/bloomwire-onboarding-step-status-ui` and verified
+(acceptance RED, edge/security RED, GREEN 83 examples, RuboCop clean, DB + browser
 proof). Awaiting review/integration into `version_1`.
 
 ### Later Phase 3 slices
@@ -297,8 +331,8 @@ Candidate scope later:
 
 ```text
 Current phase: Phase 3 — Business Onboarding / Tenant Setup
-Current slice: Bloomwire Onboarding Step Tracking (delivered on branch, in review)
-Last merged: Bloomwire Tenant Setup Foundation (PR #8 -> version_1)
+Current slice: Bloomwire Onboarding Step Status UI (delivered on branch, in review)
+Last merged: Bloomwire Onboarding Step Tracking (PR #9 -> version_1)
 Required workflow: Independent TDD Workflow
 Do not start yet: roles engine, WhatsApp setup, billing, analytics, operational polish
 ```
