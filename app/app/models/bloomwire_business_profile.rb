@@ -26,6 +26,7 @@ class BloomwireBusinessProfile < ApplicationRecord
   ONBOARDING_STATUSES = %w[not_started in_progress completed].freeze
 
   belongs_to :account
+  has_many :onboarding_steps, class_name: 'BloomwireOnboardingStep', dependent: :destroy
 
   validates :account_id, presence: true, uniqueness: true
   validates :status, presence: true, inclusion: { in: STATUSES }
