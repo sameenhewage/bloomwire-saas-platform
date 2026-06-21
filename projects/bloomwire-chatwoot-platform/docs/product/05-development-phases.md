@@ -90,9 +90,9 @@ conversation engine.
 Make tenant metadata consistent so every Chatwoot account can be represented as a
 Bloomwire business without missing rows or duplicates.
 
-### Delivered slice
+### Delivered slice — Bloomwire Business Profile Backfill
 
-`feature/bloomwire-business-profile-backfill`
+`feature/bloomwire-business-profile-backfill` (merged into `version_1` via PR #7)
 
 - Idempotent `Bloomwire::BusinessProfileBackfill` service + `bloomwire:business_profiles:backfill`
   rake task.
@@ -150,9 +150,12 @@ Required RED tests before implementation:
 
 ---
 
-## Phase 3 — Business Onboarding / Tenant Setup 🔄 Current
+## Phase 3 — Business Onboarding / Tenant Setup ✅ Done
 
-Phase 2 is complete. This is now the active phase.
+Phase 2 is complete. All Phase 3 slices below are merged into `version_1` — tenant
+setup foundation (PR #8), onboarding step tracking (PR #9), onboarding progress
+UI (PR #10), Chatwoot readiness mapping (PR #11), and manual tenant activation
+(PR #12). Phase 4 is now the active phase.
 
 ### Completed slice — Bloomwire Tenant Setup Foundation
 
@@ -344,13 +347,13 @@ edge/security RED, GREEN 121 examples, RuboCop clean, DB + browser proof.
 
 ---
 
-## Phase 4 — Roles & Permissions Engine 🚧 In progress
+## Phase 4 — Roles & Permissions Engine � Current
 
 Backend enforcement is mandatory; frontend hiding is UX only.
 
-### Current slice — Bloomwire Permission Foundation / Access Policy
+### Completed slice — Bloomwire Permission Foundation / Access Policy
 
-`feature/bloomwire-permission-foundation` (off `version_1`)
+`feature/bloomwire-permission-foundation` (merged into `version_1` via PR #13)
 
 The smallest backend foundation for Bloomwire roles & permissions: define and
 enforce who may use Bloomwire tenant features, without building any
@@ -385,16 +388,25 @@ AccountUser role — no Enterprise/custom_roles.
   WhatsApp/channel setup, no AI workflow, no Enterprise/custom_roles, no Chatwoot
   conversation/message/contact copy, no dev DB cleanup.
 
-**Status:** delivered on `feature/bloomwire-permission-foundation` and verified
-(acceptance RED, edge/security RED, GREEN 142 examples, RuboCop clean, DB +
-browser proof). Awaiting review/integration into `version_1`.
+**Status:** ✅ merged into `version_1` (PR #13). Verified — acceptance RED,
+edge/security RED, GREEN 142 examples, RuboCop clean, DB + browser proof.
 
-### Later Phase 4 slices
+The current permission foundation reuses the **core Chatwoot `AccountUser` role**
+(`administrator` / `agent`) — there are **no Bloomwire roles tables** and **no
+Chatwoot Enterprise / `custom_roles` dependency**. Bloomwire-specific
+roles/permission tables are **future-only**, to be added when SaaS-specific custom
+staff permissions become necessary (see *Next / later Phase 4 slices*).
 
+### Next / later Phase 4 slices (not started)
+
+- surface `Bloomwire::AccessPolicy` checks in tenant-facing UI (UX hiding only;
+  the backend already enforces access),
 - platform roles,
 - tenant roles,
 - permission-matrix surfaces,
-- per-action granular permissions.
+- per-action granular permissions,
+- Bloomwire roles/permission tables (only when SaaS-specific custom staff
+  permissions are required).
 
 ---
 
@@ -446,8 +458,8 @@ Candidate scope later:
 
 ```text
 Current phase: Phase 4 — Roles & Permissions Engine
-Current slice: Bloomwire Permission Foundation / Access Policy (delivered on branch, in review)
-Last merged: Bloomwire Manual Tenant Activation (PR #12 -> version_1)
+Current position: Phase 4 Slice 1 (Permission Foundation / AccessPolicy) merged; next Phase 4 slice not started
+Last merged: Bloomwire Permission Foundation / Access Policy (PR #13 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: WhatsApp setup, billing, analytics, operational polish, full roles/permissions UI
+Do not start yet: WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI
 ```

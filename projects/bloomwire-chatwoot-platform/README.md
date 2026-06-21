@@ -2,7 +2,8 @@
 
 Bloomwire is an **omnichannel customer service SaaS platform** built on top of
 **Chatwoot Community Edition**. This folder holds the project's documentation and
-architecture context. No application code lives here yet.
+architecture context; the Chatwoot CE application and Bloomwire SaaS features live
+in the repo's `app/` directory.
 
 ---
 
@@ -26,11 +27,20 @@ business-management layer around it.
 
 ## Current repo status
 
-- **Phase:** documentation + architecture foundation only.
-- **No application code** has been written for Bloomwire.
-- **Chatwoot source has not been imported** into this project yet.
-- Chatwoot source integration/import strategy will be decided in the runtime
-  baseline slice before any Bloomwire application feature work begins.
+- **Phase:** Phase 4 — Roles & Permissions Engine (Slice 1 merged). Phases 0–3
+  are complete and merged into `version_1`.
+- **Chatwoot CE is running** as the base engine (source in the repo's `app/`
+  directory); Bloomwire SaaS features are built additively on top of it.
+- **Built so far:** Bloomwire business profiles + Super Admin businesses list,
+  tenant readiness backfill, tenant setup foundation, onboarding step tracking +
+  progress UI, Chatwoot readiness mapping, manual tenant activation gate, and the
+  first permission foundation (`Bloomwire::AccessPolicy`).
+- **Source of truth:** Chatwoot owns conversations / messages / contacts;
+  Bloomwire never duplicates them. No Chatwoot Enterprise / `custom_roles`
+  dependency; permissions currently reuse Chatwoot `AccountUser` roles (Bloomwire
+  roles tables are future-only).
+- See `docs/product/05-development-phases.md` (execution source of truth) and
+  `docs/system-overview/index.html` (living overview + changelog) for detail.
 
 ## How work is organized
 
@@ -59,22 +69,19 @@ feature/*  →  version_1  →  develop  →  main
 - `version_1`, `develop`, and `main` are **protected** (PR + 1 approval).
 - Never push directly to a protected branch.
 
-## Fast demo path
+## Demo path
 
-The next work should stay lean and prove the product quickly:
+The lean demo path is built and runtime-verified:
 
-1. **Slice 0 — Chatwoot Runtime Baseline**
-   - prove Chatwoot CE can boot in the chosen repo/environment;
-   - prove login and basic inbox/conversation path;
-   - define the VPS/HTTPS demo path;
-   - no Bloomwire SaaS features yet.
-2. **Slice 1 — Bloomwire Business Profile + Super Admin Business List**
-   - let Bloomwire admins see business tenants enriched with SaaS metadata
-     (business name, industry, plan, status, onboarding status, created date).
+1. **Chatwoot Runtime Baseline** — Chatwoot CE boots and logs in; the VPS/HTTPS
+   demo path is defined.
+   (`docs/product/05-prd-slice-0-chatwoot-runtime-baseline.md`)
+2. **Bloomwire Business Profile + Super Admin Businesses** — Bloomwire admins see
+   business tenants enriched with SaaS metadata (industry, plan, status,
+   onboarding status, Chatwoot readiness) at `/super_admin/bloomwire/businesses`,
+   and can manually activate a ready tenant.
+   (`docs/product/04-prd-first-slice.md`)
 
-See:
-
-- `docs/product/05-prd-slice-0-chatwoot-runtime-baseline.md`
-- `docs/product/04-prd-first-slice.md`
-
-Both slices are documented only in this PR. Implementation is separate.
+For the full, current list of everything built (Phases 0–4 Slice 1), see
+`docs/product/05-development-phases.md` and the living
+`docs/system-overview/index.html`.

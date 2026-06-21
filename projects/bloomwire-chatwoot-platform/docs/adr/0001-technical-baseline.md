@@ -48,3 +48,9 @@ proprietary code.
 
 - This ADR is part of the documentation foundation. **No application code and no
   Chatwoot source import** are introduced by the decision itself.
+- **Implementation status (updated 2026-06-21):** this baseline is now in force —
+  Chatwoot CE runs from the repo's `app/` directory and Bloomwire SaaS features
+  (Phases 0–4 Slice 1) are built on top of it per these decisions. Current
+  permissions reuse Chatwoot `AccountUser` roles (no Enterprise/`custom_roles`,
+  no Bloomwire roles tables yet). See `../product/05-development-phases.md` and
+  `../system-overview/index.html`.

@@ -36,10 +36,14 @@ No build step, no install, no network access is required.
   `/app/accounts/:accountId/...`.
 - **Data ownership** — what Chatwoot owns vs what Bloomwire owns (no data
   duplication).
-- **Current build state** — Slice 0 / Slice 1 / Slice 2 (expandable).
-- **Permission matrix** — role × capability.
+- **Current build state** — every completed slice (Phases 0–4 Slice 1):
+  platform foundation, account overview, business profiles, tenant readiness
+  backfill, tenant setup, onboarding tracking + progress UI, Chatwoot readiness,
+  manual tenant activation, and the permission foundation (`Bloomwire::AccessPolicy`).
+- **Permission matrix** — role × capability (backend-enforced; `AccessPolicy` is
+  the first live slice, using core Chatwoot `AccountUser` roles, no Enterprise/custom_roles).
 - **Request flow** — a message's journey from customer to tenant health.
-- **Changelog** — timeline of changes.
+- **Changelog** — timeline of every completed slice.
 
 ## Maintenance rule (important)
 
