@@ -5,7 +5,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show]
-  before_action :authorize_whatsapp_setup!, only: [:create, :update], if: :whatsapp_setup_request?
+  before_action :authorize_whatsapp_setup!, only: [:create, :update, :register_webhook], if: :whatsapp_setup_request?
 
   include Api::V1::Accounts::Concerns::WhatsappHealthManagement
   include Bloomwire::WhatsappSetupGuard
@@ -86,9 +86,22 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def whatsapp_setup_request?
     case action_name
     when 'create' then params.dig(:channel, :type) == 'whatsapp'
-    when 'update' then @inbox&.whatsapp?
+    when 'update' then whatsapp_inbox? && whatsapp_setup_channel_params?
+    when 'register_webhook' then whatsapp_inbox?
     else false
     end
+  end
+
+  def whatsapp_inbox?
+    @inbox&.whatsapp?
+  end
+
+  # WhatsApp setup/credential/reauthorization params live under `channel`
+  # (Channel::Whatsapp::EDITABLE_ATTRS). Ordinary inbox maintenance (name,
+  # auto-assignment, working hours, non-channel settings) is top-level and is NOT gated.
+  def whatsapp_setup_channel_params?
+    channel_keys = params.fetch(:channel, {}).keys.map(&:to_s)
+    channel_keys.intersect?(%w[provider_config provider phone_number])
   end
 
   def fetch_inbox

@@ -6,10 +6,14 @@
 # membership/role (NOT Enterprise custom_roles) and returns a boolean only — it
 # never reads or exposes Chatwoot conversation/message/contact data.
 #
-# Current rule (mirrors the pre-existing admin gate, plus platform):
-# - SuperAdmin (STI subclass of User): platform principal — allowed.
+# Current rule (matches the reachable, pre-existing admin gate):
 # - A User who is an `administrator` AccountUser of the tenant's account — allowed.
 # - Everyone else (agents, non-members, cross-tenant, nil) — denied.
+#
+# SuperAdmin / platform-initiated WhatsApp setup is intentionally FUTURE WORK: these
+# account-scoped controllers require AccountUser membership before this policy is
+# reachable, so a membership-less SuperAdmin cannot reach WhatsApp setup today. We do
+# not claim platform support here until it is made truly reachable with tests.
 #
 # Intentionally PROFILE-AGNOSTIC in this slice: it does NOT read
 # BloomwireBusinessProfile, so tenants without a profile keep working exactly as
@@ -24,16 +28,11 @@ class Bloomwire::ChannelControlPolicy
   # Returns a strict boolean. Never raises for nil inputs (safe deny).
   def can_setup_whatsapp?
     return false if @user.nil? || @account.nil?
-    return true if super_admin?
 
     account_administrator?
   end
 
   private
-
-  def super_admin?
-    @user.is_a?(SuperAdmin)
-  end
 
   # Membership is read from the core AccountUser role only (no Enterprise roles).
   def account_administrator?

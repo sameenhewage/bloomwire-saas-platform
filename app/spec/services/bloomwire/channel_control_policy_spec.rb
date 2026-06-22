@@ -15,11 +15,15 @@ RSpec.describe Bloomwire::ChannelControlPolicy do
   end
 
   describe '#can_setup_whatsapp?' do
-    context 'when the user is a SuperAdmin (platform)' do
+    # SuperAdmin / platform WhatsApp setup is intentionally FUTURE WORK in this slice.
+    # These account-scoped controllers require AccountUser membership before the policy
+    # is reachable, so the policy matches that reachable behavior: a membership-less
+    # SuperAdmin is denied rather than carrying a misleading platform allowance.
+    context 'when the user is a SuperAdmin without tenant membership' do
       let(:super_admin) { create(:super_admin) }
 
-      it 'is allowed (platform principal)' do
-        expect(policy_for(super_admin).can_setup_whatsapp?).to be(true)
+      it 'is denied (no AccountUser membership; platform setup is future work)' do
+        expect(policy_for(super_admin).can_setup_whatsapp?).to be(false)
       end
     end
 
