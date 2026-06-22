@@ -104,9 +104,17 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   # be gated too, otherwise `{ channel: { type: 'whatsapp' } }` could mutate
   # reauthorization state while bypassing the policy. Ordinary inbox maintenance
   # (name, auto-assignment, working hours) is top-level and is NOT gated.
+  #
+  # This runs as a before_action, i.e. before `permitted_params` normalizes a
+  # legacy `'null'` string to nil (see permitted_params). A maintenance PATCH can
+  # therefore arrive with `channel: nil` or `channel: 'null'`; neither responds to
+  # `keys`, so we treat any non-keyed payload as "not setup params" instead of
+  # crashing on `.keys`.
   def whatsapp_setup_channel_params?
-    channel_keys = params.fetch(:channel, {}).keys.map(&:to_s)
-    channel_keys.intersect?(%w[type provider_config provider phone_number])
+    channel_params = params[:channel]
+    return false unless channel_params.respond_to?(:keys)
+
+    channel_params.keys.map(&:to_s).intersect?(%w[type provider_config provider phone_number])
   end
 
   def fetch_inbox

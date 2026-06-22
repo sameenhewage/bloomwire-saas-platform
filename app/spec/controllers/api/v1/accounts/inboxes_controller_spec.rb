@@ -678,6 +678,38 @@ RSpec.describe 'Inboxes API', type: :request do
           # reauthorization state was mutated while bypassing the policy seam.
           expect(response).to have_http_status(:unauthorized)
         end
+
+        it 'does not treat a nil channel payload as whatsapp setup params (maintenance stays behavior-neutral under a denying policy)' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { name: 'Renamed WA Inbox', enable_auto_assignment: false, channel: nil },
+                as: :json
+
+          expect(response).to have_http_status(:success)
+          expect(whatsapp_inbox.reload.name).to eq('Renamed WA Inbox')
+          expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
+        end
+
+        it 'does not treat a legacy "null" string channel as setup params (maintenance stays behavior-neutral under a denying policy)' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { name: 'Renamed WA Inbox', enable_auto_assignment: false, channel: 'null' },
+                as: :json
+
+          expect(response).to have_http_status(:success)
+          expect(whatsapp_inbox.reload.name).to eq('Renamed WA Inbox')
+          expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
+        end
       end
 
       it 'updates twitter inbox when administrator' do
