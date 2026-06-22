@@ -661,6 +661,23 @@ RSpec.describe 'Inboxes API', type: :request do
           expect(whatsapp_inbox.reload.name).to eq('Renamed WA Inbox')
           expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
         end
+
+        it 'gates a whatsapp channel update that only sends channel[type] when the policy denies (no reauthorization mutation)' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { channel: { type: 'whatsapp' } },
+                as: :json
+
+          # A 401 from the before_action guarantees the update action body
+          # (reauthorize_and_update_channel -> reauthorized!) never ran, so no
+          # reauthorization state was mutated while bypassing the policy seam.
+          expect(response).to have_http_status(:unauthorized)
+        end
       end
 
       it 'updates twitter inbox when administrator' do

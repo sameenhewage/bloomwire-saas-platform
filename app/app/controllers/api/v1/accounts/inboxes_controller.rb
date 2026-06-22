@@ -96,12 +96,17 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     @inbox&.whatsapp?
   end
 
-  # WhatsApp setup/credential/reauthorization params live under `channel`
-  # (Channel::Whatsapp::EDITABLE_ATTRS). Ordinary inbox maintenance (name,
-  # auto-assignment, working hours, non-channel settings) is top-level and is NOT gated.
+  # Gate ANY permitted WhatsApp `channel` update through the setup seam. The
+  # controller permits `channel[:type]` plus Channel::Whatsapp::EDITABLE_ATTRS
+  # (provider/provider_config/phone_number), and `channel_update_required?` treats
+  # any permitted `channel` payload as a channel update that runs
+  # `reauthorize_and_update_channel` (which calls `reauthorized!`). So `type` must
+  # be gated too, otherwise `{ channel: { type: 'whatsapp' } }` could mutate
+  # reauthorization state while bypassing the policy. Ordinary inbox maintenance
+  # (name, auto-assignment, working hours) is top-level and is NOT gated.
   def whatsapp_setup_channel_params?
     channel_keys = params.fetch(:channel, {}).keys.map(&:to_s)
-    channel_keys.intersect?(%w[provider_config provider phone_number])
+    channel_keys.intersect?(%w[type provider_config provider phone_number])
   end
 
   def fetch_inbox
