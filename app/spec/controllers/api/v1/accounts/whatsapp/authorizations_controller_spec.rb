@@ -16,6 +16,23 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
       let(:agent) { create(:user, account: account, role: :agent) }
       let(:administrator) { create(:user, account: account, role: :administrator) }
 
+      context 'when a non-admin agent makes the request (Bloomwire 4.4-a lockdown)' do
+        it 'returns unauthorized and does not invoke the embedded signup service' do
+          expect(Whatsapp::EmbeddedSignupService).not_to receive(:new)
+
+          post "/api/v1/accounts/#{account.id}/whatsapp/authorization",
+               params: {
+                 code: 'test_code',
+                 business_id: 'test_business_id',
+                 waba_id: 'test_waba_id'
+               },
+               headers: agent.create_new_auth_token,
+               as: :json
+
+          expect(response).to have_http_status(:unauthorized)
+        end
+      end
+
       context 'when authenticated user makes request' do
         it 'returns unprocessable entity when code is missing' do
           post "/api/v1/accounts/#{account.id}/whatsapp/authorization",
@@ -23,7 +40,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unprocessable_entity)
@@ -36,7 +53,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  code: 'test_code',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unprocessable_entity)
@@ -49,7 +66,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  code: 'test_code',
                  business_id: 'test_business_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unprocessable_entity)
@@ -77,7 +94,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  waba_id: 'test_waba_id',
                  phone_number_id: 'test_phone_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:success)
@@ -115,7 +132,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  waba_id: 'test_waba_id',
                  phone_number_id: 'test_phone_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
         end
 
@@ -144,7 +161,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:success)
@@ -159,7 +176,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unprocessable_entity)
@@ -180,7 +197,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
         end
 
@@ -194,7 +211,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unprocessable_entity)
@@ -211,7 +228,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unprocessable_entity)
@@ -229,7 +246,7 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
                  business_id: 'test_business_id',
                  waba_id: 'test_waba_id'
                },
-               headers: agent.create_new_auth_token,
+               headers: administrator.create_new_auth_token,
                as: :json
 
           expect(response).to have_http_status(:unauthorized)
@@ -456,29 +473,15 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
         create(:inbox_member, inbox: whatsapp_inbox, user: agent)
       end
 
-      it 'returns unprocessable_entity error' do
-        allow(whatsapp_channel).to receive(:reauthorization_required?).and_return(true)
-
-        # Stub the embedded signup service to prevent HTTP calls
-        embedded_signup_service = instance_double(Whatsapp::EmbeddedSignupService)
-        allow(Whatsapp::EmbeddedSignupService).to receive(:new).with(
-          account: account,
-          params: {
-            code: 'test',
-            business_id: 'test',
-            waba_id: 'test'
-          },
-          inbox_id: whatsapp_inbox.id
-        ).and_return(embedded_signup_service)
-        allow(embedded_signup_service).to receive(:perform).and_return(whatsapp_channel)
+      it 'returns unauthorized and does not invoke the embedded signup service' do
+        expect(Whatsapp::EmbeddedSignupService).not_to receive(:new)
 
         post "/api/v1/accounts/#{account.id}/whatsapp/authorization",
              params: { inbox_id: whatsapp_inbox.id, code: 'test', business_id: 'test', waba_id: 'test' },
              headers: agent.create_new_auth_token,
              as: :json
 
-        # Agents should get unprocessable_entity since they can find the inbox but channel doesn't need reauth
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unauthorized)
       end
     end
 

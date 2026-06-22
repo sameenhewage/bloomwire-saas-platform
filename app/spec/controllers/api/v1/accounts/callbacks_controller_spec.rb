@@ -69,6 +69,21 @@ RSpec.describe 'Callbacks API', type: :request do
         expect(response).to have_http_status(:success)
       end
     end
+
+    context 'when it is an agent (Bloomwire 4.4-a channel-creation lockdown)' do
+      let(:agent) { create(:user, account: account, role: :agent) }
+
+      it 'returns unauthorized and does not register a facebook page' do
+        expect do
+          post "/api/v1/accounts/#{account.id}/callbacks/register_facebook_page",
+               headers: agent.create_new_auth_token,
+               params: valid_params,
+               as: :json
+        end.not_to change(Channel::FacebookPage, :count)
+
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
   end
 
   describe 'POST /api/v1/accounts/{account.id}/callbacks/facebook_pages' do
@@ -90,6 +105,18 @@ RSpec.describe 'Callbacks API', type: :request do
 
         expect(response).to have_http_status(:success)
         expect(response.body).to include(facebook_page.page_id.to_s)
+      end
+    end
+
+    context 'when it is an agent (Bloomwire 4.4-a channel-creation lockdown)' do
+      let(:agent) { create(:user, account: account, role: :agent) }
+
+      it 'returns unauthorized' do
+        post "/api/v1/accounts/#{account.id}/callbacks/facebook_pages",
+             headers: agent.create_new_auth_token,
+             as: :json
+
+        expect(response).to have_http_status(:unauthorized)
       end
     end
   end
@@ -128,6 +155,19 @@ RSpec.describe 'Callbacks API', type: :request do
              as: :json
 
         expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+
+    context 'when it is an agent (Bloomwire 4.4-a channel-creation lockdown)' do
+      let(:agent) { create(:user, account: account, role: :agent) }
+
+      it 'returns unauthorized and does not reauthorize the page' do
+        post "/api/v1/accounts/#{account.id}/callbacks/reauthorize_page",
+             headers: agent.create_new_auth_token,
+             params: { inbox_id: inbox.id },
+             as: :json
+
+        expect(response).to have_http_status(:unauthorized)
       end
     end
   end
