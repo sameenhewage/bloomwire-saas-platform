@@ -467,6 +467,11 @@ Candidate scope later:
 
 One Chatwoot inbox = one connected channel.
 
+**Relationship to the future webhook router (ADR 0004):** Phase 5 prepares the
+controlled channel readiness and WhatsApp setup mapping needed for the future
+**Phase 8 — Bloomwire Global Meta/WhatsApp Webhook Router**. Phase 5 must **not**
+implement the router itself.
+
 **Calling note (see ADR 0002):** if voice / WhatsApp calling ever enters scope, it
 must be **Bloomwire-owned** (public Twilio / Meta APIs, `bloomwire_` tables) and
 must **not** use Chatwoot's Enterprise calling code, the `channel_voice` flag, or
@@ -501,6 +506,64 @@ Candidate scope later:
 - operator controls,
 - escalation monitoring UX,
 - workflow visibility.
+
+---
+
+## Phase 8 — Bloomwire Global Meta/WhatsApp Webhook Router ⏳ Later
+
+Do not implement yet. **Decision recorded in ADR 0004**
+(`../adr/0004-bloomwire-global-meta-whatsapp-webhook-router.md`). A **future,
+Bloomwire-owned** feature behind a config/feature toggle. It is **additive** and
+must **not** replace or change Chatwoot's native webhook/channel behavior.
+
+**Why:** SaaS customers should not be forced to wire up and maintain
+Chatwoot-generated per-inbox webhook URLs forever. For scalable SaaS, Bloomwire
+should eventually expose **one global webhook endpoint** and route events
+internally.
+
+**Target flow:**
+
+```text
+Meta / Facebook / WhatsApp App
+  → Bloomwire Global Webhook (one endpoint)
+  → Bloomwire Router
+  → correct Chatwoot Account + Inbox
+  → Chatwoot conversations / messages
+```
+
+**Two flows (must coexist):**
+
+- **Chatwoot native webhook flow (today, default):** Meta app → Chatwoot per-inbox
+  webhook URL → Chatwoot inbox → conversations/messages. **Unchanged.**
+- **Bloomwire global webhook/router flow (future, toggle-gated):** Meta app → one
+  Bloomwire global endpoint → Bloomwire router resolves the destination → hands
+  off to Chatwoot → conversations/messages.
+
+**Config / feature toggle:**
+
+- `BLOOMWIRE_GLOBAL_META_WEBHOOK_ENABLED=true|false` — **default `false` (safe)**;
+  native Chatwoot behavior is untouched when off.
+- Tenant/channel-level config can **later** decide, **per inbox**, whether it uses
+  the native Chatwoot webhook flow or the Bloomwire global webhook flow.
+
+**Routing identifiers:** `phone_number_id`, `page_id`, `waba_id`, `provider`,
+`account_id`, `inbox_id`.
+
+**Constraints:** Chatwoot stays the conversation engine / source of truth; the
+router only delivers events to the correct Chatwoot account + inbox. No
+conversation/message/contact duplication in Bloomwire. Bloomwire-owned
+(clean-room), `bloomwire_` config/tables if/when built.
+
+**Risks / open questions:**
+
+- How to proxy/route events into Chatwoot **safely** (signature validation,
+  payload integrity, idempotency, retries, ordering).
+- Whether to **proxy to native Chatwoot webhook endpoints first** (reuse existing
+  handlers) or **call internal Chatwoot services later** (tighter integration).
+- **Runtime test needed** for multi-inbox / multi-number Meta app behavior (one
+  app, many numbers/pages → correct routing).
+- **Meta verification should stay stable** by using the Bloomwire global webhook
+  from the beginning, so the verified callback URL does not have to change later.
 
 ---
 
@@ -563,5 +626,5 @@ Current phase: Phase 4 — Roles, Permissions & Security Foundation
 Current position: Phase 4 Slice 1 (Permission Foundation / AccessPolicy) merged; Phase 4.3–4.5 tenant/channel-control lockdowns decided but parked (ADR 0003); next Phase 4 coding slice not started
 Last merged: Bloomwire Permission Foundation / Access Policy (PR #13 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), WhatsApp setup, billing, analytics, operational polish, Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
+Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), WhatsApp setup, billing, analytics, operational polish, Bloomwire global Meta/WhatsApp webhook router (parked — see ADR 0004), Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
 ```

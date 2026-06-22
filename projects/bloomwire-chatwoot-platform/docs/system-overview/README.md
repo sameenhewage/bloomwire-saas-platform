@@ -55,7 +55,13 @@ No build step, no install, no network access is required.
   Chatwoot setup pages (Add Inbox; API/WhatsApp/SMS/Facebook/Instagram/Telegram;
   WhatsApp Call Beta; New Account) are not exposed by default; a future per-tenant
   capability model enables opt-in self-service. Decision only — parked/future
-  (Phase 4.3–4.5 + Phase 5).
+  (Phase 4.3–4.5 + Phase 5). **ADR 0004** records the **global Meta/WhatsApp
+  webhook router** (future Phase 8): a Bloomwire-owned, toggle-gated
+  (`BLOOMWIRE_GLOBAL_META_WEBHOOK_ENABLED`, default off) global webhook that routes
+  Meta events to the correct Chatwoot account + inbox by identifiers
+  (`phone_number_id` / `page_id` / `waba_id` / `provider` / `account_id` /
+  `inbox_id`) — **additive; Chatwoot native webhook behavior stays unchanged.**
+  Decision only — parked/future.
 - **Changelog** — timeline of every completed slice.
 
 ## Maintenance rule (important)
