@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ZERO="0000000000000000000000000000000000000000"
+PROJECT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+APPROVAL="$PROJECT_DIR/.claude/pre-push-approval.json"
+CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
+
+block() {
+  {
+    echo ""
+    echo "================ BLOCKED by Pre-Push Code Review Gate ================"
+    echo "git push refused: $1"
+    echo ""
+    echo "Current HEAD: ${CURRENT_HEAD:-unknown}"
+    echo "Current branch: ${CURRENT_BRANCH:-unknown}"
+    echo "Approval file: .claude/pre-push-approval.json"
+    echo ""
+    echo "Run implementation checks first, commit, then run the pre-push-code-review-agent."
+    echo "The agent must return APPROVE and write an approval artifact pinned to this HEAD and branch."
+    echo "Any new commit invalidates the approval automatically."
+    echo "======================================================================"
+    echo ""
+  } >&2
+  exit 1
+}
+
+command -v jq >/dev/null 2>&1 || block "jq is not installed; cannot read approval artifact."
+
+validate_ref() {
+  local local_ref="$1"
+  local local_sha="$2"
+  local ref_branch
+
+  [ "$local_sha" = "$ZERO" ] && return 0
+
+  [ -f "$APPROVAL" ] || block "missing approval artifact."
+
+  local verdict approved_sha approved_branch approved_at review_agent tests_count mcp_count summary
+  verdict="$(jq -r '.verdict // empty' "$APPROVAL" 2>/dev/null || true)"
+  approved_sha="$(jq -r '.approved_head_sha // empty' "$APPROVAL" 2>/dev/null || true)"
+  approved_branch="$(jq -r '.branch // empty' "$APPROVAL" 2>/dev/null || true)"
+  approved_at="$(jq -r '.approved_at // empty' "$APPROVAL" 2>/dev/null || true)"
+  review_agent="$(jq -r '.review_agent // empty' "$APPROVAL" 2>/dev/null || true)"
+  tests_count="$(jq -r 'if (.tests_run | type) == "array" then (.tests_run | length) else -1 end' "$APPROVAL" 2>/dev/null || echo -1)"
+  mcp_count="$(jq -r 'if (.mcp_runtime_evidence | type) == "array" then (.mcp_runtime_evidence | length) else -1 end' "$APPROVAL" 2>/dev/null || echo -1)"
+  summary="$(jq -r '.summary // empty' "$APPROVAL" 2>/dev/null || true)"
+
+  [ "$verdict" = "APPROVE" ] || block "approval verdict is '${verdict:-none}', not APPROVE."
+  [ -n "$approved_sha" ] || block "approval artifact has no approved_head_sha."
+  [ -n "$approved_branch" ] || block "approval artifact has no branch."
+  [ -n "$approved_at" ] || block "approval artifact has no approved_at."
+  [ "$review_agent" = "pre-push-code-review-agent" ] || block "approval artifact review_agent is '${review_agent:-none}', not pre-push-code-review-agent."
+  [ "$tests_count" -gt 0 ] || block "approval artifact tests_run must be a non-empty array."
+  [ "$mcp_count" -gt 0 ] || block "approval artifact mcp_runtime_evidence must be a non-empty array."
+  [ -n "$summary" ] || block "approval artifact has no summary."
+  [ "$approved_sha" = "$local_sha" ] || block "approval is for $approved_sha, but push sends $local_sha."
+  [ "$approved_sha" = "$CURRENT_HEAD" ] || block "approval is for $approved_sha, but current HEAD is $CURRENT_HEAD."
+
+  ref_branch="${local_ref#refs/heads/}"
+  if [ "$local_ref" = "$ref_branch" ]; then
+    ref_branch="$CURRENT_BRANCH"
+  fi
+
+  [ "$approved_branch" = "$CURRENT_BRANCH" ] || block "approval branch is '$approved_branch', current branch is '$CURRENT_BRANCH'."
+  [ "$approved_branch" = "$ref_branch" ] || block "approval branch is '$approved_branch', pushed ref branch is '$ref_branch'."
+}
+
+if [ -t 0 ]; then
+  validate_ref "refs/heads/$CURRENT_BRANCH" "$CURRENT_HEAD"
+else
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    validate_ref "$local_ref" "$local_sha"
+  done
+fi
+
+exit 0

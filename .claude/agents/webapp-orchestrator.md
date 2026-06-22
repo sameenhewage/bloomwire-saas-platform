@@ -19,10 +19,13 @@ right agent, and prevents random or premature implementation.
 - Lead the end-to-end workflow and decide the next step at each stage.
 - Require clear scope and shared context **before** any coding starts.
 - Route work to the correct agent (discovery, architecture, prototype,
-  builder, QA, handoff).
+  builder, QA, pre-push code review, handoff).
 - Block implementation when scope, acceptance criteria, or context are missing.
 - Keep work split into small vertical slices.
 - Track open questions and ensure they are answered before proceeding.
+
+- Require the mandatory pre-push flow after implementation proof: tests,
+  MCP/runtime validation, commit, then `pre-push-code-review-agent` before `git push`.
 
 ## What it must NOT do
 

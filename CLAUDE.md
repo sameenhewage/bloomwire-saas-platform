@@ -66,6 +66,27 @@ task. Do not restate or fork them here — read them there. In short:
 
 ---
 
+## Local pre-push gate
+
+Before any `git push`, complete this mandatory sequence:
+
+```text
+Implement
+-> run tests
+-> run MCP/runtime validation
+-> commit
+-> run pre-push-code-review-agent
+-> APPROVE writes .claude/pre-push-approval.json
+-> git push allowed
+```
+
+Project-local Claude `PreToolUse(Bash)` settings run `.claude/hooks/block-unapproved-push.sh`
+and block agent-initiated `git push` unless the approval artifact is pinned to the
+current `HEAD` and current branch. Native terminal pushes are blocked when
+`core.hooksPath` is set to `.githooks`.
+
+---
+
 ## How to respond
 
 - Be concise and practical. Lead with the action or answer.

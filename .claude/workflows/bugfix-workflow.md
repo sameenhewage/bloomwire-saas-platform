@@ -45,6 +45,11 @@ description: How to fix a bug safely, from reproduction to handoff
    - Summarize the fix, files changed, tests run, and residual risks.
    - Owner: Handoff Agent.
 
+8. **Pre-push code review**
+   - After commit, run `pre-push-code-review-agent`.
+   - `git push` is allowed only after APPROVE writes the current-head approval artifact.
+   - Owner: Pre-Push Code Review Agent.
+
 ## Definition of done
 
 - **Root cause proven** (the six-item report), not just the symptom.
@@ -53,3 +58,4 @@ description: How to fix a bug safely, from reproduction to handoff
 - Regression test protects the **business contract** and fails-first where practical.
 - **Before/after + runtime proof** documented (rule 6); safe DTOs verified (rule 8).
 - Report follows the **Final PASS Report Standard** (rule 11); handoff produced.
+- Before push, `pre-push-code-review-agent` APPROVE exists for the current `HEAD` and branch.

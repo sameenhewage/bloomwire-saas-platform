@@ -19,6 +19,7 @@ review before handoff.**
 | Prototype Agent | Builds disposable prototypes on request. | `.claude/agents/prototype-agent.md` |
 | Fullstack Builder Agent | Implements one vertical slice at a time. | `.claude/agents/fullstack-builder-agent.md` |
 | QA Review Agent | Reviews changes, returns PASS / FAIL. | `.claude/agents/qa-review-agent.md` |
+| Pre-Push Code Review Agent | Reviews exact current commit before push, returns APPROVE / BLOCK. | `.claude/agents/pre-push-code-review-agent.md` |
 | Handoff Agent | Summarizes work for the next session. | `.claude/agents/handoff-agent.md` |
 
 ## How they work together
@@ -30,7 +31,8 @@ WebApp Orchestrator
   ├─ Prototype           (de-risk, optional)
   ├─ Fullstack Builder   (implement one slice)
   ├─ QA Review           (PASS / FAIL)
-  └─ Handoff             (summary & next steps)
+  ├─ Handoff             (summary & next steps)
+  └─ Pre-Push Review     (APPROVE / BLOCK before push)
 ```
 
 ## Where things live
