@@ -148,17 +148,26 @@ vertical; Dialog admins are NOT denied yet.**
 - **Bloomwire owns all external app/channel configuration** (WhatsApp, SMS, Email,
   Instagram/Facebook, Shopify, later Telegram/Signal). Dialog (tenant) admins may
   **use** configured channels but may **not** connect/disconnect/create/
-  reauthorize/register-webhook/edit provider credentials.
-- **Setup is platform-owned** via a **dedicated Bloomwire Admin namespace/service**
-  — the tenant `InboxesController` is **not** reused as the platform setup path.
+  reauthorize/register-webhook/edit provider credentials, **nor delete/destroy a
+  Bloomwire-managed external-app inbox** (that is disconnecting the app).
+- **Setup is platform-owned (target)** via a **dedicated Bloomwire Admin
+  namespace/service** — the tenant `InboxesController` is **not** reused as the
+  platform setup path. **Current state:** WhatsApp setup is still reachable through
+  the existing tenant/account-admin surfaces (PR #19 only added a behavior-neutral
+  seam; `Bloomwire::ChannelControlPolicy` still allows `AccountUser`
+  administrators). Platform-only enforcement happens **later** (after 2B); these
+  docs do **not** imply it is already enforced.
 - **Proposed ownership table** `bloomwire_channel_integrations` (design only, no
   migration) maps `profile → inbox → channel → account` plus **non-secret**
   routing metadata (`phone_number`, `phone_number_id`, `waba_id`, `routing_key`):
   unique per inbox, unique routing key where present.
 - **Secrets are not duplicated** into the ownership/routing table; WhatsApp
   credentials stay in `Channel::Whatsapp#provider_config` (encryption is a
-  separate future ADR). **Raw provider credentials are never exposed to Dialog
-  users.**
+  separate future ADR). **Target rule:** raw provider credentials must not be
+  exposed to Dialog users. **Current state:** existing Chatwoot DTO/API behavior
+  may still expose `provider_config` to `AccountUser` administrators; a future
+  DTO/serializer **scrub slice is a prerequisite** before this guarantee is
+  enforced — do **not** state credential exposure is already fixed.
 - **The PR #19 seam** (`Bloomwire::WhatsappSetupGuard` /
   `Bloomwire::ChannelControlPolicy`) is the choke point; it stays
   **behavior-neutral** until the deny slice (4.4-b-WA.2C) lands **after** the

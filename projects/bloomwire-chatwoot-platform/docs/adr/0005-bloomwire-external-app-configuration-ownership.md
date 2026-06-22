@@ -88,10 +88,16 @@ The following decisions are **locked** by this ADR.
 10. **Secrets must not be duplicated into routing/ownership tables.** The proposed
     `bloomwire_channel_integrations` table stores **non-secret** ownership and
     routing metadata only.
-11. **Raw provider credentials must not be exposed to Dialog tenant users.**
-    Tenant-facing DTOs/APIs must not leak `api_key`/access tokens,
-    `webhook_verify_token`, or raw provider config (extends global rule 8 /
-    CONTEXT.md security contract).
+11. **Target rule — raw provider credentials must not be exposed to Dialog tenant
+    users** (extends global rule 8 / CONTEXT.md security contract). *Current
+    state:* existing Chatwoot DTO/API behavior **still exposes** WhatsApp
+    `provider_config` to `AccountUser` administrators (e.g.
+    `app/app/views/api/v1/models/_inbox.json.jbuilder` emits it for
+    administrators). *Required prerequisite:* a future **DTO/serializer scrub
+    slice** must remove tenant access to `provider_config` (`api_key`/access
+    tokens, `webhook_verify_token`, raw provider config) **before** this guarantee
+    can be claimed as enforced. This ADR does **not** state credential exposure is
+    already fixed.
 12. **Existing Chatwoot teams, campaigns, contacts, conversations, and normal
     inbox usage remain untouched.** This ADR changes **who may configure**, not
     how messaging works.
@@ -139,6 +145,18 @@ created_at / updated_at       timestamps
 - **Secrets remain where they are for now** — WhatsApp credentials stay in
   `Channel::Whatsapp#provider_config`. Moving them to **encrypted storage** is a
   **separate future ADR**, not decided here.
+- **Tenant consistency (required for 4.4-b-WA.2A).** Every row must stay within a
+  single tenant/account; the setup service and any backfill **must reject**
+  cross-tenant mismatches (fail safely, persist nothing) rather than store a
+  mixed-tenant row:
+  - `bloomwire_business_profile.account_id == account_id`,
+  - `account_id == inbox.account_id`,
+  - `channelable` must be exactly `inbox.channel` (matching `channelable_type`
+    and `channelable_id`),
+  - the channel's account must equal `account_id` where the channel carries an
+    account,
+  - `routing_key` must resolve **only inside the same integration/account** — it
+    must never select a different account's inbox/channel.
 
 **Relations:** `BloomwireBusinessProfile has_many :channel_integrations`; each
 integration references exactly one `Inbox` → one `Channel` → one `Account`.
@@ -161,6 +179,13 @@ before implementation).
   `profile → inbox → channel → account` with non-secret routing metadata;
   creating it changes **no** existing WhatsApp/inbox behavior and **no** policy
   decision; a backfill can represent existing WhatsApp inboxes read-only.
+- **GREEN (tenant consistency — required):** the model/backfill/setup service
+  **rejects** any row where `profile.account_id`, `account_id`,
+  `inbox.account_id`, or the channel's account disagree, or where `channelable` ≠
+  `inbox.channel`, and ensures `routing_key` resolves only within the same
+  account. Tests **must cover** mismatched profile/account/inbox/channel
+  combinations and **fail safely** — no row written, no cross-tenant routing
+  possible.
 
 ### B. Bloomwire Admin setup path (4.4-b-WA.2B)
 
@@ -178,10 +203,18 @@ before implementation).
 
 - **RED (must fail before implementation):** a Dialog admin (AccountUser
   `administrator`) can today create/connect/reauthorize/`register_webhook`/update
-  `provider_config` for WhatsApp (the seam is behavior-neutral).
-- **GREEN:** for managed external-app setup, the same actions return **401/403**,
-  create **no** channel/inbox, and trigger **no** provider/webhook call. Agents
-  remain denied.
+  `provider_config` for WhatsApp **and delete/destroy a managed WhatsApp inbox**
+  (`DELETE /api/v1/accounts/:account_id/inboxes/:id`; `InboxPolicy#destroy?`
+  allows administrators) — the seam is behavior-neutral.
+- **GREEN:** for managed external-app setup/config, the same actions return
+  **401/403**, create/destroy **no** channel/inbox, and trigger **no**
+  provider/webhook call. **Deleting/destroying a Bloomwire-managed external-app
+  inbox is denied** — it is effectively disconnecting the app, so it is part of
+  setup/config ownership, **not** normal inbox usage. Agents remain denied.
+- **Scope guard:** only **Bloomwire-managed** external-app inboxes
+  (`managed_by_bloomwire`) are gated for destroy; **non-managed/default** Chatwoot
+  inbox behavior is decided **separately** and must not be accidentally blocked.
+  Normal conversation usage and ordinary non-setup maintenance remain unaffected.
 
 ### D. Normal usage unaffected (cross-cutting)
 
@@ -189,11 +222,18 @@ before implementation).
   auto-assignment, working hours), and use conversations/contacts/templates/
   campaigns/sending on an existing inbox. None of these are gated.
 
-### E. Secrets not leaked (security)
+### E. Secrets not leaked (security) — requires the DTO/serializer scrub prerequisite
 
-- **GREEN:** inbox/channel JSON returned to a Dialog admin contains **no** raw
-  `api_key`/access token, `webhook_verify_token`, or raw `provider_config`
-  secrets; routing identifiers are not exposed to tenant users.
+- **Current state:** existing inbox DTO behavior still returns `provider_config`
+  to `AccountUser` administrators, so this guarantee is **not enforced yet**; docs
+  must not claim it is.
+- **RED (must fail before implementation):** inbox/channel JSON requested by a
+  Dialog admin currently includes `provider_config` secrets.
+- **GREEN (after the scrub slice):** inbox/channel JSON returned to a Dialog admin
+  contains **no** raw `api_key`/access token, `webhook_verify_token`, or raw
+  `provider_config` secrets; routing identifiers are not exposed to tenant users.
+- This **DTO/serializer scrub slice is a prerequisite** before any doc states
+  credential exposure is fixed.
 
 ### F. Global webhook routing metadata only (4.4-b-WA.3)
 
@@ -211,8 +251,12 @@ before implementation).
 - **Provider credentials currently in `provider_config`** (plaintext jsonb on
   `channel_whatsapp`). Ownership is being asserted before credential storage is
   hardened; encryption is deferred to a separate ADR.
-- **Tenant DTO/API may expose secrets** unless explicitly scrubbed — inbox/channel
-  serializers must be audited before the Bloomwire Admin path goes live.
+- **Tenant DTO/API still exposes secrets today** — existing inbox DTO returns
+  `provider_config` to `AccountUser` administrators (e.g.
+  `app/app/views/api/v1/models/_inbox.json.jbuilder`). A DTO/serializer **scrub
+  slice is a prerequisite** before the "no raw credentials to Dialog users"
+  guarantee can be claimed; until then, do **not** state credential exposure is
+  fixed.
 - **Mixing SuperAdmin with the tenant account dashboard** can cause privilege
   confusion; the dedicated platform namespace (decision 5/6) exists to avoid this.
 - **Denying tenant setup before the Bloomwire setup path exists would block setup
@@ -252,8 +296,11 @@ Phase **4.4 — External App Configuration Ownership** (WhatsApp first vertical)
   channel-creation logic; store ownership/routing metadata; never expose
   credentials to Dialog users.
 - **4.4-b-WA.2C — Dialog admin WhatsApp self-service deny** — ⏳ planned (after
-  2B). Flip the seam to deny tenant admins for WhatsApp setup/config; normal
-  inbox usage unaffected.
+  2B). Flip the seam to deny tenant admins for WhatsApp setup/config — **including
+  deleting/destroying a Bloomwire-managed WhatsApp inbox** (that is disconnecting
+  the app: setup/config ownership, not normal usage). Only `managed_by_bloomwire`
+  inboxes are gated; non-managed/default Chatwoot behavior is decided separately
+  and must not be accidentally blocked; normal inbox usage unaffected.
 - **4.4-b-WA.2D — Tenant frontend hiding/disabled UX** — ⏳ planned (after backend
   enforcement). Hide/disable external-app setup cards/forms for Dialog admins
   (UX only, not security).
@@ -278,8 +325,15 @@ Later verticals (reuse this model): **SMS → Email → Instagram/Facebook → S
   cleanly additive.
 - **Trade-offs:** introduces a Bloomwire-owned table and a platform setup surface
   to maintain; credential hardening (encryption) and DTO scrubbing become explicit
-  follow-ups; until 2B/2C land, WhatsApp setup remains a platform-performed action
-  via existing surfaces with the behavior-neutral seam.
+  follow-ups.
+- **Current vs target (no implied enforcement).** **Current state:** WhatsApp
+  setup is **still reachable through the existing tenant/account-admin setup
+  surfaces** — PR #19 only added a **behavior-neutral** seam, and
+  `Bloomwire::ChannelControlPolicy` **still allows `AccountUser` administrators**.
+  **Target state:** the Bloomwire Admin/platform performs setup; **platform-only
+  enforcement and the Dialog-admin deny happen later**, after the Bloomwire Admin
+  setup path (2B) exists. These docs do **not** imply platform-only setup is
+  already enforced.
 
 ## References
 

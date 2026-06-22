@@ -417,11 +417,18 @@ exposed to enterprise clients by default.
   - Tenant/account creation is **platform / Super-Admin-owned**; tenant admins do
     **not** get Chatwoot's "New Account" affordance by default.
 - **Phase 4.4 — External App Configuration Ownership** — in progress (decision: ADR 0005)
-  - All external app/channel configuration (WhatsApp, SMS, Email, Instagram/
-    Facebook, Shopify, later Telegram/Signal) is **Bloomwire/platform-owned**.
-    Dialog (tenant) admins may **use** configured channels but may **not**
-    connect/disconnect/create/reauthorize/register-webhook/edit provider
-    credentials. Raw Chatwoot inbox/channel setup stays Bloomwire-controlled.
+  - **Target rule:** all external app/channel configuration (WhatsApp, SMS, Email,
+    Instagram/Facebook, Shopify, later Telegram/Signal) is
+    **Bloomwire/platform-owned**. Dialog (tenant) admins may **use** configured
+    channels but may **not** connect/disconnect/create/reauthorize/register-webhook/
+    edit provider credentials, **nor delete/destroy a managed external-app inbox**.
+  - **Current state (not enforced yet):** WhatsApp setup is still reachable through
+    the existing tenant/account-admin surfaces — PR #19 added only a
+    behavior-neutral seam and `Bloomwire::ChannelControlPolicy` still allows
+    `AccountUser` administrators. Platform-only enforcement and the Dialog-admin
+    deny come **later** (after 2B); these docs do **not** imply platform-only setup
+    is already enforced. Raw Chatwoot inbox/channel setup stays
+    Bloomwire-controlled (target).
   - **Team management ≠ channel-creation permission.** A team is an internal
     department; an inbox/channel is an external customer communication
     connection. Creating a team must never automatically grant permission to
@@ -437,15 +444,22 @@ exposed to enterprise clients by default.
       logic; store ownership/routing metadata; never expose credentials to
       Dialog users).
     - **4.4-b-WA.2C — Dialog admin WhatsApp self-service deny** ⏳ planned
-      (after 2B; normal inbox usage unaffected).
+      (after 2B; includes denying **delete/destroy of Bloomwire-managed WhatsApp
+      inboxes** = disconnecting the app. Only `managed_by_bloomwire` inboxes are
+      gated; non-managed/default Chatwoot behavior is decided separately and must
+      not be accidentally blocked; normal conversation usage and ordinary
+      non-setup maintenance remain unaffected).
     - **4.4-b-WA.2D — Tenant frontend hiding/disabled UX** ⏳ planned (after
       backend enforcement; UX only, not security).
     - **4.4-b-WA.3 — Global WhatsApp webhook routing foundation** ⏳ planned
       (routing metadata only; full router is ADR 0004 / Phase 8).
   - **Constraints:** secrets stay in `Channel::Whatsapp#provider_config` (not
     duplicated into ownership/routing tables; encryption is a separate future
-    ADR); raw provider credentials must not be exposed to Dialog users; Chatwoot
-    conversations/contacts/teams/campaigns/normal inbox usage remain untouched.
+    ADR). **Target rule:** raw provider credentials must not be exposed to Dialog
+    users — but **current state** still exposes `provider_config` to `AccountUser`
+    administrators, so a DTO/serializer **scrub slice is a prerequisite** before
+    that guarantee holds (not fixed yet). Chatwoot conversations/contacts/teams/
+    campaigns/normal inbox usage remain untouched.
 - **Phase 4.5 — Tenant Feature Capabilities** ⏳ Parked
   - A **future** per-tenant capability model enabling controlled, opt-in
     self-service (e.g. `allow_new_account_creation`, `allow_team_management`,
