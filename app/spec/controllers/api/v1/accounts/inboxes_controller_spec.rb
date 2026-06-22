@@ -473,6 +473,58 @@ RSpec.describe 'Inboxes API', type: :request do
         json_response = response.parsed_body
         expect(json_response['allow_messages_after_resolved']).to be true
       end
+
+      context 'with a whatsapp channel (Bloomwire WhatsApp setup seam - 4.4-b-WA.1)' do
+        let(:whatsapp_params) do
+          { name: 'WA Manual',
+            channel: { type: 'whatsapp', phone_number: '+15551230001', provider: 'default',
+                       provider_config: { api_key: 'test_key' } } }
+        end
+
+        it 'allows an administrator (behavior-neutral)' do
+          stub_request(:any, /waba\.360dialog\.io/).to_return(status: 200, body: '{}', headers: { 'Content-Type' => 'application/json' })
+
+          expect do
+            post "/api/v1/accounts/#{account.id}/inboxes",
+                 headers: admin.create_new_auth_token, params: whatsapp_params, as: :json
+          end.to change(Channel::Whatsapp, :count).by(1)
+
+          expect(response).to have_http_status(:success)
+        end
+
+        it 'denies an agent' do
+          agent = create(:user, account: account, role: :agent)
+
+          expect do
+            post "/api/v1/accounts/#{account.id}/inboxes",
+                 headers: agent.create_new_auth_token, params: whatsapp_params, as: :json
+          end.not_to change(Channel::Whatsapp, :count)
+
+          expect(response).to have_http_status(:unauthorized)
+        end
+
+        it 'returns unauthorized when the channel control policy denies, even for an administrator' do
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          expect do
+            post "/api/v1/accounts/#{account.id}/inboxes",
+                 headers: admin.create_new_auth_token, params: whatsapp_params, as: :json
+          end.not_to change(Channel::Whatsapp, :count)
+
+          expect(response).to have_http_status(:unauthorized)
+        end
+
+        it 'does not gate non-whatsapp channels even when the policy denies (web_widget unaffected)' do
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          post "/api/v1/accounts/#{account.id}/inboxes",
+               headers: admin.create_new_auth_token, params: valid_params, as: :json
+
+          expect(response).to have_http_status(:success)
+        end
+      end
     end
   end
 
@@ -548,6 +600,116 @@ RSpec.describe 'Inboxes API', type: :request do
         expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
         expect(whatsapp_channel.reload.provider_config['api_key']).to eq('new_key')
         expect(whatsapp_channel.reload).not_to be_reauthorization_required
+      end
+
+      context 'with the whatsapp setup gate (Bloomwire - 4.4-b-WA.1)' do
+        it 'returns unauthorized for a whatsapp inbox update when the policy denies, even for an administrator' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { channel: { provider_config: { api_key: 'blocked' } } },
+                as: :json
+
+          expect(response).to have_http_status(:unauthorized)
+          expect(whatsapp_channel.reload.provider_config['api_key']).not_to eq('blocked')
+        end
+
+        it 'denies an agent updating a whatsapp inbox' do
+          agent = create(:user, account: account, role: :agent)
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: agent.create_new_auth_token,
+                params: { channel: { provider_config: { api_key: 'x' } } },
+                as: :json
+
+          expect(response).to have_http_status(:unauthorized)
+        end
+
+        it 'does not gate non-whatsapp inbox updates even when the policy denies (api inbox unaffected)' do
+          api_channel = create(:channel_api, account: account)
+          api_inbox = create(:inbox, channel: api_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{api_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { enable_auto_assignment: false, channel: { webhook_url: 'neutral.test' } },
+                as: :json
+
+          expect(response).to have_http_status(:success)
+          expect(api_channel.reload.webhook_url).to eq('neutral.test')
+        end
+
+        it 'does not gate ordinary whatsapp inbox maintenance updates (no channel/credential params) when the policy denies' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { name: 'Renamed WA Inbox', enable_auto_assignment: false },
+                as: :json
+
+          expect(response).to have_http_status(:success)
+          expect(whatsapp_inbox.reload.name).to eq('Renamed WA Inbox')
+          expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
+        end
+
+        it 'gates a whatsapp channel update that only sends channel[type] when the policy denies (no reauthorization mutation)' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { channel: { type: 'whatsapp' } },
+                as: :json
+
+          # A 401 from the before_action guarantees the update action body
+          # (reauthorize_and_update_channel -> reauthorized!) never ran, so no
+          # reauthorization state was mutated while bypassing the policy seam.
+          expect(response).to have_http_status(:unauthorized)
+        end
+
+        it 'does not treat a nil channel payload as whatsapp setup params (maintenance stays behavior-neutral under a denying policy)' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { name: 'Renamed WA Inbox', enable_auto_assignment: false, channel: nil },
+                as: :json
+
+          expect(response).to have_http_status(:success)
+          expect(whatsapp_inbox.reload.name).to eq('Renamed WA Inbox')
+          expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
+        end
+
+        it 'does not treat a legacy "null" string channel as setup params (maintenance stays behavior-neutral under a denying policy)' do
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+          denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+          allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { name: 'Renamed WA Inbox', enable_auto_assignment: false, channel: 'null' },
+                as: :json
+
+          expect(response).to have_http_status(:success)
+          expect(whatsapp_inbox.reload.name).to eq('Renamed WA Inbox')
+          expect(whatsapp_inbox.reload.enable_auto_assignment).to be_falsey
+        end
       end
 
       it 'updates twitter inbox when administrator' do
@@ -1274,6 +1436,53 @@ RSpec.describe 'Inboxes API', type: :request do
 
           expect(response).to have_http_status(:not_found)
         end
+      end
+    end
+  end
+
+  describe 'POST /api/v1/accounts/{account.id}/inboxes/{inbox.id}/register_webhook (Bloomwire WhatsApp setup seam - 4.4-b-WA.1)' do
+    let(:whatsapp_channel) do
+      create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud', sync_templates: false, validate_provider_config: false)
+    end
+    let(:whatsapp_inbox) { create(:inbox, account: account, channel: whatsapp_channel) }
+    let(:webhook_service) { instance_double(Whatsapp::WebhookSetupService) }
+
+    before do
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(webhook_service)
+      allow(webhook_service).to receive(:register_callback)
+    end
+
+    context 'when the channel control policy allows (behavior-neutral)' do
+      it 'allows an administrator and registers the webhook' do
+        expect(Whatsapp::WebhookSetupService).to receive(:new).with(whatsapp_channel).and_return(webhook_service)
+        expect(webhook_service).to receive(:register_callback)
+
+        post "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}/register_webhook",
+             headers: admin.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:ok)
+      end
+
+      it 'denies an agent with inbox access' do
+        create(:inbox_member, user: agent, inbox: whatsapp_inbox)
+
+        post "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}/register_webhook",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    context 'when the channel control policy denies' do
+      it 'returns unauthorized for an administrator and never invokes the webhook setup service' do
+        denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+        allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+        expect(Whatsapp::WebhookSetupService).not_to receive(:new)
+
+        post "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}/register_webhook",
+             headers: admin.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unauthorized)
       end
     end
   end

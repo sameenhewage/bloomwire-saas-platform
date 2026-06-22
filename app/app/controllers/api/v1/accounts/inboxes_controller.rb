@@ -5,8 +5,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show]
+  before_action :authorize_whatsapp_setup!, only: [:create, :update, :register_webhook], if: :whatsapp_setup_request?
 
   include Api::V1::Accounts::Concerns::WhatsappHealthManagement
+  include Bloomwire::WhatsappSetupGuard
 
   def index
     @inboxes = policy_scope(Current.account.inboxes)
@@ -80,6 +82,40 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   private
+
+  def whatsapp_setup_request?
+    case action_name
+    when 'create' then params.dig(:channel, :type) == 'whatsapp'
+    when 'update' then whatsapp_inbox? && whatsapp_setup_channel_params?
+    when 'register_webhook' then whatsapp_inbox?
+    else false
+    end
+  end
+
+  def whatsapp_inbox?
+    @inbox&.whatsapp?
+  end
+
+  # Gate ANY permitted WhatsApp `channel` update through the setup seam. The
+  # controller permits `channel[:type]` plus Channel::Whatsapp::EDITABLE_ATTRS
+  # (provider/provider_config/phone_number), and `channel_update_required?` treats
+  # any permitted `channel` payload as a channel update that runs
+  # `reauthorize_and_update_channel` (which calls `reauthorized!`). So `type` must
+  # be gated too, otherwise `{ channel: { type: 'whatsapp' } }` could mutate
+  # reauthorization state while bypassing the policy. Ordinary inbox maintenance
+  # (name, auto-assignment, working hours) is top-level and is NOT gated.
+  #
+  # This runs as a before_action, i.e. before `permitted_params` normalizes a
+  # legacy `'null'` string to nil (see permitted_params). A maintenance PATCH can
+  # therefore arrive with `channel: nil` or `channel: 'null'`; neither responds to
+  # `keys`, so we treat any non-keyed payload as "not setup params" instead of
+  # crashing on `.keys`.
+  def whatsapp_setup_channel_params?
+    channel_params = params[:channel]
+    return false unless channel_params.respond_to?(:keys)
+
+    channel_params.keys.map(&:to_s).intersect?(%w[type provider_config provider phone_number])
+  end
 
   def fetch_inbox
     @inbox = Current.account.inboxes.find(params[:id])

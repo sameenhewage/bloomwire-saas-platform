@@ -1,5 +1,7 @@
 class Api::V1::Accounts::Whatsapp::AuthorizationsController < Api::V1::Accounts::BaseController
-  before_action :check_admin_authorization?
+  include Bloomwire::WhatsappSetupGuard
+
+  before_action :authorize_whatsapp_setup!
   before_action :fetch_and_validate_inbox, if: -> { params[:inbox_id].present? }
 
   # POST /api/v1/accounts/:account_id/whatsapp/authorization
