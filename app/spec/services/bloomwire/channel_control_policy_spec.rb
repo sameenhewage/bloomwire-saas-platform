@@ -2,10 +2,11 @@ require 'rails_helper'
 
 # Acceptance + edge coverage for the Bloomwire WhatsApp setup decision authority.
 #
-# Phase 4.4-b-WA — Slice 1 (behavior-neutral seam). The policy currently mirrors the
-# pre-existing "account administrator" rule, plus SuperAdmin/platform. It is
-# intentionally PROFILE-AGNOSTIC in this slice: it must NOT depend on a
-# BloomwireBusinessProfile yet, so tenants without a profile keep working exactly as
+# Phase 4.4-b-WA — Slice 1 (behavior-neutral seam). The policy mirrors the pre-existing
+# "account administrator" rule. SuperAdmin/platform-initiated setup is FUTURE WORK
+# (these account-scoped controllers require AccountUser membership before the policy is
+# reachable). It is intentionally PROFILE-AGNOSTIC in this slice: it must NOT depend on
+# a BloomwireBusinessProfile yet, so tenants without a profile keep working exactly as
 # before. A later slice may add a tenant capability flag and flip the default.
 RSpec.describe Bloomwire::ChannelControlPolicy do
   let(:account) { create(:account) }
