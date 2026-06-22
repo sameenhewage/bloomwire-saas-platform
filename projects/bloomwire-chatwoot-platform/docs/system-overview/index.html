@@ -657,7 +657,7 @@
     <div class="panel" id="tab-built">
       <section class="block">
         <h2 class="sec"><span class="num">06</span> Current build state</h2>
-        <p class="sec-sub">What actually exists today. Click any slice to expand details. Every slice below is complete and merged into <span class="pill-code">version_1</span> (Phases 0–4 Slice 1).</p>
+        <p class="sec-sub">What actually exists today. Click any slice to expand details. Every slice below is complete and merged into <span class="pill-code">version_1</span> (Phases 0–4 Slice 1). <strong>Phase 4.4 — External App Configuration Ownership has since started</strong> (WhatsApp setup control seam / PR #19 merged, behavior-neutral; see the Changelog).</p>
 
         <!-- Slice 0 -->
         <div class="accordion">
@@ -1121,14 +1121,25 @@
               </dl>
             </div>
           </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-22</span>
+              <h4>Started Phase 4.4 — External App Configuration Ownership (ADR 0005)</h4>
+              <dl>
+                <dt>What changed</dt><dd><strong>Phase 4.4 has started.</strong> <span class="pill-code">4.4-b-WA.1</span> WhatsApp setup control seam is <strong>merged (PR #19)</strong> — a behavior-neutral central seam (<span class="pill-code">Bloomwire::WhatsappSetupGuard</span> / <span class="pill-code">Bloomwire::ChannelControlPolicy</span>) for WhatsApp setup actions. <strong>ADR 0005</strong> records that Bloomwire owns all external app/channel configuration (WhatsApp first vertical); Dialog admins may use configured channels but may not configure external apps. Setup will move to a dedicated Bloomwire Admin namespace/service (not the tenant <span class="pill-code">InboxesController</span>).</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">docs/adr/0005-bloomwire-external-app-configuration-ownership.md</span>, <span class="pill-code">CONTEXT.md</span>, <span class="pill-code">docs/product/05-development-phases.md</span>, README + this document; PR #19 seam under <span class="pill-code">app/app/services/bloomwire/</span> + <span class="pill-code">app/app/controllers/concerns/bloomwire/</span>.</dd>
+                <dt>Not changed</dt><dd><strong>Current runtime behavior is still behavior-neutral</strong> — Dialog admins are <strong>not</strong> denied yet, no DTO scrub, no integration table, no global webhook router. ADR 0005 is decision + design only.</dd>
+              </dl>
+            </div>
+          </div>
           <div class="tl-item next">
             <div class="tl-card next">
               <span class="date">Next</span>
-              <h4>Phase 4 — tenant/channel-control lockdowns &amp; later permission slices (not started)</h4>
+              <h4>4.4-b-WA.2A — Channel integration ownership foundation (behavior-neutral)</h4>
               <dl>
-                <dt>What changes</dt><dd>Parked Phase 4.3–4.5 (ADR 0003): <strong>New Account / Tenant-Creation Lockdown</strong>, <strong>Channel / Inbox-Creation Lockdown</strong>, and a per-tenant <strong>Feature-Capabilities</strong> model — keeping raw Chatwoot setup platform-controlled by default. Then surface <span class="pill-code">Bloomwire::AccessPolicy</span> checks in tenant-facing UI (UX hiding only; the backend already enforces access) and expand toward platform/tenant roles and a permission matrix.</dd>
-                <dt>Files / areas</dt><dd>TBD — dashboard/controllers consuming the policy; a future <span class="pill-code">bloomwire_*</span> tenant-capabilities surface; Bloomwire roles/permission tables only when SaaS-specific custom staff permissions are required.</dd>
-                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; no Bloomwire roles or capabilities tables yet.</dd>
+                <dt>What changes</dt><dd>Introduce the Bloomwire-owned <span class="pill-code">bloomwire_channel_integrations</span> ownership/mapping (design in ADR 0005) — mapping <span class="pill-code">profile → inbox → channel → account</span> with non-secret routing metadata and <strong>tenant-consistency</strong> rules. No tenant deny, no DTO scrub, no frontend, no webhook router. Later slices: 2B Bloomwire Admin setup path, 2C Dialog-admin deny (incl. managed-inbox destroy), 2D frontend hiding, 4.4-b-WA.3 routing metadata. Phase 4.3 / 4.5 (ADR 0003) remain parked.</dd>
+                <dt>Files / areas</dt><dd>TBD — a <span class="pill-code">bloomwire_channel_integrations</span> model/migration; a dedicated Bloomwire Admin setup namespace/service; later a DTO/serializer scrub slice (prerequisite before claiming no-credential-exposure).</dd>
+                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; Chatwoot conversations/contacts/teams/campaigns/normal inbox usage untouched; behavior-neutral until the deny slice lands after the setup path.</dd>
               </dl>
             </div>
           </div>
