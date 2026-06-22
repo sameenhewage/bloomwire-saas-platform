@@ -118,6 +118,27 @@ responsibilities and keeps raw Chatwoot setup surfaces platform-controlled.
 > Dialog tenant, but tenant creation and channel/inbox setup remain
 > Bloomwire-controlled unless explicit tenant capabilities allow self-service setup.
 
+## Global Meta/WhatsApp webhook routing (see ADR 0004)
+
+Decision recorded in `docs/adr/0004-bloomwire-global-meta-whatsapp-webhook-router.md`.
+**Decision only — parked/future (Phase 8); nothing here is implemented yet.**
+
+- **Chatwoot native webhook behavior stays unchanged (default).** WhatsApp /
+  Facebook / Instagram keep using Chatwoot's existing per-inbox webhook/channel
+  setup; existing Chatwoot routes and behavior keep working.
+- **A future Bloomwire-owned global webhook/router** (Phase 8) is **additive**, not
+  a replacement: `Meta app → one Bloomwire global endpoint → Bloomwire router →
+  correct Chatwoot account + inbox → Chatwoot conversations/messages`.
+- **Behind a feature toggle, safe by default:**
+  `BLOOMWIRE_GLOBAL_META_WEBHOOK_ENABLED=true|false` (**default `false`**). When
+  off, native Chatwoot behavior is untouched. Tenant/channel-level config can
+  **later** choose, per inbox, native vs global flow.
+- **Routing by identifiers:** `phone_number_id`, `page_id`, `waba_id`, `provider`,
+  `account_id`, `inbox_id`.
+- **Source of truth unchanged:** Chatwoot still owns conversations / messages /
+  contacts; the router only delivers events to the right account + inbox — **no
+  duplication** into Bloomwire.
+
 ## Implemented so far (current state)
 
 Phases 0–4 Slice 1 are merged into `version_1`. What exists today:

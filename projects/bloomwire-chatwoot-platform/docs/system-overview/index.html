@@ -1110,6 +1110,17 @@
               </dl>
             </div>
           </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-22</span>
+              <h4>Recorded Global Meta/WhatsApp Webhook Router decision (ADR 0004)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Documentation-only decision adding a <strong>future Phase 8</strong>: a <strong>Bloomwire-owned global Meta/WhatsApp webhook router</strong>. <strong>Additive — Chatwoot native webhook behavior stays unchanged</strong> (WhatsApp/Facebook/Instagram keep their existing Chatwoot per-inbox webhook setup and routes). Target flow: Meta app → one Bloomwire global endpoint → Bloomwire router → correct Chatwoot account+inbox → conversations/messages. Behind a feature toggle <span class="pill-code">BLOOMWIRE_GLOBAL_META_WEBHOOK_ENABLED</span> (<strong>default off / safe</strong>); per-inbox config later chooses native vs global flow. Routes by <span class="pill-code">phone_number_id</span> / <span class="pill-code">page_id</span> / <span class="pill-code">waba_id</span> / <span class="pill-code">provider</span> / <span class="pill-code">account_id</span> / <span class="pill-code">inbox_id</span>.</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">docs/adr/0004-bloomwire-global-meta-whatsapp-webhook-router.md</span>, <span class="pill-code">CONTEXT.md</span>, <span class="pill-code">docs/product/05-development-phases.md</span> (Phase 8 + Phase 5 note), system-overview <span class="pill-code">README.md</span> + this document.</dd>
+                <dt>Not changed</dt><dd>Decision only — parked/future (Phase 8). No app behavior, code, config, feature flag, route, migration, schema, or spec. Chatwoot native webhook/channel behavior and routes untouched; Chatwoot stays source of truth; no conversation/message/contact duplication.</dd>
+              </dl>
+            </div>
+          </div>
           <div class="tl-item next">
             <div class="tl-card next">
               <span class="date">Next</span>
