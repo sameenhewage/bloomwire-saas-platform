@@ -213,7 +213,7 @@ Rules:
 clarify -> define scope -> shared context -> PRD (if needed)
         -> vertical slices -> prototype (if useful)
         -> implement one slice -> test (TDD where practical)
-        -> review -> handoff
+        -> review -> handoff -> commit -> pre-push code review -> push
 ```
 
 The **WebApp Orchestrator** decides the next step and routes work. No agent
@@ -225,9 +225,22 @@ agents write failing tests **before** the builder implements, so the builder
 cannot reshape the requirement with convenient tests. See
 `docs/agents/independent-tdd-workflow.md`.
 
+Before any push from this repo, use the **Pre-Push Code Review Workflow**:
+
+```text
+Implement -> run tests -> run MCP/runtime validation -> commit
+          -> run pre-push-code-review-agent -> APPROVE writes approval artifact
+          -> git push allowed
+```
+
+Local hooks block `git push` unless `.claude/pre-push-approval.json` contains
+`verdict: APPROVE`, the current `git rev-parse HEAD`, and the current branch. Any
+new commit invalidates approval. See `.claude/workflows/pre-push-code-review-workflow.md`.
+
 ```
 Orchestrator -> Acceptance Test Agent (RED) -> Edge & Security Test Agent (RED)
              -> Fullstack Builder Agent (GREEN) -> QA Review -> Code Review -> Handoff
+             -> Pre-Push Code Review -> Push
 ```
 
 ---
@@ -245,6 +258,7 @@ Orchestrator -> Acceptance Test Agent (RED) -> Edge & Security Test Agent (RED)
 | Fullstack Builder Agent | Implements one vertical slice at a time; must not delete, weaken, or rewrite independent tests without approval. |
 | QA Review Agent | Reviews changes, outputs PASS / FAIL with reasons. |
 | Code Review Agent | Reviews a PR diff line-by-line (correctness, standards, security, scope) before promotion; outputs APPROVE / REQUEST CHANGES. |
+| Pre-Push Code Review Agent | Reviews the exact current commit after tests and runtime proof; outputs APPROVE / BLOCK and writes the local approval artifact only on APPROVE. |
 | Handoff Agent | Summarizes work, files, tests, risks, next steps. |
 
 Full definitions: see `.claude/agents/`.

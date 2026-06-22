@@ -63,6 +63,11 @@ description: How to build a new feature, from clarification to handoff
     - Summarize work, files changed, tests run, risks, next steps.
     - Owner: Handoff Agent.
 
+11. **Pre-push code review**
+    - After commit, run `pre-push-code-review-agent`.
+    - `git push` is allowed only after APPROVE writes the current-head approval artifact.
+    - Owner: Pre-Push Code Review Agent.
+
 ## Definition of done
 
 - **Product-truth verified**: browser/runtime behavior + source of truth +
@@ -73,3 +78,4 @@ description: How to build a new feature, from clarification to handoff
   architecture/duplicate-state (rules 7, 9).
 - Review is PASS; report follows the **Final PASS Report Standard** (rule 11).
 - Relevant docs updated (rule 10); handoff produced.
+- Before push, `pre-push-code-review-agent` APPROVE exists for the current `HEAD` and branch.

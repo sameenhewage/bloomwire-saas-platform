@@ -29,6 +29,9 @@ match its own implementation.
 
 7. Handoff Agent
    -> summarizes the merged/ready work and next step
+
+8. Pre-Push Code Review Agent
+   -> reviews the exact current commit and writes approval only on APPROVE
 ```
 
 ## Builder guardrail

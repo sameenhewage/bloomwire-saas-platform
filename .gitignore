@@ -1,3 +1,4 @@
 *.zip
 *.log
 .env
+.claude/pre-push-approval.json

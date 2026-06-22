@@ -35,6 +35,11 @@ definitions live in `.claude/agents/`.
 - **Owns:** reviewing changes against acceptance criteria; PASS / FAIL.
 - **Must not:** rewrite the feature or approve untested work.
 
+## Pre-Push Code Review Agent
+
+- **Owns:** final local review of the exact current commit before `git push`; APPROVE / BLOCK.
+- **Must not:** write approval artifacts for stale commits, wrong branches, or BLOCK findings.
+
 ## Handoff Agent
 
 - **Owns:** the handover summary — files changed, tests run, risks, next steps.
@@ -43,7 +48,7 @@ definitions live in `.claude/agents/`.
 ## Hand-off chain
 
 ```
-Discovery -> Architecture -> (Prototype) -> Build -> Review -> Handoff
-                         ^                                   |
-                         |___________ Orchestrator __________|
+Discovery -> Architecture -> (Prototype) -> Build -> Review -> Handoff -> Pre-Push Review -> Push
+                         ^                                                       |
+                         |___________________ Orchestrator ______________________|
 ```

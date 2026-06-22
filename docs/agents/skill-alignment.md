@@ -17,6 +17,7 @@ live in `.claude/skills/`.
 | Fullstack Builder Agent | `tdd`, `to-issues` |
 | QA Review Agent | `review`, `diagnose` |
 | Code Review Agent | `review` |
+| Pre-Push Code Review Agent | `review`, `git-guardrails-claude-code` |
 | Handoff Agent | `handoff` |
 
 ## By workflow
@@ -25,8 +26,9 @@ live in `.claude/skills/`.
 | -------- | -------------- |
 | `new-feature-workflow` | `grill-me` -> `to-prd` -> `to-issues` -> `prototype` (if useful) -> independent `tdd` tests -> builder implementation -> `review` -> `handoff` |
 | `bugfix-workflow` | `diagnose` -> independent `tdd` regression tests -> builder fix -> `review` -> `handoff` |
-| `independent-tdd-workflow` | Acceptance Test Agent -> Edge & Security Test Agent -> Fullstack Builder Agent -> QA Review Agent -> Code Review Agent -> Handoff Agent |
+| `independent-tdd-workflow` | Acceptance Test Agent -> Edge & Security Test Agent -> Fullstack Builder Agent -> QA Review Agent -> Code Review Agent -> Handoff Agent -> Pre-Push Code Review Agent |
 | `review-workflow` | `review` |
+| `pre-push-code-review-workflow` | tests/runtime proof -> commit -> `review` -> approval artifact -> guarded push |
 
 See `docs/agents/independent-tdd-workflow.md` for the RED/GREEN workflow and
 builder guardrails.
