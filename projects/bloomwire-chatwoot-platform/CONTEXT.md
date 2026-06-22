@@ -139,6 +139,31 @@ Decision recorded in `docs/adr/0004-bloomwire-global-meta-whatsapp-webhook-route
   contacts; the router only delivers events to the right account + inbox — **no
   duplication** into Bloomwire.
 
+## External app configuration ownership (see ADR 0005)
+
+Decision recorded in `docs/adr/0005-bloomwire-external-app-configuration-ownership.md`.
+**Decision only — implementation parked/future (Phase 4.4); WhatsApp is the first
+vertical; Dialog admins are NOT denied yet.**
+
+- **Bloomwire owns all external app/channel configuration** (WhatsApp, SMS, Email,
+  Instagram/Facebook, Shopify, later Telegram/Signal). Dialog (tenant) admins may
+  **use** configured channels but may **not** connect/disconnect/create/
+  reauthorize/register-webhook/edit provider credentials.
+- **Setup is platform-owned** via a **dedicated Bloomwire Admin namespace/service**
+  — the tenant `InboxesController` is **not** reused as the platform setup path.
+- **Proposed ownership table** `bloomwire_channel_integrations` (design only, no
+  migration) maps `profile → inbox → channel → account` plus **non-secret**
+  routing metadata (`phone_number`, `phone_number_id`, `waba_id`, `routing_key`):
+  unique per inbox, unique routing key where present.
+- **Secrets are not duplicated** into the ownership/routing table; WhatsApp
+  credentials stay in `Channel::Whatsapp#provider_config` (encryption is a
+  separate future ADR). **Raw provider credentials are never exposed to Dialog
+  users.**
+- **The PR #19 seam** (`Bloomwire::WhatsappSetupGuard` /
+  `Bloomwire::ChannelControlPolicy`) is the choke point; it stays
+  **behavior-neutral** until the deny slice (4.4-b-WA.2C) lands **after** the
+  Bloomwire Admin setup path (4.4-b-WA.2B).
+
 ## Implemented so far (current state)
 
 Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
