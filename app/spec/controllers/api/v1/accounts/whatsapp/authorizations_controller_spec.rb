@@ -495,4 +495,21 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
       end
     end
   end
+
+  describe 'Bloomwire WhatsApp setup seam (4.4-b-WA.1)' do
+    let(:administrator) { create(:user, account: account, role: :administrator) }
+
+    it 'returns unauthorized for an administrator when the channel control policy denies, and never starts embedded signup' do
+      denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
+      allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+      expect(Whatsapp::EmbeddedSignupService).not_to receive(:new)
+
+      post "/api/v1/accounts/#{account.id}/whatsapp/authorization",
+           params: { code: 'c', business_id: 'b', waba_id: 'w' },
+           headers: administrator.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
 end

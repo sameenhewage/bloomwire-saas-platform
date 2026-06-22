@@ -5,8 +5,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show]
+  before_action :authorize_whatsapp_setup!, only: [:create, :update], if: :whatsapp_setup_request?
 
   include Api::V1::Accounts::Concerns::WhatsappHealthManagement
+  include Bloomwire::WhatsappSetupGuard
 
   def index
     @inboxes = policy_scope(Current.account.inboxes)
@@ -80,6 +82,14 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   private
+
+  def whatsapp_setup_request?
+    case action_name
+    when 'create' then params.dig(:channel, :type) == 'whatsapp'
+    when 'update' then @inbox&.whatsapp?
+    else false
+    end
+  end
 
   def fetch_inbox
     @inbox = Current.account.inboxes.find(params[:id])
