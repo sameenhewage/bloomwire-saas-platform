@@ -693,6 +693,10 @@ Rails.application.routes.draw do
         post :activate, on: :member
       end
 
+      # Bloomwire platform-context external-channel setup (WhatsApp first vertical).
+      # Generic: app_kind selects the adapter (see Bloomwire::ChannelSetup::Service).
+      resources :bloomwire_channel_integrations, only: [:create], path: 'bloomwire/channel_integrations'
+
       resources :access_tokens, only: [:index, :show]
       resources :installation_configs, only: [:index, :new, :create, :show, :edit, :update]
       resources :agent_bots, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
