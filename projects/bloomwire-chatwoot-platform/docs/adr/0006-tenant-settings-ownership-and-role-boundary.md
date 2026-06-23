@@ -161,8 +161,8 @@ a settings URL or calling the API manually.
   whole Settings surface. 0003's future per-tenant **capability model** still
   governs any opt-in self-service exceptions.
 - **ADR 0005 — External App Configuration Ownership.** 0005 already enforces
-  WhatsApp setup/destroy deny for managed tenants (backend, `2C`) and plans `2D`
-  frontend hiding. 0006 **generalizes** that boundary to all platform-owned settings
+  WhatsApp setup/destroy deny for managed tenants (backend, `2C`) plus `2D`
+  frontend hiding (merged in PR #25). 0006 **generalizes** that boundary to all platform-owned settings
   (bots, integrations, automation, inboxes, account settings) and **reuses** 0005's
   safe-DTO / no-credential-exposure rule for the read-only `Connected Channels` page.
 - **ADR 0004 — Global Webhook Router (Phase 8).** 0006 is sequenced **after** Phase 8
@@ -177,11 +177,11 @@ a settings URL or calling the API manually.
   surfaces.
 - **This lockdown is mandatory before real Dialog / customer admins receive
   production access.**
-- **Development order:**
-  1. Finish `4.4-b-WA.2D` — WhatsApp frontend hiding / disabled UX.
-  2. Complete Phase 8 — Global WhatsApp Webhook Router.
-  3. Implement Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup.
-  4. Run a final security review before production / client access.
+- **Development order.** `4.4-b-WA.2D` (WhatsApp frontend hiding / disabled UX) is
+  already **merged (PR #25)**; the remaining sequence is:
+  1. Complete Phase 8 — Global WhatsApp Webhook Router.
+  2. Implement Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup.
+  3. Run a final security review before production / client access.
 
 ## Future slice
 

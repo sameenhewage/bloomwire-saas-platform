@@ -465,9 +465,10 @@ exposed to enterprise clients by default.
       profile), non-managed WhatsApp inboxes, and non-WhatsApp inboxes are unchanged;
       normal conversation usage and ordinary non-setup maintenance remain unaffected.
       Backend enforcement only — no frontend hiding yet.
-    - **4.4-b-WA.2D — Tenant frontend hiding/disabled UX** ⏳ planned — **next
-      slice** (backend enforcement now exists in 4.4-b-WA.2C; this is UX only, not
-      security).
+    - **4.4-b-WA.2D — Tenant frontend hiding/disabled UX** ✅ implemented (PR #25).
+      For Bloomwire-managed tenants the tenant-side WhatsApp setup/config UI is hidden
+      and the direct WhatsApp Call route + Meta settings shortcut are gated (UX only,
+      not security; backend enforcement is 4.4-b-WA.2C).
     - **4.4-b-WA.3 — Global WhatsApp webhook routing foundation** ⏳ planned
       (routing metadata only; full router is ADR 0004 / Phase 8).
   - **Constraints:** secrets stay in `Channel::Whatsapp#provider_config` (not
@@ -668,13 +669,13 @@ route/URL guard, (3) backend API authorization deny. Frontend hiding is UX only,
 not security; a Dialog user must not bypass via a direct settings URL or a manual
 API call.
 
-**Timing / development order (see ADR 0006):**
+**Timing / development order (see ADR 0006):** `4.4-b-WA.2D` (WhatsApp frontend
+hiding / disabled UX) is already **merged (PR #25)**, so the remaining sequence is:
 
-1. Finish 4.4-b-WA.2D (WhatsApp frontend hiding / disabled UX).
-2. Complete Phase 8 (Global WhatsApp Webhook Router) — it clarifies the final
+1. Complete Phase 8 (Global WhatsApp Webhook Router) — it clarifies the final
    Bloomwire-owned routing/admin surfaces the platform controls move to.
-3. Implement this Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup.
-4. Run a final security review before production / client access.
+2. Implement this Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup.
+3. Run a final security review before production / client access.
 
 **This lockdown is mandatory before real Dialog/customer admins receive production
 access.**
@@ -740,8 +741,8 @@ parked/future.**
 
 ```text
 Current phase: Phase 4 — Roles, Permissions & Security Foundation
-Current position: Phase 4.4 External App Configuration Ownership in progress (decision: ADR 0005). 4.4-b-WA.1 WhatsApp setup control seam merged (PR #19, behavior-neutral); 4.4-b-WA.2A channel integration ownership foundation merged (PR #22, behavior-neutral); 4.4-b-WA.2B Bloomwire Admin WhatsApp setup path merged (generic Bloomwire::ChannelSetup service + WhatsApp adapter + SuperAdmin endpoint); 4.4-b-WA.2C Dialog admin WhatsApp self-service deny implemented (PR #24 — for Bloomwire-managed tenants with a BloomwireBusinessProfile, tenant/account admins and agents are denied tenant-side WhatsApp setup/config + Bloomwire-managed WhatsApp inbox destroy; backend enforcement only). Next coding slice 4.4-b-WA.2D (tenant frontend hiding/disabled UX; UI not done yet). Phase 4.3 / 4.5 remain parked (ADR 0003).
-Last merged: Bloomwire Admin WhatsApp setup path (PR #23 -> version_1)
+Current position: Phase 4.4 External App Configuration Ownership in progress (decision: ADR 0005). 4.4-b-WA.1 WhatsApp setup control seam merged (PR #19, behavior-neutral); 4.4-b-WA.2A channel integration ownership foundation merged (PR #22, behavior-neutral); 4.4-b-WA.2B Bloomwire Admin WhatsApp setup path merged (generic Bloomwire::ChannelSetup service + WhatsApp adapter + SuperAdmin endpoint); 4.4-b-WA.2C Dialog admin WhatsApp self-service deny implemented (PR #24 — for Bloomwire-managed tenants with a BloomwireBusinessProfile, tenant/account admins and agents are denied tenant-side WhatsApp setup/config + Bloomwire-managed WhatsApp inbox destroy; backend enforcement only). 4.4-b-WA.2D tenant frontend hiding/disabled UX merged (PR #25; UX only, not security). Next planned 4.4 WhatsApp slice 4.4-b-WA.3 (routing-metadata foundation; full router is ADR 0004 / Phase 8). Phase 4.3 / 4.5 remain parked (ADR 0003).
+Last merged: Tenant WhatsApp frontend hiding/disabled UX (PR #25 -> version_1)
 Required workflow: Independent TDD Workflow
 Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), billing, analytics, operational polish, Bloomwire global Meta/WhatsApp webhook router (parked — see ADR 0004), Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup (parked — see ADR 0006; Phase 9, implement after Phase 8, mandatory before real Dialog/customer admin production access), Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
 ```
