@@ -65,4 +65,32 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappMetadataValidator do
       expect(described_class.new(params).error_code).to eq(:phone_metadata_unverifiable)
     end
   end
+
+  describe '#canonical_phone_number' do
+    it "returns Meta's number normalized to the +<digits> convention for the validated id" do
+      stub_phone_numbers([{ 'id' => 'pnid-001', 'display_phone_number' => '+1 555-123-4567' }])
+      expect(described_class.new(params).canonical_phone_number).to eq('+15551234567')
+    end
+
+    it 'derives the canonical value from Meta, independent of how the operator formatted the input' do
+      formatted = params.merge(phone_number: '+1 (555) 123-4567')
+      stub_phone_numbers([{ 'id' => 'pnid-001', 'display_phone_number' => '15551234567' }])
+      expect(described_class.new(formatted).canonical_phone_number).to eq('+15551234567')
+    end
+
+    it 'is nil when the metadata is invalid (no canonical number to persist)' do
+      stub_phone_numbers([{ 'id' => 'a-different-pnid', 'display_phone_number' => '15551234567' }])
+      expect(described_class.new(params).canonical_phone_number).to be_nil
+    end
+
+    it 'shares a single Meta HTTP call with error_code (memoized)' do
+      stub_phone_numbers([{ 'id' => 'pnid-001', 'display_phone_number' => '15551234567' }])
+      validator = described_class.new(params)
+
+      validator.error_code
+      validator.canonical_phone_number
+
+      expect(api_client).to have_received(:fetch_phone_numbers).once
+    end
+  end
 end

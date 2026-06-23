@@ -378,6 +378,53 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
   end
 
+  describe 'canonical phone number persistence (inbound webhook routing)' do
+    # The operator submits an equivalently-but-differently-formatted number; Meta returns
+    # its own (also formatted) canonical display for the matched id. The stored value must
+    # be normalized to '+<digits>' (the Whatsapp::PhoneInfoService convention) so inbound
+    # routing can find the channel: Webhooks::WhatsappEventsJob / Webhooks::WhatsappController
+    # resolve it by '+<metadata.display_phone_number>'. Persisting the raw submitted string
+    # ('+1 (555) 123-0001') would break that lookup.
+    let(:formatted_params) { whatsapp_params.merge(phone_number: '+1 (555) 123-0001') }
+
+    before do
+      stub_waba_phone_numbers([{ 'id' => whatsapp_params[:phone_number_id], 'display_phone_number' => '+1 555-123-0001' }])
+    end
+
+    it 'accepts the equivalently-formatted submitted phone number' do
+      expect(perform_setup(params: formatted_params).success?).to be(true)
+    end
+
+    it 'persists Meta canonical +<digits> on Channel::Whatsapp, not the raw submitted string' do
+      channel = perform_setup(params: formatted_params).integration.channelable
+      expect(channel.phone_number).to eq('+15551230001')
+    end
+
+    it 'records the same canonical value on the BloomwireChannelIntegration row' do
+      integration = perform_setup(params: formatted_params).integration
+      expect(integration.phone_number).to eq('+15551230001')
+      expect(integration.phone_number).to eq(integration.channelable.phone_number)
+    end
+
+    it 'never persists the raw formatted phone number anywhere' do
+      perform_setup(params: formatted_params)
+
+      expect(Channel::Whatsapp.where(phone_number: '+1 (555) 123-0001')).to be_empty
+      expect(BloomwireChannelIntegration.where(phone_number: '+1 (555) 123-0001')).to be_empty
+    end
+
+    it 'stores a value the inbound webhook lookup (+<display_phone_number>) resolves to the channel' do
+      created = perform_setup(params: formatted_params).integration.channelable
+
+      # Mirror Webhooks::WhatsappEventsJob#get_channel_from_wb_payload: the webhook payload
+      # carries a digits-only metadata.display_phone_number and the job finds the channel by
+      # '+<display_phone_number>', then confirms the phone_number_id matches.
+      resolved = Channel::Whatsapp.find_by(phone_number: '+15551230001')
+      expect(resolved).to eq(created)
+      expect(resolved.provider_config['phone_number_id']).to eq(whatsapp_params[:phone_number_id])
+    end
+  end
+
   describe 'unsupported channel kind' do
     it 'fails cleanly for an app_kind that has no adapter yet' do
       result = perform_setup(app_kind: 'sms')

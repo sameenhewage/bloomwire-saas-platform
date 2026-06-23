@@ -124,6 +124,22 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
         ['pnid-req-009', 'waba-req-009', 'a-different-pnid', '+15551230009', 'super-secret-token']
           .each { |value| expect(response.body).not_to include(value) }
       end
+
+      it 'stores the canonical +<digits> phone number (so inbound webhooks resolve the channel)' do
+        formatted = valid_payload.merge(channel: valid_payload[:channel].merge(phone_number: '+1 (555) 123-0009'))
+        lookup = instance_double(Whatsapp::FacebookApiClient)
+        allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+        allow(lookup).to receive(:fetch_phone_numbers).and_return(
+          'data' => [{ 'id' => 'pnid-req-009', 'display_phone_number' => '+1 555-123-0009' }]
+        )
+
+        post_setup(formatted)
+
+        expect(response).to have_http_status(:created)
+        expect(Channel::Whatsapp.last.phone_number).to eq('+15551230009')
+        expect(BloomwireChannelIntegration.last.phone_number).to eq('+15551230009')
+        expect(response.body).not_to include('+1 (555) 123-0009')
+      end
     end
 
     context 'when signed in as a Dialog tenant account administrator (not platform)' do

@@ -104,6 +104,17 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
       expect(lookup).to have_received(:fetch_phone_numbers).with('waba-ad-001')
     end
 
+    it "returns the params with phone_number swapped for Meta's canonical +<digits> value" do
+      stub_meta_phone_numbers([{ 'id' => 'pnid-ad-001', 'display_phone_number' => '+1 555-777-0001' }])
+
+      result = adapter.validate_setup_metadata!(params.merge(phone_number: '+1 (555) 777-0001'))
+
+      expect(result[:phone_number]).to eq('+15557770001')
+      # all other params are preserved unchanged
+      expect(result[:phone_number_id]).to eq('pnid-ad-001')
+      expect(result[:api_key]).to eq('secret-key')
+    end
+
     it 'raises :phone_number_id_mismatch when the WABA does not expose the supplied phone_number_id' do
       stub_meta_phone_numbers([{ 'id' => 'a-different-pnid', 'display_phone_number' => '+15557770001' }])
 

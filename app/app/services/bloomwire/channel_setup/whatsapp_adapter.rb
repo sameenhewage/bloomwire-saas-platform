@@ -31,20 +31,29 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
     params[:phone_number_id].presence
   end
 
-  # Overrides BaseAdapter#validate_setup_metadata! (the default no-op). The orchestrator
-  # runs this BEFORE creating or activating the integration (outside the DB transaction).
-  # It verifies the supplied phone_number_id against Meta for the supplied WABA/token and
-  # confirms the returned number matches the submitted one — neither the reused
-  # ChannelCreationService nor WebhookSetupService proves this (see WhatsappMetadataValidator).
-  # On any failure it raises a coded SetupError so setup never persists/activates a
-  # mistyped identifier; raw provider data is never surfaced.
+  # Overrides BaseAdapter#validate_setup_metadata!. The orchestrator runs this BEFORE
+  # creating or activating the integration (outside the DB transaction). It verifies the
+  # supplied phone_number_id against Meta for the supplied WABA/token and confirms the
+  # returned number matches the submitted one — neither the reused ChannelCreationService
+  # nor WebhookSetupService proves this (see WhatsappMetadataValidator). On any failure it
+  # raises a coded SetupError so setup never persists/activates a mistyped identifier; raw
+  # provider data is never surfaced.
+  #
+  # On success it returns the params with phone_number swapped for Meta's CANONICAL number
+  # ('+<digits>', the Whatsapp::PhoneInfoService convention). The submitted phone_number may
+  # be equivalently but differently formatted (spaces/dashes/parens); persisting that raw
+  # string would make inbound WhatsApp webhook routing — which looks the channel up by
+  # '+<display_phone_number>' — fail to resolve it. We persist the canonical value instead.
   def validate_setup_metadata!(params)
     # Missing/malformed params can't be verified against Meta — surface the same
     # :invalid_channel_params as create_channel rather than a misleading metadata code.
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params if missing_required?(params)
 
-    code = Bloomwire::ChannelSetup::WhatsappMetadataValidator.new(params).error_code
+    validator = Bloomwire::ChannelSetup::WhatsappMetadataValidator.new(params)
+    code = validator.error_code
     raise Bloomwire::ChannelSetup::SetupError, code if code
+
+    params.merge(phone_number: validator.canonical_phone_number)
   end
 
   # Creates the Channel::Whatsapp + Inbox via the existing Chatwoot service.

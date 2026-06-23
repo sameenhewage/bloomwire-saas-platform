@@ -70,8 +70,10 @@ class Bloomwire::ChannelSetup::Service
     # Verify the supplied provider metadata BEFORE we create OR activate anything, and
     # OUTSIDE the DB transaction (the duplicate short-circuit above runs first, so a known
     # duplicate never triggers an external call). The adapter raises a coded SetupError if
-    # the metadata is invalid, so neither path persists/activates a mistyped identifier.
-    adapter.validate_setup_metadata!(@params)
+    # the metadata is invalid, so neither path persists/activates a mistyped identifier. It
+    # also RETURNS the params to persist: WhatsApp swaps phone_number for Meta's canonical
+    # value so the stored channel matches what inbound webhook routing looks up.
+    @params = adapter.validate_setup_metadata!(@params)
 
     return resume(adapter, existing) if existing
 
