@@ -39,15 +39,7 @@ class Bloomwire::ChannelSetup::Service
     profile = BloomwireBusinessProfile.find_by(account_id: @account&.id)
     return failure(:profile_not_found) if profile.nil?
 
-    return failure(:duplicate_routing_key) if duplicate_routing_key?(adapter.routing_key(@params))
-
-    integration = create_integration(adapter, profile)
-    # Provider-side registration (e.g. WhatsApp webhook) runs AFTER the DB
-    # transaction commits, so an external/provider call can neither roll back nor
-    # be rolled back by the committed ownership row. Adapters with no provider-side
-    # step no-op this hook.
-    adapter.post_create!(integration.channelable)
-    Bloomwire::ChannelSetup::Result.success(integration)
+    set_up_or_resume(adapter, profile)
   rescue Bloomwire::ChannelSetup::SetupError => e
     failure(e.code)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
@@ -63,8 +55,39 @@ class Bloomwire::ChannelSetup::Service
     @actor.is_a?(SuperAdmin)
   end
 
-  def duplicate_routing_key?(routing_key)
-    routing_key.present? && BloomwireChannelIntegration.exists?(routing_key: routing_key)
+  # Resolves the routing key to either a resumable PENDING row (retry of a failed
+  # webhook), a genuine duplicate, or a brand-new setup. Kept separate from #perform
+  # so the orchestrator's guard clauses stay flat.
+  def set_up_or_resume(adapter, profile)
+    existing = existing_integration(adapter.routing_key(@params))
+    # A prior attempt whose provider registration failed left a PENDING row. A retry
+    # must RESUME it (re-run registration, then activate) — never create a second
+    # channel/inbox/integration for the same routing key.
+    return activate_with_provider(adapter, existing) if existing&.status == 'pending'
+    # An already-active (or disabled) row for this routing key is a genuine duplicate.
+    return failure(:duplicate_routing_key) if existing
+
+    activate_with_provider(adapter, create_integration(adapter, profile))
+  end
+
+  # The routing key (WhatsApp phone_number_id) is globally unique on the ownership
+  # table. We look the row up (not just existence) so a PENDING row left by a failed
+  # webhook attempt can be resumed instead of blocking a retry as a duplicate.
+  def existing_integration(routing_key)
+    return nil if routing_key.blank?
+
+    BloomwireChannelIntegration.find_by(routing_key: routing_key)
+  end
+
+  # Provider-side registration runs AFTER the transaction commits and must SURFACE
+  # failure. Only a successful registration flips the row to active; on failure the
+  # adapter raises a coded SetupError, the row stays pending (retryable), and setup
+  # never reports success/active on a failed webhook. Used by both the create path and
+  # the pending-resume (retry) path, so neither can duplicate channel/inbox rows.
+  def activate_with_provider(adapter, integration)
+    adapter.post_create!(integration.channelable)
+    integration.update!(status: 'active')
+    Bloomwire::ChannelSetup::Result.success(integration)
   end
 
   # Channel + inbox + ownership row are created atomically. requires_new opens a
@@ -86,7 +109,9 @@ class Bloomwire::ChannelSetup::Service
         channelable: channel,
         app_kind: adapter.app_kind,
         managed_by_bloomwire: true,
-        status: 'active',
+        # Created PENDING; only flips to active once provider registration succeeds
+        # AFTER this transaction commits (see #activate_with_provider).
+        status: 'pending',
         created_by_super_admin: @actor,
         **adapter.integration_attributes(channel)
       )

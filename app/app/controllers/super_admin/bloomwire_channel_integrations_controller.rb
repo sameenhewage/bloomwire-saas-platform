@@ -17,14 +17,17 @@ class SuperAdmin::BloomwireChannelIntegrationsController < SuperAdmin::Applicati
     unsupported_app_kind: 'Unsupported channel type.',
     invalid_channel_params: 'Missing or invalid channel parameters.',
     duplicate_phone_number: 'A channel with this phone number already exists.',
+    duplicate_phone_number_id: 'A channel with this WhatsApp phone number ID already exists.',
     duplicate_routing_key: 'A channel with this routing identifier already exists.',
     duplicate_integration: 'This inbox already has a Bloomwire channel integration.',
+    webhook_setup_failed: 'Provider webhook registration failed; the channel setup is pending. Retry to complete it.',
     integration_invalid: 'Could not record the channel integration.'
   }.freeze
 
   ERROR_STATUSES = {
     unauthorized: :forbidden,
-    account_not_found: :not_found
+    account_not_found: :not_found,
+    webhook_setup_failed: :bad_gateway
   }.freeze
 
   def create
@@ -62,21 +65,26 @@ class SuperAdmin::BloomwireChannelIntegrationsController < SuperAdmin::Applicati
            status: ERROR_STATUSES.fetch(code, :unprocessable_entity)
   end
 
-  # Safe, platform-side DTO: ownership + NON-SECRET routing metadata only. No
-  # provider_config / api_key / tokens are ever included.
+  # Minimal, safe SuperAdmin DTO (ADR 0005 security gate). A browser/API response
+  # must NOT carry raw phone numbers, Meta vendor identifiers (phone_number_id,
+  # business_account_id, routing_key), provider_config, credentials, or raw DB ids.
+  # We return setup-confirmation fields only, plus a MASKED phone for human display.
   def integration_dto(integration)
     {
-      id: integration.id,
-      account_id: integration.account_id,
-      inbox_id: integration.inbox_id,
       app_kind: integration.app_kind,
       provider: integration.provider,
       status: integration.status,
       managed_by_bloomwire: integration.managed_by_bloomwire,
-      phone_number: integration.phone_number,
-      phone_number_id: integration.phone_number_id,
-      business_account_id: integration.business_account_id,
-      routing_key: integration.routing_key
+      phone_number_masked: masked_phone(integration.phone_number)
     }
+  end
+
+  # Last 4 digits only, so the operator can confirm which number was configured
+  # without the response exposing the raw E.164 number.
+  def masked_phone(phone_number)
+    digits = phone_number.to_s.gsub(/\D/, '')
+    return nil if digits.empty?
+
+    "\u2022\u2022\u2022\u2022#{digits.last(4)}"
   end
 end

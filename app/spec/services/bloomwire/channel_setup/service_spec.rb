@@ -84,6 +84,51 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
   end
 
+  describe 'provider webhook failure (must not report success/active)' do
+    before do
+      failing = instance_double(Whatsapp::WebhookSetupService)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(failing)
+      allow(failing).to receive(:perform).and_raise(RuntimeError, 'Webhook setup failed: Meta unavailable')
+    end
+
+    it 'returns :webhook_setup_failed and leaves the integration pending (not active)' do
+      result = perform_setup
+
+      expect(result.success?).to be(false)
+      expect(result.error).to eq(:webhook_setup_failed)
+      expect(BloomwireChannelIntegration.last.status).to eq('pending')
+    end
+
+    it 'still creates the channel + inbox + pending integration so a retry can resume' do
+      expect { perform_setup }
+        .to change(Channel::Whatsapp, :count).by(1)
+        .and change(Inbox, :count).by(1)
+        .and change(BloomwireChannelIntegration, :count).by(1)
+    end
+  end
+
+  describe 'retry after a failed webhook (resume pending, never duplicate)' do
+    it 'resumes the SAME pending integration and activates it without creating duplicate rows' do
+      failing = instance_double(Whatsapp::WebhookSetupService)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(failing)
+      allow(failing).to receive(:perform).and_raise(RuntimeError, 'Meta down')
+      expect(perform_setup.error).to eq(:webhook_setup_failed)
+      pending = BloomwireChannelIntegration.last
+      expect(pending.status).to eq('pending')
+
+      ok = instance_double(Whatsapp::WebhookSetupService, perform: nil)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(ok)
+
+      before_counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
+      result = perform_setup
+
+      expect([Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]).to eq(before_counts)
+      expect(result.success?).to be(true)
+      expect(result.integration.id).to eq(pending.id)
+      expect(result.integration.reload.status).to eq('active')
+    end
+  end
+
   describe 'integration fields (decided lifecycle + non-secret routing metadata)' do
     let(:integration) { perform_setup.integration }
 

@@ -36,33 +36,41 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
   # orchestrator never has to know about WhatsApp/Meta error shapes.
   def create_channel(account:, params:)
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params if missing_required?(params)
-    raise Bloomwire::ChannelSetup::SetupError, :duplicate_phone_number if phone_number_taken?(params)
+
+    duplicate = duplicate_code(params)
+    raise Bloomwire::ChannelSetup::SetupError, duplicate if duplicate
 
     Whatsapp::ChannelCreationService.new(account, waba_info(params), phone_info(params), params[:api_key]).perform
   rescue ArgumentError
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, RuntimeError => e
-    # A concurrent setup can insert the same phone number between the pre-check
-    # above and this create. The reused Chatwoot service then raises a RuntimeError
-    # (its own phone-exists guard) or RecordInvalid/RecordNotUnique (the unique phone
-    # index). Re-check and translate that race into the same safe coded error as the
-    # pre-check, rather than leaking a raw exception.
-    raise Bloomwire::ChannelSetup::SetupError, :duplicate_phone_number if phone_number_taken?(params)
+    # A concurrent setup can insert the same phone number / phone_number_id between the
+    # pre-checks above and this create (the unique phone index, or the reused Chatwoot
+    # service's own RuntimeError phone-exists guard). Re-check and translate that race
+    # into the same safe coded error as the pre-checks, not a leaked raw exception.
+    duplicate = duplicate_code(params)
+    raise Bloomwire::ChannelSetup::SetupError, duplicate if duplicate
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params if e.is_a?(ActiveRecord::RecordInvalid)
 
     raise
   end
 
-  # Overrides BaseAdapter#post_create! (the default no-op). Provider-side step run by
-  # the orchestrator AFTER the channel + inbox + ownership row are committed. WhatsApp
-  # channels are created through
-  # Whatsapp::ChannelCreationService, which tags provider_config['source'] =
-  # 'embedded_signup'; that suppresses Channel::Whatsapp's after_commit webhook
-  # auto-setup, so we register the webhook explicitly here — exactly as
-  # Whatsapp::EmbeddedSignupService does. setup_webhooks handles its own provider
-  # errors (logs + prompts reauthorization) and does not raise.
+  # Overrides BaseAdapter#post_create! (the default no-op). Provider-side registration
+  # run by the orchestrator AFTER the channel + inbox + ownership row commit.
+  #
+  # We call Whatsapp::WebhookSetupService directly and let failures SURFACE, instead of
+  # Channel::Whatsapp#setup_webhooks (which rescues StandardError, only logs, and prompts
+  # reauthorization). If Meta rejects the webhook subscription the service raises; we
+  # translate that into :webhook_setup_failed so the orchestrator keeps the integration
+  # PENDING (retryable) and never reports success/active on a failed registration.
+  # (ChannelCreationService tags provider_config['source'] = 'embedded_signup', so the
+  # model's after_commit auto-setup is skipped and this is the only registration path.)
   def post_create!(channel)
-    channel.setup_webhooks
+    config = channel.provider_config || {}
+    Whatsapp::WebhookSetupService.new(channel, config['business_account_id'], config['api_key']).perform
+  rescue StandardError => e
+    Rails.logger.error("[BLOOMWIRE] WhatsApp webhook registration failed: #{e.message}")
+    raise Bloomwire::ChannelSetup::SetupError, :webhook_setup_failed
   end
 
   # NON-SECRET routing metadata read back from the persisted channel. These keys
@@ -84,8 +92,31 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
     REQUIRED_PARAMS.any? { |key| params[key].blank? }
   end
 
+  # The two Chatwoot source-of-truth duplicate checks, in priority order. Returns the
+  # coded error (or nil) so create_channel applies it identically on the pre-check and
+  # on a concurrent-insert race.
+  def duplicate_code(params)
+    return :duplicate_phone_number if phone_number_taken?(params)
+    return :duplicate_phone_number_id if phone_number_id_taken?(params)
+
+    nil
+  end
+
   def phone_number_taken?(params)
     Channel::Whatsapp.exists?(phone_number: params[:phone_number])
+  end
+
+  # Chatwoot SOURCE-OF-TRUTH dedupe (ADR 0005): the same Meta phone_number_id may
+  # already back a Channel::Whatsapp created via the still-enabled tenant setup path
+  # (or before the ownership backfill) — with NO BloomwireChannelIntegration row and
+  # possibly a differently formatted phone_number. phone_number_id is the canonical
+  # Meta identifier, so we dedupe on it directly against provider_config rather than
+  # relying on the phone-number text or the ownership table alone.
+  def phone_number_id_taken?(params)
+    phone_number_id = params[:phone_number_id]
+    return false if phone_number_id.blank?
+
+    Channel::Whatsapp.exists?(["provider_config ->> 'phone_number_id' = ?", phone_number_id])
   end
 
   # Chatwoot's Whatsapp::ChannelCreationService stores business_account_id under

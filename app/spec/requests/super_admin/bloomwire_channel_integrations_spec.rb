@@ -45,22 +45,44 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
     context 'when signed in as a super admin (platform context)' do
       before { sign_in(super_admin, scope: :super_admin) }
 
-      it 'creates the channel + inbox + integration and returns a safe DTO' do
+      it 'creates the channel + inbox + integration and returns a minimal safe DTO' do
         expect { post_setup }.to change(BloomwireChannelIntegration, :count).by(1)
 
         expect(response).to have_http_status(:created)
-        expect(response.parsed_body['app_kind']).to eq('whatsapp')
-        expect(response.parsed_body['routing_key']).to eq('pnid-req-009')
-        expect(response.parsed_body['status']).to eq('active')
+        body = response.parsed_body
+        expect(body['app_kind']).to eq('whatsapp')
+        expect(body['provider']).to eq('whatsapp_cloud')
+        expect(body['status']).to eq('active')
+        expect(body['managed_by_bloomwire']).to be(true)
+        expect(body['phone_number_masked']).to be_present
       end
 
-      it 'never includes secrets in the response body' do
+      it 'never exposes raw phone/vendor identifiers or secrets' do
         post_setup
 
-        expect(response.body).not_to include('super-secret-token')
-        expect(response.body).not_to include('provider_config')
-        expect(response.body).not_to include('api_key')
-        expect(response.body).not_to include('token')
+        # secrets + raw phone + Meta vendor identifiers must be absent from the body
+        forbidden = ['super-secret-token', 'provider_config', 'api_key', 'token',
+                     '+15551230009', '15551230009', 'pnid-req-009', 'waba-req-009']
+        forbidden.each { |value| expect(response.body).not_to include(value) }
+
+        %w[phone_number phone_number_id business_account_id routing_key].each do |key|
+          expect(response.parsed_body).not_to have_key(key)
+        end
+
+        # only a masked phone (last 4) is shared
+        expect(response.parsed_body['phone_number_masked']).to include('0009')
+      end
+
+      it 'does not return 201/active when provider webhook registration fails' do
+        failing = instance_double(Whatsapp::WebhookSetupService)
+        allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(failing)
+        allow(failing).to receive(:perform).and_raise(RuntimeError, 'Webhook setup failed: Meta down')
+
+        post_setup
+
+        expect(response).not_to have_http_status(:created)
+        expect(response.parsed_body['error']).to be_present
+        expect(BloomwireChannelIntegration.last.status).to eq('pending')
       end
 
       it 'returns 422 with a safe error when the tenant has no Bloomwire profile' do

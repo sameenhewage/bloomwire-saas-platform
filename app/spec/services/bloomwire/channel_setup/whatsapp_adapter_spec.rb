@@ -66,25 +66,51 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
     it 'translates a duplicate-phone race that slips past the pre-check into :duplicate_phone_number' do
       # Pre-check sees no existing channel, but a concurrent setup wins the race, so the
       # reused Chatwoot service raises; the rescue re-checks and finds the phone taken.
+      # exists? is called: phone (pre) -> phone_number_id (pre) -> phone (rescue).
       creation = instance_double(Whatsapp::ChannelCreationService)
       allow(Whatsapp::ChannelCreationService).to receive(:new).and_return(creation)
       allow(creation).to receive(:perform).and_raise(RuntimeError, 'WhatsApp number already exists')
-      allow(Channel::Whatsapp).to receive(:exists?)
-        .with(phone_number: params[:phone_number]).and_return(false, true)
+      allow(Channel::Whatsapp).to receive(:exists?).and_return(false, false, true)
 
       expect { adapter.create_channel(account: account, params: params) }
         .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:duplicate_phone_number) }
     end
+
+    it 'rejects an existing WhatsApp phone_number_id (source of truth) with different phone formatting and no integration' do
+      # A Channel::Whatsapp created via the still-enabled tenant path (no Bloomwire
+      # integration) already uses this phone_number_id, under a differently formatted number.
+      existing = create(:channel_whatsapp, account: create(:account), phone_number: '+1 (999) 000-1111',
+                                           provider: 'whatsapp_cloud', validate_provider_config: false, sync_templates: false)
+      dup_params = params.merge(phone_number: '+19990001111', phone_number_id: existing.provider_config['phone_number_id'])
+
+      expect { adapter.create_channel(account: account, params: dup_params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:duplicate_phone_number_id) }
+    end
   end
 
   describe '#post_create!' do
-    it 'registers the WhatsApp webhook (embedded_signup suppresses the model auto-setup)' do
-      channel = instance_double(Channel::Whatsapp)
-      allow(channel).to receive(:setup_webhooks)
+    let(:channel) do
+      instance_double(Channel::Whatsapp,
+                      provider_config: { 'business_account_id' => 'waba-ad-001', 'api_key' => 'secret-key' })
+    end
+
+    it 'registers the webhook via WebhookSetupService (a failure-surfacing path, not the swallowing setup_webhooks)' do
+      webhook = instance_double(Whatsapp::WebhookSetupService, perform: nil)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(webhook)
 
       adapter.post_create!(channel)
 
-      expect(channel).to have_received(:setup_webhooks)
+      expect(Whatsapp::WebhookSetupService).to have_received(:new).with(channel, 'waba-ad-001', 'secret-key')
+      expect(webhook).to have_received(:perform)
+    end
+
+    it 'raises :webhook_setup_failed when provider registration fails (so setup never reports success)' do
+      webhook = instance_double(Whatsapp::WebhookSetupService)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(webhook)
+      allow(webhook).to receive(:perform).and_raise(RuntimeError, 'Webhook setup failed: Meta down')
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:webhook_setup_failed) }
     end
   end
 
