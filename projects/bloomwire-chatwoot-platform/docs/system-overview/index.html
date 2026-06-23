@@ -1132,6 +1132,17 @@
               </dl>
             </div>
           </div>
+          <div class="tl-item">
+            <div class="tl-card">
+              <span class="date">2026-06-23</span>
+              <h4>Recorded Tenant Settings Ownership &amp; Role Boundary decision (ADR 0006)</h4>
+              <dl>
+                <dt>What changed</dt><dd>Documentation-only decision. <strong>Dialog owns business operations</strong> (agents/staff, teams, campaigns, labels, macros, conversations, contacts, reports); <strong>Bloomwire owns platform/infrastructure</strong> (account/platform settings, inbox/channel setup, WhatsApp/Meta/SMS/Email/API/Shopify integrations, bots/AI, provider credentials, webhooks, the global router). For Bloomwire-managed tenants the raw Chatwoot <strong>Settings menu must be role-filtered</strong>: Dialog Admin loses raw Account Settings / Inboxes / Bots / Integrations / Automation / Conversation Workflow; Dialog Agent gets day-to-day support only. <strong>Teams stay Dialog-owned</strong> (Sales/Enterprise/Marketing/Finance/Support/Returns). Enforcement must be <strong>three-layered</strong>: menu hide + route/URL guard + backend API deny. A later read-only <span class="pill-code">Connected Channels</span> page may show status only (no credentials/tokens/IDs/routing/raw config).</dd>
+                <dt>Files / areas</dt><dd><span class="pill-code">docs/adr/0006-tenant-settings-ownership-and-role-boundary.md</span>, <span class="pill-code">CONTEXT.md</span>, <span class="pill-code">docs/product/05-development-phases.md</span> (Phase 9 + checkpoint) + this document; cross-references ADR 0003 and ADR 0005.</dd>
+                <dt>Not changed</dt><dd>Decision only — <strong>future implementation after Phase 8</strong>, <strong>mandatory before real Dialog/customer admin production access</strong>. No app behavior, code, route, migration, schema, spec, or frontend change. Not implemented yet; do not claim enforcement. Chatwoot stays source of truth.</dd>
+              </dl>
+            </div>
+          </div>
           <div class="tl-item next">
             <div class="tl-card next">
               <span class="date">Next</span>

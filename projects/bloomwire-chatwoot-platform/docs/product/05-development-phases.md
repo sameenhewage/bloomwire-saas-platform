@@ -620,6 +620,67 @@ conversation/message/contact duplication in Bloomwire. Bloomwire-owned
 
 ---
 
+## Phase 9 — Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup ⏳ Later (decision: ADR 0006)
+
+Do not implement yet. **Decision recorded in ADR 0006**
+(`../adr/0006-tenant-settings-ownership-and-role-boundary.md`). It
+**cross-references** ADR 0003 (permission & channel-control boundary) and ADR 0005
+(external app ownership) and does **not** replace them. **Not implemented yet — do
+not claim enforcement exists.**
+
+**Why:** Bloomwire (the SaaS operator) and Dialog (the tenant business) have
+separate responsibilities, yet raw Chatwoot Settings still exposes platform-owned
+infrastructure (inboxes, bots, integrations, automation, provider config, webhooks)
+to tenant admins. This phase locks the **whole Settings surface** to the role
+boundary — generalizing the WhatsApp-only deny shipped in 4.4-b-WA.2C.
+
+**Ownership split:**
+
+- **Dialog owns business operations:** staff/agents, teams, campaigns, labels,
+  macros/canned responses, conversations, contacts, day-to-day handling, and
+  reports/analytics where enabled.
+- **Bloomwire owns platform/infrastructure:** account/platform settings, external
+  app/channel setup, inbox/channel creation + deletion/disconnection, integrations,
+  bots/AI setup, provider credentials, webhooks, the global router, plan/feature
+  enablement, tenant lifecycle, and audited support/debug access.
+
+**Role boundary:**
+
+- **Dialog Admin must NOT** access raw Account Settings, Inboxes, Bots,
+  Integrations, Automation, Conversation Workflow, provider config, webhook config,
+  or Bloomwire-managed inbox deletion. Dialog Admin keeps Teams, Agents, Campaigns,
+  Labels, Macros, and business-operation tools where appropriate.
+- **Dialog Agent** gets day-to-day support only (conversations / assigned inboxes,
+  contacts / labels / macros if enabled, personal profile); no Settings menu beyond
+  personal preferences.
+- **Teams stay Dialog-owned** (Sales/Enterprise/Marketing/Finance/Support/Returns)
+  — no Bloomwire involvement needed; agents may not manage teams.
+- **Raw `Settings → Inboxes` is not exposed to Dialog Admin.** A later read-only
+  `Connected Channels` page may show status only (no credentials / tokens / phone
+  number IDs / business account IDs / routing keys / raw provider config — ADR 0005
+  safe-DTO rule).
+
+**Enforcement (three layers, not UI-only):** (1) sidebar/menu hide, (2) direct
+route/URL guard, (3) backend API authorization deny. Frontend hiding is UX only,
+not security; a Dialog user must not bypass via a direct settings URL or a manual
+API call.
+
+**Timing / development order (see ADR 0006):**
+
+1. Finish 4.4-b-WA.2D (WhatsApp frontend hiding / disabled UX).
+2. Complete Phase 8 (Global WhatsApp Webhook Router) — it clarifies the final
+   Bloomwire-owned routing/admin surfaces the platform controls move to.
+3. Implement this Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup.
+4. Run a final security review before production / client access.
+
+**This lockdown is mandatory before real Dialog/customer admins receive production
+access.**
+
+**Future slice name:** `Tenant Settings Menu Lockdown + Dialog Admin Capability
+Cleanup`.
+
+---
+
 ## Cross-cutting parked decision — Enterprise boundary & ChatwootHub telemetry (ADR 0002)
 
 Recorded in `../adr/0002-bloomwire-enterprise-boundary-and-telemetry.md`. The
@@ -679,5 +740,5 @@ Current phase: Phase 4 — Roles, Permissions & Security Foundation
 Current position: Phase 4.4 External App Configuration Ownership in progress (decision: ADR 0005). 4.4-b-WA.1 WhatsApp setup control seam merged (PR #19, behavior-neutral); 4.4-b-WA.2A channel integration ownership foundation merged (PR #22, behavior-neutral); 4.4-b-WA.2B Bloomwire Admin WhatsApp setup path merged (generic Bloomwire::ChannelSetup service + WhatsApp adapter + SuperAdmin endpoint); 4.4-b-WA.2C Dialog admin WhatsApp self-service deny implemented (PR #24 — for Bloomwire-managed tenants with a BloomwireBusinessProfile, tenant/account admins and agents are denied tenant-side WhatsApp setup/config + Bloomwire-managed WhatsApp inbox destroy; backend enforcement only). Next coding slice 4.4-b-WA.2D (tenant frontend hiding/disabled UX; UI not done yet). Phase 4.3 / 4.5 remain parked (ADR 0003).
 Last merged: Bloomwire Admin WhatsApp setup path (PR #23 -> version_1)
 Required workflow: Independent TDD Workflow
-Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), billing, analytics, operational polish, Bloomwire global Meta/WhatsApp webhook router (parked — see ADR 0004), Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
+Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), billing, analytics, operational polish, Bloomwire global Meta/WhatsApp webhook router (parked — see ADR 0004), Tenant Settings Menu Lockdown + Dialog Admin Capability Cleanup (parked — see ADR 0006; Phase 9, implement after Phase 8, mandatory before real Dialog/customer admin production access), Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
 ```

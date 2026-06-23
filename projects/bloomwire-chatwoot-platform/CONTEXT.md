@@ -193,6 +193,36 @@ still future.**
   enforcement exists now; tenant **frontend hiding/disabled UX is still future
   (4.4-b-WA.2D)** and is UX only, not security.
 
+## Tenant settings ownership & role boundary (see ADR 0006)
+
+Decision recorded in `docs/adr/0006-tenant-settings-ownership-and-role-boundary.md`.
+**Decision only — future implementation after Phase 8; NOT implemented yet. This
+lockdown is mandatory before real Dialog/customer admins receive production access.**
+0006 **cross-references** ADR 0003 (permission/channel-control boundary) and ADR 0005
+(external app ownership) and does **not** replace them.
+
+- **Dialog owns business operations** (tenant plane): staff/agents, teams,
+  campaigns, labels, macros/canned responses, conversations, contacts, day-to-day
+  customer handling, and reports/analytics where enabled.
+- **Bloomwire owns platform/infrastructure:** account/platform settings, external
+  app/channel setup, inbox/channel creation + deletion/disconnection, WhatsApp/Meta/
+  Instagram/Facebook/SMS/Email/API/Shopify integrations, provider credentials,
+  webhook config, bots/AI setup, the global webhook/router, plan/feature enablement,
+  tenant lifecycle, and audited support/debug access.
+- **Dialog Admin must NOT** get raw Chatwoot Account Settings, Inboxes, Bots,
+  Integrations, Automation, Conversation Workflow, provider config, webhook config,
+  or Bloomwire-managed inbox deletion. **Dialog Agent** gets no Settings except
+  personal profile/preferences if needed (day-to-day support only).
+- **Teams stay Dialog-owned** (Sales/Enterprise/Marketing/Finance/Support/Returns) —
+  tenants self-serve teams without asking Bloomwire; agents may not manage teams.
+- **Raw `Settings → Inboxes` is not exposed to Dialog Admin.** If channel visibility
+  is needed later, a **read-only `Connected Channels` page** may show status only
+  (no credentials, tokens, phone number IDs, business account IDs, routing keys, or
+  raw provider config — same safe-DTO rule as ADR 0005).
+- **Enforcement must be three-layered:** (1) menu hide, (2) direct route/URL guard,
+  (3) backend API deny. Frontend hiding is UX only, not security; a Dialog user must
+  not bypass via a direct URL or manual API call.
+
 ## Implemented so far (current state)
 
 Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
