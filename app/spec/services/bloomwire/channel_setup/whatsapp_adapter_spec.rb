@@ -29,6 +29,11 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
       allow(channel).to receive(:sync_templates)
       channel
     end
+    # post_create!'s strict readiness gate queries Meta health; default to a registered/ready
+    # number so the happy path activates. Readiness-failure examples re-stub this.
+    health = instance_double(Whatsapp::HealthService,
+                             fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API' })
+    allow(Whatsapp::HealthService).to receive(:new).and_return(health)
   end
 
   it 'identifies as the whatsapp app_kind' do
@@ -162,6 +167,30 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
 
       expect { adapter.post_create!(channel) }
         .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:webhook_setup_failed) }
+    end
+
+    it 'verifies phone readiness AFTER the webhook subscribe returns (the swallowed registration gap)' do
+      # The webhook subscribe SUCCEEDS, but Meta shows the number is not provisioned — exactly
+      # what WebhookSetupService#register_phone_number swallowing a /register failure looks like.
+      health = instance_double(Whatsapp::HealthService,
+                               fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE' })
+      allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_not_ready) }
+    end
+
+    it 'raises :phone_registration_unverifiable (never the raw error) when Meta readiness cannot be verified' do
+      health = instance_double(Whatsapp::HealthService)
+      allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+      allow(health).to receive(:fetch_health_status).and_raise(RuntimeError, 'WhatsApp API request failed: 190')
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_registration_unverifiable) }
+    end
+
+    it 'completes without error when the webhook subscribes and the number is registered/ready' do
+      expect { adapter.post_create!(channel) }.not_to raise_error
     end
   end
 

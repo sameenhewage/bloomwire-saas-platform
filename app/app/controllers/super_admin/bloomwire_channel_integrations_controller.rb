@@ -24,13 +24,17 @@ class SuperAdmin::BloomwireChannelIntegrationsController < SuperAdmin::Applicati
     duplicate_routing_key: 'A channel with this routing identifier already exists.',
     duplicate_integration: 'This inbox already has a Bloomwire channel integration.',
     webhook_setup_failed: 'Provider webhook registration failed; the channel setup is pending. Retry to complete it.',
+    phone_registration_unverifiable: 'Could not verify the WhatsApp phone registration with Meta; setup is pending. Retry to complete it.',
+    phone_not_ready: 'The WhatsApp phone number is not fully registered yet; setup is pending. Finish registration in Meta, then retry.',
     integration_invalid: 'Could not record the channel integration.'
   }.freeze
 
   ERROR_STATUSES = {
     unauthorized: :forbidden,
     account_not_found: :not_found,
-    webhook_setup_failed: :bad_gateway
+    webhook_setup_failed: :bad_gateway,
+    phone_registration_unverifiable: :bad_gateway,
+    phone_not_ready: :bad_gateway
   }.freeze
 
   def create

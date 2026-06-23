@@ -84,21 +84,18 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
   end
 
   # Overrides BaseAdapter#post_create! (the default no-op). Provider-side registration
-  # run by the orchestrator AFTER the channel + inbox + ownership row commit.
+  # run by the orchestrator AFTER the channel + inbox + ownership row commit. Two gates,
+  # BOTH of which must pass before the orchestrator may flip the integration to active —
+  # otherwise it raises a coded SetupError and the integration stays PENDING (retryable):
   #
-  # We call Whatsapp::WebhookSetupService directly and let failures SURFACE, instead of
-  # Channel::Whatsapp#setup_webhooks (which rescues StandardError, only logs, and prompts
-  # reauthorization). If Meta rejects the webhook subscription the service raises; we
-  # translate that into :webhook_setup_failed so the orchestrator keeps the integration
-  # PENDING (retryable) and never reports success/active on a failed registration.
-  # (ChannelCreationService tags provider_config['source'] = 'embedded_signup', so the
-  # model's after_commit auto-setup is skipped and this is the only registration path.)
+  # 1. Webhook subscription (#register_webhook!) — see its comment.
+  # 2. Strict phone readiness (#verify_phone_ready!) — a webhook subscribe returning is NOT
+  #    proof the number is registered/usable: WebhookSetupService#register_phone_number
+  #    intentionally swallows Meta registration errors (kept for the tenant/Chatwoot flow),
+  #    so the Bloomwire path verifies registration/readiness explicitly here.
   def post_create!(channel)
-    config = channel.provider_config || {}
-    Whatsapp::WebhookSetupService.new(channel, config['business_account_id'], config['api_key']).perform
-  rescue StandardError => e
-    Rails.logger.error("[BLOOMWIRE] WhatsApp webhook registration failed: #{e.message}")
-    raise Bloomwire::ChannelSetup::SetupError, :webhook_setup_failed
+    register_webhook!(channel)
+    verify_phone_ready!(channel)
   end
 
   # On a same-tenant RETRY of a PENDING setup the orchestrator resumes the existing
@@ -138,6 +135,31 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
   end
 
   private
+
+  # Webhook subscription via Whatsapp::WebhookSetupService directly, letting failures SURFACE
+  # — unlike Channel::Whatsapp#setup_webhooks, which rescues StandardError, only logs, and
+  # prompts reauthorization. If Meta rejects the subscription the service raises; we translate
+  # that into :webhook_setup_failed (never the raw provider error) so the integration stays
+  # PENDING/retryable. (ChannelCreationService tags provider_config['source'] = 'embedded_signup',
+  # so the model's after_commit auto-setup is skipped and this is the only registration path.)
+  def register_webhook!(channel)
+    config = channel.provider_config || {}
+    Whatsapp::WebhookSetupService.new(channel, config['business_account_id'], config['api_key']).perform
+  rescue StandardError => e
+    Rails.logger.error("[BLOOMWIRE] WhatsApp webhook registration failed: #{e.message}")
+    raise Bloomwire::ChannelSetup::SetupError, :webhook_setup_failed
+  end
+
+  # Bloomwire-only strict readiness gate (PR #23 P2 round 2). WebhookSetupService#perform can
+  # return even when its register_phone_number swallowed a Meta failure, so a webhook subscribe
+  # alone does not prove the number is registered/usable. WhatsappReadinessValidator re-checks
+  # via the failure-surfacing Whatsapp::HealthService and returns a safe coded symbol; we raise
+  # it as a SetupError (no raw provider error / number / vendor id) so the orchestrator keeps
+  # the integration PENDING and never reports active on an unregistered number.
+  def verify_phone_ready!(channel)
+    code = Bloomwire::ChannelSetup::WhatsappReadinessValidator.new(channel).error_code
+    raise Bloomwire::ChannelSetup::SetupError, code if code
+  end
 
   # Runs the actual Channel::Whatsapp + Inbox insert inside its OWN savepoint
   # (requires_new), so a unique-index race (ActiveRecord::RecordNotUnique on the phone

@@ -44,6 +44,9 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     allow(phone_lookup).to receive(:fetch_phone_numbers).and_return(
       'data' => [{ 'id' => whatsapp_params[:phone_number_id], 'display_phone_number' => whatsapp_params[:phone_number] }]
     )
+    # post_create!'s Bloomwire-only readiness gate queries Meta health after webhook setup.
+    # Default to a registered/ready number so the happy path activates; failure cases re-stub it.
+    stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
   end
 
   def perform_setup(actor: super_admin, target: account, app_kind: 'whatsapp', params: whatsapp_params)
@@ -54,6 +57,19 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     lookup = instance_double(Whatsapp::FacebookApiClient)
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
     allow(lookup).to receive(:fetch_phone_numbers).and_return('data' => data)
+  end
+
+  # Stub the failure-surfacing Whatsapp::HealthService the readiness gate uses. Pass a hash to
+  # return that health, or an exception class/instance to simulate Meta being unreachable.
+  def stub_phone_health(status)
+    health = instance_double(Whatsapp::HealthService)
+    allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+    if status.is_a?(Hash)
+      allow(health).to receive(:fetch_health_status).and_return(status)
+    else
+      allow(health).to receive(:fetch_health_status).and_raise(status)
+    end
+    health
   end
 
   describe 'successful WhatsApp setup (happy path)' do
@@ -133,6 +149,78 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
       ok = instance_double(Whatsapp::WebhookSetupService, perform: nil)
       allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(ok)
 
+      before_counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
+      result = perform_setup
+
+      expect([Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]).to eq(before_counts)
+      expect(result.success?).to be(true)
+      expect(result.integration.id).to eq(pending.id)
+      expect(result.integration.reload.status).to eq('active')
+    end
+  end
+
+  describe 'phone readiness gate (Bloomwire-only strict registration check, P2 round 2)' do
+    # The shared Whatsapp::WebhookSetupService#register_phone_number SWALLOWS Meta registration
+    # errors, so #perform can return after the webhook subscribe even when the number was never
+    # actually registered. The Bloomwire path verifies readiness with Meta AFTER webhook setup;
+    # an unready number must NOT be reported active. (Webhook itself succeeds in these examples.)
+    it 'does not mark the integration active when Meta shows the number is not provisioned' do
+      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE')
+
+      result = perform_setup
+
+      expect(result.success?).to be(false)
+      expect(result.error).to eq(:phone_not_ready)
+      expect(BloomwireChannelIntegration.last.status).to eq('pending')
+    end
+
+    it 'does not mark the integration active when the number is not code-verified' do
+      stub_phone_health(code_verification_status: 'PENDING', platform_type: 'CLOUD_API')
+
+      result = perform_setup
+
+      expect(result.error).to eq(:phone_not_ready)
+      expect(BloomwireChannelIntegration.last.status).to eq('pending')
+    end
+
+    it 'returns a safe :phone_registration_unverifiable (no raw provider error) when Meta health cannot be fetched' do
+      stub_phone_health(RuntimeError.new('WhatsApp API request failed: 190 - {"error":{"code":190}}'))
+
+      result = perform_setup
+
+      expect(result.success?).to be(false)
+      expect(result.error).to eq(:phone_registration_unverifiable)
+      expect(result.error.to_s).not_to include('190')
+      expect(BloomwireChannelIntegration.last.status).to eq('pending')
+    end
+
+    it 'still creates the channel + inbox + pending integration so a retry can resume' do
+      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE')
+
+      expect { perform_setup }
+        .to change(Channel::Whatsapp, :count).by(1)
+        .and change(Inbox, :count).by(1)
+        .and change(BloomwireChannelIntegration, :count).by(1)
+    end
+
+    it 'activates when the webhook subscribes AND Meta confirms the number is registered/ready' do
+      health = stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+
+      result = perform_setup
+
+      expect(result.success?).to be(true)
+      expect(result.integration.reload.status).to eq('active')
+      expect(health).to have_received(:fetch_health_status)
+    end
+
+    it 'resumes the SAME pending row on retry after a readiness failure (no duplicate rows), then activates' do
+      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE')
+      expect(perform_setup.error).to eq(:phone_not_ready)
+      pending = BloomwireChannelIntegration.last
+      expect(pending.status).to eq('pending')
+
+      # The operator completes registration in Meta; the number now reports ready on retry.
+      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
       before_counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
       result = perform_setup
 

@@ -42,6 +42,11 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
     allow(phone_lookup).to receive(:fetch_phone_numbers).and_return(
       'data' => [{ 'id' => 'pnid-req-009', 'display_phone_number' => '+15551230009' }]
     )
+    # The post-activation readiness gate queries Meta health; default to a registered/ready
+    # number so the happy path activates. The readiness-failure example re-stubs it.
+    health = instance_double(Whatsapp::HealthService,
+                             fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API' })
+    allow(Whatsapp::HealthService).to receive(:new).and_return(health)
   end
 
   def post_setup(payload = valid_payload)
@@ -90,6 +95,22 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
         expect(response).not_to have_http_status(:created)
         expect(response.parsed_body['error']).to be_present
         expect(BloomwireChannelIntegration.last.status).to eq('pending')
+      end
+
+      it 'does not return 201/active (safe error, pending row, no raw data) when the phone is not registered/ready' do
+        # The webhook subscribe SUCCEEDS (default stub) but Meta reports the number unprovisioned —
+        # the swallowed-registration gap. Setup must stay pending and must leak no provider data.
+        health = instance_double(Whatsapp::HealthService,
+                                 fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE' })
+        allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+
+        post_setup
+
+        expect(response).not_to have_http_status(:created)
+        expect(response.parsed_body['error']).to be_present
+        expect(BloomwireChannelIntegration.last.status).to eq('pending')
+        ['super-secret-token', 'provider_config', 'pnid-req-009', 'waba-req-009', '+15551230009']
+          .each { |value| expect(response.body).not_to include(value) }
       end
 
       it 'returns 422 with a safe error when the tenant has no Bloomwire profile' do
