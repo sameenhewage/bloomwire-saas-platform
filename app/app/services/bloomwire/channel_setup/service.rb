@@ -41,7 +41,13 @@ class Bloomwire::ChannelSetup::Service
 
     return failure(:duplicate_routing_key) if duplicate_routing_key?(adapter.routing_key(@params))
 
-    Bloomwire::ChannelSetup::Result.success(create_integration(adapter, profile))
+    integration = create_integration(adapter, profile)
+    # Provider-side registration (e.g. WhatsApp webhook) runs AFTER the DB
+    # transaction commits, so an external/provider call can neither roll back nor
+    # be rolled back by the committed ownership row. Adapters with no provider-side
+    # step no-op this hook.
+    adapter.post_create!(integration.channelable)
+    Bloomwire::ChannelSetup::Result.success(integration)
   rescue Bloomwire::ChannelSetup::SetupError => e
     failure(e.code)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique

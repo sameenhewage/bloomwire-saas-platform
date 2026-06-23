@@ -70,6 +70,20 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
   end
 
+  describe 'provider webhook registration (embedded_signup skips the model auto-setup)' do
+    let(:webhook_setup) { instance_double(Whatsapp::WebhookSetupService, perform: nil) }
+
+    before { allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(webhook_setup) }
+
+    it 'registers the WhatsApp webhook for the created channel after the setup commits' do
+      perform_setup
+
+      expect(Whatsapp::WebhookSetupService)
+        .to have_received(:new).with(kind_of(Channel::Whatsapp), 'waba-2b-001', 'super-secret-token')
+      expect(webhook_setup).to have_received(:perform)
+    end
+  end
+
   describe 'integration fields (decided lifecycle + non-secret routing metadata)' do
     let(:integration) { perform_setup.integration }
 

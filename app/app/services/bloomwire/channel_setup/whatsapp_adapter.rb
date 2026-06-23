@@ -39,8 +39,29 @@ class Bloomwire::ChannelSetup::WhatsappAdapter
     raise Bloomwire::ChannelSetup::SetupError, :duplicate_phone_number if phone_number_taken?(params)
 
     Whatsapp::ChannelCreationService.new(account, waba_info(params), phone_info(params), params[:api_key]).perform
-  rescue ArgumentError, ActiveRecord::RecordInvalid
+  rescue ArgumentError
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params
+  rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, RuntimeError => e
+    # A concurrent setup can insert the same phone number between the pre-check
+    # above and this create. The reused Chatwoot service then raises a RuntimeError
+    # (its own phone-exists guard) or RecordInvalid/RecordNotUnique (the unique phone
+    # index). Re-check and translate that race into the same safe coded error as the
+    # pre-check, rather than leaking a raw exception.
+    raise Bloomwire::ChannelSetup::SetupError, :duplicate_phone_number if phone_number_taken?(params)
+    raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params if e.is_a?(ActiveRecord::RecordInvalid)
+
+    raise
+  end
+
+  # Provider-side step run by the orchestrator AFTER the channel + inbox + ownership
+  # row are committed. WhatsApp channels are created through
+  # Whatsapp::ChannelCreationService, which tags provider_config['source'] =
+  # 'embedded_signup'; that suppresses Channel::Whatsapp's after_commit webhook
+  # auto-setup, so we register the webhook explicitly here — exactly as
+  # Whatsapp::EmbeddedSignupService does. setup_webhooks handles its own provider
+  # errors (logs + prompts reauthorization) and does not raise.
+  def post_create!(channel)
+    channel.setup_webhooks
   end
 
   # NON-SECRET routing metadata read back from the persisted channel. These keys

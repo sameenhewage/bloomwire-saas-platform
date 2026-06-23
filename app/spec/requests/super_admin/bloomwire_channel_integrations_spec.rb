@@ -23,9 +23,8 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
     }
   end
 
-  before { create(:bloomwire_business_profile, account: account) }
-
   before do
+    create(:bloomwire_business_profile, account: account)
     teardown = instance_double(Whatsapp::WebhookTeardownService, perform: nil)
     allow(Whatsapp::WebhookTeardownService).to receive(:new).and_return(teardown)
     setup = instance_double(Whatsapp::WebhookSetupService, perform: nil)
@@ -61,6 +60,7 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
         expect(response.body).not_to include('super-secret-token')
         expect(response.body).not_to include('provider_config')
         expect(response.body).not_to include('api_key')
+        expect(response.body).not_to include('token')
       end
 
       it 'returns 422 with a safe error when the tenant has no Bloomwire profile' do
