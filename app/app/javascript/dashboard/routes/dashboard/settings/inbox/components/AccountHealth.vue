@@ -20,8 +20,9 @@ const props = defineProps({
 const emit = defineEmits(['registerWebhook']);
 
 const { t } = useI18n();
-// Bloomwire (ADR 0005, 4.4-b-WA.2D): manual WhatsApp webhook registration is
-// platform-owned for Bloomwire-managed tenants, so hide the register action.
+// Bloomwire (ADR 0005, 4.4-b-WA.2D): manual WhatsApp webhook registration and the
+// Meta Business Manager settings shortcut are platform-owned for Bloomwire-managed
+// tenants, so hide those external WhatsApp configuration actions.
 const { isBloomwireManagedAccount } = useAccount();
 
 const QUALITY_COLORS = {
@@ -184,6 +185,7 @@ const handleRegisterWebhook = () => {
           </p>
         </div>
         <ButtonV4
+          v-if="!isBloomwireManagedAccount"
           sm
           solid
           blue
