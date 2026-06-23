@@ -210,9 +210,12 @@ lockdown is mandatory before real Dialog/customer admins receive production acce
   webhook config, bots/AI setup, the global webhook/router, plan/feature enablement,
   tenant lifecycle, and audited support/debug access.
 - **Dialog Admin must NOT** get raw Chatwoot Account Settings, Inboxes, Bots,
-  Integrations, Automation, Conversation Workflow, provider config, webhook config,
-  or Bloomwire-managed inbox deletion. **Dialog Agent** gets no Settings except
-  personal profile/preferences if needed (day-to-day support only).
+  Integrations, **platform-owned automation/workflow config**, provider config,
+  webhook config, or Bloomwire-managed inbox deletion — but **keeps tenant-owned
+  conversation assignment / customer-handling workflow** (per ADR 0003). **Dialog
+  Agent** gets no Settings except personal profile/preferences if needed (day-to-day
+  support only; the raw Automation and Conversation Workflow surfaces are
+  agent-denied).
 - **Teams stay Dialog-owned** (Sales/Enterprise/Marketing/Finance/Support/Returns) —
   tenants self-serve teams without asking Bloomwire; agents may not manage teams.
 - **Raw `Settings → Inboxes` is not exposed to Dialog Admin.** If channel visibility

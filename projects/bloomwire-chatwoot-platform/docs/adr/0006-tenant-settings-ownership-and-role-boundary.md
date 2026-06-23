@@ -78,6 +78,15 @@ provider credentials; webhook registration; integrations; bots / AI setup; raw
 automation or workflow configuration that can affect platform-owned behavior;
 Bloomwire-managed inbox deletion.
 
+> **Workflow carve-out (platform vs tenant).** "Raw automation/workflow
+> configuration" above means **platform-owned** automation (provider / webhook /
+> routing behavior). Dialog Admin **retains tenant-owned conversation assignment and
+> customer-handling workflow** — consistent with ADR 0003 (tenant admins own
+> conversation workflow inside their tenant) and the "May manage" list above. The
+> raw `Automation` / `Conversation Workflow` **settings surfaces** are denied to the
+> **Agent** role (below); they are **not** used to strip the Admin's tenant workflow
+> ownership.
+
 #### Dialog Agent / Staff (tenant plane)
 
 **May access (day-to-day support only):** conversations / assigned inboxes; contacts

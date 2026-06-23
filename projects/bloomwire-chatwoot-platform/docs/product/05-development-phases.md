@@ -647,12 +647,15 @@ boundary — generalizing the WhatsApp-only deny shipped in 4.4-b-WA.2C.
 **Role boundary:**
 
 - **Dialog Admin must NOT** access raw Account Settings, Inboxes, Bots,
-  Integrations, Automation, Conversation Workflow, provider config, webhook config,
-  or Bloomwire-managed inbox deletion. Dialog Admin keeps Teams, Agents, Campaigns,
-  Labels, Macros, and business-operation tools where appropriate.
+  Integrations, **platform-owned automation/workflow config** (workflow/automation
+  that can affect platform-owned behavior), provider config, webhook config, or
+  Bloomwire-managed inbox deletion. Dialog Admin **keeps** Teams, Agents, Campaigns,
+  Labels, Macros, and **tenant-owned conversation assignment / customer-handling
+  workflow** (per ADR 0003) plus other business-operation tools where appropriate.
 - **Dialog Agent** gets day-to-day support only (conversations / assigned inboxes,
   contacts / labels / macros if enabled, personal profile); no Settings menu beyond
-  personal preferences.
+  personal preferences — the raw **Automation** and **Conversation Workflow** setting
+  surfaces are agent-denied.
 - **Teams stay Dialog-owned** (Sales/Enterprise/Marketing/Finance/Support/Returns)
   — no Bloomwire involvement needed; agents may not manage teams.
 - **Raw `Settings → Inboxes` is not exposed to Dialog Admin.** A later read-only
