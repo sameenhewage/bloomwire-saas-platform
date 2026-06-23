@@ -43,13 +43,14 @@ class Bloomwire::ChannelIntegrationBackfill
     return false if profile.nil?
     return false if BloomwireChannelIntegration.exists?(inbox_id: inbox.id)
 
-    integration = build_integration(profile, inbox, channel)
-    return false unless integration.valid?
-
-    integration.save!
-    true
-  rescue ActiveRecord::RecordNotUnique
-    # Concurrent/duplicate routing identifier — fail safe, never raise.
+    # Non-bang save returns false (instead of raising) when validations fail —
+    # e.g. a concurrent process inserts the same inbox/routing_key after the
+    # exists? check, so the uniqueness validators now reject this row. The rescue
+    # covers the narrow TOCTOU window where validations pass but the DB unique
+    # index rejects the insert (RecordNotUnique), or a re-validation raises
+    # RecordInvalid. Any duplicate/collision/race is skipped, never raised.
+    build_integration(profile, inbox, channel).save
+  rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
     false
   end
 

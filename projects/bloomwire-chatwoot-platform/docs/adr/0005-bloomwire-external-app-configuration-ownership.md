@@ -1,7 +1,9 @@
 # ADR 0005 — Bloomwire External App Configuration Ownership
 
-- **Status:** Accepted (decision) — **implementation parked / future** (Phase 4.4
-  External App Configuration Ownership; WhatsApp first vertical)
+- **Status:** Accepted (decision). **4.4-b-WA.2A (ownership foundation)
+  implemented** in PR #22 (behavior-neutral); remaining slices (2B/2C/2D, WA.3
+  router) parked / future (Phase 4.4 External App Configuration Ownership;
+  WhatsApp first vertical)
 - **Date:** 2026-06-23
 - **Extends:** ADR 0001 (Technical Baseline), ADR 0003 (Permission &
   Channel-Control Boundary). Relates to ADR 0004 (Global Meta/WhatsApp Webhook
@@ -9,10 +11,11 @@
   permission foundation (`Bloomwire::AccessPolicy`) and the WhatsApp setup seam
   shipped in PR #19 (`Bloomwire::WhatsappSetupGuard`,
   `Bloomwire::ChannelControlPolicy`).
-- **Scope:** documentation-only. **No code, configuration, migration, schema,
-  spec, feature flag, route, policy behavior, or runtime behavior is changed by
-  this ADR.** It records decisions and a set of parked future slices. Nothing
-  described here is implemented yet, and **Dialog admins are not denied yet.**
+- **Scope:** this ADR records the decisions and slice plan; the ADR commit itself
+  changed no code. **Implementation status:** 4.4-b-WA.2A (ownership table, model
+  `BloomwireChannelIntegration`, and `Bloomwire::ChannelIntegrationBackfill`) is
+  **implemented** in PR #22 (behavior-neutral); the remaining slices are **not**
+  implemented yet, and **Dialog admins are not denied yet.**
 
 ---
 
@@ -104,14 +107,17 @@ The following decisions are **locked** by this ADR.
 
 ---
 
-## Proposed data model design (design only — no migration)
+## Data model (4.4-b-WA.2A — implemented in PR #22)
 
 A new Bloomwire-owned table records **which inbox/channel Bloomwire configured for
 which tenant**, plus the **non-secret routing identifiers** a future global router
 will use. Per CONTEXT.md, Bloomwire tables use the `bloomwire_` prefix.
 
-> **This is a proposed design for review. No migration, model, or schema change is
-> created by this ADR.**
+> **Implemented in 4.4-b-WA.2A (PR #22):** migration `20260623000000` (table +
+> indexes) and `20260623000001` (inbox FK `on_delete: :cascade`), model
+> `BloomwireChannelIntegration`, and `Bloomwire::ChannelIntegrationBackfill`. The
+> sketch below is the original proposal; see the **as-built note** below for the
+> deltas (e.g. `business_account_id` rather than `waba_id`).
 
 **Table (proposed): `bloomwire_channel_integrations`**
 
@@ -294,16 +300,17 @@ before implementation).
 
 ---
 
-## Non-goals (explicitly out of scope of this phase / documentation-only PR)
+## Non-goals (explicitly out of scope of this phase)
 
 ```text
 - no frontend implementation yet
-- no tenant deny yet (no policy behavior change in this docs-only work)
+- no tenant deny yet (no policy behavior change)
 - no webhook router implementation yet
 - no Twilio/SMS/Email/Instagram/Facebook/Shopify implementation yet
 - no changes to Chatwoot conversations / teams / campaigns / contacts
-- no migrations, models, controllers, services, routes, or tests changed
-- no production behavior change
+- beyond 4.4-b-WA.2A (ownership table/model/backfill + specs): no further
+  models, controllers, services, or routes yet
+- no production behavior change (4.4-b-WA.2A is behavior-neutral)
 ```
 
 ---

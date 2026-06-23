@@ -17,11 +17,9 @@
 #
 #  id                            :bigint           not null, primary key
 #  app_kind                      :string           not null
-#  business_account_id           :string
 #  channelable_type              :string           not null
 #  managed_by_bloomwire          :boolean          default(TRUE), not null
 #  phone_number                  :string
-#  phone_number_id               :string
 #  provider                      :string           not null
 #  routing_key                   :string
 #  status                        :string           default("pending"), not null
@@ -29,9 +27,11 @@
 #  updated_at                    :datetime         not null
 #  account_id                    :bigint           not null
 #  bloomwire_business_profile_id :bigint           not null
+#  business_account_id           :string
 #  channelable_id                :bigint           not null
 #  created_by_super_admin_id     :bigint
 #  inbox_id                      :bigint           not null
+#  phone_number_id               :string
 #
 # Indexes
 #
@@ -51,7 +51,7 @@
 #  fk_rails_...  (account_id => accounts.id)
 #  fk_rails_...  (bloomwire_business_profile_id => bloomwire_business_profiles.id)
 #  fk_rails_...  (created_by_super_admin_id => users.id)
-#  fk_rails_...  (inbox_id => inboxes.id)
+#  fk_rails_...  (inbox_id => inboxes.id) ON DELETE => cascade
 #
 class BloomwireChannelIntegration < ApplicationRecord
   STATUSES = %w[pending active disabled].freeze

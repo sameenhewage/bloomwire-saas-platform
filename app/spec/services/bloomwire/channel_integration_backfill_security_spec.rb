@@ -67,6 +67,52 @@ RSpec.describe Bloomwire::ChannelIntegrationBackfill do
     end
   end
 
+  describe 'concurrent creation races (TOCTOU between the existence check and save)' do
+    it 'does not raise if a concurrent insert makes the row invalid before save (RecordInvalid)' do
+      account = create(:account)
+      create(:bloomwire_business_profile, account: account)
+      create_whatsapp_inbox(account: account, phone_number_id: 'pid-race-invalid')
+
+      racy = instance_double(BloomwireChannelIntegration)
+      allow(racy).to receive(:save).and_raise(ActiveRecord::RecordInvalid.new(BloomwireChannelIntegration.new))
+      allow(BloomwireChannelIntegration).to receive(:new).and_return(racy)
+
+      expect { backfill.perform }.not_to raise_error
+      expect(BloomwireChannelIntegration.count).to eq(0)
+    end
+
+    it 'does not raise if the database rejects a duplicate before save (RecordNotUnique)' do
+      account = create(:account)
+      create(:bloomwire_business_profile, account: account)
+      create_whatsapp_inbox(account: account, phone_number_id: 'pid-race-unique')
+
+      racy = instance_double(BloomwireChannelIntegration)
+      allow(racy).to receive(:save).and_raise(ActiveRecord::RecordNotUnique.new('duplicate key'))
+      allow(BloomwireChannelIntegration).to receive(:new).and_return(racy)
+
+      expect { backfill.perform }.not_to raise_error
+      expect(BloomwireChannelIntegration.count).to eq(0)
+    end
+  end
+
+  describe 'behavior-neutral inbox deletion (pre-2C deny slice)' do
+    # 2A must not block the existing inbox-delete workflow: both the sync path and
+    # the async DeleteObjectJob ultimately call inbox.destroy!. The FK uses
+    # ON DELETE CASCADE, so deleting an inbox removes its ownership metadata
+    # instead of raising an FK error. Denying deletion of managed inboxes is 2C.
+    it 'is removed when its inbox is destroyed, without raising an FK error' do
+      integration = create(:bloomwire_channel_integration)
+      inbox = integration.inbox
+
+      # Channel teardown calls an external webhook service; stub it so the spec
+      # exercises only the inbox-destroy / FK-cascade behavior.
+      allow(Whatsapp::WebhookTeardownService).to receive(:new).and_return(instance_double(Whatsapp::WebhookTeardownService, perform: true))
+
+      expect { inbox.destroy! }.not_to raise_error
+      expect(BloomwireChannelIntegration.exists?(integration.id)).to be(false)
+    end
+  end
+
   describe 'source-of-truth protection (no Chatwoot data copied)' do
     it 'does not change Chatwoot conversation, message or contact counts' do
       account = create(:account)
