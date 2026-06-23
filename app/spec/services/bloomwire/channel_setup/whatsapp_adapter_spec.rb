@@ -35,6 +35,10 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
     expect(adapter.app_kind).to eq('whatsapp')
   end
 
+  it 'is a channel-setup adapter (inherits the base default-no-op hook contract)' do
+    expect(adapter).to be_a(Bloomwire::ChannelSetup::BaseAdapter)
+  end
+
   it 'derives the routing key from the WhatsApp phone_number_id' do
     expect(adapter.routing_key(params)).to eq('pnid-ad-001')
   end

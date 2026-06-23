@@ -11,7 +11,7 @@
 #
 # Secrets (api_key/access token) stay in Channel::Whatsapp#provider_config and are
 # never returned to the orchestrator or copied into the ownership table.
-class Bloomwire::ChannelSetup::WhatsappAdapter
+class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAdapter
   REQUIRED_PARAMS = %i[phone_number phone_number_id business_account_id api_key].freeze
   PERMITTED_PARAMS = %i[phone_number phone_number_id business_account_id api_key business_name].freeze
 
@@ -53,8 +53,9 @@ class Bloomwire::ChannelSetup::WhatsappAdapter
     raise
   end
 
-  # Provider-side step run by the orchestrator AFTER the channel + inbox + ownership
-  # row are committed. WhatsApp channels are created through
+  # Overrides BaseAdapter#post_create! (the default no-op). Provider-side step run by
+  # the orchestrator AFTER the channel + inbox + ownership row are committed. WhatsApp
+  # channels are created through
   # Whatsapp::ChannelCreationService, which tags provider_config['source'] =
   # 'embedded_signup'; that suppresses Channel::Whatsapp's after_commit webhook
   # auto-setup, so we register the webhook explicitly here — exactly as
