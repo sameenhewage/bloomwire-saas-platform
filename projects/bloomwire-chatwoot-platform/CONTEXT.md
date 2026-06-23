@@ -142,8 +142,9 @@ Decision recorded in `docs/adr/0004-bloomwire-global-meta-whatsapp-webhook-route
 ## External app configuration ownership (see ADR 0005)
 
 Decision recorded in `docs/adr/0005-bloomwire-external-app-configuration-ownership.md`.
-**Decision only — implementation parked/future (Phase 4.4); WhatsApp is the first
-vertical; Dialog admins are NOT denied yet.**
+**WhatsApp is the first vertical. The ownership foundation (4.4-b-WA.2A) is
+implemented (behavior-neutral); the Bloomwire Admin setup path (2B) and the
+Dialog-admin deny (2C) remain parked/future — Dialog admins are NOT denied yet.**
 
 - **Bloomwire owns all external app/channel configuration** (WhatsApp, SMS, Email,
   Instagram/Facebook, Shopify, later Telegram/Signal). Dialog (tenant) admins may
@@ -157,10 +158,12 @@ vertical; Dialog admins are NOT denied yet.**
   seam; `Bloomwire::ChannelControlPolicy` still allows `AccountUser`
   administrators). Platform-only enforcement happens **later** (after 2B); these
   docs do **not** imply it is already enforced.
-- **Proposed ownership table** `bloomwire_channel_integrations` (design only, no
-  migration) maps `profile → inbox → channel → account` plus **non-secret**
-  routing metadata (`phone_number`, `phone_number_id`, `waba_id`, `routing_key`):
-  unique per inbox, unique routing key where present.
+- **Ownership table** `bloomwire_channel_integrations` (implemented in 4.4-b-WA.2A;
+  model `BloomwireChannelIntegration`) maps `profile → inbox → channel → account`
+  plus **non-secret** routing metadata (`phone_number`, `phone_number_id`,
+  `business_account_id`, `routing_key`): unique per inbox, unique routing key
+  where present. (`business_account_id` matches `Channel::Whatsapp#provider_config`;
+  the ADR's `waba_id` label is the same value.)
 - **Secrets are not duplicated** into the ownership/routing table; WhatsApp
   credentials stay in `Channel::Whatsapp#provider_config` (encryption is a
   separate future ADR). **Target rule:** raw provider credentials must not be
@@ -214,8 +217,10 @@ Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
 
 - Services: `Bloomwire::BusinessProfileBackfill`, `Bloomwire::TenantSetupInitializer`,
   `Bloomwire::OnboardingStepTracker`, `Bloomwire::ChatwootReadiness`,
-  `Bloomwire::TenantActivation`, `Bloomwire::AccessPolicy`.
-- Models: `BloomwireBusinessProfile`, `BloomwireOnboardingStep`.
+  `Bloomwire::TenantActivation`, `Bloomwire::AccessPolicy`,
+  `Bloomwire::ChannelIntegrationBackfill`.
+- Models: `BloomwireBusinessProfile`, `BloomwireOnboardingStep`,
+  `BloomwireChannelIntegration`.
 - Super Admin: `SuperAdmin::BloomwireBusinessProfilesController`
   (`/super_admin/bloomwire/businesses`, list/show + `activate`).
 

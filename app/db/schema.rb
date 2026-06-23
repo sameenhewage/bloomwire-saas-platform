@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_21_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_23_000000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -272,6 +272,35 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_21_000000) do
     t.index ["account_id"], name: "index_bloomwire_business_profiles_on_account_id", unique: true
     t.index ["onboarding_status"], name: "index_bloomwire_business_profiles_on_onboarding_status"
     t.index ["status"], name: "index_bloomwire_business_profiles_on_status"
+  end
+
+  create_table "bloomwire_channel_integrations", force: :cascade do |t|
+    t.bigint "bloomwire_business_profile_id", null: false
+    t.bigint "account_id", null: false
+    t.bigint "inbox_id", null: false
+    t.string "channelable_type", null: false
+    t.bigint "channelable_id", null: false
+    t.string "app_kind", null: false
+    t.string "provider", null: false
+    t.string "status", default: "pending", null: false
+    t.boolean "managed_by_bloomwire", default: true, null: false
+    t.string "routing_key"
+    t.string "phone_number"
+    t.string "phone_number_id"
+    t.string "business_account_id"
+    t.bigint "created_by_super_admin_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_bloomwire_channel_integrations_on_account_id"
+    t.index ["app_kind", "provider"], name: "index_bloomwire_channel_integrations_on_app_kind_and_provider"
+    t.index ["bloomwire_business_profile_id"], name: "index_bw_channel_integrations_on_profile_id"
+    t.index ["business_account_id"], name: "index_bw_channel_integrations_on_business_account_id", where: "(business_account_id IS NOT NULL)"
+    t.index ["channelable_type", "channelable_id"], name: "index_bloomwire_channel_integrations_on_channelable"
+    t.index ["created_by_super_admin_id"], name: "index_bw_channel_integrations_on_created_by_sa_id"
+    t.index ["inbox_id"], name: "index_bloomwire_channel_integrations_on_inbox_id", unique: true
+    t.index ["phone_number_id"], name: "index_bw_channel_integrations_on_phone_number_id", where: "(phone_number_id IS NOT NULL)"
+    t.index ["routing_key"], name: "index_bw_channel_integrations_on_routing_key", unique: true, where: "(routing_key IS NOT NULL)"
+    t.index ["status"], name: "index_bloomwire_channel_integrations_on_status"
   end
 
   create_table "bloomwire_onboarding_steps", force: :cascade do |t|
@@ -1370,6 +1399,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_21_000000) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "bloomwire_business_profiles", "accounts"
+  add_foreign_key "bloomwire_channel_integrations", "accounts"
+  add_foreign_key "bloomwire_channel_integrations", "bloomwire_business_profiles"
+  add_foreign_key "bloomwire_channel_integrations", "inboxes"
+  add_foreign_key "bloomwire_channel_integrations", "users", column: "created_by_super_admin_id"
   add_foreign_key "bloomwire_onboarding_steps", "bloomwire_business_profiles"
   add_foreign_key "inboxes", "portals"
   add_foreign_key "user_sessions", "users"
