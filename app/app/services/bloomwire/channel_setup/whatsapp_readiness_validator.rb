@@ -12,9 +12,11 @@
 #
 # It reuses the failure-surfacing Whatsapp::HealthService (which RAISES on a non-200 Meta
 # response, unlike the swallowed registration call) and confirms the number is verified and
-# provisioned, using the SAME signals Whatsapp::WebhookSetupService uses to decide a number
-# still "needs registration" (code_verification_status + platform_type) — so "ready" here is
-# the exact inverse of "registration was needed", which a silently-failed /register leaves true.
+# provisioned, mirroring BOTH signals Whatsapp::WebhookSetupService#phone_number_in_pending_state?
+# uses to decide a number still "needs registration" (platform_type AND throughput.level), plus
+# code_verification_status — so "ready" here is the exact inverse of "registration was needed",
+# which a silently-failed /register leaves true (an unprovisioned number reports platform_type or
+# throughput.level NOT_APPLICABLE, or omits throughput entirely).
 #
 # It never persists anything and never surfaces raw provider data: provider/transport errors
 # are logged server-side and only a machine-readable symbol is returned (nil when ready). It
@@ -38,14 +40,32 @@ class Bloomwire::ChannelSetup::WhatsappReadinessValidator
 
   private
 
-  # Ready = code-verified AND provisioned on a platform. This is the exact inverse of the
-  # signals Whatsapp::WebhookSetupService uses to decide a number still needs registration
-  # (phone_number_verified? + phone_number_in_pending_state?). If the swallowed /register call
-  # failed, the number stays unverified or platform_type NOT_APPLICABLE, which we catch here.
+  # Ready = code-verified AND provisioned on a platform AND assigned messaging throughput. This
+  # is the exact inverse of the signals Whatsapp::WebhookSetupService uses to decide a number
+  # still needs registration (phone_number_verified? + phone_number_in_pending_state?, the latter
+  # flagging platform_type OR throughput.level == NOT_APPLICABLE). If the swallowed /register call
+  # failed, the number stays unverified, or platform_type / throughput.level NOT_APPLICABLE, which
+  # we catch here so the Bloomwire path never reports a channel active when sends are not ready.
   def ready?(health)
     health[:code_verification_status] == 'VERIFIED' &&
-      health[:platform_type].present? &&
-      health[:platform_type] != 'NOT_APPLICABLE'
+      provisioned?(health[:platform_type]) &&
+      provisioned?(throughput_level(health))
+  end
+
+  # Meta reports NOT_APPLICABLE (or omits the field) for an attribute that is not fully
+  # provisioned; a usable number reports a concrete value.
+  def provisioned?(value)
+    value.present? && value != 'NOT_APPLICABLE'
+  end
+
+  # Whatsapp::HealthService returns throughput as raw parsed Meta JSON — a nested object whose
+  # inner key is a STRING ("level"), under a symbol top-level key — while other callers/specs use
+  # symbol keys. Read BOTH shapes so a missing OR NOT_APPLICABLE level is caught either way.
+  def throughput_level(health)
+    throughput = health[:throughput] || health['throughput']
+    return nil unless throughput.is_a?(Hash)
+
+    throughput[:level] || throughput['level']
   end
 
   # Whatsapp::HealthService raises on a non-200 Meta response (unlike the swallowed

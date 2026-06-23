@@ -46,7 +46,7 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     )
     # post_create!'s Bloomwire-only readiness gate queries Meta health after webhook setup.
     # Default to a registered/ready number so the happy path activates; failure cases re-stub it.
-    stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+    stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
   end
 
   def perform_setup(actor: super_admin, target: account, app_kind: 'whatsapp', params: whatsapp_params)
@@ -175,10 +175,20 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
 
     it 'does not mark the integration active when the number is not code-verified' do
-      stub_phone_health(code_verification_status: 'PENDING', platform_type: 'CLOUD_API')
+      stub_phone_health(code_verification_status: 'PENDING', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
 
       result = perform_setup
 
+      expect(result.error).to eq(:phone_not_ready)
+      expect(BloomwireChannelIntegration.last.status).to eq('pending')
+    end
+
+    it 'does not mark the integration active when Meta shows throughput.level NOT_APPLICABLE (no messaging capacity)' do
+      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'NOT_APPLICABLE' })
+
+      result = perform_setup
+
+      expect(result.success?).to be(false)
       expect(result.error).to eq(:phone_not_ready)
       expect(BloomwireChannelIntegration.last.status).to eq('pending')
     end
@@ -204,7 +214,7 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
 
     it 'activates when the webhook subscribes AND Meta confirms the number is registered/ready' do
-      health = stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+      health = stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
 
       result = perform_setup
 
@@ -220,7 +230,7 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
       expect(pending.status).to eq('pending')
 
       # The operator completes registration in Meta; the number now reports ready on retry.
-      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+      stub_phone_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
       before_counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
       result = perform_setup
 

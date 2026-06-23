@@ -31,8 +31,8 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
     end
     # post_create!'s strict readiness gate queries Meta health; default to a registered/ready
     # number so the happy path activates. Readiness-failure examples re-stub this.
-    health = instance_double(Whatsapp::HealthService,
-                             fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API' })
+    ready = { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' } }
+    health = instance_double(Whatsapp::HealthService, fetch_health_status: ready)
     allow(Whatsapp::HealthService).to receive(:new).and_return(health)
   end
 
@@ -174,6 +174,18 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
       # what WebhookSetupService#register_phone_number swallowing a /register failure looks like.
       health = instance_double(Whatsapp::HealthService,
                                fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE' })
+      allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_not_ready) }
+    end
+
+    it 'raises :phone_not_ready when Meta reports throughput.level NOT_APPLICABLE (no messaging capacity)' do
+      # Webhook subscribe SUCCEEDS and the number is code-verified on a platform, but it has no
+      # assigned throughput — phone_number_in_pending_state? still treats this as pending, so the
+      # Bloomwire path must not report the channel active.
+      not_ready = { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'NOT_APPLICABLE' } }
+      health = instance_double(Whatsapp::HealthService, fetch_health_status: not_ready)
       allow(Whatsapp::HealthService).to receive(:new).and_return(health)
 
       expect { adapter.post_create!(channel) }

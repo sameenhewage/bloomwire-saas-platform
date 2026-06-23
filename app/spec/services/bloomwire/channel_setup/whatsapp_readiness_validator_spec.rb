@@ -20,13 +20,13 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappReadinessValidator do
 
   describe '#error_code' do
     it 'returns nil when Meta reports the number verified and provisioned' do
-      stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+      stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
 
       expect(validator.error_code).to be_nil
     end
 
     it 'queries Meta health for the channel' do
-      health = stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+      health = stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
 
       validator.error_code
 
@@ -36,21 +36,55 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappReadinessValidator do
 
     it 'returns :phone_not_ready when the number is not yet provisioned (platform_type NOT_APPLICABLE)' do
       # This is exactly what a silently-failed Whatsapp::FacebookApiClient#register_phone_number leaves behind.
-      stub_health(code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE')
+      stub_health(code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE', throughput: { 'level' => 'STANDARD' })
 
       expect(validator.error_code).to eq(:phone_not_ready)
     end
 
     it 'returns :phone_not_ready when the number is not code-verified' do
-      stub_health(code_verification_status: 'NOT_VERIFIED', platform_type: 'CLOUD_API')
+      stub_health(code_verification_status: 'NOT_VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' })
 
       expect(validator.error_code).to eq(:phone_not_ready)
     end
 
     it 'returns :phone_not_ready when platform_type is missing from Meta' do
-      stub_health(code_verification_status: 'VERIFIED', platform_type: nil)
+      stub_health(code_verification_status: 'VERIFIED', platform_type: nil, throughput: { 'level' => 'STANDARD' })
 
       expect(validator.error_code).to eq(:phone_not_ready)
+    end
+
+    it 'returns :phone_not_ready when throughput.level is NOT_APPLICABLE (no messaging capacity assigned)' do
+      # phone_number_in_pending_state? treats this exact value as still-pending registration, so a
+      # number whose swallowed /register left it without throughput must NOT be reported active.
+      stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'NOT_APPLICABLE' })
+
+      expect(validator.error_code).to eq(:phone_not_ready)
+    end
+
+    it 'returns :phone_not_ready when throughput is missing entirely' do
+      stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API')
+
+      expect(validator.error_code).to eq(:phone_not_ready)
+    end
+
+    it 'returns :phone_not_ready when throughput is present but carries no level' do
+      stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: {})
+
+      expect(validator.error_code).to eq(:phone_not_ready)
+    end
+
+    it 'is ready with a SYMBOL-key throughput hash (health[:throughput] / throughput[:level])' do
+      stub_health(code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { level: 'STANDARD' })
+
+      expect(validator.error_code).to be_nil
+    end
+
+    it 'is ready with a STRING-key throughput hash (health["throughput"] / throughput["level"])' do
+      # Symbol top-level health keys (as Whatsapp::HealthService returns) but a STRING throughput
+      # key + inner level, exercising health["throughput"] and throughput["level"].
+      stub_health({ code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API' }.merge('throughput' => { 'level' => 'STANDARD' }))
+
+      expect(validator.error_code).to be_nil
     end
 
     it 'returns :phone_registration_unverifiable (never the raw error) when Meta health cannot be fetched' do

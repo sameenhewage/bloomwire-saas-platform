@@ -43,9 +43,9 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
       'data' => [{ 'id' => 'pnid-req-009', 'display_phone_number' => '+15551230009' }]
     )
     # The post-activation readiness gate queries Meta health; default to a registered/ready
-    # number so the happy path activates. The readiness-failure example re-stubs it.
-    health = instance_double(Whatsapp::HealthService,
-                             fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API' })
+    # number so the happy path activates. The readiness-failure examples re-stub it.
+    ready = { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' } }
+    health = instance_double(Whatsapp::HealthService, fetch_health_status: ready)
     allow(Whatsapp::HealthService).to receive(:new).and_return(health)
   end
 
@@ -111,6 +111,20 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
         expect(BloomwireChannelIntegration.last.status).to eq('pending')
         ['super-secret-token', 'provider_config', 'pnid-req-009', 'waba-req-009', '+15551230009']
           .each { |value| expect(response.body).not_to include(value) }
+      end
+
+      it 'does not return 201/active when Meta reports throughput.level NOT_APPLICABLE (no messaging capacity)' do
+        # Webhook subscribe SUCCEEDS and the number is code-verified on a platform, but it has no
+        # assigned throughput, so sends would not work — the integration must stay pending.
+        not_ready = { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'NOT_APPLICABLE' } }
+        health = instance_double(Whatsapp::HealthService, fetch_health_status: not_ready)
+        allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+
+        post_setup
+
+        expect(response).not_to have_http_status(:created)
+        expect(response.parsed_body['error']).to be_present
+        expect(BloomwireChannelIntegration.last.status).to eq('pending')
       end
 
       it 'returns 422 with a safe error when the tenant has no Bloomwire profile' do
