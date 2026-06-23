@@ -281,8 +281,9 @@ before implementation).
   `InboxesController#destroy` when `BloomwireChannelIntegration.managed_whatsapp_inbox?`
   is true (a row with `managed_by_bloomwire: true` and `app_kind: 'whatsapp'` for that
   inbox). The SuperAdmin platform path (`Bloomwire::ChannelSetup::Service`) is unaffected.
-  Frontend hiding (2D), the webhook router (WA.3), and the tenant DTO/provider_config
-  secret scrub remain out of scope.
+  Frontend hiding (2D) was out of scope of this deny slice and has since shipped
+  (4.4-b-WA.2D, PR #25, UX only, not security); the webhook router (WA.3) and the
+  tenant DTO/provider_config secret scrub remain out of scope / pending.
 
 ### D. Normal usage unaffected (cross-cutting)
 
@@ -397,15 +398,19 @@ Later verticals (reuse this model): **SMS → Email → Instagram/Facebook → S
 - **Trade-offs:** introduces a Bloomwire-owned table and a platform setup surface
   to maintain; credential hardening (encryption) and DTO scrubbing become explicit
   follow-ups.
-- **Current vs target.** **Current state (this PR):** for a **Bloomwire-managed**
-  tenant (account with a `BloomwireBusinessProfile`), `Bloomwire::ChannelControlPolicy`
-  now **denies `AccountUser` administrators and agents** the WhatsApp setup/config
-  actions, and managed-WhatsApp **inbox destroy** is denied; the Bloomwire
-  Admin/platform performs setup via `Bloomwire::ChannelSetup::Service`. **Plain
-  Chatwoot accounts (no profile) are unchanged** (admin gate preserved). **Still
-  pending:** tenant frontend hiding (2D), the global webhook router (WA.3), and the
-  tenant DTO/provider_config secret scrub — so these docs do **not** yet claim raw
-  credentials are hidden from Dialog users.
+- **Current vs target.** **Current state:** for a **Bloomwire-managed** tenant
+  (account with a `BloomwireBusinessProfile`), `Bloomwire::ChannelControlPolicy`
+  **denies `AccountUser` administrators and agents** the WhatsApp setup/config
+  actions and managed-WhatsApp **inbox destroy** (backend enforcement —
+  4.4-b-WA.2C, PR #24); the Bloomwire Admin/platform performs setup via
+  `Bloomwire::ChannelSetup::Service`. **Tenant frontend hiding/disabled UX is merged
+  (4.4-b-WA.2D, PR #25; UX only, not security)** — the tenant-side WhatsApp
+  setup/config UI is hidden. **Plain Chatwoot accounts (no profile) are unchanged**
+  (admin gate preserved). **Still pending:** the global webhook router (4.4-b-WA.3
+  routing metadata; full router is ADR 0004 / Phase 8) and the tenant
+  DTO/provider_config secret scrub — so these docs do **not** yet claim raw
+  credentials are hidden from Dialog users. The broad Tenant Settings Menu Lockdown
+  remains ADR 0006 / Phase 9 (after Phase 8).
 
 ## References
 
