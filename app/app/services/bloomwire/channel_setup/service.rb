@@ -60,14 +60,28 @@ class Bloomwire::ChannelSetup::Service
   # so the orchestrator's guard clauses stay flat.
   def set_up_or_resume(adapter, profile)
     existing = existing_integration(adapter.routing_key(@params))
-    # A prior attempt whose provider registration failed left a PENDING row. A retry
-    # must RESUME it (re-run registration, then activate) — never create a second
-    # channel/inbox/integration for the same routing key.
-    return activate_with_provider(adapter, existing) if existing&.status == 'pending'
-    # An already-active (or disabled) row for this routing key is a genuine duplicate.
-    return failure(:duplicate_routing_key) if existing
+    if existing
+      # A prior attempt by THIS tenant whose provider registration failed left a PENDING
+      # row; a retry RESUMES it (re-run registration, then activate) — never creating a
+      # second channel/inbox/integration for the same routing key. A pending row owned by
+      # ANOTHER tenant, or any active/disabled row, is a genuine duplicate this request
+      # must neither mutate nor expose.
+      return activate_with_provider(adapter, existing) if resumable?(existing, profile)
+
+      return failure(:duplicate_routing_key)
+    end
 
     activate_with_provider(adapter, create_integration(adapter, profile))
+  end
+
+  # routing_key (WhatsApp phone_number_id) is GLOBALLY unique on the ownership table, so a
+  # row found for this routing key may belong to a different tenant. We may only resume a
+  # row that is still PENDING and owned by the account + profile this request is scoped
+  # to; otherwise that phone_number_id is already owned elsewhere and this is a duplicate.
+  def resumable?(integration, profile)
+    integration.status == 'pending' &&
+      integration.account_id == @account&.id &&
+      integration.bloomwire_business_profile_id == profile.id
   end
 
   # The routing key (WhatsApp phone_number_id) is globally unique on the ownership

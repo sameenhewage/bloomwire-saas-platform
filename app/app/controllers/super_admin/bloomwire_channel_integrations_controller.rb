@@ -49,9 +49,14 @@ class SuperAdmin::BloomwireChannelIntegrationsController < SuperAdmin::Applicati
   private
 
   def channel_params
-    return {} if params[:channel].blank?
+    channel = params[:channel]
+    # A malformed payload (channel sent as a JSON string/array/scalar) is not a
+    # parameter object and cannot be permitted. Treat it as empty so the adapter's
+    # required-param check returns a safe :invalid_channel_params (422) instead of
+    # letting .permit raise and surface a 500.
+    return {} unless channel.respond_to?(:permit)
 
-    params.require(:channel).permit(*permitted_channel_keys).to_h.symbolize_keys
+    channel.permit(*permitted_channel_keys).to_h.symbolize_keys
   end
 
   # Each adapter declares the params it accepts, keeping the controller generic.

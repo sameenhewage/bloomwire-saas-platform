@@ -129,6 +129,33 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
   end
 
+  describe 'cross-tenant safety (a pending row is tenant-owned, routing_key is global)' do
+    it "never resumes/activates another tenant's pending row; reports it as a duplicate" do
+      # Tenant A's first attempt fails its webhook and leaves a PENDING row.
+      failing = instance_double(Whatsapp::WebhookSetupService)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(failing)
+      allow(failing).to receive(:perform).and_raise(RuntimeError, 'Meta down')
+      expect(perform_setup.error).to eq(:webhook_setup_failed)
+      tenant_a_pending = BloomwireChannelIntegration.last
+      expect(tenant_a_pending.status).to eq('pending')
+
+      # Tenant B reuses the SAME phone_number_id (globally-unique routing key). Even if
+      # registration would now succeed, B must NOT touch A's row or return its DTO.
+      ok = instance_double(Whatsapp::WebhookSetupService, perform: nil)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(ok)
+      other_account = create(:account)
+      create(:bloomwire_business_profile, account: other_account)
+      before_counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
+
+      result = perform_setup(target: other_account)
+
+      expect(result.success?).to be(false)
+      expect(result.error).to eq(:duplicate_routing_key)
+      expect([Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]).to eq(before_counts)
+      expect(tenant_a_pending.reload).to have_attributes(status: 'pending', account_id: account.id)
+    end
+  end
+
   describe 'integration fields (decided lifecycle + non-secret routing metadata)' do
     let(:integration) { perform_setup.integration }
 

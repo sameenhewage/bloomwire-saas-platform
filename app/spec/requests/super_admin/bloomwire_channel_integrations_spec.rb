@@ -92,6 +92,15 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
         expect(response.parsed_body['error']).to be_present
         expect(response.body).not_to include('super-secret-token')
       end
+
+      it 'returns a safe 422 (never a 500) when channel is not a parameter object' do
+        ['not-an-object', %w[a b]].each do |bad_channel|
+          post_setup(valid_payload.merge(channel: bad_channel))
+
+          expect(response).to have_http_status(:unprocessable_entity)
+          expect(response.parsed_body['error']).to eq('Missing or invalid channel parameters.')
+        end
+      end
     end
 
     context 'when signed in as a Dialog tenant account administrator (not platform)' do
