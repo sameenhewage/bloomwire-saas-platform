@@ -379,6 +379,55 @@ RSpec.describe 'Inboxes API', type: :request do
         expect(response).to have_http_status(:unauthorized)
       end
     end
+
+    context 'when the inbox is a Bloomwire-managed WhatsApp inbox (4.4-b-WA.2C deny)' do
+      let(:admin) { create(:user, account: account, role: :administrator) }
+      let(:integration) { create(:bloomwire_channel_integration, account: account) }
+
+      it 'denies an administrator and enqueues no deletion job' do
+        expect(DeleteObjectJob).not_to receive(:perform_later)
+
+        delete "/api/v1/accounts/#{account.id}/inboxes/#{integration.inbox_id}",
+               headers: admin.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+      end
+
+      it 'denies an agent and enqueues no deletion job' do
+        agent = create(:user, account: account, role: :agent)
+        expect(DeleteObjectJob).not_to receive(:perform_later)
+
+        delete "/api/v1/accounts/#{account.id}/inboxes/#{integration.inbox_id}",
+               headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    context 'when the inbox is a WhatsApp inbox not managed by Bloomwire (4.4-b-WA.2C unchanged)' do
+      let(:admin) { create(:user, account: account, role: :administrator) }
+
+      it 'allows an administrator to destroy a plain WhatsApp inbox with no Bloomwire integration' do
+        whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+        whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+        expect(DeleteObjectJob).to receive(:perform_later).with(whatsapp_inbox, admin, anything).once
+
+        delete "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+               headers: admin.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+      end
+
+      it 'allows an administrator to destroy a non-managed WhatsApp integration inbox' do
+        integration = create(:bloomwire_channel_integration, account: account, managed_by_bloomwire: false)
+        expect(DeleteObjectJob).to receive(:perform_later).with(integration.inbox, admin, anything).once
+
+        delete "/api/v1/accounts/#{account.id}/inboxes/#{integration.inbox_id}",
+               headers: admin.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+      end
+    end
   end
 
   describe 'POST /api/v1/accounts/{account.id}/inboxes' do
@@ -524,6 +573,17 @@ RSpec.describe 'Inboxes API', type: :request do
 
           expect(response).to have_http_status(:success)
         end
+
+        it 'denies an administrator and creates no whatsapp channel when the tenant is Bloomwire-managed (real deny, no stub)' do
+          create(:bloomwire_business_profile, account: account)
+
+          expect do
+            post "/api/v1/accounts/#{account.id}/inboxes",
+                 headers: admin.create_new_auth_token, params: whatsapp_params, as: :json
+          end.not_to change(Channel::Whatsapp, :count)
+
+          expect(response).to have_http_status(:unauthorized)
+        end
       end
     end
   end
@@ -629,6 +689,20 @@ RSpec.describe 'Inboxes API', type: :request do
                 as: :json
 
           expect(response).to have_http_status(:unauthorized)
+        end
+
+        it 'denies an administrator updating provider config when the tenant is Bloomwire-managed (real deny, no stub)' do
+          create(:bloomwire_business_profile, account: account)
+          whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+          whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+
+          patch "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}",
+                headers: admin.create_new_auth_token,
+                params: { channel: { provider_config: { api_key: 'blocked' } } },
+                as: :json
+
+          expect(response).to have_http_status(:unauthorized)
+          expect(whatsapp_channel.reload.provider_config['api_key']).not_to eq('blocked')
         end
 
         it 'does not gate non-whatsapp inbox updates even when the policy denies (api inbox unaffected)' do
@@ -1477,6 +1551,19 @@ RSpec.describe 'Inboxes API', type: :request do
       it 'returns unauthorized for an administrator and never invokes the webhook setup service' do
         denying_policy = instance_double(Bloomwire::ChannelControlPolicy, can_setup_whatsapp?: false)
         allow(Bloomwire::ChannelControlPolicy).to receive(:new).and_return(denying_policy)
+        expect(Whatsapp::WebhookSetupService).not_to receive(:new)
+
+        post "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}/register_webhook",
+             headers: admin.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    context 'when the tenant is Bloomwire-managed (4.4-b-WA.2C real deny, no stub)' do
+      before { create(:bloomwire_business_profile, account: account) }
+
+      it 'returns unauthorized for an administrator and never invokes the webhook setup service' do
         expect(Whatsapp::WebhookSetupService).not_to receive(:new)
 
         post "/api/v1/accounts/#{account.id}/inboxes/#{whatsapp_inbox.id}/register_webhook",

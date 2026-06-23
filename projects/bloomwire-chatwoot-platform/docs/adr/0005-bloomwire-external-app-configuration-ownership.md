@@ -1,8 +1,9 @@
 # ADR 0005 — Bloomwire External App Configuration Ownership
 
-- **Status:** Accepted (decision). **4.4-b-WA.2A (ownership foundation)** merged in
-  PR #22 and **4.4-b-WA.2B (Bloomwire Admin setup path)** implemented
-  (behavior-neutral); remaining slices (2C/2D, WA.3 router) parked / future
+- **Status:** Accepted (decision). **4.4-b-WA.2A (ownership foundation)** and
+  **4.4-b-WA.2B (Bloomwire Admin setup path)** merged; **4.4-b-WA.2C (Dialog tenant
+  deny, incl. managed-WhatsApp inbox destroy)** implemented (this PR); remaining
+  slices (2D frontend, WA.3 router) parked / future
   (Phase 4.4 External App Configuration Ownership; WhatsApp first vertical)
 - **Date:** 2026-06-23
 - **Extends:** ADR 0001 (Technical Baseline), ADR 0003 (Permission &
@@ -14,9 +15,11 @@
 - **Scope:** this ADR records the decisions and slice plan; the ADR commit itself
   changed no code. **Implementation status:** 4.4-b-WA.2A (ownership table, model
   `BloomwireChannelIntegration`, and `Bloomwire::ChannelIntegrationBackfill`) is
-  merged in PR #22, and **4.4-b-WA.2B (Bloomwire Admin setup path)** is
-  **implemented** (behavior-neutral); the remaining slices (2C/2D, WA.3) are
-  **not** implemented yet, and **Dialog admins are not denied yet.**
+  merged in PR #22, **4.4-b-WA.2B (Bloomwire Admin setup path)** is merged, and
+  **4.4-b-WA.2C (Dialog tenant deny)** is **implemented** (this PR); the remaining
+  slices (2D frontend, WA.3) are **not** implemented yet. **Dialog admins/agents of a
+  Bloomwire-managed tenant are now denied** WhatsApp setup/config and managed-inbox
+  destroy; plain Chatwoot accounts (no profile) are unchanged.
 
 ---
 
@@ -266,6 +269,17 @@ before implementation).
   (`managed_by_bloomwire`) are gated for destroy; **non-managed/default** Chatwoot
   inbox behavior is decided **separately** and must not be accidentally blocked.
   Normal conversation usage and ordinary non-setup maintenance remain unaffected.
+- **As built (implemented, this PR):** `Bloomwire::ChannelControlPolicy#can_setup_whatsapp?`
+  now denies **every** tenant principal once the account has a `BloomwireBusinessProfile`
+  (Bloomwire-managed), gating the 4 setup actions through the existing PR #19 seam
+  (`Whatsapp::AuthorizationsController#create`, `InboxesController#create/#update/#register_webhook`).
+  Accounts **without** a profile keep the pre-existing admin gate (plain Chatwoot
+  unchanged). A separate guard `authorize_whatsapp_managed_inbox_destroy!` denies
+  `InboxesController#destroy` when `BloomwireChannelIntegration.managed_whatsapp_inbox?`
+  is true (a row with `managed_by_bloomwire: true` and `app_kind: 'whatsapp'` for that
+  inbox). The SuperAdmin platform path (`Bloomwire::ChannelSetup::Service`) is unaffected.
+  Frontend hiding (2D), the webhook router (WA.3), and the tenant DTO/provider_config
+  secret scrub remain out of scope.
 
 ### D. Normal usage unaffected (cross-cutting)
 
@@ -340,19 +354,20 @@ Phase **4.4 — External App Configuration Ownership** (WhatsApp first vertical)
 
 - **4.4-b-WA.1 — WhatsApp setup control seam** — ✅ done/merged (PR #19). Central
   backend seam for WhatsApp setup actions (behavior-neutral).
-- **4.4-b-WA.2A — Channel integration ownership foundation** — ✅ implemented
-  (behavior-neutral; pending PR). `BloomwireChannelIntegration` model + migration
-  + `Bloomwire::ChannelIntegrationBackfill`. No tenant deny, no frontend.
-- **4.4-b-WA.2B — Bloomwire Admin WhatsApp setup service/path** — ⏳ planned.
+- **4.4-b-WA.2A — Channel integration ownership foundation** — ✅ merged (PR #22).
+  `BloomwireChannelIntegration` model + migration + `Bloomwire::ChannelIntegrationBackfill`.
+  No tenant deny, no frontend.
+- **4.4-b-WA.2B — Bloomwire Admin WhatsApp setup service/path** — ✅ merged.
   Platform-context creation of WhatsApp channel/inbox for a tenant; reuse Chatwoot
   channel-creation logic; store ownership/routing metadata; never expose
   credentials to Dialog users.
-- **4.4-b-WA.2C — Dialog admin WhatsApp self-service deny** — ⏳ planned (after
-  2B). Flip the seam to deny tenant admins for WhatsApp setup/config — **including
-  deleting/destroying a Bloomwire-managed WhatsApp inbox** (that is disconnecting
-  the app: setup/config ownership, not normal usage). Only `managed_by_bloomwire`
-  inboxes are gated; non-managed/default Chatwoot behavior is decided separately
-  and must not be accidentally blocked; normal inbox usage unaffected.
+- **4.4-b-WA.2C — Dialog admin WhatsApp self-service deny** — ✅ implemented (this
+  PR). Flipped the seam to deny tenant admins/agents for WhatsApp setup/config —
+  **including deleting/destroying a Bloomwire-managed WhatsApp inbox** (that is
+  disconnecting the app: setup/config ownership, not normal usage). Gating is
+  profile-based: only Bloomwire-managed tenants (with a `BloomwireBusinessProfile`)
+  are denied, and only `managed_by_bloomwire` WhatsApp inboxes are gated for destroy;
+  non-managed/default Chatwoot behavior is unchanged; normal inbox usage unaffected.
 - **4.4-b-WA.2D — Tenant frontend hiding/disabled UX** — ⏳ planned (after backend
   enforcement). Hide/disable external-app setup cards/forms for Dialog admins
   (UX only, not security).
@@ -360,8 +375,8 @@ Phase **4.4 — External App Configuration Ownership** (WhatsApp first vertical)
   Prepare Bloomwire-owned routing metadata only; full router stays ADR 0004 /
   Phase 8.
 
-**Recommended next implementation PR after this docs PR:** **4.4-b-WA.2A**
-(ownership foundation) — behavior-neutral, lowest risk, unblocks 2B/2C/2D/3.
+**Recommended next implementation PR:** **4.4-b-WA.2D** (tenant frontend
+hiding/disabled UX) and **4.4-b-WA.3** (global webhook routing metadata).
 
 Later verticals (reuse this model): **SMS → Email → Instagram/Facebook → Shopify
 → Telegram/Signal.**
@@ -378,14 +393,15 @@ Later verticals (reuse this model): **SMS → Email → Instagram/Facebook → S
 - **Trade-offs:** introduces a Bloomwire-owned table and a platform setup surface
   to maintain; credential hardening (encryption) and DTO scrubbing become explicit
   follow-ups.
-- **Current vs target (no implied enforcement).** **Current state:** WhatsApp
-  setup is **still reachable through the existing tenant/account-admin setup
-  surfaces** — PR #19 only added a **behavior-neutral** seam, and
-  `Bloomwire::ChannelControlPolicy` **still allows `AccountUser` administrators**.
-  **Target state:** the Bloomwire Admin/platform performs setup; **platform-only
-  enforcement and the Dialog-admin deny happen later**, after the Bloomwire Admin
-  setup path (2B) exists. These docs do **not** imply platform-only setup is
-  already enforced.
+- **Current vs target.** **Current state (this PR):** for a **Bloomwire-managed**
+  tenant (account with a `BloomwireBusinessProfile`), `Bloomwire::ChannelControlPolicy`
+  now **denies `AccountUser` administrators and agents** the WhatsApp setup/config
+  actions, and managed-WhatsApp **inbox destroy** is denied; the Bloomwire
+  Admin/platform performs setup via `Bloomwire::ChannelSetup::Service`. **Plain
+  Chatwoot accounts (no profile) are unchanged** (admin gate preserved). **Still
+  pending:** tenant frontend hiding (2D), the global webhook router (WA.3), and the
+  tenant DTO/provider_config secret scrub — so these docs do **not** yet claim raw
+  credentials are hidden from Dialog users.
 
 ## References
 
