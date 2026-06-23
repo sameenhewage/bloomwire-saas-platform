@@ -62,16 +62,28 @@ class Bloomwire::ChannelSetup::Service
     existing = existing_integration(adapter.routing_key(@params))
     if existing
       # A prior attempt by THIS tenant whose provider registration failed left a PENDING
-      # row; a retry RESUMES it (re-run registration, then activate) — never creating a
-      # second channel/inbox/integration for the same routing key. A pending row owned by
-      # ANOTHER tenant, or any active/disabled row, is a genuine duplicate this request
-      # must neither mutate nor expose.
-      return activate_with_provider(adapter, existing) if resumable?(existing, profile)
+      # row; a retry RESUMES it (refresh credentials, re-run registration, activate) —
+      # never creating a second channel/inbox/integration for the same routing key. A
+      # pending row owned by ANOTHER tenant, or any active/disabled row, is a genuine
+      # duplicate this request must neither mutate nor expose.
+      return resume(adapter, existing) if resumable?(existing, profile)
 
       return failure(:duplicate_routing_key)
     end
 
     activate_with_provider(adapter, create_integration(adapter, profile))
+  end
+
+  # Retry of a same-tenant PENDING setup. We REFRESH the existing channel's stored
+  # credentials/config from this payload FIRST, so re-registration uses the corrected
+  # api_key / business_account_id rather than the stale values that failed last time
+  # (otherwise the integration would stay stuck pending). We then sync the NON-SECRET
+  # routing metadata onto the ownership row and register + activate — reusing the same
+  # channel/inbox/integration, so no duplicate rows are created.
+  def resume(adapter, integration)
+    channel = adapter.refresh_channel!(integration.channelable, @params)
+    integration.update!(**adapter.integration_attributes(channel))
+    activate_with_provider(adapter, integration)
   end
 
   # routing_key (WhatsApp phone_number_id) is GLOBALLY unique on the ownership table, so a

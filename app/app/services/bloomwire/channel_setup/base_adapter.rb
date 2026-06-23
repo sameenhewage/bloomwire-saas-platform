@@ -11,14 +11,24 @@
 # - create_channel(account:, params:) -> the provider channel (with its inbox)
 # - integration_attributes(channel)   -> Hash of NON-SECRET routing columns
 #
-# Lifecycle hook (override only when needed):
+# Lifecycle hooks (override only when needed):
 # - post_create!(channel) runs AFTER the channel + inbox + ownership row are
 #   committed. It DEFAULTS TO A NO-OP here, so a new adapter only overrides it when
 #   the provider needs a post-commit step (e.g. WhatsApp webhook registration).
 #   Keeping it post-commit ensures no external/provider call runs inside (or can be
 #   rolled back by) the DB transaction.
+# - refresh_channel!(channel, params) runs on a same-tenant RETRY of a pending setup,
+#   BEFORE post_create! re-runs. It DEFAULTS TO A NO-OP returning the channel, and is
+#   overridden by adapters that persist credentials/config on the channel so a retry
+#   re-registers with corrected values instead of the stale ones.
 class Bloomwire::ChannelSetup::BaseAdapter
   # Default no-op. Adapters override this only when the provider requires a
   # post-commit registration step.
   def post_create!(_channel); end
+
+  # Default no-op returning the channel unchanged. Adapters override this when the
+  # provider stores credentials/config on the channel and a retry must refresh them.
+  def refresh_channel!(channel, _params)
+    channel
+  end
 end

@@ -73,6 +73,29 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
     raise Bloomwire::ChannelSetup::SetupError, :webhook_setup_failed
   end
 
+  # On a same-tenant RETRY of a PENDING setup the orchestrator resumes the existing
+  # channel instead of creating a new one, so we must REFRESH its stored credentials
+  # from the retry payload BEFORE re-running registration — otherwise post_create! would
+  # reuse the stale api_key / business_account_id that failed the first time and the
+  # integration would stay stuck pending. Only PRESENT values overwrite (a partial retry
+  # never wipes existing config), and existing keys like webhook_verify_token / source are
+  # preserved. We save with validate: false to skip validate_provider_config's remote
+  # credential re-check (post_create!'s webhook registration is the real credential gate,
+  # raising :webhook_setup_failed) — mirroring Channel::Whatsapp#enable_voice_calling!.
+  # Secrets stay in provider_config on Channel::Whatsapp and are NEVER copied onto the row.
+  def refresh_channel!(channel, params)
+    overrides = {
+      'api_key' => params[:api_key],
+      'phone_number_id' => params[:phone_number_id],
+      'business_account_id' => params[:business_account_id]
+    }.compact_blank
+    return channel if overrides.empty?
+
+    channel.provider_config = (channel.provider_config || {}).merge(overrides)
+    channel.save!(validate: false)
+    channel
+  end
+
   # NON-SECRET routing metadata read back from the persisted channel. These keys
   # map 1:1 to BloomwireChannelIntegration columns; no secrets are included.
   def integration_attributes(channel)

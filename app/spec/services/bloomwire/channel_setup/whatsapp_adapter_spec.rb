@@ -132,4 +132,27 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
       expect(adapter.integration_attributes(channel).keys).not_to include(:api_key, :provider_config)
     end
   end
+
+  describe '#refresh_channel!' do
+    let(:channel) { adapter.create_channel(account: account, params: params) }
+
+    it 'merges corrected credentials into provider_config while preserving existing keys' do
+      channel.update!(provider_config: channel.provider_config.merge('webhook_verify_token' => 'keep-me'))
+
+      adapter.refresh_channel!(channel, params.merge(api_key: 'new-key', business_account_id: 'new-waba'))
+
+      expect(channel.reload.provider_config).to include(
+        'api_key' => 'new-key', 'business_account_id' => 'new-waba',
+        'phone_number_id' => 'pnid-ad-001', 'webhook_verify_token' => 'keep-me'
+      )
+    end
+
+    it 'never wipes existing config when the retry values are blank or missing' do
+      original = channel.provider_config.dup
+
+      adapter.refresh_channel!(channel, { api_key: '', business_account_id: nil })
+
+      expect(channel.reload.provider_config).to eq(original)
+    end
+  end
 end

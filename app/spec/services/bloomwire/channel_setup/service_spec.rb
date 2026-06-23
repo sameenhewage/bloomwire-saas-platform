@@ -129,6 +129,66 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
     end
   end
 
+  describe 'retry refreshes pending credentials before re-registering (same tenant)' do
+    let(:corrected) { whatsapp_params.merge(api_key: 'token-corrected', business_account_id: 'waba-corrected') }
+
+    # First attempt: registration fails on the ORIGINAL (bad) token, leaving a pending
+    # integration and a real channel that still holds the original credentials.
+    def fail_first_attempt
+      first = instance_double(Whatsapp::WebhookSetupService)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(first)
+      allow(first).to receive(:perform).and_raise(RuntimeError, 'Invalid OAuth access token')
+      perform_setup
+    end
+
+    # Retry the SAME tenant + phone_number_id with corrected credentials; registration
+    # now succeeds. The reused channel must be refreshed before post_create! re-runs.
+    def retry_with_corrected
+      registration = instance_double(Whatsapp::WebhookSetupService, perform: nil)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(registration)
+      perform_setup(params: corrected)
+    end
+
+    it 'leaves the integration pending after the first failure with the original token' do
+      result = fail_first_attempt
+      expect(result.error).to eq(:webhook_setup_failed)
+      expect(BloomwireChannelIntegration.last.status).to eq('pending')
+      expect(Channel::Whatsapp.last.provider_config)
+        .to include('api_key' => 'super-secret-token', 'business_account_id' => 'waba-2b-001')
+    end
+
+    it 'updates the existing channel provider_config with the corrected credentials' do
+      fail_first_attempt
+      retry_with_corrected
+      expect(Channel::Whatsapp.last.provider_config)
+        .to include('api_key' => 'token-corrected', 'business_account_id' => 'waba-corrected')
+    end
+
+    it 're-registers the webhook with the corrected credentials and activates' do
+      fail_first_attempt
+      channel = Channel::Whatsapp.last
+      result = retry_with_corrected
+      expect(Whatsapp::WebhookSetupService).to have_received(:new).with(channel, 'waba-corrected', 'token-corrected')
+      expect(result.success?).to be(true)
+      expect(result.integration.reload.status).to eq('active')
+    end
+
+    it 'reuses the same channel/inbox/integration (no duplicate rows)' do
+      fail_first_attempt
+      pending = BloomwireChannelIntegration.last
+      counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
+      result = retry_with_corrected
+      expect(result.integration.id).to eq(pending.id)
+      expect([Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]).to eq(counts)
+    end
+
+    it 'keeps the api_key secret on the channel only, never on the ownership row' do
+      fail_first_attempt
+      retry_with_corrected
+      expect(BloomwireChannelIntegration.last.attributes.values).not_to include('token-corrected')
+    end
+  end
+
   describe 'cross-tenant safety (a pending row is tenant-owned, routing_key is global)' do
     it "never resumes/activates another tenant's pending row; reports it as a duplicate" do
       # Tenant A's first attempt fails its webhook and leaves a PENDING row.
@@ -139,20 +199,22 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
       tenant_a_pending = BloomwireChannelIntegration.last
       expect(tenant_a_pending.status).to eq('pending')
 
-      # Tenant B reuses the SAME phone_number_id (globally-unique routing key). Even if
-      # registration would now succeed, B must NOT touch A's row or return its DTO.
+      # Tenant B reuses the SAME phone_number_id (globally-unique routing key) with its
+      # OWN corrected credentials. B must NOT resume, activate, mutate, or refresh A's
+      # channel/row — not even its stored provider_config.
       ok = instance_double(Whatsapp::WebhookSetupService, perform: nil)
       allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(ok)
       other_account = create(:account)
       create(:bloomwire_business_profile, account: other_account)
       before_counts = [Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]
 
-      result = perform_setup(target: other_account)
+      result = perform_setup(target: other_account, params: whatsapp_params.merge(api_key: 'token-from-b'))
 
       expect(result.success?).to be(false)
       expect(result.error).to eq(:duplicate_routing_key)
       expect([Channel::Whatsapp.count, Inbox.count, BloomwireChannelIntegration.count]).to eq(before_counts)
       expect(tenant_a_pending.reload).to have_attributes(status: 'pending', account_id: account.id)
+      expect(tenant_a_pending.channelable.reload.provider_config['api_key']).to eq('super-secret-token')
     end
   end
 
