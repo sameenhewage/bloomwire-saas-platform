@@ -129,6 +129,10 @@ json.bot_name resource.channel.try(:bot_name) if resource.telegram?
 ### WhatsApp Channel
 if resource.whatsapp?
   json.message_templates resource.channel.try(:message_templates)
+  # Bloomwire (ADR 0005, 4.4-b-WA.2D): read-only, non-secret flag mirroring the PR #24
+  # backend destroy deny. The dashboard uses it to hide the delete action for a
+  # Bloomwire-managed WhatsApp inbox. No provider secrets are exposed.
+  json.bloomwire_managed BloomwireChannelIntegration.managed_whatsapp_inbox?(resource)
   json.provider_config resource.channel.try(:provider_config) if Current.account_user&.administrator?
   # Only show reauthorization for embedded signup; manual flow uses API keys, not OAuth
   json.reauthorization_required(

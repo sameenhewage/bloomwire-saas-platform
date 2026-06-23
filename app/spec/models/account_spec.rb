@@ -387,4 +387,18 @@ RSpec.describe Account do
       end
     end
   end
+
+  describe '#bloomwire_managed?' do
+    let(:account) { create(:account) }
+
+    it 'is true when the account has a BloomwireBusinessProfile' do
+      create(:bloomwire_business_profile, account: account)
+
+      expect(account.bloomwire_managed?).to be(true)
+    end
+
+    it 'is false when the account has no BloomwireBusinessProfile' do
+      expect(account.bloomwire_managed?).to be(false)
+    end
+  end
 end

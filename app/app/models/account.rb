@@ -170,6 +170,14 @@ class Account < ApplicationRecord
     Redis::Alfred.exists?(enrichment_key) ? 'enrichment' : step
   end
 
+  # Bloomwire (ADR 0005, 4.4-b-WA.2D): true when this tenant is Bloomwire-managed
+  # (has a BloomwireBusinessProfile). Read-only, non-secret capability flag the
+  # dashboard reads to hide tenant-side external WhatsApp setup UI. The backend
+  # deny (Bloomwire::ChannelControlPolicy) remains the real enforcement.
+  def bloomwire_managed?
+    BloomwireBusinessProfile.exists?(account_id: id)
+  end
+
   def reset_cache_keys
     super
     clear_unread_conversation_counts_cache

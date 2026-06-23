@@ -88,6 +88,34 @@ describe('useAccount', () => {
     expect(currentAccount).toEqual({ id: 123, name: 'Chatwoot' });
   });
 
+  it('returns isBloomwireManagedAccount as false when the account has no bloomwire_managed flag', () => {
+    const wrapper = mount(createComponent(), mountParams);
+    const { isBloomwireManagedAccount } = wrapper.vm;
+    expect(isBloomwireManagedAccount).toBe(false);
+  });
+
+  it('returns isBloomwireManagedAccount as true when the account is Bloomwire-managed', () => {
+    const managedStore = createStore({
+      modules: {
+        accounts: {
+          namespaced: true,
+          getters: {
+            getAccount: () => id => ({
+              id,
+              name: 'Chatwoot',
+              bloomwire_managed: true,
+            }),
+          },
+        },
+      },
+    });
+    const wrapper = mount(createComponent(), {
+      global: { plugins: [managedStore] },
+    });
+    const { isBloomwireManagedAccount } = wrapper.vm;
+    expect(isBloomwireManagedAccount).toBe(true);
+  });
+
   it('returns an account-scoped route', () => {
     const wrapper = mount(createComponent(), mountParams);
     const { accountScopedRoute } = wrapper.vm;

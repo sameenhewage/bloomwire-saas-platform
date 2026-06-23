@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useAccount } from 'dashboard/composables/useAccount';
 
 import ButtonV4 from 'next/button/Button.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
@@ -19,6 +20,10 @@ const props = defineProps({
 const emit = defineEmits(['registerWebhook']);
 
 const { t } = useI18n();
+// Bloomwire (ADR 0005, 4.4-b-WA.2D): manual WhatsApp webhook registration and the
+// Meta Business Manager settings shortcut are platform-owned for Bloomwire-managed
+// tenants, so hide those external WhatsApp configuration actions.
+const { isBloomwireManagedAccount } = useAccount();
 
 const QUALITY_COLORS = {
   GREEN: 'text-n-teal-11',
@@ -180,6 +185,7 @@ const handleRegisterWebhook = () => {
           </p>
         </div>
         <ButtonV4
+          v-if="!isBloomwireManagedAccount"
           sm
           solid
           blue
@@ -275,7 +281,10 @@ const handleRegisterWebhook = () => {
               }}
             </span>
             <ButtonV4
-              v-if="!webhookConfigured || webhookUrlMismatch"
+              v-if="
+                (!webhookConfigured || webhookUrlMismatch) &&
+                !isBloomwireManagedAccount
+              "
               sm
               solid
               blue
@@ -286,6 +295,15 @@ const handleRegisterWebhook = () => {
             >
               {{ t('INBOX_MGMT.ACCOUNT_HEALTH.WEBHOOK.REGISTER_BUTTON') }}
             </ButtonV4>
+            <span
+              v-else-if="
+                (!webhookConfigured || webhookUrlMismatch) &&
+                isBloomwireManagedAccount
+              "
+              class="flex-shrink-0 text-label-small text-n-slate-11"
+            >
+              {{ t('INBOX_MGMT.BLOOMWIRE_MANAGED.NOTICE') }}
+            </span>
           </div>
         </div>
       </div>
