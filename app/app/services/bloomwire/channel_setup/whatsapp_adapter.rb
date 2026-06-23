@@ -31,6 +31,22 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
     params[:phone_number_id].presence
   end
 
+  # Overrides BaseAdapter#validate_setup_metadata! (the default no-op). The orchestrator
+  # runs this BEFORE creating or activating the integration (outside the DB transaction).
+  # It verifies the supplied phone_number_id against Meta for the supplied WABA/token and
+  # confirms the returned number matches the submitted one — neither the reused
+  # ChannelCreationService nor WebhookSetupService proves this (see WhatsappMetadataValidator).
+  # On any failure it raises a coded SetupError so setup never persists/activates a
+  # mistyped identifier; raw provider data is never surfaced.
+  def validate_setup_metadata!(params)
+    # Missing/malformed params can't be verified against Meta — surface the same
+    # :invalid_channel_params as create_channel rather than a misleading metadata code.
+    raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params if missing_required?(params)
+
+    code = Bloomwire::ChannelSetup::WhatsappMetadataValidator.new(params).error_code
+    raise Bloomwire::ChannelSetup::SetupError, code if code
+  end
+
   # Creates the Channel::Whatsapp + Inbox via the existing Chatwoot service.
   # Channel-specific failures are translated into a coded SetupError so the
   # orchestrator never has to know about WhatsApp/Meta error shapes.

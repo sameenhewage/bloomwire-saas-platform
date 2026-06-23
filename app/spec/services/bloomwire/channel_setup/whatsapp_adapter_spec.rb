@@ -88,6 +88,46 @@ RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
     end
   end
 
+  describe '#validate_setup_metadata!' do
+    def stub_meta_phone_numbers(data)
+      lookup = instance_double(Whatsapp::FacebookApiClient)
+      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+      allow(lookup).to receive(:fetch_phone_numbers).and_return('data' => data)
+      lookup
+    end
+
+    it 'queries Meta with the supplied token + WABA and passes when the id/number match' do
+      lookup = stub_meta_phone_numbers([{ 'id' => 'pnid-ad-001', 'display_phone_number' => '+1 555-777-0001' }])
+
+      expect { adapter.validate_setup_metadata!(params) }.not_to raise_error
+      expect(Whatsapp::FacebookApiClient).to have_received(:new).with('secret-key')
+      expect(lookup).to have_received(:fetch_phone_numbers).with('waba-ad-001')
+    end
+
+    it 'raises :phone_number_id_mismatch when the WABA does not expose the supplied phone_number_id' do
+      stub_meta_phone_numbers([{ 'id' => 'a-different-pnid', 'display_phone_number' => '+15557770001' }])
+
+      expect { adapter.validate_setup_metadata!(params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_number_id_mismatch) }
+    end
+
+    it 'raises :phone_number_mismatch when the id is valid but its number differs from the submission' do
+      stub_meta_phone_numbers([{ 'id' => 'pnid-ad-001', 'display_phone_number' => '+1 555-000-9999' }])
+
+      expect { adapter.validate_setup_metadata!(params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_number_mismatch) }
+    end
+
+    it 'raises :phone_metadata_unverifiable (never the raw provider error) when Meta rejects the WABA/token' do
+      lookup = instance_double(Whatsapp::FacebookApiClient)
+      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+      allow(lookup).to receive(:fetch_phone_numbers).and_raise(RuntimeError, 'WABA phone numbers fetch failed: {"error":{"code":190}}')
+
+      expect { adapter.validate_setup_metadata!(params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_metadata_unverifiable) }
+    end
+  end
+
   describe '#post_create!' do
     let(:channel) do
       instance_double(Channel::Whatsapp,

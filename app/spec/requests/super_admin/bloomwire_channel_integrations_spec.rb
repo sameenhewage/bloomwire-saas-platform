@@ -35,6 +35,13 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
       allow(channel).to receive(:sync_templates)
       channel
     end
+    # Confirm the supplied WhatsApp phone metadata against Meta by default (the new
+    # pre-activation check queries Whatsapp::FacebookApiClient); failure cases re-stub it.
+    phone_lookup = instance_double(Whatsapp::FacebookApiClient)
+    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(phone_lookup)
+    allow(phone_lookup).to receive(:fetch_phone_numbers).and_return(
+      'data' => [{ 'id' => 'pnid-req-009', 'display_phone_number' => '+15551230009' }]
+    )
   end
 
   def post_setup(payload = valid_payload)
@@ -100,6 +107,22 @@ RSpec.describe 'SuperAdmin::BloomwireChannelIntegrations', type: :request do
           expect(response).to have_http_status(:unprocessable_entity)
           expect(response.parsed_body['error']).to eq('Missing or invalid channel parameters.')
         end
+      end
+
+      it 'returns a safe 422 (no raw provider data) and creates nothing when Meta rejects the phone metadata' do
+        lookup = instance_double(Whatsapp::FacebookApiClient)
+        allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+        allow(lookup).to receive(:fetch_phone_numbers).and_return(
+          'data' => [{ 'id' => 'a-different-pnid', 'display_phone_number' => '+15550000000' }]
+        )
+
+        expect { post_setup }.not_to change(BloomwireChannelIntegration, :count)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['error'])
+          .to eq('The WhatsApp phone number ID was not found in the supplied WhatsApp Business Account.')
+
+        ['pnid-req-009', 'waba-req-009', 'a-different-pnid', '+15551230009', 'super-secret-token']
+          .each { |value| expect(response.body).not_to include(value) }
       end
     end
 

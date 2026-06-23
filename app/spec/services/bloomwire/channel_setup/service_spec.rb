@@ -36,10 +36,24 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
       allow(channel).to receive(:sync_templates)
       channel
     end
+    # The metadata validator confirms the phone_number_id belongs to the WABA and the
+    # number matches, by querying Meta via Whatsapp::FacebookApiClient. Stub it to CONFIRM
+    # the default whatsapp_params; failure cases re-stub it per example.
+    phone_lookup = instance_double(Whatsapp::FacebookApiClient)
+    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(phone_lookup)
+    allow(phone_lookup).to receive(:fetch_phone_numbers).and_return(
+      'data' => [{ 'id' => whatsapp_params[:phone_number_id], 'display_phone_number' => whatsapp_params[:phone_number] }]
+    )
   end
 
   def perform_setup(actor: super_admin, target: account, app_kind: 'whatsapp', params: whatsapp_params)
     described_class.new(actor: actor, account: target, app_kind: app_kind, params: params).perform
+  end
+
+  def stub_waba_phone_numbers(data)
+    lookup = instance_double(Whatsapp::FacebookApiClient)
+    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+    allow(lookup).to receive(:fetch_phone_numbers).and_return('data' => data)
   end
 
   describe 'successful WhatsApp setup (happy path)' do
@@ -319,6 +333,48 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
       result = perform_setup
       expect(result.success?).to be(false)
       expect(result.error).to eq(:duplicate_phone_number)
+    end
+  end
+
+  describe 'provider metadata validation (verify the phone before creating/activating)' do
+    it 'rejects a phone_number_id that is not in the supplied WABA, creating nothing' do
+      stub_waba_phone_numbers([{ 'id' => 'some-other-pnid', 'display_phone_number' => whatsapp_params[:phone_number] }])
+
+      result = nil
+      expect { result = perform_setup }.not_to change(BloomwireChannelIntegration, :count)
+      expect(result.success?).to be(false)
+      expect(result.error).to eq(:phone_number_id_mismatch)
+    end
+
+    it 'rejects a submitted phone_number that does not match Meta for that phone_number_id' do
+      stub_waba_phone_numbers([{ 'id' => whatsapp_params[:phone_number_id], 'display_phone_number' => '+1 555-999-8888' }])
+
+      result = nil
+      expect { result = perform_setup }.not_to change(Channel::Whatsapp, :count)
+      expect(result.error).to eq(:phone_number_mismatch)
+    end
+
+    it 'fails safely when Meta cannot be queried for the supplied WABA/token (inaccessible id)' do
+      lookup = instance_double(Whatsapp::FacebookApiClient)
+      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+      allow(lookup).to receive(:fetch_phone_numbers).and_raise(RuntimeError, 'WABA phone numbers fetch failed: 190')
+
+      result = nil
+      expect { result = perform_setup }.not_to change(BloomwireChannelIntegration, :count)
+      expect(result.error).to eq(:phone_metadata_unverifiable)
+    end
+
+    it 'does not register a provider webhook when metadata validation fails' do
+      stub_waba_phone_numbers([])
+      expect(Whatsapp::WebhookSetupService).not_to receive(:new)
+
+      perform_setup
+    end
+
+    it 'accepts a matching phone supplied in a different format (normalized comparison)' do
+      stub_waba_phone_numbers([{ 'id' => whatsapp_params[:phone_number_id], 'display_phone_number' => '1 (555) 123-0001' }])
+
+      expect(perform_setup.success?).to be(true)
     end
   end
 

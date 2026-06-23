@@ -59,17 +59,21 @@ class Bloomwire::ChannelSetup::Service
   # webhook), a genuine duplicate, or a brand-new setup. Kept separate from #perform
   # so the orchestrator's guard clauses stay flat.
   def set_up_or_resume(adapter, profile)
+    # A prior attempt by THIS tenant whose provider registration failed left a PENDING
+    # row; a retry RESUMES it (refresh credentials, re-run registration, activate) —
+    # never creating a second channel/inbox/integration for the same routing key. A
+    # pending row owned by ANOTHER tenant, or any active/disabled row, is a genuine
+    # duplicate this request must neither mutate nor expose.
     existing = existing_integration(adapter.routing_key(@params))
-    if existing
-      # A prior attempt by THIS tenant whose provider registration failed left a PENDING
-      # row; a retry RESUMES it (refresh credentials, re-run registration, activate) —
-      # never creating a second channel/inbox/integration for the same routing key. A
-      # pending row owned by ANOTHER tenant, or any active/disabled row, is a genuine
-      # duplicate this request must neither mutate nor expose.
-      return resume(adapter, existing) if resumable?(existing, profile)
+    return failure(:duplicate_routing_key) if existing && !resumable?(existing, profile)
 
-      return failure(:duplicate_routing_key)
-    end
+    # Verify the supplied provider metadata BEFORE we create OR activate anything, and
+    # OUTSIDE the DB transaction (the duplicate short-circuit above runs first, so a known
+    # duplicate never triggers an external call). The adapter raises a coded SetupError if
+    # the metadata is invalid, so neither path persists/activates a mistyped identifier.
+    adapter.validate_setup_metadata!(@params)
+
+    return resume(adapter, existing) if existing
 
     activate_with_provider(adapter, create_integration(adapter, profile))
   end

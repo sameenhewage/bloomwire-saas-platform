@@ -12,6 +12,12 @@
 # - integration_attributes(channel)   -> Hash of NON-SECRET routing columns
 #
 # Lifecycle hooks (override only when needed):
+# - validate_setup_metadata!(params) runs BEFORE the orchestrator creates or activates
+#   the integration (outside the DB transaction). It DEFAULTS TO A NO-OP, and is
+#   overridden by adapters that must verify provider-side metadata against the provider
+#   (e.g. that a WhatsApp phone_number_id belongs to the supplied WABA/token and matches
+#   the submitted phone number) so a mistyped identifier is never persisted/activated.
+#   It raises a coded Bloomwire::ChannelSetup::SetupError on failure.
 # - post_create!(channel) runs AFTER the channel + inbox + ownership row are
 #   committed. It DEFAULTS TO A NO-OP here, so a new adapter only overrides it when
 #   the provider needs a post-commit step (e.g. WhatsApp webhook registration).
@@ -22,6 +28,10 @@
 #   overridden by adapters that persist credentials/config on the channel so a retry
 #   re-registers with corrected values instead of the stale ones.
 class Bloomwire::ChannelSetup::BaseAdapter
+  # Default no-op. Adapters override this to verify provider-side metadata against the
+  # provider BEFORE the orchestrator creates/activates the integration.
+  def validate_setup_metadata!(_params); end
+
   # Default no-op. Adapters override this only when the provider requires a
   # post-commit registration step.
   def post_create!(_channel); end
