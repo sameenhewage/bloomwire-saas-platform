@@ -1,9 +1,9 @@
 # ADR 0005 — Bloomwire External App Configuration Ownership
 
-- **Status:** Accepted (decision). **4.4-b-WA.2A (ownership foundation)
-  implemented** in PR #22 (behavior-neutral); remaining slices (2B/2C/2D, WA.3
-  router) parked / future (Phase 4.4 External App Configuration Ownership;
-  WhatsApp first vertical)
+- **Status:** Accepted (decision). **4.4-b-WA.2A (ownership foundation)** merged in
+  PR #22 and **4.4-b-WA.2B (Bloomwire Admin setup path)** implemented
+  (behavior-neutral); remaining slices (2C/2D, WA.3 router) parked / future
+  (Phase 4.4 External App Configuration Ownership; WhatsApp first vertical)
 - **Date:** 2026-06-23
 - **Extends:** ADR 0001 (Technical Baseline), ADR 0003 (Permission &
   Channel-Control Boundary). Relates to ADR 0004 (Global Meta/WhatsApp Webhook
@@ -14,8 +14,9 @@
 - **Scope:** this ADR records the decisions and slice plan; the ADR commit itself
   changed no code. **Implementation status:** 4.4-b-WA.2A (ownership table, model
   `BloomwireChannelIntegration`, and `Bloomwire::ChannelIntegrationBackfill`) is
-  **implemented** in PR #22 (behavior-neutral); the remaining slices are **not**
-  implemented yet, and **Dialog admins are not denied yet.**
+  merged in PR #22, and **4.4-b-WA.2B (Bloomwire Admin setup path)** is
+  **implemented** (behavior-neutral); the remaining slices (2C/2D, WA.3) are
+  **not** implemented yet, and **Dialog admins are not denied yet.**
 
 ---
 
@@ -230,6 +231,24 @@ before implementation).
   `Whatsapp::ChannelCreationService`; one `bloomwire_channel_integration` row is
   recorded with correct `routing_key` (`phone_number_id`) and `account`; secrets
   are stored in provider config and **not** returned in the response.
+- **As built (implemented, behavior-neutral):** the path is **generic, not
+  WhatsApp-only**. `Bloomwire::ChannelSetup::Service` (`actor:`, `account:`,
+  `app_kind:`, `params:` → `Bloomwire::ChannelSetup::Result`) selects a channel
+  adapter by `app_kind`; the first adapter `Bloomwire::ChannelSetup::WhatsappAdapter`
+  isolates **all** WhatsApp Cloud specifics (required params, reuse of
+  `Whatsapp::ChannelCreationService`, `routing_key = phone_number_id`, non-secret
+  routing-metadata extraction, error translation via `SetupError`). The
+  orchestrator owns platform authorization (**SuperAdmin actor only**),
+  tenant/profile resolution, duplicate routing-key / phone-number safety, and an
+  **atomic** transaction (channel + inbox + ownership row, rolled back together on
+  any failure) that writes the `bloomwire_channel_integration` row
+  (`managed_by_bloomwire: true`, `status: 'active'`, `created_by_super_admin`).
+- **Endpoint:** `POST /super_admin/bloomwire/channel_integrations`
+  (`SuperAdmin::BloomwireChannelIntegrationsController`, generic — `app_kind`
+  selects the adapter, each adapter declares its permitted params), SuperAdmin
+  Devise-authenticated. It returns a **safe DTO** (ownership + non-secret routing
+  metadata only — never `provider_config`, api_key, or tokens). Dialog tenant
+  admins/agents cannot reach it. No tenant deny is added (that is 2C).
 
 ### C. Dialog admin deny (4.4-b-WA.2C)
 

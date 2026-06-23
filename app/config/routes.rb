@@ -693,6 +693,14 @@ Rails.application.routes.draw do
         post :activate, on: :member
       end
 
+      # Bloomwire platform-context external-channel setup (WhatsApp first vertical).
+      # Generic: app_kind selects the adapter (see Bloomwire::ChannelSetup::Service).
+      # A single create-only action, declared as an explicit POST rather than a CRUD
+      # `resources` (which would imply an index/show) and excluded from the Administrate
+      # sidebar in super_admin/application/_navigation.html.erb — that nav enumerates every
+      # super_admin controller, so a create-only resource would render a dead GET index link.
+      post 'bloomwire/channel_integrations', to: 'bloomwire_channel_integrations#create', as: :bloomwire_channel_integrations
+
       resources :access_tokens, only: [:index, :show]
       resources :installation_configs, only: [:index, :new, :create, :show, :edit, :update]
       resources :agent_bots, only: [:index, :new, :create, :show, :edit, :update, :destroy] do

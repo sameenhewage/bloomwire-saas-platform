@@ -142,9 +142,10 @@ Decision recorded in `docs/adr/0004-bloomwire-global-meta-whatsapp-webhook-route
 ## External app configuration ownership (see ADR 0005)
 
 Decision recorded in `docs/adr/0005-bloomwire-external-app-configuration-ownership.md`.
-**WhatsApp is the first vertical. The ownership foundation (4.4-b-WA.2A) is
-implemented (behavior-neutral); the Bloomwire Admin setup path (2B) and the
-Dialog-admin deny (2C) remain parked/future — Dialog admins are NOT denied yet.**
+**WhatsApp is the first vertical. The ownership foundation (4.4-b-WA.2A, PR #22)
+and the Bloomwire Admin setup path (4.4-b-WA.2B) are implemented
+(behavior-neutral); the Dialog-admin deny (2C) remains parked/future — Dialog
+admins are NOT denied yet.**
 
 - **Bloomwire owns all external app/channel configuration** (WhatsApp, SMS, Email,
   Instagram/Facebook, Shopify, later Telegram/Signal). Dialog (tenant) admins may
@@ -153,11 +154,13 @@ Dialog-admin deny (2C) remain parked/future — Dialog admins are NOT denied yet
   Bloomwire-managed external-app inbox** (that is disconnecting the app).
 - **Setup is platform-owned (target)** via a **dedicated Bloomwire Admin
   namespace/service** — the tenant `InboxesController` is **not** reused as the
-  platform setup path. **Current state:** WhatsApp setup is still reachable through
-  the existing tenant/account-admin surfaces (PR #19 only added a behavior-neutral
-  seam; `Bloomwire::ChannelControlPolicy` still allows `AccountUser`
-  administrators). Platform-only enforcement happens **later** (after 2B); these
-  docs do **not** imply it is already enforced.
+  platform setup path. **Current state:** the Bloomwire Admin platform setup path
+  now exists (4.4-b-WA.2B — `Bloomwire::ChannelSetup::Service` + the SuperAdmin
+  endpoint), but WhatsApp setup is **also** still reachable through the existing
+  tenant/account-admin surfaces (`Bloomwire::ChannelControlPolicy` still allows
+  `AccountUser` administrators). Platform-only enforcement (the tenant deny)
+  happens **later** (4.4-b-WA.2C); these docs do **not** imply it is already
+  enforced.
 - **Ownership table** `bloomwire_channel_integrations` (implemented in 4.4-b-WA.2A;
   model `BloomwireChannelIntegration`) maps `profile → inbox → channel → account`
   plus **non-secret** routing metadata (`phone_number`, `phone_number_id`,
@@ -218,11 +221,15 @@ Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
 - Services: `Bloomwire::BusinessProfileBackfill`, `Bloomwire::TenantSetupInitializer`,
   `Bloomwire::OnboardingStepTracker`, `Bloomwire::ChatwootReadiness`,
   `Bloomwire::TenantActivation`, `Bloomwire::AccessPolicy`,
-  `Bloomwire::ChannelIntegrationBackfill`.
+  `Bloomwire::ChannelIntegrationBackfill`,
+  `Bloomwire::ChannelSetup::Service` (+ `WhatsappAdapter`, `Result`, `SetupError`).
 - Models: `BloomwireBusinessProfile`, `BloomwireOnboardingStep`,
   `BloomwireChannelIntegration`.
 - Super Admin: `SuperAdmin::BloomwireBusinessProfilesController`
-  (`/super_admin/bloomwire/businesses`, list/show + `activate`).
+  (`/super_admin/bloomwire/businesses`, list/show + `activate`);
+  `SuperAdmin::BloomwireChannelIntegrationsController`
+  (`POST /super_admin/bloomwire/channel_integrations`, generic external-channel
+  setup; `app_kind` selects the adapter).
 
 See `docs/product/05-development-phases.md` (execution source of truth) and
 `docs/system-overview/index.html` (living overview + changelog).

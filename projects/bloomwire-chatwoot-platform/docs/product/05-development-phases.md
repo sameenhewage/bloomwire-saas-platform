@@ -440,10 +440,13 @@ exposed to enterprise clients by default.
       (behavior-neutral; `bloomwire_channel_integrations` model + migration +
       `Bloomwire::ChannelIntegrationBackfill`; no tenant deny, no frontend;
       pending PR review).
-    - **4.4-b-WA.2B — Bloomwire Admin WhatsApp setup service/path** ⏳ planned
-      (platform-context channel/inbox creation; reuse Chatwoot channel-creation
-      logic; store ownership/routing metadata; never expose credentials to
-      Dialog users).
+    - **4.4-b-WA.2B — Bloomwire Admin WhatsApp setup service/path** ✅ implemented
+      (behavior-neutral; pending PR). **Generic** `Bloomwire::ChannelSetup::Service`
+      (selects an adapter by `app_kind`) + `WhatsappAdapter` (reuses
+      `Whatsapp::ChannelCreationService`) + SuperAdmin endpoint
+      `POST /super_admin/bloomwire/channel_integrations`. Creates
+      channel+inbox+ownership row atomically, SuperAdmin-only, returns a safe DTO
+      (no credentials/`provider_config` exposed). No Dialog deny yet (that is 2C).
     - **4.4-b-WA.2C — Dialog admin WhatsApp self-service deny** ⏳ planned
       (after 2B; includes denying **delete/destroy of Bloomwire-managed WhatsApp
       inboxes** = disconnecting the app. Only `managed_by_bloomwire` inboxes are
@@ -660,8 +663,8 @@ parked/future.**
 
 ```text
 Current phase: Phase 4 — Roles, Permissions & Security Foundation
-Current position: Phase 4.4 External App Configuration Ownership in progress (decision: ADR 0005). 4.4-b-WA.1 WhatsApp setup control seam merged (PR #19, behavior-neutral); 4.4-b-WA.2A channel integration ownership foundation implemented (behavior-neutral; bloomwire_channel_integrations model + migration + backfill; pending PR); next coding slice 4.4-b-WA.2B (Bloomwire Admin WhatsApp setup path). Phase 4.3 / 4.5 remain parked (ADR 0003).
-Last merged: WhatsApp setup control seam (PR #19 -> version_1)
+Current position: Phase 4.4 External App Configuration Ownership in progress (decision: ADR 0005). 4.4-b-WA.1 WhatsApp setup control seam merged (PR #19, behavior-neutral); 4.4-b-WA.2A channel integration ownership foundation merged (PR #22, behavior-neutral); 4.4-b-WA.2B Bloomwire Admin WhatsApp setup path implemented (behavior-neutral; generic Bloomwire::ChannelSetup service + WhatsApp adapter + SuperAdmin endpoint; pending PR); next coding slice 4.4-b-WA.2C (Dialog admin WhatsApp self-service deny). Phase 4.3 / 4.5 remain parked (ADR 0003).
+Last merged: channel integration ownership foundation (PR #22 -> version_1)
 Required workflow: Independent TDD Workflow
 Do not start yet: New Account / tenant-creation lockdown, channel/inbox-creation lockdown, tenant feature capabilities (parked — see ADR 0003), Dialog-admin WhatsApp deny (4.4-b-WA.2C) + tenant frontend hiding (4.4-b-WA.2D) ahead of their prerequisite slices (4.4-b-WA.2A/2B; see ADR 0005), billing, analytics, operational polish, Bloomwire global Meta/WhatsApp webhook router (parked — see ADR 0004), Bloomwire roles tables / full roles-permissions UI, Enterprise calling / channel_voice, Enterprise-overlay removal (parked — see ADR 0002; ChatwootHub outbound isolation now implemented)
 ```

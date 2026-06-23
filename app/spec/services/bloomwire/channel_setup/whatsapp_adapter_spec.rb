@@ -1,0 +1,250 @@
+require 'rails_helper'
+
+# WhatsApp Cloud adapter for the generic channel-setup orchestrator. It isolates
+# all WhatsApp-specific credential/routing extraction (Meta phone_number_id,
+# business_account_id, api_key) so the orchestrator and the integration model
+# stay channel-agnostic. This is the first adapter; SMS/Email/etc. add their own.
+RSpec.describe Bloomwire::ChannelSetup::WhatsappAdapter do
+  subject(:adapter) { described_class.new }
+
+  let(:account) { create(:account) }
+  let(:params) do
+    {
+      phone_number: '+15557770001',
+      phone_number_id: 'pnid-ad-001',
+      business_account_id: 'waba-ad-001',
+      api_key: 'secret-key',
+      business_name: 'Adapter Co'
+    }
+  end
+
+  before do
+    teardown = instance_double(Whatsapp::WebhookTeardownService, perform: nil)
+    allow(Whatsapp::WebhookTeardownService).to receive(:new).and_return(teardown)
+    setup = instance_double(Whatsapp::WebhookSetupService, perform: nil)
+    allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(setup)
+    allow(Channel::Whatsapp).to receive(:new).and_wrap_original do |method, *args|
+      channel = method.call(*args)
+      allow(channel).to receive(:validate_provider_config)
+      allow(channel).to receive(:sync_templates)
+      channel
+    end
+    # post_create!'s strict readiness gate queries Meta health; default to a registered/ready
+    # number so the happy path activates. Readiness-failure examples re-stub this.
+    ready = { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'STANDARD' } }
+    health = instance_double(Whatsapp::HealthService, fetch_health_status: ready)
+    allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+  end
+
+  it 'identifies as the whatsapp app_kind' do
+    expect(adapter.app_kind).to eq('whatsapp')
+  end
+
+  it 'is a channel-setup adapter (inherits the base default-no-op hook contract)' do
+    expect(adapter).to be_a(Bloomwire::ChannelSetup::BaseAdapter)
+  end
+
+  it 'derives the routing key from the WhatsApp phone_number_id' do
+    expect(adapter.routing_key(params)).to eq('pnid-ad-001')
+  end
+
+  describe '#create_channel' do
+    it 'creates a whatsapp_cloud channel with an inbox via Whatsapp::ChannelCreationService' do
+      channel = adapter.create_channel(account: account, params: params)
+      expect(channel).to be_a(Channel::Whatsapp)
+      expect(channel.provider).to eq('whatsapp_cloud')
+      expect(channel.inbox).to be_present
+    end
+
+    it 'raises a coded SetupError when a required credential is missing' do
+      expect { adapter.create_channel(account: account, params: params.except(:api_key)) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:invalid_channel_params) }
+    end
+
+    it 'raises a coded SetupError when the phone number already exists' do
+      create(:channel_whatsapp, account: create(:account), phone_number: '+15557770001',
+                                provider: 'whatsapp_cloud', validate_provider_config: false, sync_templates: false)
+      expect { adapter.create_channel(account: account, params: params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:duplicate_phone_number) }
+    end
+
+    it 'translates a duplicate-phone race that slips past the pre-check into :duplicate_phone_number' do
+      # Pre-check sees no existing channel, but a concurrent setup wins the race, so the
+      # reused Chatwoot service raises; the rescue re-checks and finds the phone taken.
+      # exists? is called: phone (pre) -> phone_number_id (pre) -> phone (rescue).
+      creation = instance_double(Whatsapp::ChannelCreationService)
+      allow(Whatsapp::ChannelCreationService).to receive(:new).and_return(creation)
+      allow(creation).to receive(:perform).and_raise(RuntimeError, 'WhatsApp number already exists')
+      allow(Channel::Whatsapp).to receive(:exists?).and_return(false, false, true)
+
+      expect { adapter.create_channel(account: account, params: params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:duplicate_phone_number) }
+    end
+
+    it 'rejects an existing WhatsApp phone_number_id (source of truth) with different phone formatting and no integration' do
+      # A Channel::Whatsapp created via the still-enabled tenant path (no Bloomwire
+      # integration) already uses this phone_number_id, under a differently formatted number.
+      existing = create(:channel_whatsapp, account: create(:account), phone_number: '+1 (999) 000-1111',
+                                           provider: 'whatsapp_cloud', validate_provider_config: false, sync_templates: false)
+      dup_params = params.merge(phone_number: '+19990001111', phone_number_id: existing.provider_config['phone_number_id'])
+
+      expect { adapter.create_channel(account: account, params: dup_params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:duplicate_phone_number_id) }
+    end
+  end
+
+  describe '#validate_setup_metadata!' do
+    def stub_meta_phone_numbers(data)
+      lookup = instance_double(Whatsapp::FacebookApiClient)
+      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+      allow(lookup).to receive(:fetch_phone_numbers).and_return('data' => data)
+      lookup
+    end
+
+    it 'queries Meta with the supplied token + WABA and passes when the id/number match' do
+      lookup = stub_meta_phone_numbers([{ 'id' => 'pnid-ad-001', 'display_phone_number' => '+1 555-777-0001' }])
+
+      expect { adapter.validate_setup_metadata!(params) }.not_to raise_error
+      expect(Whatsapp::FacebookApiClient).to have_received(:new).with('secret-key')
+      expect(lookup).to have_received(:fetch_phone_numbers).with('waba-ad-001')
+    end
+
+    it "returns the params with phone_number swapped for Meta's canonical +<digits> value" do
+      stub_meta_phone_numbers([{ 'id' => 'pnid-ad-001', 'display_phone_number' => '+1 555-777-0001' }])
+
+      result = adapter.validate_setup_metadata!(params.merge(phone_number: '+1 (555) 777-0001'))
+
+      expect(result[:phone_number]).to eq('+15557770001')
+      # all other params are preserved unchanged
+      expect(result[:phone_number_id]).to eq('pnid-ad-001')
+      expect(result[:api_key]).to eq('secret-key')
+    end
+
+    it 'raises :phone_number_id_mismatch when the WABA does not expose the supplied phone_number_id' do
+      stub_meta_phone_numbers([{ 'id' => 'a-different-pnid', 'display_phone_number' => '+15557770001' }])
+
+      expect { adapter.validate_setup_metadata!(params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_number_id_mismatch) }
+    end
+
+    it 'raises :phone_number_mismatch when the id is valid but its number differs from the submission' do
+      stub_meta_phone_numbers([{ 'id' => 'pnid-ad-001', 'display_phone_number' => '+1 555-000-9999' }])
+
+      expect { adapter.validate_setup_metadata!(params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_number_mismatch) }
+    end
+
+    it 'raises :phone_metadata_unverifiable (never the raw provider error) when Meta rejects the WABA/token' do
+      lookup = instance_double(Whatsapp::FacebookApiClient)
+      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(lookup)
+      allow(lookup).to receive(:fetch_phone_numbers).and_raise(RuntimeError, 'WABA phone numbers fetch failed: {"error":{"code":190}}')
+
+      expect { adapter.validate_setup_metadata!(params) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_metadata_unverifiable) }
+    end
+  end
+
+  describe '#post_create!' do
+    let(:channel) do
+      instance_double(Channel::Whatsapp,
+                      provider_config: { 'business_account_id' => 'waba-ad-001', 'api_key' => 'secret-key' })
+    end
+
+    it 'registers the webhook via WebhookSetupService (a failure-surfacing path, not the swallowing setup_webhooks)' do
+      webhook = instance_double(Whatsapp::WebhookSetupService, perform: nil)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(webhook)
+
+      adapter.post_create!(channel)
+
+      expect(Whatsapp::WebhookSetupService).to have_received(:new).with(channel, 'waba-ad-001', 'secret-key')
+      expect(webhook).to have_received(:perform)
+    end
+
+    it 'raises :webhook_setup_failed when provider registration fails (so setup never reports success)' do
+      webhook = instance_double(Whatsapp::WebhookSetupService)
+      allow(Whatsapp::WebhookSetupService).to receive(:new).and_return(webhook)
+      allow(webhook).to receive(:perform).and_raise(RuntimeError, 'Webhook setup failed: Meta down')
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:webhook_setup_failed) }
+    end
+
+    it 'verifies phone readiness AFTER the webhook subscribe returns (the swallowed registration gap)' do
+      # The webhook subscribe SUCCEEDS, but Meta shows the number is not provisioned — exactly
+      # what WebhookSetupService#register_phone_number swallowing a /register failure looks like.
+      health = instance_double(Whatsapp::HealthService,
+                               fetch_health_status: { code_verification_status: 'VERIFIED', platform_type: 'NOT_APPLICABLE' })
+      allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_not_ready) }
+    end
+
+    it 'raises :phone_not_ready when Meta reports throughput.level NOT_APPLICABLE (no messaging capacity)' do
+      # Webhook subscribe SUCCEEDS and the number is code-verified on a platform, but it has no
+      # assigned throughput — phone_number_in_pending_state? still treats this as pending, so the
+      # Bloomwire path must not report the channel active.
+      not_ready = { code_verification_status: 'VERIFIED', platform_type: 'CLOUD_API', throughput: { 'level' => 'NOT_APPLICABLE' } }
+      health = instance_double(Whatsapp::HealthService, fetch_health_status: not_ready)
+      allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_not_ready) }
+    end
+
+    it 'raises :phone_registration_unverifiable (never the raw error) when Meta readiness cannot be verified' do
+      health = instance_double(Whatsapp::HealthService)
+      allow(Whatsapp::HealthService).to receive(:new).and_return(health)
+      allow(health).to receive(:fetch_health_status).and_raise(RuntimeError, 'WhatsApp API request failed: 190')
+
+      expect { adapter.post_create!(channel) }
+        .to raise_error(Bloomwire::ChannelSetup::SetupError) { |e| expect(e.code).to eq(:phone_registration_unverifiable) }
+    end
+
+    it 'completes without error when the webhook subscribes and the number is registered/ready' do
+      expect { adapter.post_create!(channel) }.not_to raise_error
+    end
+  end
+
+  describe '#integration_attributes' do
+    it 'extracts only non-secret routing metadata from the channel' do
+      channel = adapter.create_channel(account: account, params: params)
+
+      expect(adapter.integration_attributes(channel)).to eq(
+        provider: 'whatsapp_cloud',
+        phone_number: '+15557770001',
+        phone_number_id: 'pnid-ad-001',
+        business_account_id: 'waba-ad-001',
+        routing_key: 'pnid-ad-001'
+      )
+    end
+
+    it 'never returns provider secrets' do
+      channel = adapter.create_channel(account: account, params: params)
+      expect(adapter.integration_attributes(channel).keys).not_to include(:api_key, :provider_config)
+    end
+  end
+
+  describe '#refresh_channel!' do
+    let(:channel) { adapter.create_channel(account: account, params: params) }
+
+    it 'merges corrected credentials into provider_config while preserving existing keys' do
+      channel.update!(provider_config: channel.provider_config.merge('webhook_verify_token' => 'keep-me'))
+
+      adapter.refresh_channel!(channel, params.merge(api_key: 'new-key', business_account_id: 'new-waba'))
+
+      expect(channel.reload.provider_config).to include(
+        'api_key' => 'new-key', 'business_account_id' => 'new-waba',
+        'phone_number_id' => 'pnid-ad-001', 'webhook_verify_token' => 'keep-me'
+      )
+    end
+
+    it 'never wipes existing config when the retry values are blank or missing' do
+      original = channel.provider_config.dup
+
+      adapter.refresh_channel!(channel, { api_key: '', business_account_id: nil })
+
+      expect(channel.reload.provider_config).to eq(original)
+    end
+  end
+end
