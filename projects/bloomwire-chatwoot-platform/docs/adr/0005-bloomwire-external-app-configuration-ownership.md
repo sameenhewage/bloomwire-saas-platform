@@ -1,7 +1,9 @@
 # ADR 0005 — Bloomwire External App Configuration Ownership
 
-- **Status:** Accepted (decision) — **implementation parked / future** (Phase 4.4
-  External App Configuration Ownership; WhatsApp first vertical)
+- **Status:** Accepted (decision). **4.4-b-WA.2A (ownership foundation)
+  implemented** in PR #22 (behavior-neutral); remaining slices (2B/2C/2D, WA.3
+  router) parked / future (Phase 4.4 External App Configuration Ownership;
+  WhatsApp first vertical)
 - **Date:** 2026-06-23
 - **Extends:** ADR 0001 (Technical Baseline), ADR 0003 (Permission &
   Channel-Control Boundary). Relates to ADR 0004 (Global Meta/WhatsApp Webhook
@@ -9,10 +11,11 @@
   permission foundation (`Bloomwire::AccessPolicy`) and the WhatsApp setup seam
   shipped in PR #19 (`Bloomwire::WhatsappSetupGuard`,
   `Bloomwire::ChannelControlPolicy`).
-- **Scope:** documentation-only. **No code, configuration, migration, schema,
-  spec, feature flag, route, policy behavior, or runtime behavior is changed by
-  this ADR.** It records decisions and a set of parked future slices. Nothing
-  described here is implemented yet, and **Dialog admins are not denied yet.**
+- **Scope:** this ADR records the decisions and slice plan; the ADR commit itself
+  changed no code. **Implementation status:** 4.4-b-WA.2A (ownership table, model
+  `BloomwireChannelIntegration`, and `Bloomwire::ChannelIntegrationBackfill`) is
+  **implemented** in PR #22 (behavior-neutral); the remaining slices are **not**
+  implemented yet, and **Dialog admins are not denied yet.**
 
 ---
 
@@ -104,14 +107,17 @@ The following decisions are **locked** by this ADR.
 
 ---
 
-## Proposed data model design (design only — no migration)
+## Data model (4.4-b-WA.2A — implemented in PR #22)
 
 A new Bloomwire-owned table records **which inbox/channel Bloomwire configured for
 which tenant**, plus the **non-secret routing identifiers** a future global router
 will use. Per CONTEXT.md, Bloomwire tables use the `bloomwire_` prefix.
 
-> **This is a proposed design for review. No migration, model, or schema change is
-> created by this ADR.**
+> **Implemented in 4.4-b-WA.2A (PR #22):** migration `20260623000000` (table +
+> indexes) and `20260623000001` (inbox FK `on_delete: :cascade`), model
+> `BloomwireChannelIntegration`, and `Bloomwire::ChannelIntegrationBackfill`. The
+> sketch below is the original proposal; see the **as-built note** below for the
+> deltas (e.g. `business_account_id` rather than `waba_id`).
 
 **Table (proposed): `bloomwire_channel_integrations`**
 
@@ -160,8 +166,34 @@ created_at / updated_at       timestamps
 
 **Relations:** `BloomwireBusinessProfile has_many :channel_integrations`; each
 integration references exactly one `Inbox` → one `Channel` → one `Account`.
-Routing identifiers (`phone_number`, `phone_number_id`, `waba_id`, `routing_key`)
-are **platform-side only** and must not appear in tenant DTOs.
+Routing identifiers (`phone_number`, `phone_number_id`, `business_account_id`,
+`routing_key`) are **platform-side only** and must not appear in tenant DTOs.
+
+### Implementation note (4.4-b-WA.2A — as built)
+
+The ownership foundation is now implemented (behavior-neutral; pending PR):
+
+- **Model `BloomwireChannelIntegration`** / table `bloomwire_channel_integrations`
+  (migration `20260623000000`), polymorphic `channelable` (first vertical
+  `Channel::Whatsapp`), `belongs_to :created_by_super_admin` (optional, FK →
+  `users`, left null by the backfill — there is no actor in 2A).
+- **Column named `business_account_id`, not `waba_id`.** Per the slice
+  instruction we match the existing Chatwoot key
+  `Channel::Whatsapp#provider_config['business_account_id']`, so backfill and
+  future routing map 1:1 with no translation layer. The `waba_id` label in the
+  proposed table above is the same value.
+- **`Bloomwire::ChannelIntegrationBackfill`** represents existing WhatsApp inboxes
+  (accounts that own a profile) read-only: it copies only non-secret routing
+  metadata (`phone_number`, `phone_number_id`, `business_account_id`,
+  `routing_key = phone_number_id`), is idempotent (unique per inbox) and fails
+  safely on tenant mismatch or routing-key collision (nothing persisted, never
+  raised).
+- **Tenant consistency** is enforced at the model level: profile, account, inbox
+  and channel must share one account, and `channelable` must equal
+  `inbox.channel`.
+- `status` defaults to `pending`; the backfill records existing live inboxes as
+  `active` and `managed_by_bloomwire: true`. No tenant deny, no frontend, no
+  webhook router and no DTO scrub are part of this slice.
 
 ---
 
@@ -268,16 +300,17 @@ before implementation).
 
 ---
 
-## Non-goals (explicitly out of scope of this phase / documentation-only PR)
+## Non-goals (explicitly out of scope of this phase)
 
 ```text
 - no frontend implementation yet
-- no tenant deny yet (no policy behavior change in this docs-only work)
+- no tenant deny yet (no policy behavior change)
 - no webhook router implementation yet
 - no Twilio/SMS/Email/Instagram/Facebook/Shopify implementation yet
 - no changes to Chatwoot conversations / teams / campaigns / contacts
-- no migrations, models, controllers, services, routes, or tests changed
-- no production behavior change
+- beyond 4.4-b-WA.2A (ownership table/model/backfill + specs): no further
+  models, controllers, services, or routes yet
+- no production behavior change (4.4-b-WA.2A is behavior-neutral)
 ```
 
 ---
@@ -288,9 +321,9 @@ Phase **4.4 — External App Configuration Ownership** (WhatsApp first vertical)
 
 - **4.4-b-WA.1 — WhatsApp setup control seam** — ✅ done/merged (PR #19). Central
   backend seam for WhatsApp setup actions (behavior-neutral).
-- **4.4-b-WA.2A — Channel integration ownership foundation** — ⏳ next.
-  Behavior-neutral ownership/mapping model + design for
-  `bloomwire_channel_integrations`. No tenant deny, no frontend.
+- **4.4-b-WA.2A — Channel integration ownership foundation** — ✅ implemented
+  (behavior-neutral; pending PR). `BloomwireChannelIntegration` model + migration
+  + `Bloomwire::ChannelIntegrationBackfill`. No tenant deny, no frontend.
 - **4.4-b-WA.2B — Bloomwire Admin WhatsApp setup service/path** — ⏳ planned.
   Platform-context creation of WhatsApp channel/inbox for a tenant; reuse Chatwoot
   channel-creation logic; store ownership/routing metadata; never expose

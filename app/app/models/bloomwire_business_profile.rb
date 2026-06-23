@@ -32,6 +32,7 @@ class BloomwireBusinessProfile < ApplicationRecord
 
   belongs_to :account
   has_many :onboarding_steps, class_name: 'BloomwireOnboardingStep', dependent: :destroy
+  has_many :channel_integrations, class_name: 'BloomwireChannelIntegration', dependent: :destroy
 
   validates :account_id, presence: true, uniqueness: true
   validates :status, presence: true, inclusion: { in: STATUSES }
