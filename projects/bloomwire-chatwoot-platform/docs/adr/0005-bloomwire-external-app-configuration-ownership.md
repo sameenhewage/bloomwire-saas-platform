@@ -340,14 +340,21 @@ before implementation).
 ## Non-goals (explicitly out of scope of this phase)
 
 ```text
-- no frontend implementation yet
-- no tenant deny yet (no policy behavior change)
-- no webhook router implementation yet
-- no Twilio/SMS/Email/Instagram/Facebook/Shopify implementation yet
+Scope note: ADR 0005's own slices (the 2A ownership model/table/backfill + the
+2B platform setup path) implemented backend/ownership only — no tenant-facing
+frontend behavior. That original "no frontend yet" non-goal no longer describes
+current state:
+
+Already shipped (current state):
+- backend tenant deny for Bloomwire-managed tenants (4.4-b-WA.2C, PR #24)
+- tenant frontend hiding/disabled UX (4.4-b-WA.2D, PR #25) — UX only, not security
+
+Still out of scope / pending:
+- 4.4-b-WA.3 routing metadata (the full global webhook router stays ADR 0004 / Phase 8)
+- tenant DTO/provider_config secret scrub
+- ADR 0006 / Phase 9 tenant settings menu lockdown (after Phase 8)
+- no Twilio/SMS/Email/Instagram/Facebook/Shopify implementation
 - no changes to Chatwoot conversations / teams / campaigns / contacts
-- beyond 4.4-b-WA.2A (ownership table/model/backfill + specs): no further
-  models, controllers, services, or routes yet
-- no production behavior change (4.4-b-WA.2A is behavior-neutral)
 ```
 
 ---
