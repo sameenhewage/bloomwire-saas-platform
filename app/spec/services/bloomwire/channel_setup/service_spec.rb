@@ -290,6 +290,36 @@ RSpec.describe Bloomwire::ChannelSetup::Service do
       expect(result.success?).to be(false)
       expect(result.error).to eq(:duplicate_phone_number)
     end
+
+    it 'translates a lost unique-index race into a safe coded error, never PG::InFailedSqlTransaction (500)' do
+      # A concurrent request already committed this phone number, so it holds the unique index.
+      create(:channel_whatsapp, account: create(:account), phone_number: whatsapp_params[:phone_number],
+                                provider: 'whatsapp_cloud', validate_provider_config: false, sync_templates: false)
+
+      # Force the race: the duplicate PRE-check passes (the row appeared after it) so the adapter
+      # proceeds to insert; the post-rollback RE-check (call 2, the REAL query) then finds it.
+      adapter = Bloomwire::ChannelSetup::WhatsappAdapter.new
+      allow(described_class).to receive(:adapter_for).with('whatsapp').and_return(adapter)
+      checks = 0
+      allow(adapter).to receive(:duplicate_code).and_wrap_original do |original, *args|
+        checks += 1
+        checks == 1 ? nil : original.call(*args)
+      end
+
+      # The reused Chatwoot service loses the race with a REAL unique violation that aborts the
+      # DB transaction; the savepoint must roll it back so the RE-check query runs cleanly rather
+      # than raising PG::InFailedSqlTransaction. On the unpatched code perform raises instead.
+      racing = instance_double(Whatsapp::ChannelCreationService)
+      allow(Whatsapp::ChannelCreationService).to receive(:new).and_return(racing)
+      allow(racing).to receive(:perform) do
+        Channel::Whatsapp.new(account: account, phone_number: whatsapp_params[:phone_number], provider: 'whatsapp_cloud',
+                              provider_config: { 'source' => 'embedded_signup' }).save!(validate: false)
+      end
+
+      result = perform_setup
+      expect(result.success?).to be(false)
+      expect(result.error).to eq(:duplicate_phone_number)
+    end
   end
 
   describe 'unsupported channel kind' do

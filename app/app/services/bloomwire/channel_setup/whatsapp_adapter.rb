@@ -40,14 +40,17 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
     duplicate = duplicate_code(params)
     raise Bloomwire::ChannelSetup::SetupError, duplicate if duplicate
 
-    Whatsapp::ChannelCreationService.new(account, waba_info(params), phone_info(params), params[:api_key]).perform
+    create_whatsapp_channel(account, params)
   rescue ArgumentError
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, RuntimeError => e
     # A concurrent setup can insert the same phone number / phone_number_id between the
-    # pre-checks above and this create (the unique phone index, or the reused Chatwoot
-    # service's own RuntimeError phone-exists guard). Re-check and translate that race
-    # into the same safe coded error as the pre-checks, not a leaked raw exception.
+    # pre-checks above and our insert (the unique phone index, or the reused Chatwoot
+    # service's own RuntimeError phone-exists guard). The insert runs in its OWN savepoint
+    # (see #create_whatsapp_channel), so on ActiveRecord::RecordNotUnique that savepoint has
+    # ALREADY rolled back and the surrounding transaction is usable again before we reach
+    # here — otherwise this re-check would run inside PostgreSQL's aborted transaction and
+    # raise PG::InFailedSqlTransaction (HTTP 500) instead of a safe coded duplicate error.
     duplicate = duplicate_code(params)
     raise Bloomwire::ChannelSetup::SetupError, duplicate if duplicate
     raise Bloomwire::ChannelSetup::SetupError, :invalid_channel_params if e.is_a?(ActiveRecord::RecordInvalid)
@@ -110,6 +113,18 @@ class Bloomwire::ChannelSetup::WhatsappAdapter < Bloomwire::ChannelSetup::BaseAd
   end
 
   private
+
+  # Runs the actual Channel::Whatsapp + Inbox insert inside its OWN savepoint
+  # (requires_new), so a unique-index race (ActiveRecord::RecordNotUnique on the phone
+  # number) rolls back to the savepoint as the exception leaves this block — restoring the
+  # surrounding transaction (e.g. Service#create_integration's) to a usable state. Only
+  # then can create_channel's rescue safely re-query duplicate state; without the savepoint
+  # the recheck would run in PostgreSQL's aborted transaction and raise PG::InFailedSqlTransaction.
+  def create_whatsapp_channel(account, params)
+    ActiveRecord::Base.transaction(requires_new: true) do
+      Whatsapp::ChannelCreationService.new(account, waba_info(params), phone_info(params), params[:api_key]).perform
+    end
+  end
 
   def missing_required?(params)
     REQUIRED_PARAMS.any? { |key| params[key].blank? }
