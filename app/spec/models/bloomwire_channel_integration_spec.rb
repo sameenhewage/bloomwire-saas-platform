@@ -182,4 +182,35 @@ RSpec.describe BloomwireChannelIntegration do
       expect(described_class.column_names & forbidden).to be_empty
     end
   end
+
+  # 4.4-b-WA.2C destroy gate: only a Bloomwire-managed WhatsApp inbox is gated for
+  # destroy (disconnecting a platform-owned app). Non-managed, non-WhatsApp, missing,
+  # and nil inputs are NOT gated so plain Chatwoot destroy behavior is unchanged.
+  describe '.managed_whatsapp_inbox?' do
+    it 'is true for a Bloomwire-managed WhatsApp integration inbox' do
+      integration = create(:bloomwire_channel_integration, managed_by_bloomwire: true, app_kind: 'whatsapp')
+
+      expect(described_class.managed_whatsapp_inbox?(integration.inbox)).to be(true)
+    end
+
+    it 'is false for a non-managed WhatsApp integration inbox' do
+      integration = create(:bloomwire_channel_integration, managed_by_bloomwire: false, app_kind: 'whatsapp')
+
+      expect(described_class.managed_whatsapp_inbox?(integration.inbox)).to be(false)
+    end
+
+    it 'is false for a managed non-WhatsApp integration inbox' do
+      integration = create(:bloomwire_channel_integration, managed_by_bloomwire: true, app_kind: 'sms')
+
+      expect(described_class.managed_whatsapp_inbox?(integration.inbox)).to be(false)
+    end
+
+    it 'is false for an inbox with no integration' do
+      expect(described_class.managed_whatsapp_inbox?(create(:inbox))).to be(false)
+    end
+
+    it 'is false for a nil inbox' do
+      expect(described_class.managed_whatsapp_inbox?(nil)).to be(false)
+    end
+  end
 end

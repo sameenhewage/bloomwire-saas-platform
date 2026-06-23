@@ -1,24 +1,18 @@
 # Backend decision authority for Bloomwire-controlled channel setup.
 #
-# Phase 4.4-b-WA — Slice 1 (behavior-neutral). Decides whether a principal may
-# perform raw WhatsApp setup (create/connect/reauthorize a WhatsApp channel or
-# inbox) in a tenant account. It reuses the EXISTING core Chatwoot AccountUser
-# membership/role (NOT Enterprise custom_roles) and returns a boolean only — it
-# never reads or exposes Chatwoot conversation/message/contact data.
+# Phase 4.4-b-WA.2C — Dialog tenant deny. Decides whether a principal may perform
+# raw WhatsApp setup (create/connect/reauthorize a WhatsApp channel or inbox, update
+# provider config, register the webhook) in a tenant account. It reuses the EXISTING
+# core Chatwoot AccountUser membership/role (NOT Enterprise custom_roles) and returns
+# a boolean only — it never reads or exposes Chatwoot conversation/message/contact data.
 #
-# Current rule (matches the reachable, pre-existing admin gate):
-# - A User who is an `administrator` AccountUser of the tenant's account — allowed.
-# - Everyone else (agents, non-members, cross-tenant, nil) — denied.
-#
-# SuperAdmin / platform-initiated WhatsApp setup is intentionally FUTURE WORK: these
-# account-scoped controllers require AccountUser membership before this policy is
-# reachable, so a membership-less SuperAdmin cannot reach WhatsApp setup today. We do
-# not claim platform support here until it is made truly reachable with tests.
-#
-# Intentionally PROFILE-AGNOSTIC in this slice: it does NOT read
-# BloomwireBusinessProfile, so tenants without a profile keep working exactly as
-# before. A later slice may introduce a tenant capability and flip the default to
-# platform-controlled.
+# Rule (ADR 0005 — Bloomwire owns external app/channel configuration):
+# - Bloomwire-managed tenant (account has a BloomwireBusinessProfile): WhatsApp setup
+#   is platform-only, so EVERY tenant principal (admins, agents, cross-tenant, nil) is
+#   denied here. The SuperAdmin platform setup path does NOT use this policy.
+# - Plain Chatwoot account (no Bloomwire profile): UNCHANGED — the pre-existing
+#   account-administrator gate still applies (admin allowed, everyone else denied), so
+#   installs that do not use Bloomwire keep behaving exactly as before.
 class Bloomwire::ChannelControlPolicy
   def initialize(user:, account:)
     @user = user
@@ -29,10 +23,22 @@ class Bloomwire::ChannelControlPolicy
   def can_setup_whatsapp?
     return false if @user.nil? || @account.nil?
 
+    # Bloomwire-managed tenants: external WhatsApp configuration is platform-only,
+    # so deny every tenant principal here (the SuperAdmin path does not use this
+    # policy). Plain Chatwoot accounts fall through to the unchanged admin gate.
+    return false if bloomwire_managed_tenant?
+
     account_administrator?
   end
 
   private
+
+  # A tenant is Bloomwire-managed once it has a BloomwireBusinessProfile (the
+  # account-level Bloomwire control-plane anchor, ADR 0005). Reads only that flag;
+  # never touches Chatwoot conversation/message/contact data.
+  def bloomwire_managed_tenant?
+    BloomwireBusinessProfile.exists?(account_id: @account.id)
+  end
 
   # Membership is read from the core AccountUser role only (no Enterprise roles).
   def account_administrator?

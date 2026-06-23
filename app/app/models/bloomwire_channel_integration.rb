@@ -84,6 +84,16 @@ class BloomwireChannelIntegration < ApplicationRecord
   scope :managed, -> { where(managed_by_bloomwire: true) }
   scope :for_app_kind, ->(kind) { where(app_kind: kind) }
 
+  # True when +inbox+ is backed by a Bloomwire-managed WhatsApp integration.
+  # Destroying such an inbox disconnects a platform-owned external app, so it is
+  # setup/config ownership (denied for tenant users), not normal inbox usage
+  # (ADR 0005, 4.4-b-WA.2C). inbox_id is UNIQUE, so this matches at most one row.
+  def self.managed_whatsapp_inbox?(inbox)
+    return false if inbox.nil?
+
+    managed.for_app_kind('whatsapp').exists?(inbox_id: inbox.id)
+  end
+
   private
 
   def profile_within_account

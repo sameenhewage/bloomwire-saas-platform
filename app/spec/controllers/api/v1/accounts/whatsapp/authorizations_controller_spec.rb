@@ -511,5 +511,17 @@ RSpec.describe 'WhatsApp Authorization API', type: :request do
 
       expect(response).to have_http_status(:unauthorized)
     end
+
+    it 'returns unauthorized for an administrator when the tenant is Bloomwire-managed (4.4-b-WA.2C real deny, no stub)' do
+      create(:bloomwire_business_profile, account: account)
+      expect(Whatsapp::EmbeddedSignupService).not_to receive(:new)
+
+      post "/api/v1/accounts/#{account.id}/whatsapp/authorization",
+           params: { code: 'c', business_id: 'b', waba_id: 'w' },
+           headers: administrator.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+    end
   end
 end

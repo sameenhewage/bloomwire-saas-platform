@@ -6,6 +6,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   # we are already handling the authorization in fetch inbox
   before_action :check_authorization, except: [:show]
   before_action :authorize_whatsapp_setup!, only: [:create, :update, :register_webhook], if: :whatsapp_setup_request?
+  before_action :authorize_whatsapp_managed_inbox_destroy!, only: [:destroy]
 
   include Api::V1::Accounts::Concerns::WhatsappHealthManagement
   include Bloomwire::WhatsappSetupGuard
