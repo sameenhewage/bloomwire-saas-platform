@@ -198,6 +198,22 @@ RSpec.describe 'Accounts API', type: :request do
         expect(response.body).to include(account.support_email)
         expect(response.body).to include(account.locale)
       end
+
+      it 'exposes bloomwire_managed: true when the account is Bloomwire-managed (4.4-b-WA.2D)' do
+        create(:bloomwire_business_profile, account: account)
+
+        get "/api/v1/accounts/#{account.id}",
+            headers: admin.create_new_auth_token, as: :json
+
+        expect(JSON.parse(response.body, symbolize_names: true)[:bloomwire_managed]).to be(true)
+      end
+
+      it 'exposes bloomwire_managed: false for a plain Chatwoot account (4.4-b-WA.2D)' do
+        get "/api/v1/accounts/#{account.id}",
+            headers: admin.create_new_auth_token, as: :json
+
+        expect(JSON.parse(response.body, symbolize_names: true)[:bloomwire_managed]).to be(false)
+      end
     end
   end
 

@@ -66,6 +66,41 @@ RSpec.describe 'Inboxes API', type: :request do
     end
   end
 
+  describe 'GET /api/v1/accounts/{account.id}/inboxes (Bloomwire-managed WhatsApp DTO flag - 4.4-b-WA.2D)' do
+    let(:admin) { create(:user, account: account, role: :administrator) }
+
+    it 'exposes bloomwire_managed: true for a Bloomwire-managed WhatsApp inbox' do
+      integration = create(:bloomwire_channel_integration, account: account)
+
+      get "/api/v1/accounts/#{account.id}/inboxes",
+          headers: admin.create_new_auth_token, as: :json
+
+      entry = JSON.parse(response.body, symbolize_names: true)[:payload].find { |i| i[:id] == integration.inbox_id }
+      expect(entry[:bloomwire_managed]).to be(true)
+    end
+
+    it 'exposes bloomwire_managed: false for a WhatsApp inbox with no Bloomwire integration' do
+      whatsapp_channel = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false)
+      whatsapp_inbox = create(:inbox, channel: whatsapp_channel, account: account)
+
+      get "/api/v1/accounts/#{account.id}/inboxes",
+          headers: admin.create_new_auth_token, as: :json
+
+      entry = JSON.parse(response.body, symbolize_names: true)[:payload].find { |i| i[:id] == whatsapp_inbox.id }
+      expect(entry[:bloomwire_managed]).to be(false)
+    end
+
+    it 'does not expose bloomwire_managed for a non-WhatsApp inbox' do
+      web_inbox = create(:inbox, account: account)
+
+      get "/api/v1/accounts/#{account.id}/inboxes",
+          headers: admin.create_new_auth_token, as: :json
+
+      entry = JSON.parse(response.body, symbolize_names: true)[:payload].find { |i| i[:id] == web_inbox.id }
+      expect(entry).not_to have_key(:bloomwire_managed)
+    end
+  end
+
   describe 'GET /api/v1/accounts/{account.id}/inboxes/{inbox.id}' do
     let(:inbox) { create(:inbox, account: account) }
 

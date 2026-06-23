@@ -10,6 +10,9 @@
     "CLICK_TO_RECONNECT": "Click here to reconnect.",
     "WHATSAPP_REGISTRATION_INCOMPLETE": "Your WhatsApp Business registration isn’t complete. Please check your display name status in Meta Business Manager before reconnecting.",
     "COMPLETE_REGISTRATION": "Complete Registration",
+    "BLOOMWIRE_MANAGED": {
+      "NOTICE": "Managed by Bloomwire. Contact Bloomwire support to change this integration."
+    },
     "LIST": {
       "404": "There are no inboxes attached to this account."
     },

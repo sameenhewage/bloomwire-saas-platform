@@ -166,7 +166,7 @@ const openDelete = inbox => {
               />
             </router-link>
             <Button
-              v-if="isAdmin"
+              v-if="isAdmin && !inbox.bloomwire_managed"
               v-tooltip.top="$t('INBOX_MGMT.DELETE.BUTTON_TEXT')"
               icon="i-woot-bin"
               slate

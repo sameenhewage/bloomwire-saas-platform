@@ -25,6 +25,17 @@ export function useAccount() {
   const currentAccount = computed(() => getAccountFn.value(accountId.value));
 
   /**
+   * Whether the current account is a Bloomwire-managed tenant (ADR 0005,
+   * 4.4-b-WA.2D). Backed by the read-only, non-secret `bloomwire_managed` account
+   * flag. Used to hide tenant-side external WhatsApp setup UI; the backend deny
+   * remains the real enforcement.
+   * @type {import('vue').ComputedRef<boolean>}
+   */
+  const isBloomwireManagedAccount = computed(() =>
+    Boolean(currentAccount.value?.bloomwire_managed)
+  );
+
+  /**
    * Generates an account-scoped URL.
    * @param {string} url - The URL to be scoped to the account.
    * @returns {string} The account-scoped URL.
@@ -60,6 +71,7 @@ export function useAccount() {
     accountId,
     route,
     currentAccount,
+    isBloomwireManagedAccount,
     accountScopedUrl,
     accountScopedRoute,
     isCloudFeatureEnabled,

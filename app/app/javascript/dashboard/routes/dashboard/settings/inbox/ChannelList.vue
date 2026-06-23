@@ -10,7 +10,7 @@ import ChannelItem from 'dashboard/components/widgets/ChannelItem.vue';
 
 const { t } = useI18n();
 const router = useRouter();
-const { accountId, currentAccount } = useAccount();
+const { accountId, currentAccount, isBloomwireManagedAccount } = useAccount();
 
 const globalConfig = useMapGetter('globalConfig/get');
 
@@ -101,6 +101,15 @@ const channelList = computed(() => {
     description: t('INBOX_MGMT.ADD.AUTH.CHANNEL.WHATSAPP_CALL.DESCRIPTION'),
     icon: 'i-woot-whatsapp',
   });
+
+  // Bloomwire (ADR 0005, 4.4-b-WA.2D): WhatsApp external setup is platform-owned for
+  // Bloomwire-managed tenants, so hide the WhatsApp connect/create entry points.
+  // Backend deny (Bloomwire::ChannelControlPolicy) remains the real enforcement.
+  if (isBloomwireManagedAccount.value) {
+    return channels.filter(
+      channel => channel.key !== 'whatsapp' && channel.key !== 'whatsapp_call'
+    );
+  }
 
   return channels;
 });

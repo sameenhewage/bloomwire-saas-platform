@@ -3,6 +3,7 @@ import { mapGetters } from 'vuex';
 import { shouldBeUrl } from 'shared/helpers/Validators';
 import { useAlert } from 'dashboard/composables';
 import { useVuelidate } from '@vuelidate/core';
+import { useAccount } from 'dashboard/composables/useAccount';
 import Avatar from 'next/avatar/Avatar.vue';
 import SettingIntroBanner from 'dashboard/components/widgets/SettingIntroBanner.vue';
 import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsToggleSection.vue';
@@ -79,7 +80,10 @@ export default {
   },
   mixins: [inboxMixin],
   setup() {
-    return { v$: useVuelidate() };
+    // Bloomwire (ADR 0005, 4.4-b-WA.2D): hide the WhatsApp reconnect/reauthorize
+    // banner for Bloomwire-managed tenants (reauthorization is platform-owned).
+    const { isBloomwireManagedAccount } = useAccount();
+    return { v$: useVuelidate(), isBloomwireManagedAccount };
   },
   data() {
     return {
@@ -725,7 +729,7 @@ export default {
           :class="bannerMaxWidth"
         />
         <WhatsappReauthorize
-          v-if="whatsappUnauthorized"
+          v-if="whatsappUnauthorized && !isBloomwireManagedAccount"
           :whatsapp-registration-incomplete="whatsappRegistrationIncomplete"
           :inbox="inbox"
           class="mb-4"

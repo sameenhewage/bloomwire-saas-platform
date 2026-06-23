@@ -25,6 +25,9 @@ if resource.custom_attributes.present?
 end
 json.domain @account.domain
 json.features @account.enabled_features
+# Bloomwire (ADR 0005, 4.4-b-WA.2D): read-only, non-secret flag the dashboard uses
+# to hide tenant-side external WhatsApp setup UI. Backend deny is the real enforcement.
+json.bloomwire_managed @account.bloomwire_managed?
 json.id @account.id
 json.locale @account.locale
 json.name @account.name

@@ -12,6 +12,7 @@ import NextButton from 'dashboard/components-next/button/Button.vue';
 import TextArea from 'next/textarea/TextArea.vue';
 import WhatsappReauthorize from '../channels/whatsapp/Reauthorize.vue';
 import { sanitizeAllowedDomains } from 'dashboard/helper/URLHelper';
+import { useAccount } from 'dashboard/composables/useAccount';
 
 export default {
   components: {
@@ -32,7 +33,11 @@ export default {
     },
   },
   setup() {
-    return { v$: useVuelidate() };
+    // Bloomwire (ADR 0005, 4.4-b-WA.2D): hide tenant-side external WhatsApp
+    // credential/webhook/reconfigure UI for Bloomwire-managed tenants. Backend
+    // deny remains the real enforcement.
+    const { isBloomwireManagedAccount } = useAccount();
+    return { v$: useVuelidate(), isBloomwireManagedAccount };
   },
   data() {
     return {
@@ -359,8 +364,15 @@ export default {
   </div>
   <div v-else-if="isAWhatsAppChannel && !isATwilioChannel">
     <div v-if="inbox.provider_config">
+      <!-- Bloomwire-managed: external WhatsApp config is platform-owned (4.4-b-WA.2D) -->
+      <p
+        v-if="isBloomwireManagedAccount"
+        class="py-2 px-3 mb-4 text-sm rounded-xl bg-n-alpha-2 text-n-slate-11"
+      >
+        {{ $t('INBOX_MGMT.BLOOMWIRE_MANAGED.NOTICE') }}
+      </p>
       <!-- Embedded Signup Section -->
-      <template v-if="isEmbeddedSignupWhatsApp">
+      <template v-else-if="isEmbeddedSignupWhatsApp">
         <SettingsFieldSection
           v-if="whatsappAppId"
           :label="
@@ -436,7 +448,7 @@ export default {
       </SettingsFieldSection>
     </div>
     <WhatsappReauthorize
-      v-if="isEmbeddedSignupWhatsApp"
+      v-if="isEmbeddedSignupWhatsApp && !isBloomwireManagedAccount"
       ref="whatsappReauth"
       :inbox="inbox"
       class="hidden"
