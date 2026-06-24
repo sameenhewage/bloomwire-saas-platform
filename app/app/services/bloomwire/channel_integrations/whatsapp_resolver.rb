@@ -17,6 +17,10 @@
 # - Scope is always managed WhatsApp integrations only (non-managed and non-WhatsApp
 #   rows are ignored), so a routing match can never point at a row Bloomwire does
 #   not own.
+# - provider (e.g. 'whatsapp_cloud') is only an OPTIONAL qualifier: it narrows the
+#   lookup but can never resolve a tenant on its own. At least one tenant/number-
+#   specific identifier (phone_number_id, business_account_id, or routing_key) must
+#   be supplied, so a provider-only or otherwise partial lookup fails closed (nil).
 # - All supplied identifiers must match the SAME row (AND), so a mix of identifiers
 #   from two different integrations resolves to nil instead of the wrong tenant.
 # - Deterministic + ambiguity-safe: returns the single matching row, or nil when
@@ -63,7 +67,11 @@ class Bloomwire::ChannelIntegrations::WhatsappResolver
     rows.one? ? rows.first : nil
   end
 
+  # A tenant/number-specific routing identifier is required: provider alone is a
+  # shared channel type, not a tenant key, so it must fail closed rather than route
+  # a partial/malformed lookup to the only managed integration. provider stays an
+  # optional qualifier in #scope.
   def identifiers?
-    [@provider, @phone_number_id, @business_account_id, @routing_key].any?(&:present?)
+    [@phone_number_id, @business_account_id, @routing_key].any?(&:present?)
   end
 end

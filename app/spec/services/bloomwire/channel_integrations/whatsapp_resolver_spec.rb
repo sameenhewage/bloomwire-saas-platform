@@ -64,6 +64,26 @@ RSpec.describe Bloomwire::ChannelIntegrations::WhatsappResolver do
     end
   end
 
+  describe 'provider is only an optional qualifier (fails closed)' do
+    it 'returns nil for a provider-only lookup even when exactly one managed WhatsApp integration exists' do
+      managed_wa(phone_number_id: 'pid-A', provider: 'whatsapp_cloud')
+
+      expect(described_class.resolve(provider: 'whatsapp_cloud')).to be_nil
+    end
+
+    it 'resolves when provider is combined with a tenant-specific identifier' do
+      target = managed_wa(phone_number_id: 'pid-A', provider: 'whatsapp_cloud')
+
+      expect(described_class.resolve(provider: 'whatsapp_cloud', phone_number_id: 'pid-A')).to eq(target)
+    end
+
+    it 'returns nil when the provider mismatches a valid phone_number_id' do
+      managed_wa(phone_number_id: 'pid-A', provider: 'whatsapp_cloud')
+
+      expect(described_class.resolve(provider: '360dialog', phone_number_id: 'pid-A')).to be_nil
+    end
+  end
+
   describe 'scoping' do
     it 'ignores non-WhatsApp integrations' do
       managed_wa(phone_number_id: 'pid-sms', app_kind: 'sms')
