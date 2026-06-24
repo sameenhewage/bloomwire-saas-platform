@@ -28,20 +28,24 @@ business-management layer around it.
 ## Current repo status
 
 - **Phase:** Phase 4 — Roles, Permissions & Security Foundation. **Phase 4.4 —
-  External App Configuration Ownership has started** (decision: ADR 0005; WhatsApp
-  first vertical). `4.4-b-WA.1` WhatsApp setup control seam is **merged (PR #19,
-  behavior-neutral)**; the next implementation slice is `4.4-b-WA.2A` (channel
-  integration ownership foundation). Phases 0–3 and the Phase 4 permission
-  foundation (Slice 1) are merged into `version_1`. **Current runtime behavior is
-  still behavior-neutral — Dialog admins are not denied yet.**
+  External App Configuration Ownership is well underway** (decision: ADR 0005;
+  WhatsApp first vertical). WhatsApp slices `4.4-b-WA.1` (seam, PR #19), `2A`
+  (ownership model, PR #22), `2B` (Bloomwire Admin setup path, PR #23), `2C`
+  (Dialog-admin deny, PR #24) and `2D` (tenant frontend hiding, PR #25) are merged;
+  the next planned slice is `4.4-b-WA.3` (routing metadata; full router is Phase 8).
+  Phases 0–3 and the Phase 4 permission foundation (Slice 1) are merged into
+  `version_1`. **For Bloomwire-managed tenants, Dialog admins/agents are now denied
+  WhatsApp setup/config (backend) and the tenant-side setup UI is hidden (UX).**
 - **Chatwoot CE is running** as the base engine (source in the repo's `app/`
   directory); Bloomwire SaaS features are built additively on top of it.
 - **Built so far:** Bloomwire business profiles + Super Admin businesses list,
   tenant readiness backfill, tenant setup foundation, onboarding step tracking +
   progress UI, Chatwoot readiness mapping, manual tenant activation gate, the
-  first permission foundation (`Bloomwire::AccessPolicy`), and the WhatsApp setup
-  control seam (`Bloomwire::WhatsappSetupGuard` / `Bloomwire::ChannelControlPolicy`,
-  behavior-neutral).
+  first permission foundation (`Bloomwire::AccessPolicy`), and the WhatsApp external-
+  app ownership stack (the `Bloomwire::WhatsappSetupGuard` /
+  `Bloomwire::ChannelControlPolicy` seam, the `BloomwireChannelIntegration` ownership
+  model, the `Bloomwire::ChannelSetup` Admin setup path, the Dialog-admin deny, and
+  the tenant frontend hiding — 4.4-b-WA.1 through 2D).
 - **Source of truth:** Chatwoot owns conversations / messages / contacts;
   Bloomwire never duplicates them. No Chatwoot Enterprise / `custom_roles`
   dependency; permissions currently reuse Chatwoot `AccountUser` roles (Bloomwire

@@ -657,7 +657,7 @@
     <div class="panel" id="tab-built">
       <section class="block">
         <h2 class="sec"><span class="num">06</span> Current build state</h2>
-        <p class="sec-sub">What actually exists today. Click any slice to expand details. Every slice below is complete and merged into <span class="pill-code">version_1</span> (Phases 0–4 Slice 1). <strong>Phase 4.4 — External App Configuration Ownership has since started</strong> (WhatsApp setup control seam / PR #19 merged, behavior-neutral; see the Changelog).</p>
+        <p class="sec-sub">What actually exists today. Click any slice to expand details. Every slice below is complete and merged into <span class="pill-code">version_1</span> (Phases 0–4 Slice 1). <strong>Phase 4.4 — External App Configuration Ownership is well underway</strong> — WhatsApp slices 4.4-b-WA.1 (seam, PR #19), 2A (ownership model, PR #22), 2B (Bloomwire Admin setup path, PR #23), 2C (Dialog-admin deny, PR #24) and 2D (tenant frontend hiding, PR #25) are merged; for Bloomwire-managed tenants Dialog admins are now denied WhatsApp setup and the setup UI is hidden. Next planned: 4.4-b-WA.3 routing metadata (full router is Phase 8). See the Changelog.</p>
 
         <!-- Slice 0 -->
         <div class="accordion">
@@ -1146,11 +1146,11 @@
           <div class="tl-item next">
             <div class="tl-card next">
               <span class="date">Next</span>
-              <h4>4.4-b-WA.2A — Channel integration ownership foundation (behavior-neutral)</h4>
+              <h4>4.4-b-WA.3 — Global WhatsApp webhook routing foundation (planned)</h4>
               <dl>
-                <dt>What changes</dt><dd>Introduce the Bloomwire-owned <span class="pill-code">bloomwire_channel_integrations</span> ownership/mapping (design in ADR 0005) — mapping <span class="pill-code">profile → inbox → channel → account</span> with non-secret routing metadata and <strong>tenant-consistency</strong> rules. No tenant deny, no DTO scrub, no frontend, no webhook router. Later slices: 2B Bloomwire Admin setup path, 2C Dialog-admin deny (incl. managed-inbox destroy), 2D frontend hiding, 4.4-b-WA.3 routing metadata. Phase 4.3 / 4.5 (ADR 0003) remain parked.</dd>
-                <dt>Files / areas</dt><dd>TBD — a <span class="pill-code">bloomwire_channel_integrations</span> model/migration; a dedicated Bloomwire Admin setup namespace/service; later a DTO/serializer scrub slice (prerequisite before claiming no-credential-exposure).</dd>
-                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; Chatwoot conversations/contacts/teams/campaigns/normal inbox usage untouched; behavior-neutral until the deny slice lands after the setup path.</dd>
+                <dt>What changes</dt><dd>Prepare Bloomwire-owned <strong>routing metadata only</strong> (the full global Meta/WhatsApp webhook router is ADR 0004 / Phase 8). WhatsApp slices 2A–2D are merged: ownership model (PR #22), Bloomwire Admin setup path (PR #23), Dialog-admin deny (PR #24), tenant frontend hiding (PR #25). The broad tenant Settings/role lockdown is recorded as <strong>ADR 0006 / Phase 9</strong> and is parked until after Phase 8.</dd>
+                <dt>Files / areas</dt><dd>TBD — Bloomwire-owned routing metadata; later a DTO/serializer scrub slice (prerequisite before claiming no-credential-exposure to Dialog admins).</dd>
+                <dt>Will not change</dt><dd>No data duplication; no Chatwoot Enterprise/custom_roles; backend-enforced permissions; Chatwoot conversations/contacts/teams/campaigns/normal inbox usage untouched.</dd>
               </dl>
             </div>
           </div>

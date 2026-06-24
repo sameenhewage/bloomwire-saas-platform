@@ -143,12 +143,14 @@ Decision recorded in `docs/adr/0004-bloomwire-global-meta-whatsapp-webhook-route
 
 Decision recorded in `docs/adr/0005-bloomwire-external-app-configuration-ownership.md`.
 **WhatsApp is the first vertical. The ownership foundation (4.4-b-WA.2A, PR #22),
-the Bloomwire Admin setup path (4.4-b-WA.2B), and the Dialog-admin deny
-(4.4-b-WA.2C, PR #24) are implemented. For Bloomwire-managed tenants (accounts
-with a `BloomwireBusinessProfile`), tenant/account admins and agents are now
-DENIED tenant-side WhatsApp setup/config and destroy of a Bloomwire-managed
-WhatsApp inbox (backend enforcement). Tenant frontend hiding (4.4-b-WA.2D) is
-still future.**
+the Bloomwire Admin setup path (4.4-b-WA.2B, PR #23), the Dialog-admin deny
+(4.4-b-WA.2C, PR #24), and the tenant frontend hiding/disabled UX (4.4-b-WA.2D,
+PR #25) are all merged. For Bloomwire-managed tenants (accounts with a
+`BloomwireBusinessProfile`), tenant/account admins and agents are now DENIED
+tenant-side WhatsApp setup/config and destroy of a Bloomwire-managed WhatsApp inbox
+(backend enforcement), and the tenant-side setup/config UI is hidden (UX only, not
+security). The next planned WhatsApp slice is 4.4-b-WA.3 (routing metadata; full
+router is Phase 8).**
 
 - **Bloomwire owns all external app/channel configuration** (WhatsApp, SMS, Email,
   Instagram/Facebook, Shopify, later Telegram/Signal). Dialog (tenant) admins may
@@ -190,8 +192,8 @@ still future.**
   (4.4-b-WA.2C, PR #24) flipped it from behavior-neutral to **denying tenant
   admins/agents for Bloomwire-managed tenants**, plus a destroy guard on
   `InboxesController#destroy` for Bloomwire-managed WhatsApp inboxes. Backend
-  enforcement exists now; tenant **frontend hiding/disabled UX is still future
-  (4.4-b-WA.2D)** and is UX only, not security.
+  enforcement exists now; tenant **frontend hiding/disabled UX is merged
+  (4.4-b-WA.2D, PR #25)** and is UX only, not security.
 
 ## Tenant settings ownership & role boundary (see ADR 0006)
 
@@ -281,7 +283,8 @@ Phases 0–4 Slice 1 are merged into `version_1`. What exists today:
   `Bloomwire::ChannelControlPolicy#can_setup_whatsapp?` (profile-gated deny) via the
   `Bloomwire::WhatsappSetupGuard` controller concern on the tenant WhatsApp setup
   actions, plus `BloomwireChannelIntegration.managed_whatsapp_inbox?` guarding
-  `InboxesController#destroy`. Backend enforcement only; no frontend hiding yet.
+  `InboxesController#destroy`. Backend enforcement (4.4-b-WA.2C); tenant frontend
+  hiding/disabled UX shipped separately in 4.4-b-WA.2D (PR #25, UX only).
 
 See `docs/product/05-development-phases.md` (execution source of truth) and
 `docs/system-overview/index.html` (living overview + changelog).

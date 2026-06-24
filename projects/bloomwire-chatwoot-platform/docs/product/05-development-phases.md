@@ -432,8 +432,8 @@ exposed to enterprise clients by default.
     non-WhatsApp inboxes are unchanged; existing configured WhatsApp inboxes remain
     usable for normal conversation/inbox usage. The Bloomwire SuperAdmin endpoint
     remains the platform-owned setup path. **Backend enforcement exists now; tenant
-    frontend hiding/disabled UX is not done yet (4.4-b-WA.2D).** Raw Chatwoot
-    inbox/channel setup stays Bloomwire-controlled.
+    frontend hiding/disabled UX is merged (4.4-b-WA.2D, PR #25; UX only, not
+    security).** Raw Chatwoot inbox/channel setup stays Bloomwire-controlled.
   - **Team management ≠ channel-creation permission.** A team is an internal
     department; an inbox/channel is an external customer communication
     connection. Creating a team must never automatically grant permission to
@@ -464,7 +464,8 @@ exposed to enterprise clients by default.
       `app_kind: 'whatsapp'`, and matching `inbox_id`. Plain Chatwoot accounts (no
       profile), non-managed WhatsApp inboxes, and non-WhatsApp inboxes are unchanged;
       normal conversation usage and ordinary non-setup maintenance remain unaffected.
-      Backend enforcement only — no frontend hiding yet.
+      Backend enforcement only (tenant frontend hiding is the separate 4.4-b-WA.2D
+      slice below, merged in PR #25).
     - **4.4-b-WA.2D — Tenant frontend hiding/disabled UX** ✅ implemented (PR #25).
       For Bloomwire-managed tenants the tenant-side WhatsApp setup/config UI is hidden
       and the direct WhatsApp Call route + Meta settings shortcut are gated (UX only,
