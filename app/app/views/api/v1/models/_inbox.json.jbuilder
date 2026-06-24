@@ -132,8 +132,13 @@ if resource.whatsapp?
   # Bloomwire (ADR 0005, 4.4-b-WA.2D): read-only, non-secret flag mirroring the PR #24
   # backend destroy deny. The dashboard uses it to hide the delete action for a
   # Bloomwire-managed WhatsApp inbox. No provider secrets are exposed.
-  json.bloomwire_managed BloomwireChannelIntegration.managed_whatsapp_inbox?(resource)
-  json.provider_config resource.channel.try(:provider_config) if Current.account_user&.administrator?
+  bloomwire_managed = BloomwireChannelIntegration.managed_whatsapp_inbox?(resource)
+  json.bloomwire_managed bloomwire_managed
+  # Bloomwire (ADR 0005, 4.4-b-WA.4): a managed WhatsApp channel is platform-owned, so
+  # tenant roles must never receive its raw provider_config (api_key, webhook_verify_token,
+  # phone_number_id, business_account_id, access tokens). Plain tenant-owned WhatsApp
+  # inboxes keep the existing admin-only provider_config to manage their own credentials.
+  json.provider_config resource.channel.try(:provider_config) if Current.account_user&.administrator? && !bloomwire_managed
   # Only show reauthorization for embedded signup; manual flow uses API keys, not OAuth
   json.reauthorization_required(
     (resource.channel.try(:provider_config) || {}).to_h['source'] == 'embedded_signup' &&

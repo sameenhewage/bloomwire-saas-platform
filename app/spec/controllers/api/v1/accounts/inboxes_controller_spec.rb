@@ -101,6 +101,138 @@ RSpec.describe 'Inboxes API', type: :request do
     end
   end
 
+  describe 'Bloomwire-managed WhatsApp provider_config secret scrub (4.4-b-WA.4)' do
+    let(:admin) { create(:user, account: account, role: :administrator) }
+    let(:agent) { create(:user, account: account, role: :agent) }
+
+    let(:secret_config) do
+      {
+        'api_key' => 'SUPER_SECRET_API_KEY',
+        'access_token' => 'SUPER_SECRET_ACCESS_TOKEN',
+        'webhook_verify_token' => 'SUPER_SECRET_WEBHOOK_TOKEN',
+        'app_secret' => 'SUPER_SECRET_APP_SECRET',
+        'phone_number_id' => 'pid-secret',
+        'business_account_id' => 'waba-secret',
+        'source' => 'embedded_signup'
+      }
+    end
+
+    # Builds a genuinely Bloomwire-managed WhatsApp inbox whose channel carries the
+    # given provider_config. update! runs on the stubbed factory instance, so the
+    # remote credential check is skipped (no HTTP), and the same channel is reused
+    # for the managed integration so managed_whatsapp_inbox? returns true.
+    def managed_whatsapp_inbox(provider_config:)
+      channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
+                                          validate_provider_config: false, sync_templates: false)
+      channel.update!(provider_config: provider_config)
+      create(:bloomwire_channel_integration, account: account, whatsapp_channel: channel)
+      channel.inbox
+    end
+
+    context 'when listing inboxes (index)' do
+      it 'does not expose provider_config to a Dialog tenant administrator for a managed WhatsApp inbox' do
+        inbox = managed_whatsapp_inbox(provider_config: secret_config)
+
+        get "/api/v1/accounts/#{account.id}/inboxes", headers: admin.create_new_auth_token, as: :json
+
+        entry = JSON.parse(response.body, symbolize_names: true)[:payload].find { |i| i[:id] == inbox.id }
+        expect(entry).not_to have_key(:provider_config)
+      end
+
+      it 'does not leak any provider secret values to a tenant administrator' do
+        managed_whatsapp_inbox(provider_config: secret_config)
+
+        get "/api/v1/accounts/#{account.id}/inboxes", headers: admin.create_new_auth_token, as: :json
+
+        expect(response.body).not_to include('SUPER_SECRET_API_KEY')
+        expect(response.body).not_to include('SUPER_SECRET_ACCESS_TOKEN')
+        expect(response.body).not_to include('SUPER_SECRET_WEBHOOK_TOKEN')
+        expect(response.body).not_to include('SUPER_SECRET_APP_SECRET')
+      end
+
+      it 'still returns safe operational metadata and the read-only managed flag' do
+        inbox = managed_whatsapp_inbox(provider_config: secret_config)
+
+        get "/api/v1/accounts/#{account.id}/inboxes", headers: admin.create_new_auth_token, as: :json
+
+        entry = JSON.parse(response.body, symbolize_names: true)[:payload].find { |i| i[:id] == inbox.id }
+        expect(entry[:id]).to eq(inbox.id)
+        expect(entry[:channel_type]).to eq('Channel::Whatsapp')
+        expect(entry[:provider]).to eq('whatsapp_cloud')
+        expect(entry[:bloomwire_managed]).to be(true)
+      end
+
+      it 'does not leak provider secrets to a Dialog tenant agent assigned to the managed inbox' do
+        inbox = managed_whatsapp_inbox(provider_config: secret_config)
+        create(:inbox_member, user: agent, inbox: inbox)
+
+        get "/api/v1/accounts/#{account.id}/inboxes", headers: agent.create_new_auth_token, as: :json
+
+        entry = JSON.parse(response.body, symbolize_names: true)[:payload].find { |i| i[:id] == inbox.id }
+        expect(entry).not_to have_key(:provider_config)
+        expect(response.body).not_to include('SUPER_SECRET_API_KEY')
+        expect(response.body).not_to include('SUPER_SECRET_ACCESS_TOKEN')
+        expect(response.body).not_to include('SUPER_SECRET_WEBHOOK_TOKEN')
+      end
+    end
+
+    context 'when showing an inbox (show)' do
+      it 'does not expose provider_config or secret values to a tenant administrator' do
+        inbox = managed_whatsapp_inbox(provider_config: secret_config)
+
+        get "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: admin.create_new_auth_token, as: :json
+
+        body = JSON.parse(response.body, symbolize_names: true)
+        expect(body).not_to have_key(:provider_config)
+        expect(response.body).not_to include('SUPER_SECRET_API_KEY')
+        expect(response.body).not_to include('SUPER_SECRET_ACCESS_TOKEN')
+        expect(response.body).not_to include('SUPER_SECRET_WEBHOOK_TOKEN')
+        expect(response.body).not_to include('SUPER_SECRET_APP_SECRET')
+      end
+
+      it 'still exposes the read-only managed flag and safe metadata' do
+        inbox = managed_whatsapp_inbox(provider_config: secret_config)
+
+        get "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: admin.create_new_auth_token, as: :json
+
+        body = JSON.parse(response.body, symbolize_names: true)
+        expect(body[:bloomwire_managed]).to be(true)
+        expect(body[:channel_type]).to eq('Channel::Whatsapp')
+      end
+    end
+
+    context 'when the WhatsApp inbox is plain (tenant-owned)' do
+      it 'still returns provider_config to the administrator for a non-managed WhatsApp inbox' do
+        plain = create(:channel_whatsapp, account: account, validate_provider_config: false, sync_templates: false).inbox
+
+        get "/api/v1/accounts/#{account.id}/inboxes/#{plain.id}", headers: admin.create_new_auth_token, as: :json
+
+        body = JSON.parse(response.body, symbolize_names: true)
+        expect(body).to have_key(:provider_config)
+        expect(body[:bloomwire_managed]).to be(false)
+      end
+    end
+
+    context 'without duplicating conversation/message/contact data' do
+      it 'does not create Bloomwire rows or conversation data when serving the tenant response' do
+        inbox = managed_whatsapp_inbox(provider_config: secret_config)
+        before_counts = {
+          integrations: BloomwireChannelIntegration.count,
+          conversations: Conversation.count,
+          messages: Message.count,
+          contacts: Contact.count
+        }
+
+        get "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: admin.create_new_auth_token, as: :json
+
+        expect(BloomwireChannelIntegration.count).to eq(before_counts[:integrations])
+        expect(Conversation.count).to eq(before_counts[:conversations])
+        expect(Message.count).to eq(before_counts[:messages])
+        expect(Contact.count).to eq(before_counts[:contacts])
+      end
+    end
+  end
+
   describe 'GET /api/v1/accounts/{account.id}/inboxes/{inbox.id}' do
     let(:inbox) { create(:inbox, account: account) }
 
