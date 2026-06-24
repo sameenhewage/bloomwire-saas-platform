@@ -42,7 +42,7 @@
 #  index_bloomwire_channel_integrations_on_status                 (status)
 #  index_bw_channel_integrations_on_business_account_id           (business_account_id) WHERE (business_account_id IS NOT NULL)
 #  index_bw_channel_integrations_on_created_by_sa_id              (created_by_super_admin_id)
-#  index_bw_channel_integrations_on_phone_number_id               (phone_number_id) WHERE (phone_number_id IS NOT NULL)
+#  index_bw_channel_integrations_on_managed_phone_number_id       (phone_number_id) UNIQUE WHERE managed_by_bloomwire
 #  index_bw_channel_integrations_on_profile_id                    (bloomwire_business_profile_id)
 #  index_bw_channel_integrations_on_routing_key                   (routing_key) UNIQUE WHERE (routing_key IS NOT NULL)
 #

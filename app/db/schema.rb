@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_23_000001) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_24_000000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -298,7 +298,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_23_000001) do
     t.index ["channelable_type", "channelable_id"], name: "index_bloomwire_channel_integrations_on_channelable"
     t.index ["created_by_super_admin_id"], name: "index_bw_channel_integrations_on_created_by_sa_id"
     t.index ["inbox_id"], name: "index_bloomwire_channel_integrations_on_inbox_id", unique: true
-    t.index ["phone_number_id"], name: "index_bw_channel_integrations_on_phone_number_id", where: "(phone_number_id IS NOT NULL)"
+    t.index ["phone_number_id"], name: "index_bw_channel_integrations_on_managed_phone_number_id", unique: true, where: "managed_by_bloomwire"
     t.index ["routing_key"], name: "index_bw_channel_integrations_on_routing_key", unique: true, where: "(routing_key IS NOT NULL)"
     t.index ["status"], name: "index_bloomwire_channel_integrations_on_status"
   end
