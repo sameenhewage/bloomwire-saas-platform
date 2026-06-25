@@ -112,13 +112,14 @@ model level); did not exercise the live `callbacks_controller` debug log or `bas
 | `provider_config` in DTO | `_inbox.json.jbuilder:130-138` | Scrub `provider_config` from managed-tenant inbox DTO (never send `api_key`/tokens to tenant admins) |
 | App Secret unmasked | super-admin WhatsApp Embedded form (S-07) | `type=password` + never echo stored secret |
 | Tokens in explicit logs | `callbacks_controller.rb:25-30`, `base_service.rb:44-45` | Remove/scrub token + full-response-body logging |
-| Message bodies in logs/job args | `whatsapp_controller.rb:13` (enqueues full payload); param filter gap | Scrub message bodies from logs; pass minimal refs (not full payload) into the job / scrub job args |
+| Message bodies in logs/job args | `whatsapp_controller.rb:13` (enqueues full payload); param filter gap | Redact message bodies in logs; keep the Sidekiq handoff **non-mutating** — the stock `WhatsappEventsJob` reads `text.body` via `IncomingMessageServiceHelpers#message_content` to set `Message#content`, so do **not** strip/minimize job args. Use a Sidekiq log/display redactor (worker still gets the full payload), encrypted job args (decrypted in-worker), or an encrypted out-of-band payload + minimal reference (final plan §11) |
 
 **Fields to mask/scrub for Bloomwire mode:** message bodies (`content`, `body`, `text.body`, message text), full
 inbound webhook payload in Sidekiq args, FB/WA access tokens in explicit logs, provider error response bodies,
 contact PII (`wa_id`/phone, `display_phone_number`), routing identifiers where unnecessary (`phone_number_id`,
 `business_account_id`), and the inbox DTO `provider_config`. (Token/secret/`*_key` params are already redacted in
-Rails request-param logs but **not** elsewhere.)
+Rails request-param logs but **not** elsewhere.) **Sidekiq-args items are redacted at the log/display layer or via
+encryption — never by mutating the payload the worker consumes (final plan §11).**
 
 ## 8. Cleanup result [RUNTIME-PROVEN]
 
@@ -130,8 +131,9 @@ product code changed (only this report + a throwaway runner piped via stdin).
 
 **P-05 — "Platform admins prevented from reading tenant content" → CONFIRMED AS A REAL, OPEN RISK.** Both bypass
 paths (self-add + impersonation) work, and in CE mode there is **no audit trail at all**. The feature-toggle plan's
-privacy-hardening workstream (plan §8) is **required**, must include a **Bloomwire-owned CE audit**, and must scrub
-message bodies/tokens from logs, job args, and the inbox DTO.
+privacy-hardening workstream (plan §8) is **required**, must include a **Bloomwire-owned CE audit**, and must redact
+message bodies/tokens at the log/display layer and scrub the inbox DTO — **without mutating** the Sidekiq payload the
+WhatsApp job consumes (non-mutating redaction / encrypted args / encrypted out-of-band handoff; final plan §11).
 
 ## 10. Recommended next step
 
