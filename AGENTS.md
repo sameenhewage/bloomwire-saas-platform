@@ -26,7 +26,28 @@ re-read this file before acting.
 
 ## What every agent MUST do
 
-1. **Read context first**
+1. **Graph-first — read the graphify code graph before acting**
+   - Before **any** analysis, design, bugfix, or implementation, establish the
+     current situation from the **graphify** code graph — never from memory or
+     assumption. *Read the graph, understand reality, then act.*
+   - **Update → read → then act, in this order:**
+     - **1) Update if stale** — the graph is stale when its `Built from commit` in
+       `app/graphify-out/GRAPH_REPORT.md` differs from `git rev-parse HEAD`, or when
+       there are uncommitted changes in the area you will touch. If stale, run
+       `graphify update .` at the graph root (currently `app/`) — incremental,
+       cached, and **$0** (no LLM/API cost).
+     - **2) Read** the relevant slice for what you will touch:
+       `graphify explain "<Symbol>"`, `graphify query "<intent>"`, or
+       `graphify path "<A>" "<B>"` (quick map: grep node labels in
+       `app/graphify-out/graph.json`).
+     - **3) Then** analyse or implement — only after the graph reflects HEAD and you
+       have read it.
+   - **Ground-truth caveat** — the graph is AST-only (code symbols, not string
+     literals) and the `projects/<name>/docs` are **not** in it unless ingested.
+     Confirm against source, and ingest docs with `graphify add projects/<name>/docs`
+     when the task depends on them.
+
+2. **Read context first**
    - Read `AGENTS.md` (this file) and `CLAUDE.md`.
    - Read the relevant task brief, issue, or PRD.
    - **When the work touches a project under `projects/<name>/`, read that
@@ -34,15 +55,15 @@ re-read this file before acting.
      *extend* (never override) the global engineering rules below.
    - Inspect the existing code in the affected area.
 
-2. **Work in vertical slices**
+3. **Work in vertical slices**
    - One slice = one thin, end-to-end piece of value that can be tested.
    - Keep each slice independently reviewable.
 
-3. **Keep changes small**
+4. **Keep changes small**
    - If a task grows beyond a small slice, stop and split it.
    - Avoid unrelated edits in the same change.
 
-4. **Report after every task**
+5. **Report after every task**
    Every completed task must end with the **Final PASS Report Standard**
    (Engineering rule 11 below): requirement understood, root cause (for fixes),
    files read, files changed, tests added/updated, proof the tests failed before
@@ -50,7 +71,7 @@ re-read this file before acting.
    where relevant, security proof where relevant, what was **not** changed,
    remaining risks, and the next recommended step.
 
-5. **Preserve conventions**
+6. **Preserve conventions**
    - Match existing structure, naming, and style.
    - Do not introduce new patterns, libraries, or tools without approval.
 

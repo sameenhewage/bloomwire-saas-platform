@@ -1,0 +1,17 @@
+{
+  "verdict": "APPROVE",
+  "approved_head_sha": "d0fad26195b727172a876cd166499a08c72bd056",
+  "branch": "chore/pre-push-code-review-gate",
+  "approved_at": "2026-06-22T17:52:35Z",
+  "review_agent": "pre-push-code-review-agent",
+  "tests_run": [
+    "bash -n .githooks/pre-push -> OK",
+    "bash -n .claude/hooks/block-unapproved-push.sh -> OK",
+    "dogfood .githooks/pre-push without artifact -> BLOCK (exit 1)",
+    "dogfood .githooks/pre-push with this artifact -> ALLOW (exit 0)"
+  ],
+  "mcp_runtime_evidence": [
+    "N/A - documentation + git/Claude pre-push hook change with no UI/HTTP runtime surface; verified via direct hook execution simulation (block + allow paths)"
+  ],
+  "summary": "Pre-push code review gate: native .githooks/pre-push + Claude block-unapproved-push.sh + settings.json, pre-push-code-review-agent + workflow docs, and AGENTS/CLAUDE/docs wiring. No app code, no secrets, no hard-coded paths, in scope."
+}

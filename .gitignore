@@ -1,2 +1,6 @@
 *.zip
 *.log
+
+.env
+graphify-out/
+.graphify/

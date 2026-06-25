@@ -10,10 +10,14 @@ repository.
 
 ## Before you do anything
 
-1. **Read `AGENTS.md`.** Follow it without exception.
-2. **Understand the current task.** Find the issue, task brief, or PRD that
+1. **Graph-first.** If the graphify code graph is stale, run `graphify update .`
+   (incremental, cached, $0); then **read** the relevant slice to establish the
+   current situation — *before* any analysis or implementation. This is
+   `AGENTS.md` → "What every agent MUST do" step 1; follow it without exception.
+2. **Read `AGENTS.md`.** Follow it without exception.
+3. **Understand the current task.** Find the issue, task brief, or PRD that
    authorizes the work. If there is none, stop and ask.
-3. **Inspect the affected code** before editing. Know what exists and why.
+4. **Inspect the affected code** before editing. Know what exists and why.
 
 ---
 
