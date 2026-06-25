@@ -358,16 +358,20 @@ Activated by the **privacy hardening** toggle (so OFF preserves stock unless exp
 
 ## 10. Runtime gates before implementation
 
-These remain **required before final implementation confidence**. **S-01…S-06 are NOT started in this plan.**
+> **Status update — all gates complete (retained for history).** Spikes **S-01…S-07** have been run (reports in this
+> folder; see the final architecture plan §2 evidence table). **S-01…S-06 are no longer "required / not started"** — they
+> are **Complete**, and **P-01…P-05 are resolved** (P-01…P-04 confirmed; P-04 live Meta *send* remains a production
+> **[BLOCKER]**; P-05 confirmed a real privacy risk). Do **not** re-run them — proceed to the final architecture plan's
+> **Phase 1** (§12). The table is kept below **for history**.
 
 | Gate | Goal | Unblocks | Plan section it de-risks | Status |
 |---|---|---|---|---|
-| **S-01** | Multiple WhatsApp inboxes under one account (no collision, correct routing/listing) | P-01 | §4, §6 | **Required** |
-| **S-02** | Multi-WABA webhook routing — two `phone_number_id`s → correct account/inbox, no cross-tenant leak | P-02 | §6, §7 | **Required** |
-| **S-03** | Global webhook front-door — one ingress, one app secret, forward to `WhatsappEventsJob`, no loss/dup | P-03 | §3, §7 | **Required** |
-| **S-04** | Outgoing injection preserves history + reconciles status | P-04 | outgoing gateway (later) | **Required** |
-| **S-05** | SuperAdmin impersonation / privacy capability + audit-gap inventory | P-05 | §8 | **Required** |
-| **S-06** | Token / log / Sidekiq job-arg leakage inventory + scrubbing requirements | P-05 | §8 | **Required** |
+| **S-01** | Multiple WhatsApp inboxes under one account (no collision, correct routing/listing) | P-01 | §4, §6 | **Complete ✅** |
+| **S-02** | Multi-WABA webhook routing — two `phone_number_id`s → correct account/inbox, no cross-tenant leak | P-02 | §6, §7 | **Complete ✅** |
+| **S-03** | Global webhook front-door — one ingress, one app secret, forward to `WhatsappEventsJob`, no loss/dup | P-03 | §3, §7 | **Complete ✅** |
+| **S-04** | Outgoing injection preserves history + reconciles status | P-04 | outgoing gateway (later) | **Complete ✅** (live *send* = [BLOCKER]) |
+| **S-05** | SuperAdmin impersonation / privacy capability + audit-gap inventory | P-05 | §8 | **Complete ✅** |
+| **S-06** | Token / log / Sidekiq job-arg leakage inventory + scrubbing requirements | P-05 | §8 | **Complete ✅** |
 | **S-07** | Live UI/runtime baseline (OFF baseline + secret-masking gap) | C / Areas A,B | §1, §4, §8 | **Complete** |
 
 ---

@@ -400,7 +400,7 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 - **Tests:** unit specs (master AND-gate forces sub-OFF; defaults OFF); request specs (page **reachable to SuperAdmin with master OFF** = bootstrap; **forbidden to non-SuperAdmin**; sub-feature controls inert until master ON; **tenant-facing** OFF parity with `develop`).
 - **Runtime validation:** toggles OFF → zero **tenant-facing** behavior change; control page reachable to a SuperAdmin with master OFF (sub-controls inert); not shown to non-SuperAdmin.
 - **Rollback:** remove service/page (additive).
-- **Feature-OFF regression:** full app behaves as `develop`.
+- **Feature-OFF regression:** **tenant-facing / runtime** behavior is byte-for-byte `develop` (S-07 baseline); the **only** additive surface is the **SuperAdmin-only** Bloomwire bootstrap page (zero tenant-facing impact), which is **excluded** from the parity contract.
 
 ### Phase 2 — Privacy / security foundation
 - **Objective:** App-Secret masking, `provider_config` DTO scrub, log/job scrubbing, Bloomwire support-access audit, self-add/impersonation controls — behind `BLOOMWIRE_PRIVACY_HARDENING`.
