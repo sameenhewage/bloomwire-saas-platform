@@ -60,6 +60,22 @@ byte-for-byte stock Chatwoot.
 3. **Output-only, non-mutating.** The scrubber returns a copy; the stored `provider_config` (jsonb at rest) is **never**
    changed. No DB/schema/storage change and **no new toggle** (reuses `:privacy_hardening`).
 
+### Phase 2C — LOCKED (explicit log / token / error scrubbing)
+
+When `Bloomwire::Features.enabled?(:privacy_hardening)` is true (master AND-gated), sensitive token/secret values are
+redacted from **explicit** log/error/debug output. With privacy hardening OFF or master OFF it is a no-op (stock).
+
+1. **Centralized redactor.** `Bloomwire::SensitiveDataRedactor` — `redact(value)` deep-redacts sensitive keys
+   (`access_token`, `api_key`, `app_secret`, `client_secret`, `webhook_verify_token`, `authorization`, plus any key
+   matching `/token|secret|api_key|password|authorization/i`) to `[FILTERED]`; `redact_response_body(response)` redacts
+   the parsed provider JSON body. Non-mutating; returns the input unchanged when the feature is OFF.
+2. **Two proven surfaces only** (S-06 §7 / plan §11): `Api::V1::Accounts::CallbacksController#log_additional_info`
+   (raw `user_access_token` / `page_access_token` debug log) and `Whatsapp::Providers::BaseService#handle_error`
+   (`Rails.logger.error response.body`). Applied **only** at these log boundaries.
+3. **Output-only.** Redaction happens at the log call only; the controller/service still read the original values for
+   their business logic. No DB/storage change, **no Sidekiq/job-arg mutation**, no message-body stripping, and **no new
+   toggle** (reuses `:privacy_hardening`).
+
 ### Phase 2B+ — DEFERRED (NOT decided here; open gates)
 
 These are recorded as **open decisions**, not silently made:
@@ -73,8 +89,8 @@ These are recorded as **open decisions**, not silently made:
 5. **Sidekiq payload redaction/encryption strategy** — non-mutating only (log/display redactor, encrypted job args,
    or out-of-band encrypted payload + reference); never strip `text.body` the worker consumes (plan §11). **DEFERRED.**
 
-Also still in Phase 2 but not yet done (later slices): explicit-log token/error scrubbing and self-add controls.
-(`provider_config` DTO scrub is now **done in Phase 2B** above.)
+Also still in Phase 2 but not yet done (later slices): self-add controls.
+(`provider_config` DTO scrub = **Phase 2B**; explicit-log token/error scrubbing = **Phase 2C**, both above.)
 
 ## Consequences
 

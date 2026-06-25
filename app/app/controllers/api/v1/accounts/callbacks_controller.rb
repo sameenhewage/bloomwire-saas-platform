@@ -23,9 +23,15 @@ class Api::V1::Accounts::CallbacksController < Api::V1::Accounts::BaseController
   end
 
   def log_additional_info
+    # Bloomwire Phase 2C: redact token values from this debug log when privacy hardening is ON (ADR-0003).
+    # OFF => stock (raw values logged). Redaction is output-only; the create flow above uses the real tokens.
     Rails.logger.debug do
-      "user_access_token: #{params[:user_access_token]} , page_access_token: #{params[:page_access_token]} ,
-      page_id: #{params[:page_id]}, inbox_name: #{params[:inbox_name]}"
+      Bloomwire::SensitiveDataRedactor.redact(
+        'user_access_token' => params[:user_access_token],
+        'page_access_token' => params[:page_access_token],
+        'page_id' => params[:page_id],
+        'inbox_name' => params[:inbox_name]
+      ).inspect
     end
   end
 
