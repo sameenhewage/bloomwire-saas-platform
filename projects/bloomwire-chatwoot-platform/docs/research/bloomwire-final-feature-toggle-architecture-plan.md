@@ -372,7 +372,7 @@ Q §17). Every gap below is **proven**.
 | SuperAdmin **impersonation** unaudited (`sso_authenticatable.rb:27-31`; only FE `sessionStorage` flag) [RUNTIME-PROVEN, S-05] | Gate/restrict impersonation; **audit every impersonation start/stop + cross-tenant access** | **Yes** |
 | Tokens in explicit logs (`callbacks_controller.rb:25-30`; `base_service.rb:44-45`) [CODE-PROVEN] | Scrub tokens + provider error bodies from those log statements | **Yes** |
 | **Message bodies not scrubbed** by `ParameterFilter` (`content`/`body`/`text.body` cleartext) [RUNTIME-PROVEN, S-06] | Add message-body scrubbing for logs | **Yes** |
-| **Whole inbound payload in Sidekiq job args** → message body in plaintext (`whatsapp_controller.rb:13`) [RUNTIME-PROVEN, S-06] | Minimize/scrub job args (pass minimal refs, not full payload) or scrub bodies | **Yes** |
+| **Whole inbound payload in Sidekiq job args** → message body in plaintext (`whatsapp_controller.rb:13`) [RUNTIME-PROVEN, S-06] | **Non-mutating redaction only** — the stock `WhatsappEventsJob` reads the body from the payload via `IncomingMessageServiceHelpers#message_content` to set `Message#content`, so **deleting `text.body` from the enqueued args would break message creation**. Redact at the **log/display layer** (custom Sidekiq log redactor → worker still receives the full payload), **encrypt** job args at rest (decrypted in-worker), or hand off an **out-of-band encrypted payload + minimal reference** — never drop the body the worker consumes | **Yes** |
 
 **Note:** `ParameterFilter` already redacts token/secret/`*_key` params for Rails request-param logging — but **not**
 explicit logger calls, Sidekiq job args, or API DTOs; those are the gaps above. Every control above is **mandatory**

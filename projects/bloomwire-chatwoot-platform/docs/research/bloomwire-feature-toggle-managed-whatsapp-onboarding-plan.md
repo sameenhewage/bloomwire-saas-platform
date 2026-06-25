@@ -276,7 +276,7 @@ schema for a later, gated implementation.
 | Registration | **Per-phone-number** callback `FRONTEND_URL/webhooks/whatsapp/<phone_number>`, registered per channel by `Whatsapp::WebhookSetupService` (`app/app/services/whatsapp/webhook_setup_service.rb:58-80`) | **One global** Bloomwire callback URL registered for all managed numbers |
 | Ingress | `Webhooks::WhatsappController#process_payload` (`app/app/controllers/webhooks/whatsapp_controller.rb:6-15`) | Bloomwire global endpoint (thin) |
 | Signature | Per-channel secret + global `WHATSAPP_APP_SECRET` fallback (`whatsapp_controller.rb:25-30`) | Verify with one app secret/verify strategy |
-| Resolution | Payload metadata `phone_number_id`/`display_phone_number` → `Channel::Whatsapp` → inbox (`app/app/jobs/webhooks/whatsapp_events_job.rb:146-161`) | Same resolution, via routing registry first, fallback to payload resolution |
+| Resolution | Payload metadata `phone_number_id`/`display_phone_number` → `Channel::Whatsapp` → inbox (`app/app/jobs/webhooks/whatsapp_events_job.rb:146-161`) | **Initially identical** — the front-door forwards the **unmodified payload** and the stock job **re-resolves natively** from metadata; the registry is **control-plane only**, not the hot path. Registry-**first** routing is a **later, explicit** step needing a job overlay/handoff (§7.3; final plan §9.2, Phase 7) |
 | Processing | `WhatsappEventsJob` → `IncomingMessageWhatsappCloudService` → inbox | **Identical** — reuse the existing pipeline |
 
 ### 7.2 Target flow
@@ -285,15 +285,23 @@ schema for a later, gated implementation.
 Meta → Bloomwire global webhook
      → verify signature (one app secret / verify token)
      → extract phone_number_id from entry[].changes[].value.metadata
-     → resolve phone_number_id → account/inbox/channel  (routing registry; fallback = Channel::Whatsapp lookup)
-     → forward into Webhooks::WhatsappEventsJob (existing pipeline)
+     → forward the UNMODIFIED payload into Webhooks::WhatsappEventsJob (existing pipeline)
+     → the stock job re-resolves the channel natively from payload metadata
+       (display_phone_number + validates phone_number_id) — no registry on this hot path
      → message persisted in the correct inbox
 ```
 
 ### 7.3 Design notes
 
-- **Reuse, don't fork:** the router's only new responsibility is *verify + resolve + enqueue*; message processing
-  stays in `WhatsappEventsJob` (which already resolves by payload metadata independent of the URL — RCA §6.E).
+- **Reuse, don't fork:** the router's only new responsibility is *verify + forward (enqueue)*; **resolution + message
+  processing stay in** `WhatsappEventsJob`, which resolves by payload metadata independent of the URL (RCA §6.E). The
+  front-door does **not** resolve on the hot path.
+- **Registry-first routing is NOT free with the stock job.** `WhatsappEventsJob#perform` re-runs
+  `find_channel_from_whatsapp_business_payload` and **discards** any channel resolved in the controller, so "resolve via
+  registry then forward to the stock job" would **not** change routing. To honor registry-first resolution later (e.g. a
+  managed number whose `display_phone_number` diverges), carry the resolved channel into processing via a **job overlay**
+  (`prepend_mod_with`, `whatsapp_events_job.rb:164`), an explicit channel-handoff arg, or safe payload normalization —
+  **tracked as the final plan's Phase 7**. Until then the registry is **control-plane only** (ownership/status/health).
 - **Callback indirection insertion point:** `Whatsapp::WebhookSetupService#build_callback_url`
   (`webhook_setup_service.rb:75-80`) returns the Bloomwire global URL when the router toggle is ON.
 - **Feasibility:** the resolution chain and the forward target are **[CODE-PROVEN]**, but a Bloomwire-owned global
@@ -314,7 +322,7 @@ Activated by the **privacy hardening** toggle (so OFF preserves stock unless exp
 | SuperAdmin **impersonation** unaudited (`app/app/models/concerns/sso_authenticatable.rb:27-31`; only a FE `sessionStorage` flag) | Restrict/gate impersonation and **audit every impersonation + cross-tenant access** |
 | Audit is enterprise-overlay + premium-gated; impersonation/message-reads never audited (RCA §6.F) | Add a **Bloomwire-owned support-access audit** (independent of the enterprise `audit_logs` feature) |
 | Token leakage in explicit logs (`app/app/controllers/api/v1/accounts/callbacks_controller.rb:25-30`; `app/app/services/whatsapp/providers/base_service.rb:44-45`) | Scrub tokens from those log statements |
-| Whole inbound payload enqueued to Sidekiq (`whatsapp_controller.rb:13`); message bodies unscrubbed | Scrub message bodies/tokens from logs **and** Sidekiq job args |
+| Whole inbound payload enqueued to Sidekiq (`whatsapp_controller.rb:13`); message bodies unscrubbed | **Non-mutating redaction** — the stock `WhatsappEventsJob` reads the body from the job payload (`IncomingMessageServiceHelpers#message_content`) to set `Message#content`, so removing `text.body` from the args would **break message creation**. Redact at the **log/display layer** (Sidekiq log redactor; worker still gets the full payload), **encrypt** job args at rest, or pass an **out-of-band encrypted payload + minimal reference** — never drop the body the worker consumes |
 
 - **ON → privacy hardening active.**
 - **OFF → original Chatwoot preserved** (no masking/scrubbing changes) unless explicitly configured.
