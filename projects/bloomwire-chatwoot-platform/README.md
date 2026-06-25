@@ -1,7 +1,8 @@
 # Bloomwire / Unecast (Chatwoot-based) — Project
 
 Managed WhatsApp onboarding on top of Chatwoot, behind feature toggles. With every toggle **OFF** the platform is stock
-Chatwoot.
+Chatwoot **for tenants** — the only OFF-state addition is the SuperAdmin-only Bloomwire control page (the bootstrap
+surface that lets Ops turn the feature on).
 
 ## Documentation map
 
@@ -16,5 +17,6 @@ Architecture / documentation only. No product code, branches, or migrations yet.
 
 ## Golden rules
 
-See `CONTEXT.md` and root `AGENTS.md`: additive + toggle-gated; **Feature-OFF preserves stock Chatwoot**; Chatwoot is
+See `CONTEXT.md` and root `AGENTS.md`: additive + toggle-gated; **Feature-OFF preserves stock Chatwoot for all
+tenant-facing behavior** (the only OFF-state addition is the SuperAdmin-only Bloomwire control page); Chatwoot is
 source of truth; secrets are never committed.

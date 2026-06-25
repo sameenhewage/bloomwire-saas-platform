@@ -11,8 +11,9 @@ without forking Chatwoot or breaking stock behavior.
 
 ## Decision
 
-1. **Build additively on Chatwoot**, behind feature toggles that default OFF; **Feature-OFF == stock Chatwoot** (S-07
-   baseline).
+1. **Build additively on Chatwoot**, behind feature toggles that default OFF; **Feature-OFF == stock Chatwoot for all
+   tenant-facing / runtime behavior** (S-07 baseline). The sole OFF-state addition is the **SuperAdmin-only** Bloomwire
+   control page (the master-toggle bootstrap surface; zero tenant-facing impact).
 2. **Reuse the native WhatsApp pipeline** for inbound routing, idempotency, outbound send, and status reconciliation
    (S-01…S-04 proven); do not reimplement it.
 3. **Routing registry is control-plane** (non-secret routing identifiers + status); Chatwoot stays source of truth; no

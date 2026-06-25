@@ -22,4 +22,5 @@ experience.
 ## Success
 
 - A managed tenant can receive **and** reply to WhatsApp messages routed via the Bloomwire front-door.
-- With all toggles OFF, the platform is indistinguishable from stock Chatwoot.
+- With all toggles OFF, the platform is indistinguishable from stock Chatwoot **for tenants** (the only addition is the
+  SuperAdmin-only Bloomwire control page that lets Ops turn the feature on).
