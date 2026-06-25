@@ -3,6 +3,13 @@
 > **Status:** Evidence only. **No** final architecture plan here.
 > **Scope note:** Pricing / billing / plan limits are **OUT OF SCOPE** for this pass (per request).
 > **Constraint:** This document only reads code. Nothing was implemented, branched, migrated, or PR'd.
+>
+> **Status update — superseded by completed spikes (retained for history).** This is the **earliest, pre-spike**
+> evidence pass. Since it was written, runtime spikes **S-01 → S-07** have all been **run** (see the S-01…S-07 reports
+> and the **final architecture plan §2** evidence table), so **P-01…P-05 are resolved** (P-04 live Meta *send* + media
+> remain production **[BLOCKER]s**). The **"runtime spikes needed (not yet run)"** and **open-questions** sections below
+> are kept **for history**; for current direction follow the final architecture plan and **proceed to Phase 1** — do
+> **not** re-run the spikes.
 
 ## Sources read
 

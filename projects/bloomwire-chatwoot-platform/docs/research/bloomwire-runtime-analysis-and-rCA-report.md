@@ -9,6 +9,12 @@
 > **Scope:** Pricing / billing out of scope. Nothing implemented, branched, switched, migrated, or PR'd. No app code changed.
 > **Core product rule being protected:** *Bloomwire/Unecast OFF → original Chatwoot behavior unchanged.
 > Bloomwire/Unecast ON → managed onboarding + global webhook/router + routing registry + privacy controls active.*
+>
+> **Status update — runtime gates since completed (retained for history).** At analysis time the dev server was down,
+> so this report deliberately marks live items **[RUNTIME-TBD]**. Those have since been **run**: spikes **S-01 → S-07**
+> are **complete** (see the S-01…S-07 reports + the **final architecture plan §2** evidence table) and **P-01…P-05 are
+> resolved** (P-04 live Meta *send* + media remain production **[BLOCKER]s**). Part 2 **§10 [RUNTIME-TBD]** and **§11
+> follow-up spikes** are kept **for history**; for current direction follow the final architecture plan (**Phase 1**).
 
 ## Execution mode + proof discipline (read first)
 
