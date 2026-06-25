@@ -82,14 +82,17 @@ sub-feature is forced OFF regardless of its stored value.
 
 | Surface | OFF (master OFF or sub-feature OFF) | ON |
 |---|---|---|
-| Super Admin pages | Stock Chatwoot WhatsApp-Embedded page only | + Bloomwire/Unecast settings page (§3) |
+| Super Admin pages | Stock pages **+ the SuperAdmin-only Bloomwire control page** (hosts the master toggle — always reachable as the **bootstrap surface**; sub-feature controls inert) | Bloomwire control page fully active (§3) |
 | Account WhatsApp UI | Native provider chooser + manual/embedded forms fully visible (S-07 baseline) | Hidden/disabled for managed tenants (§4) |
 | Create APIs (`/inboxes`, `/whatsapp/authorization`) | Native behavior, unguarded | Guarded: tenant-initiated WhatsApp creation blocked; Ops path allowed (§4) |
 | Inbound webhook | Per-phone-number callback → `Webhooks::WhatsappController` (stock) | Meta → Bloomwire global webhook → router → `WhatsappEventsJob` (§7) |
 | Routing registry | Not written/read | Written at onboarding; read by router (§6) |
 | Secrets/logs/impersonation | Stock Chatwoot (unmasked secret, current logging) | Hardened (§8) |
 
-**Invariant:** With all toggles OFF the app equals `develop` (S-07-proven). Toggles are **purely additive**.
+**Invariant:** With all toggles OFF, **tenant-facing / runtime** behavior equals `develop` (S-07-proven); toggles are
+**purely additive**. The **only** OFF-state addition is the **SuperAdmin-only** Bloomwire control page (the master-toggle
+bootstrap surface) — it has **zero tenant-facing or conversation-engine impact**, so it cannot, by itself, be gated behind
+the toggle it sets.
 
 ---
 
