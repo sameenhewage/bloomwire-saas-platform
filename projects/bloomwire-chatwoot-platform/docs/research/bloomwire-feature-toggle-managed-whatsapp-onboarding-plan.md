@@ -107,8 +107,10 @@ sub-feature is forced OFF regardless of its stored value.
 
 ### 3.2 Recommendation — **Option B (separate page)**
 
-Create a Bloomwire-owned **"Bloomwire / Unecast Features"** super-admin page (new route + controller, additive,
-gated by the master toggle). Keep the stock WhatsApp Embedded page **unmodified** except for the one **privacy fix**
+Create a Bloomwire-owned **"Bloomwire / Unecast Features"** super-admin page (new route + controller, additive).
+**The page is always reachable to SuperAdmins** — it hosts the master toggle, so it is the **bootstrap surface** and must
+not be gated behind the toggle it sets; the master toggle gates **managed behavior + sub-feature controls**, not the
+page's existence (SuperAdmin-only, no tenant-facing impact). Keep the stock WhatsApp Embedded page **unmodified** except for the one **privacy fix**
 (secret masking) which is applied under the privacy-hardening toggle (§8) so OFF stays stock. This best satisfies
 *OFF = unchanged Chatwoot* and *wrap-not-replace*. Reuse the same `InstallationConfig` + `GlobalConfigService`
 storage so values live in the existing admin/config plumbing.

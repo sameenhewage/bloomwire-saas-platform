@@ -114,21 +114,27 @@ stored value.
 
 | Surface | OFF (master OFF or sub-feature OFF) | ON |
 |---|---|---|
-| Super Admin pages | Stock WhatsApp-Embedded page only | + Bloomwire/Unecast settings page (§5) |
+| Super Admin pages | Stock pages **+ the SuperAdmin-only Bloomwire control page** (hosts the master toggle — always reachable as the **bootstrap surface**; sub-feature controls inert) | Bloomwire control page fully active (§5) |
 | Account WhatsApp UI | Native chooser + manual/embedded forms fully visible (S-07 baseline) | Hidden/disabled for managed tenants (§6) |
 | Create APIs (`/inboxes`, `/whatsapp/authorization`) | Native, unguarded | Guarded: tenant-initiated WhatsApp creation blocked; Ops path allowed (§6) |
 | Inbound webhook | Per-number callback → `Webhooks::WhatsappController` (stock) | Meta → Bloomwire global webhook → router → `WhatsappEventsJob` (§9) |
 | Routing registry | Not written/read | Written at onboarding; read by router (§8) |
 | Secrets / logs / impersonation | Stock Chatwoot | Hardened (§11) |
 
-**Invariant:** all toggles OFF ⇒ app equals `develop` (S-07-proven). Toggles are **purely additive**.
+**Invariant:** all toggles OFF ⇒ **tenant-facing / runtime** behavior equals `develop` (S-07-proven); toggles are
+**purely additive**. The **only** OFF-state addition is the **SuperAdmin-only** Bloomwire control page (the master-toggle
+bootstrap surface) — it has **zero tenant-facing or conversation-engine impact**, so it cannot, by itself, be gated
+behind the toggle it sets.
 
 ---
 
 ## 5. Super Admin / Ops Architecture
 
 **Recommendation — separate page (Option B).** Create a Bloomwire-owned **"Bloomwire / Unecast Features"** super-admin
-page (new route + controller, additive, gated by the master toggle). Keep the stock WhatsApp-Embedded page
+page (new route + controller, additive). **The page itself is always reachable to SuperAdmins** — it hosts the master
+toggle, so it is the **bootstrap control surface** and must **not** be gated behind the very toggle it sets. The master
+toggle gates all **managed behavior + sub-feature controls**, not the page's existence; the page is **SuperAdmin-auth-only**
+(`/super_admin`) with **no tenant-facing impact**, so *OFF = stock* still holds for tenants. Keep the stock WhatsApp-Embedded page
 **unmodified** except the single privacy fix (App Secret masking) applied under the privacy toggle (§11), so OFF stays
 stock. This best satisfies *OFF = unchanged Chatwoot* and *wrap-not-replace*, minimizes upgrade conflicts, and makes
 rollback trivial (gate/remove one page). The Super Admin Console is a **separate** `/super_admin` auth boundary — a
@@ -136,7 +142,7 @@ tenant workspace session does **not** grant it. [RUNTIME-PROVEN, S-07]
 
 | Setting / action | Type | Notes |
 |---|---|---|
-| Enable Bloomwire mode | toggle | Master (`BLOOMWIRE_MODE_ENABLED`) |
+| Enable Bloomwire mode | toggle | Master (`BLOOMWIRE_MODE_ENABLED`); **reachable even when OFF** — this is the bootstrap control, so the page renders it regardless of master state |
 | Enable managed onboarding / global router / restrict native setup / privacy hardening | toggles | Sub-features |
 | Global webhook callback URL | read-only | The single Bloomwire ingress URL (from configured host) |
 | Webhook verify token | **masked** field | Meta GET-verify handshake; mask + reveal-on-demand; rotate action |
@@ -371,9 +377,9 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 
 ### Phase 1 — Feature-toggle foundation
 - **Objective:** `Bloomwire::Features` central service + `InstallationConfig` keys + master AND-gate. No behavior change (all OFF).
-- **Areas:** `app/lib/bloomwire/features.rb` (new); new super-admin Bloomwire page (route/controller/view); reuse `GlobalConfigService`.
-- **Tests:** unit specs (master AND-gate forces sub-OFF; defaults OFF); request spec (page hidden unless master ON).
-- **Runtime validation:** toggles OFF → zero behavior change; page appears only when master ON.
+- **Areas:** `app/lib/bloomwire/features.rb` (new); new **SuperAdmin-only** Bloomwire page (route/controller/view) — **reachable regardless of master state** (it hosts the master toggle = bootstrap surface); reuse `GlobalConfigService`.
+- **Tests:** unit specs (master AND-gate forces sub-OFF; defaults OFF); request specs (page **reachable to SuperAdmin with master OFF** = bootstrap; **forbidden to non-SuperAdmin**; sub-feature controls inert until master ON; **tenant-facing** OFF parity with `develop`).
+- **Runtime validation:** toggles OFF → zero **tenant-facing** behavior change; control page reachable to a SuperAdmin with master OFF (sub-controls inert); not shown to non-SuperAdmin.
 - **Rollback:** remove service/page (additive).
 - **Feature-OFF regression:** full app behaves as `develop`.
 
@@ -459,7 +465,7 @@ signed body**; the `:channel_whatsapp` factory must pass `validate_provider_conf
 |---|---|---|
 | **Unit specs** | `Bloomwire::Features` master AND-gate; defaults OFF | master OFF ⇒ every sub-feature `enabled?` false |
 | **Model specs** | registry validations; **`phone_number_id` unique index**; **no secret columns**; `managed` flag | duplicate pnid rejected |
-| **Request specs** | super-admin page gating; native-setup guard (`403` tenant / allow Ops / allow OFF); global webhook verify→forward & fail-closed | invalid signature ⇒ `401`, no message |
+| **Request specs** | super-admin page **reachable to SuperAdmin (master-OFF bootstrap) + forbidden to non-SuperAdmin**; native-setup guard (`403` tenant / allow Ops / allow OFF); global webhook verify→forward & fail-closed | invalid signature ⇒ `401`, no message |
 | **Job specs** | `WhatsappEventsJob` routing + idempotency + status reconcile by `source_id` | duplicate `wamid` ⇒ no second message |
 | **Security specs** | DTO has no `provider_config` when ON; logs/job args scrubbed; audit row on impersonation/support access; self-add restricted | managed inbox DTO omits `api_key` |
 | **Feature-OFF regression specs** | each toggle OFF ⇒ stock behavior (the binding S-07 contract) | OFF ⇒ native WhatsApp UI + unguarded APIs + raw DTO |
@@ -550,8 +556,9 @@ native** (routing, idempotency, status reconcile), the spike runtime proofs (S-0
 ## 18. Recommended Next Step
 
 **First implementation slice after approval: Phase 1 — feature-toggle foundation.** Build the `Bloomwire::Features`
-central service (master AND-gate + `InstallationConfig`-backed keys, defaults OFF) and the gated super-admin Bloomwire
-page, shipped **dark** (every toggle OFF → zero behavior change), with unit specs for the AND-gate and **feature-OFF
+central service (master AND-gate + `InstallationConfig`-backed keys, defaults OFF) and the **SuperAdmin-only** Bloomwire
+control page (**reachable with master OFF** — the bootstrap surface that lets a SuperAdmin enable Bloomwire from the UI,
+no out-of-band DB edits), shipped **dark** (every toggle OFF → zero **tenant-facing** behavior change), with unit specs for the AND-gate and **feature-OFF
 regression specs** proving the app still equals the S-07 `develop` baseline.
 
 It is the smallest, safest, zero-risk foundation every later phase depends on, needs **no** Meta credentials, and
