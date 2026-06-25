@@ -99,7 +99,7 @@ token logs, unaudited impersonation/self-add) are live, so managed traffic must 
 privacy hardening is OFF, and the SuperAdmin control page **refuses to enable** either managed-data toggle while privacy
 hardening is OFF (offering to enable the bundle). Privacy hardening may be enabled **on its own** — it is a pure no-op
 safety layer when no managed traffic exists. (Phase order already reflects this: Phase 2 privacy foundation lands before
-the Phase 6 router / Phase 7 onboarding slices.)
+the managed-data slices that depend on it — **Phase 4** managed-onboarding (Ops UI) and **Phase 6** global webhook router.)
 
 | Toggle | Suggested key | Default | Controls |
 |---|---|---|---|

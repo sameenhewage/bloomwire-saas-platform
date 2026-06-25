@@ -134,9 +134,10 @@ storage so values live in the existing admin/config plumbing.
 | Setting / action | Type | Notes |
 |---|---|---|
 | Enable Bloomwire/Unecast mode | toggle | Master (`BLOOMWIRE_MODE_ENABLED`) |
-| Enable managed WhatsApp onboarding | toggle | Sub-feature |
-| Enable global Meta webhook router | toggle | Sub-feature |
+| Enable managed WhatsApp onboarding | toggle | Sub-feature — **requires Privacy hardening ON**; the page refuses to enable it otherwise (offers the bundle), see §2.2 |
+| Enable global Meta webhook router | toggle | Sub-feature — **requires Privacy hardening ON**; the page refuses to enable it otherwise (offers the bundle), see §2.2 |
 | Restrict native customer WhatsApp setup | toggle | Sub-feature |
+| Enable privacy hardening | toggle | Sub-feature — **prerequisite** for managed onboarding + global router (§2.2, §8); may be enabled on its own |
 | Global webhook callback URL | read-only field | The single Bloomwire ingress URL (built from `FRONTEND_URL`/configured host) |
 | Webhook verify token | masked field | Used by Meta GET-verify handshake; mask + reveal-on-demand |
 | Webhook status | read-only indicator | e.g. `not_configured / verified / receiving / error` |
