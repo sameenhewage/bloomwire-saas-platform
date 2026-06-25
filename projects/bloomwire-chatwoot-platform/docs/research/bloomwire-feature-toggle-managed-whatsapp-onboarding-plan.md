@@ -199,6 +199,12 @@ embedded signup marks `provider_config['source'] = 'embedded_signup'`). The guar
 
 The customer **never** configures Meta App, webhook, Phone Number ID, Business Account ID, or API key.
 
+**Activation invariant.** Ops may flip an account to `active` (owner dashboard enabled) **only when native-setup
+restriction is in force for that account** (`BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` ON — §4). Otherwise the
+just-onboarded owner could open **Settings → Inboxes** and self-add an **unmanaged** WhatsApp channel with their own Meta
+credentials, defeating the managed model. The restriction (§4) therefore lands **before** (or with) the first activation,
+never after.
+
 ### 5.2 Onboarding statuses
 
 State machine on the routing/control registry (`onboarding_status`):
@@ -218,7 +224,7 @@ registered
 | `number_submitted` | WhatsApp Business number provided | Customer |
 | `setup_in_progress` | Ops performing WhatsApp onboarding | Ops |
 | `waiting_for_customer_otp_or_approval` | Blocked on customer OTP/Meta approval | Ops (awaiting customer) |
-| `active` | Channel + Inbox live, routing registered, dashboard enabled | Ops / system on success |
+| `active` | Channel + Inbox live, routing registered, dashboard enabled — **only when native-setup restriction is in force for the account** (activation invariant above) | Ops / system on success |
 | `failed` | Onboarding failed; needs retry | System/Ops |
 
 *(Exact OTP/approval capture mechanics in a managed flow are an open question — §11.)*
@@ -377,15 +383,16 @@ These remain **required before final implementation confidence**. **S-01…S-06 
 
 ## 12. Recommended next step after this plan
 
-**Run S-01 first**, immediately followed by **S-02**.
+**Status (updated): spikes S-01 → S-07 are complete.** All runtime gates this plan depended on — S-01 (multi-inbox),
+S-02 (multi-WABA routing), S-03 (global front-door), S-04 (outgoing + status), S-05/S-06 (privacy) — have been run; see
+the S-01…S-07 reports in this folder and the **final architecture plan §2 evidence table**. **P-01…P-04 are confirmed**
+(live Meta *send* remains a production **[BLOCKER]**) and **P-05 is confirmed as a real privacy risk**. The S-01-first
+sequencing below is retained **for history**.
 
-- **Why S-01 first:** it is the **cheapest** spike with **zero external dependencies** (no real Meta app needed —
-  seed two `Channel::Whatsapp` + inboxes under one account), and it validates the **foundational premise** the entire
-  managed model rests on: one account holding multiple WhatsApp inboxes with correct creation, listing, and routing
-  (P-01). It is also a hard **prerequisite** for S-02 (which needs ≥2 WABAs/inboxes to exist).
-- **Then S-02 (the pivotal routing proof):** it directly validates the **routing-registry + global-router** core of
-  §6/§7 — that two `phone_number_id`s resolve to the correct account/inbox with **no cross-tenant leakage** — using
-  the existing controller/job, still without a real Meta app. Passing S-01→S-02 de-risks the highest-architecture
-  pieces before the more involved **S-03** (global front-door) and the privacy spikes **S-05/S-06**.
+**Recommended next step:** proceed to the **final architecture plan**
+(`bloomwire-final-feature-toggle-architecture-plan.md`) and its **Phase 1** (feature-toggle foundation). Do **not** re-run
+the spikes. Still **no product code** is implemented — this remains a planning/documentation pass.
 
-**Stop here.** This is a planning document only; no spikes are started and no code is implemented.
+*Historical sequencing (pre-spike):* S-01 first (cheapest, zero external deps, validates the multi-inbox premise P-01 and
+is a prerequisite for S-02), then S-02 (the pivotal routing-registry + global-router proof), before the more involved
+S-03 (global front-door) and the privacy spikes S-05/S-06.

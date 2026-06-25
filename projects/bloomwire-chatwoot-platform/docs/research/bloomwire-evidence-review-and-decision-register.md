@@ -7,6 +7,13 @@
 > (sections A–H + cross-cutting). This document reviews that evidence; it adds **no** new code reading.
 > **Scope note:** Pricing / billing / plan limits are **OUT OF SCOPE** for this pass (per request).
 > **Constraints honored:** nothing implemented, branched, switched, migrated, or PR'd. No product code edited.
+>
+> **⚠️ Status update — spikes complete (this register is now pre-spike / superseded).** The runtime spikes
+> **S-01 → S-07** in this folder are **DONE** (see the S-01…S-07 reports and the **final architecture plan §2 evidence
+> table**). Consequently **P-01…P-05 below are resolved**: **P-01…P-04 confirmed** (P-04 live Meta *send* remains a
+> production **[BLOCKER]**), and **P-05 confirmed as a real privacy risk** → addressed by the privacy-hardening
+> workstream (plan §11). The §0 index, the §2 "needs proof" items, and the §3 spike list are retained **for history**;
+> for current direction follow the architecture plan and **proceed to Phase 1** — do **not** re-run the spikes.
 
 ---
 
@@ -37,11 +44,11 @@ Full citations live in the source report.
 | D-07 | Owner owns inboxes/contacts/convos/campaigns/automations | Decision | **Confirmed** | §A, §C | Build on it |
 | D-08 | Bloomwire owns provider / control-plane | Decision (boundary) | **Confirmed intent** | §D, §E, §F, §C | Mechanisms gated on S-02..S-06 |
 | D-09 | WhatsWay = reference only, no code copy | Decision (hard rule) | **Confirmed** | §G | Concepts only |
-| P-01 | Multiple WA inboxes per account at runtime | Needs proof | **Open** | §A, §D | S-01 |
-| P-02 | One Bloomwire Meta App → many WABAs safely | Needs proof | **Open** | §E | S-02 |
-| P-03 | Bloomwire-owned global webhook → Chatwoot safely | Needs proof | **Open** | §D, §E | S-03 |
-| P-04 | Outgoing injection via Bloomwire API preserves history | Needs proof | **Open** | §F | S-04 |
-| P-05 | Platform admins prevented from reading tenant content | Needs proof | **Open** | §C | S-05, S-06 |
+| P-01 | Multiple WA inboxes per account at runtime | Needs proof | **Confirmed** (S-01 ✅) | §A, §D | Build per plan |
+| P-02 | One Bloomwire Meta App → many WABAs safely | Needs proof | **Confirmed** (S-02 ✅) | §E | Build (router, plan §6) |
+| P-03 | Bloomwire-owned global webhook → Chatwoot safely | Needs proof | **Confirmed** (S-03 ✅) | §D, §E | Build (router, plan §6) |
+| P-04 | Outgoing injection via Bloomwire API preserves history | Needs proof | **Confirmed** (S-04 ✅; live *send* = [BLOCKER]) | §F | Deferred gateway |
+| P-05 | Platform admins prevented from reading tenant content | Needs proof | **Confirmed risk** (S-05/S-06) | §C | Privacy workstream (plan §11) |
 
 ---
 
@@ -213,4 +220,10 @@ Each needs a **runtime spike**, a **business/product decision**, or both. Tag in
 
 **Out of scope here:** the final architecture plan, any branches/PRs, migrations, product-code edits, and pricing/billing.
 
-**Recommended next step:** run spikes **S-01 → S-06** and capture decision-grade results, then resolve business decisions **Q-03, Q-05, Q-06, Q-07, Q-08, Q-09, Q-10**. Once **P-01..P-05** are confirmed (or re-shaped) and the business questions are answered, proceed to the **final architecture plan** (separate document).
+**Status (updated):** spikes **S-01 → S-07** are **complete** (reports in this folder) and the **final architecture plan**
+exists (`bloomwire-final-feature-toggle-architecture-plan.md`). **P-01…P-05 are resolved** — P-01…P-04 confirmed (P-04
+live *send* = production **[BLOCKER]**), P-05 confirmed as a real privacy risk (privacy-hardening workstream, plan §11).
+
+**Recommended next step:** proceed to the architecture plan's **Phase 1** (feature-toggle foundation); do **not** re-run
+the spikes. Business decisions answered by the spikes: **Q-03, Q-04** (→ privacy workstream). Still-open **business**
+decisions to settle as their phases approach: **Q-05, Q-06, Q-07, Q-08, Q-09, Q-10**.

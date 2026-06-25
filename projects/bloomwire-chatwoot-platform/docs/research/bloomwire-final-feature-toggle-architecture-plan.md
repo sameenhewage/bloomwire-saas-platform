@@ -215,6 +215,12 @@ distinguishes **Ops context** vs **tenant context**, not merely "is WhatsApp". [
 
 The customer **never** configures Meta App, webhook, Phone Number ID, Business Account ID, or API key.
 
+**Activation invariant.** Ops may flip an account to `active` (owner dashboard enabled, §7.1) **only when native-setup
+restriction is in force for that account** (`BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` ON — §4.1, Phase 5). Otherwise the
+just-onboarded owner could open **Settings → Inboxes** and self-add an **unmanaged** WhatsApp channel with their own Meta
+credentials — exactly what this managed model forbids. The restriction guard therefore lands **before** (or with) the
+first activation, never after.
+
 ### 7.2 Status state machine (`onboarding_status` on the registry, §8)
 
 ```
@@ -232,7 +238,7 @@ registered
 | `number_submitted` | WhatsApp Business number provided | Customer |
 | `setup_in_progress` | Ops performing WhatsApp onboarding | Ops |
 | `waiting_for_customer_otp_or_approval` | Blocked on customer OTP / Meta approval | Ops (awaiting customer) |
-| `active` | Channel + Inbox live, routing registered, dashboard enabled | Ops / system on success |
+| `active` | Channel + Inbox live, routing registered, dashboard enabled — **only when native-setup restriction is in force for the account** (activation invariant above) | Ops / system on success |
 | `failed` | Onboarding failed; needs retry | System / Ops |
 
 *OTP / Meta-approval capture mechanics in an Ops-run flow are an Open Q (§17) and partly a production **[BLOCKER]**
@@ -414,7 +420,7 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 
 ### Phase 4 — Ops UI
 - **Objective:** Super-admin managed-onboarding controls + status transitions + **Ops-only** channel/inbox creation.
-- **Prereq:** Phase 2 privacy hardening (`BLOOMWIRE_PRIVACY_HARDENING` ON) — managed onboarding is **fail-closed** without it (§4.1), since a managed channel carries real Meta secrets + customer data.
+- **Prereq (two gates):** (1) **Privacy hardening** (`BLOOMWIRE_PRIVACY_HARDENING` ON, Phase 2) — managed onboarding is **fail-closed** without it (§4.1), since a managed channel carries real Meta secrets + customer data; (2) **native-setup restriction landed first** — Ops may flip an account to `active`/owner-dashboard only when `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` is in force for it (the §7 activation invariant), else the just-onboarded tenant could self-add **unmanaged** WhatsApp via the stock UI/API. **Order:** land **Phase 5 before any Phase 4 activation** (or ship the guard together with activation).
 - **Areas:** super-admin Bloomwire controllers/views; Ops service reusing `Whatsapp::ChannelCreationService`.
 - **Tests:** request specs — Ops can create + transition status; **tenant cannot** reach the Ops path.
 - **Runtime validation:** Ops creates channel/inbox; registry written; status → `active` (reuses S-01 mechanics).
@@ -422,7 +428,7 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 - **Feature-OFF regression:** no Ops page when OFF.
 
 ### Phase 5 — Restrict native customer WhatsApp setup
-- **Objective:** Hide UI + guard APIs for managed tenants (DTO flag + `Bloomwire::GuardNativeWhatsappSetup`).
+- **Objective:** Hide UI + guard APIs for managed tenants (DTO flag + `Bloomwire::GuardNativeWhatsappSetup`). **Activation prerequisite:** this guard must be in force for an account **before** Phase 4 flips it to `active` (§7 activation invariant) — so although numbered Phase 5, it lands **before/with** the first managed activation.
 - **Areas:** Vue channel components + route; `inboxes_controller`; `authorizations_controller`; guard concern; read-only DTO flag.
 - **Tests:** request specs — tenant create WhatsApp → **403** when ON+managed; allowed when OFF; **Ops exempt**; vitest UI hiding.
 - **Runtime validation:** managed tenant sees no WhatsApp tiles + API 403; non-managed unaffected.
