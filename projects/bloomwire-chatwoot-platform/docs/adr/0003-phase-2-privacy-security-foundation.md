@@ -44,6 +44,22 @@ byte-for-byte stock Chatwoot (S-07 baseline). **No tenant-facing change.**
 
 **Scope:** only keys in `MASKED_SECRET_KEYS` (currently `WHATSAPP_APP_SECRET`). Other secret fields are out of 2A scope.
 
+### Phase 2B — LOCKED (provider_config DTO/API scrub)
+
+When `Bloomwire::Features.enabled?(:privacy_hardening)` is true (master AND-gated), sensitive `provider_config` values
+are dropped from **outbound** API/JSON/browser responses. With privacy hardening OFF or master OFF, responses are
+byte-for-byte stock Chatwoot.
+
+1. **Single response surface.** The only DTO exposing raw `provider_config` is the account inbox serializer
+   `app/views/api/v1/models/_inbox.json.jbuilder` (the admin-only WhatsApp `json.provider_config` line). All other
+   `provider_config` reads are internal (services / jobs / models / webhook controller) and are **not** touched.
+2. **Centralized scrubber.** `Bloomwire::ProviderConfigScrubber.for_response(provider_config)` returns the stock value
+   unless privacy hardening is ON, in which case it omits sensitive keys (`api_key`, `webhook_verify_token`, and any
+   key matching `/secret|token|password|api_key/i`). Non-secret routing fields (`source`, `phone_number_id`,
+   `business_account_id`, ...) are preserved so the inbox/channel UI keeps working.
+3. **Output-only, non-mutating.** The scrubber returns a copy; the stored `provider_config` (jsonb at rest) is **never**
+   changed. No DB/schema/storage change and **no new toggle** (reuses `:privacy_hardening`).
+
 ### Phase 2B+ — DEFERRED (NOT decided here; open gates)
 
 These are recorded as **open decisions**, not silently made:
@@ -57,8 +73,8 @@ These are recorded as **open decisions**, not silently made:
 5. **Sidekiq payload redaction/encryption strategy** — non-mutating only (log/display redactor, encrypted job args,
    or out-of-band encrypted payload + reference); never strip `text.body` the worker consumes (plan §11). **DEFERRED.**
 
-Also still in Phase 2 but outside 2A: `provider_config` DTO scrub (`_inbox.json.jbuilder`), explicit-log token/error
-scrubbing, and self-add controls.
+Also still in Phase 2 but not yet done (later slices): explicit-log token/error scrubbing and self-add controls.
+(`provider_config` DTO scrub is now **done in Phase 2B** above.)
 
 ## Consequences
 
