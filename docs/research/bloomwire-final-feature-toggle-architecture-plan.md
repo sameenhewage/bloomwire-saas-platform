@@ -282,8 +282,10 @@ Meta → Bloomwire ONE global webhook endpoint
   `incoming_message_base_service.rb:36` (`find_message_by_source_id`) + Redis `MessageDedupLock` (SET NX). [RUNTIME-PROVEN, S-03]
 - **Fail-closed on both axes.** Invalid/malformed signature → rejected before forwarding; verified payload with unknown
   `phone_number_id` → forwarded but produces **no** message. [RUNTIME-PROVEN, S-03]
-- **Callback indirection insertion point:** `Whatsapp::WebhookSetupService#build_callback_url`
-  (`webhook_setup_service.rb:75-80`) returns the Bloomwire global URL when the router toggle is ON.
+- **Callback indirection insertion point:** `Whatsapp::WebhookSetupService#setup_webhook` (`webhook_setup_service.rb:58-62`)
+  registers **both** the callback URL (`build_callback_url`, `:75-80`) **and** the `verify_token` with Meta. When the
+  router toggle is ON the overlay must rewrite **both together** — the global URL **and** the global verify token (next
+  bullet) — not just the URL.
 - **Registry is control-plane, not the hot-path router (Phases 1–6).** The front-door only **verifies + forwards the
   unmodified payload**; the unmodified `WhatsappEventsJob` resolves the channel from payload metadata
   (`whatsapp_events_job.rb:155-161`) — exactly what S-02/S-03 proved **without** any registry. The routing registry (§8)
@@ -295,13 +297,18 @@ Meta → Bloomwire ONE global webhook endpoint
   anything resolved in the controller. Carry it via a **job overlay** (`prepend_mod_with`, already used at
   `whatsapp_events_job.rb:164`), an explicit channel-handoff arg, or safe payload normalization — never by assuming the
   stock job reads the front-door's resolution. (Tracked as Phase 7.)
-- **[CODE GAP] Global GET verify token is required.** The stock GET verifier cannot validate a global URL: native
-  `Webhooks::WhatsappController#valid_token?` (`whatsapp_controller.rb:19-23`) looks up `Channel::Whatsapp` by
-  `params[:phone_number]` and compares that channel's per-channel `provider_config['webhook_verify_token']`
-  (`channel/whatsapp.rb:124-126`). A global callback has **no** `:phone_number` param → `channel` is nil → `valid_token?`
-  returns falsy → Meta's `hub.challenge` setup **401s**. The router slice must add a **Bloomwire-owned global verify-token
-  store + check** (single `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN` in `InstallationConfig`/ENV, compared in the global GET
-  action) instead of reusing the per-channel verifier. This is a **design requirement**, independent of live Meta.
+- **[CODE GAP] Global verify token — the inbound check AND the outbound registration must match.** Two halves, both required:
+  - *Inbound check:* the stock GET verifier cannot validate a global URL — native `Webhooks::WhatsappController#valid_token?`
+    (`whatsapp_controller.rb:19-23`) looks up `Channel::Whatsapp` by `params[:phone_number]` and compares that channel's
+    per-channel `provider_config['webhook_verify_token']` (`channel/whatsapp.rb:124-126`). A global callback has **no**
+    `:phone_number` param → `channel` is nil → `valid_token?` falsy → Meta's `hub.challenge` **401s**. Add a
+    **Bloomwire-owned global verify-token store + check** (single `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN` in
+    `InstallationConfig`/ENV, compared in the global GET action).
+  - *Outbound registration:* `setup_webhook` (`webhook_setup_service.rb:58-62`) currently registers the **per-channel**
+    `provider_config['webhook_verify_token']` as Meta's `verify_token`. With the router ON, Meta would then call the global
+    URL with the **per-channel** token while the global action expects the **global** one → every registration/re-point
+    **fails the handshake**. The setup/override overlay must register the **same global token** it validates.
+  Both halves are a **design requirement**, independent of live Meta.
 - **[BLOCKER — needs real Meta]:** the live Meta GET `hub.challenge` handshake and a real signed Meta callback can only be
   proven in production/staging (the global verify-token + signature logic itself is S-03-proven via a faithful
   always-verify replica).
@@ -403,10 +410,11 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 - **Feature-OFF regression:** OFF → native UI + APIs unguarded (S-07 baseline).
 
 ### Phase 6 — Global webhook router
-- **Objective:** Bloomwire global ingress (verify one app secret → forward `WhatsappEventsJob`) + callback-URL indirection.
-- **Areas:** new `Webhooks::Bloomwire*` controller + route; overlay on `webhook_setup_service#build_callback_url`.
-- **Tests:** request specs with **fake secret + signed body** — valid→forward; invalid/malformed→401; unknown pnid→no message; duplicate→idempotent. **No real Meta.**
+- **Objective:** Bloomwire global ingress (verify one app secret → forward `WhatsappEventsJob`) + callback indirection (URL **and** verify token).
+- **Areas:** new `Webhooks::Bloomwire*` controller + route; global GET verify-token action; overlay on `webhook_setup_service#setup_webhook` that rewrites **both** `build_callback_url` **and** the registered `verify_token`; re-registration task for existing managed WABAs.
+- **Tests:** request specs with **fake secret + signed body** — valid→forward; invalid/malformed→401; unknown pnid→no message; duplicate→idempotent; GET `hub.challenge` with the global token→200, wrong token→403. **No real Meta.**
 - **Runtime validation:** replicate S-03 (signed sample → 1 message; dup → 1; bad sig → reject).
+- **Enablement [BLOCKER — needs real Meta]:** flipping `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` ON does **not** re-point WABAs already registered in earlier phases — Meta keeps the prior per-number `override_callback_uri` and keeps posting to `/webhooks/whatsapp/:phone_number`, bypassing the front-door until each managed channel is **re-registered** (`register_callback`/`setup_webhook` with the global URL + global token). Ship an explicit re-registration runbook, not just a toggle.
 - **Rollback:** toggle OFF → per-number registration. **CAVEAT [BLOCKER]:** if Meta callbacks were re-pointed to the global URL, full rollback needs a **Meta-side re-point** (documented runbook step).
 - **Feature-OFF regression:** OFF → stock per-number `Webhooks::WhatsappController`.
 
@@ -473,9 +481,10 @@ native** (routing, idempotency, status reconcile), the spike runtime proofs (S-0
   required).
 - **Data rollback expectations:** early phases add **only** an additive table (no destructive migration); rolling back
   code leaves native data intact. The registry can be dropped later if truly abandoned.
-- **Global webhook re-point caveat [BLOCKER]:** if the router was ON and Meta callbacks were re-pointed to the Bloomwire
-  global URL, returning to per-number ingress requires a **Meta-side callback re-point** (an external action, not a code
-  toggle). Ship a documented re-point runbook for router rollback specifically.
+- **Global webhook re-point caveat [BLOCKER]:** Meta's callback URL + verify token are **registration state on Meta's
+  side**, not a code toggle, so re-pointing is required in **both** directions — **enabling** the router means
+  re-registering existing managed WABAs to the global URL + global token (§Phase 6 Enablement), and **rolling back** means
+  re-pointing them back to per-number ingress. Ship a documented re-point/re-register runbook covering both.
 
 ---
 
