@@ -1,5 +1,10 @@
 class SuperAdmin::InstallationConfigsController < SuperAdmin::ApplicationController
   rescue_from ActiveRecord::RecordNotUnique, :with => :invalid_action_perfomed
+
+  # Bloomwire: managed-data toggles must never be persisted ON through this generic config editor
+  # while privacy hardening is OFF (architecture plan §4.1, ADR-0002 §5). This closes the path that
+  # bypasses SuperAdmin::BloomwireConfigsController's guard.
+  before_action :enforce_bloomwire_privacy_prerequisite, only: [:create, :update]
   # Overwrite any of the RESTful controller actions to implement custom behavior
   # For example, you may want to send an email after a foo is updated.
   #
@@ -66,6 +71,20 @@ class SuperAdmin::InstallationConfigsController < SuperAdmin::ApplicationControl
   end
 
   private
+
+  def enforce_bloomwire_privacy_prerequisite
+    name = bloomwire_config_name
+    return unless Bloomwire::Features.privacy_dependent_key?(name)
+    return unless ActiveModel::Type::Boolean.new.cast(resource_params[:value])
+    return if Bloomwire::Features.raw_enabled?(:privacy_hardening)
+
+    redirect_back fallback_location: super_admin_installation_configs_path,
+                  alert: "#{name} cannot be enabled while BLOOMWIRE_PRIVACY_HARDENING is OFF."
+  end
+
+  def bloomwire_config_name
+    resource_params[:name].presence || (action_name == 'update' ? requested_resource.name : nil)
+  end
 
   def success_flash(resource)
     message = translate_with_resource('update.success')

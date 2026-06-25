@@ -550,3 +550,51 @@
   value: 'https://us.cloud.langfuse.com'
   locked: false
 ## ---- End of LLM Observability ---- ##
+
+## ------- Bloomwire / Unecast Feature Toggles ------- ##
+# Phase 1 feature-toggle foundation. All default OFF and are read only via Bloomwire::Features.
+# The master (BLOOMWIRE_MODE_ENABLED) AND-gates every sub-feature; managed-data sub-features
+# also require BLOOMWIRE_PRIVACY_HARDENING ON. OFF = stock Chatwoot for tenants.
+- name: BLOOMWIRE_MODE_ENABLED
+  display_title: 'Bloomwire Mode (master)'
+  description: 'Master switch for the entire Bloomwire/Unecast layer. OFF = stock Chatwoot for tenants.'
+  value: false
+  locked: false
+  type: boolean
+- name: BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING
+  display_title: 'Bloomwire Managed WhatsApp Onboarding'
+  description: 'Ops-driven managed WhatsApp onboarding. Requires Privacy hardening ON. (Behavior lands in a later phase.)'
+  value: false
+  locked: false
+  type: boolean
+- name: BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER
+  display_title: 'Bloomwire Global Webhook Router'
+  description: 'Global Meta webhook front-door + phone_number_id routing. Requires Privacy hardening ON. (Later phase.)'
+  value: false
+  locked: false
+  type: boolean
+- name: BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP
+  display_title: 'Bloomwire Restrict Native WhatsApp Setup'
+  description: 'Hide tenant WhatsApp setup UI and guard the create/update APIs for managed tenants. (Later phase.)'
+  value: false
+  locked: false
+  type: boolean
+- name: BLOOMWIRE_PRIVACY_HARDENING
+  display_title: 'Bloomwire Privacy Hardening'
+  description: 'Secret masking, DTO/log scrubbing, support-access audit. Prerequisite for managed-data features. (Later phase.)'
+  value: false
+  locked: false
+  type: boolean
+- name: BLOOMWIRE_OUTGOING_GATEWAY
+  display_title: 'Bloomwire Outgoing Gateway'
+  description: 'Managed outbound send wrapper. (Later phase / deferred.)'
+  value: false
+  locked: false
+  type: boolean
+- name: BLOOMWIRE_CUSTOM_BRANDING
+  display_title: 'Bloomwire Custom Branding'
+  description: 'White-label naming/branding. (Later phase / deferred.)'
+  value: false
+  locked: false
+  type: boolean
+## ------- End of Bloomwire / Unecast Feature Toggles ------- ##
