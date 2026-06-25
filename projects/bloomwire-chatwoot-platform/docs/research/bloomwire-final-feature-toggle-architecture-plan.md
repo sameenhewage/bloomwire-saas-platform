@@ -175,8 +175,9 @@ design itself is build-ready.*
 ### 6.1 By mode
 - **OFF:** native account-level WhatsApp setup remains **visible and unchanged** — provider chooser + `CloudWhatsapp.vue`
   manual form + `WhatsappEmbeddedSignup.vue` → native endpoints (S-07 baseline; must not regress).
-- **ON (managed tenant):** customer-facing **technical WhatsApp setup is hidden/disabled**. Customers never see or
-  submit Meta App / webhook / Phone Number ID / Business Account ID / API key.
+- **ON (managed tenant):** customer-facing **technical WhatsApp setup is hidden/disabled** — both **creating** a new
+  WhatsApp inbox **and editing an existing managed one's** credentials. Customers never see, submit, or **later edit**
+  Meta App / webhook / Phone Number ID / Business Account ID / API key.
 
 ### 6.2 UI hiding is necessary but **not sufficient** — guard the APIs too
 
@@ -185,10 +186,14 @@ design itself is build-ready.*
 | UI | `dashboard/settings/inbox/channels/Whatsapp.vue`, `CloudWhatsapp.vue`, `WhatsappEmbeddedSignup.vue`, `360DialogWhatsapp.vue`, route `settings/inboxes/new/whatsapp` | Hide/disable WhatsApp tiles + forms for managed tenants (driven by a **read-only, non-secret DTO flag**) |
 | API — manual create | `Api::V1::Accounts::InboxesController#create` / `create_channel` (`inboxes_controller.rb:33-46,93-101`) | Reject `channel.type == 'whatsapp'` for tenant (non-Ops) callers |
 | API — embedded signup | `Api::V1::Accounts::Whatsapp::AuthorizationsController#create` (`authorizations_controller.rb:7-24`) | Reject tenant-initiated embedded signup |
+| API — **update existing** | `Api::V1::Accounts::InboxesController#update` → `update_channel` (`inboxes_controller.rb:48-54,107-130`), which permits `Channel::Whatsapp::EDITABLE_ATTRS` = `[:phone_number, :provider, {provider_config:{}}]` (`channel/whatsapp.rb:25`) | Reject tenant edits to a **managed** WhatsApp inbox's `provider_config`/`phone_number`/`provider` — else a tenant admin can PATCH and replace `api_key`/ids, **breaking or hijacking** the managed channel; Ops-exempt |
+| UI — **existing-inbox settings** | `settingsPage/ConfigurationPage.vue` (`updateWhatsAppInboxAPIKey` → `inboxes/updateInbox`, `:150-168`; + embedded reconfigure) | Hide/disable the API-key edit + reconfigure for managed tenants |
 
-**Mechanism:** a small `before_action` guard concern (e.g. `Bloomwire::GuardNativeWhatsappSetup`) included into those
-two controllers, consulting `Bloomwire::Features` + the account's `managed` flag, returning `403` for tenant callers
-when restriction is ON. Additive and removable.
+**Mechanism:** a small `before_action` guard concern (e.g. `Bloomwire::GuardNativeWhatsappSetup`) included into
+`InboxesController` (**`create` *and* `update`**) and `Whatsapp::AuthorizationsController#create`, consulting
+`Bloomwire::Features` + the account's `managed` flag, returning `403` for tenant callers when restriction is ON. On
+`update` it must reject any change to a managed WhatsApp channel's `provider_config`/`phone_number`/`provider` (the
+`EDITABLE_ATTRS`), **not just creation**. Additive and removable.
 
 ### 6.3 Ops exemption path
 When restriction is ON, **Bloomwire Ops** must still create/link `Channel::Whatsapp` + `Inbox` for the customer.
@@ -430,9 +435,9 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 
 ### Phase 5 — Restrict native customer WhatsApp setup
 - **Objective:** Hide UI + guard APIs for managed tenants (DTO flag + `Bloomwire::GuardNativeWhatsappSetup`). **Activation prerequisite:** this guard must be in force for an account **before** Phase 4 flips it to `active` (§7 activation invariant) — so although numbered Phase 5, it lands **before/with** the first managed activation.
-- **Areas:** Vue channel components + route; `inboxes_controller`; `authorizations_controller`; guard concern; read-only DTO flag.
-- **Tests:** request specs — tenant create WhatsApp → **403** when ON+managed; allowed when OFF; **Ops exempt**; vitest UI hiding.
-- **Runtime validation:** managed tenant sees no WhatsApp tiles + API 403; non-managed unaffected.
+- **Areas:** Vue channel components + route + **`settingsPage/ConfigurationPage.vue`** (existing-inbox API-key/reconfigure); `inboxes_controller` (**`create` *and* `update`/`update_channel`**); `authorizations_controller`; guard concern; read-only DTO flag.
+- **Tests:** request specs — tenant **create** WhatsApp **and PATCH `update` of a managed inbox's `provider_config`/`phone_number`** → **403** when ON+managed; allowed when OFF; **Ops exempt**; vitest UI hiding (tiles + `ConfigurationPage` API-key edit).
+- **Runtime validation:** managed tenant sees no WhatsApp tiles + API 403 (create **and** update); non-managed unaffected.
 - **Rollback:** toggle OFF.
 - **Feature-OFF regression:** OFF → native UI + APIs unguarded (S-07 baseline).
 
@@ -487,7 +492,7 @@ signed body**; the `:channel_whatsapp` factory must pass `validate_provider_conf
 |---|---|---|
 | **Unit specs** | `Bloomwire::Features` master AND-gate; defaults OFF; **privacy-hardening prerequisite** | master OFF ⇒ every sub-feature `enabled?` false; **managed onboarding/router `enabled?` false unless privacy hardening ON** |
 | **Model specs** | registry validations; **`phone_number_id` unique index**; **no secret columns**; `managed` flag | duplicate pnid rejected |
-| **Request specs** | super-admin page **reachable to SuperAdmin (master-OFF bootstrap) + forbidden to non-SuperAdmin**; native-setup guard (`403` tenant / allow Ops / allow OFF); global webhook verify→forward & fail-closed | invalid signature ⇒ `401`, no message |
+| **Request specs** | super-admin page **reachable to SuperAdmin (master-OFF bootstrap) + forbidden to non-SuperAdmin**; native-setup guard on **`create` *and* `update`** (`403` tenant create / tenant `PATCH` of managed `provider_config` / allow Ops / allow OFF); global webhook verify→forward & fail-closed | tenant PATCH of managed `provider_config` ⇒ `403`; invalid signature ⇒ `401`, no message |
 | **Job specs** | `WhatsappEventsJob` routing + idempotency + status reconcile by `source_id` | duplicate `wamid` ⇒ no second message |
 | **Security specs** | DTO has no `provider_config` when ON; logs/job display redacted or payload encrypted without mutating `WhatsappEventsJob` input; inbound text still creates `Message#content`; audit row on impersonation/support access; self-add restricted | managed inbox DTO omits `api_key` |
 | **Feature-OFF regression specs** | each toggle OFF ⇒ stock behavior (the binding S-07 contract) | OFF ⇒ native WhatsApp UI + unguarded APIs + raw DTO |

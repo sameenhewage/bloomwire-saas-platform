@@ -251,9 +251,10 @@ All of these are **wrap-not-replace** seams; OFF must leave them at current beha
 
 | Concern | Insertion point (file:line) | ON behavior |
 |---|---|---|
-| Hide account WhatsApp UI | `channels/Whatsapp.vue`, `CloudWhatsapp.vue`, `WhatsappEmbeddedSignup.vue`, `360DialogWhatsapp.vue` + SPA route `settings/inboxes/new/whatsapp` | Hide/disable tenant-facing technical setup (read-only DTO flag drives it) |
+| Hide account WhatsApp UI | `channels/Whatsapp.vue`, `CloudWhatsapp.vue`, `WhatsappEmbeddedSignup.vue`, `360DialogWhatsapp.vue` + SPA route `settings/inboxes/new/whatsapp`; **existing-inbox `settingsPage/ConfigurationPage.vue`** (API-key edit + reconfigure) | Hide/disable tenant-facing technical setup, **new *and* existing** (read-only DTO flag drives it) |
 | Restrict manual create API | `InboxesController#create` / `create_channel` (`inboxes_controller.rb:33-46,93-101`) | Deny `channel.type == 'whatsapp'` for tenant callers |
 | Restrict embedded API | `Whatsapp::AuthorizationsController#create` (`authorizations_controller.rb:7-24`) | Deny tenant-initiated embedded signup |
+| Restrict **update** API | `InboxesController#update` → `update_channel` (`inboxes_controller.rb:48-54,107-130`); permits `Channel::Whatsapp::EDITABLE_ATTRS` incl. `provider_config` (`channel/whatsapp.rb:25`) | Deny tenant edits to a managed WhatsApp inbox's `provider_config`/`phone_number`/`provider` (a tenant admin could otherwise PATCH `api_key`/ids) |
 | Ops-only setup path | new Bloomwire admin/ops service reusing `ChannelCreationService` / inbox create internally | Bloomwire performs setup on behalf of the customer |
 | Webhook callback URL | `WebhookSetupService#build_callback_url` (`webhook_setup_service.rb:75-80`) | Point to Bloomwire global front door; reuse payload-metadata resolution |
 | Routing registry writes | channel creation paths (`ChannelCreationService`, `InboxesController#create`) | Upsert additive Bloomwire routing row (no message/conversation duplication) |

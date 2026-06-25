@@ -158,8 +158,9 @@ storage so values live in the existing admin/config plumbing.
 - **OFF:** the native account-level WhatsApp setup remains **visible and unchanged** — provider chooser +
   `CloudWhatsapp.vue` manual form + `WhatsappEmbeddedSignup.vue`, submitting to the native endpoints. This is the
   S-07-proven baseline and must not regress.
-- **ON (managed tenant):** the **customer-facing technical WhatsApp setup is hidden/disabled**. Customers must never
-  see or submit Meta App / webhook / Phone Number ID / Business Account ID / API key.
+- **ON (managed tenant):** the **customer-facing technical WhatsApp setup is hidden/disabled** — both **creating** a new
+  WhatsApp inbox **and editing an existing managed one's** credentials. Customers must never see, submit, or **later
+  edit** Meta App / webhook / Phone Number ID / Business Account ID / API key.
 
 ### 4.2 UI hiding is necessary but **not sufficient** — guard the APIs
 
@@ -170,10 +171,14 @@ Hiding components only removes the button; the REST endpoints are still reachabl
 | UI — provider chooser + forms | `app/app/javascript/dashboard/routes/dashboard/settings/inbox/channels/Whatsapp.vue`, `CloudWhatsapp.vue`, `WhatsappEmbeddedSignup.vue`, `360DialogWhatsapp.vue`, and the SPA route `settings/inboxes/new/whatsapp` | Hide/disable WhatsApp tiles + forms for managed tenants (driven by a read-only DTO flag, mirroring prior art **WA.2D** on `version_1`) |
 | API — manual create | `Api::V1::Accounts::InboxesController#create` / `create_channel` (`app/app/controllers/api/v1/accounts/inboxes_controller.rb:33-46,93-101`) | Reject `channel.type == 'whatsapp'` for tenant (non-Ops) callers |
 | API — embedded signup | `Api::V1::Accounts::Whatsapp::AuthorizationsController#create` (`app/app/controllers/api/v1/accounts/whatsapp/authorizations_controller.rb:7-24`) | Reject tenant-initiated embedded signup |
+| API — **update existing** | `Api::V1::Accounts::InboxesController#update` → `update_channel` (`inboxes_controller.rb:48-54,107-130`); permits `Channel::Whatsapp::EDITABLE_ATTRS` = `[:phone_number, :provider, {provider_config:{}}]` (`channel/whatsapp.rb:25`) | Reject tenant edits to a **managed** inbox's `provider_config`/`phone_number`/`provider` — else a tenant admin can PATCH and replace `api_key`/ids, **breaking/hijacking** the managed channel; Ops-exempt |
+| UI — **existing-inbox settings** | `settingsPage/ConfigurationPage.vue` (`updateWhatsAppInboxAPIKey` → `inboxes/updateInbox`, `:150-168`; + embedded reconfigure) | Hide/disable the API-key edit + reconfigure for managed tenants (mirrors prior art **WA.2D**) |
 
 Recommended mechanism: a small **before_action guard concern** (e.g. `Bloomwire::GuardNativeWhatsappSetup`) included
-into those two controllers that consults `Bloomwire::Features` + the account's managed flag, returning `403` for
-tenant callers when restriction is ON. This is additive and removable.
+into `InboxesController` (**`create` and `update`**) + `Whatsapp::AuthorizationsController#create`, consulting
+`Bloomwire::Features` + the account's managed flag, returning `403` for tenant callers when restriction is ON — and on
+`update` rejecting any change to a managed WhatsApp channel's `provider_config`/`phone_number`/`provider`, **not just
+creation**. This is additive and removable.
 
 ### 4.3 Ops/Admin must still create channels internally
 
