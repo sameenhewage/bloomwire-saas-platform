@@ -24,8 +24,10 @@ WhatsWay is **reference-only** (concepts, never code — decision **D-09**).
 ## 1. Executive Summary
 
 Bloomwire/Unecast is a **thin, additive control-plane layer** on top of **unmodified** Chatwoot, switched on by a
-small set of **feature toggles**. With every toggle **OFF**, the application is byte-for-byte stock Chatwoot — exactly
-today's `develop` baseline, which S-07 proved at runtime. With toggles **ON**, Bloomwire takes over only the *edges*
+small set of **feature toggles**. With every toggle **OFF**, all **tenant-facing / runtime** behavior is byte-for-byte
+stock Chatwoot — exactly today's `develop` baseline, which S-07 proved at runtime; the **only** OFF-state addition is the
+**SuperAdmin-only** Bloomwire control page (the master-toggle bootstrap surface; zero tenant-facing impact). With toggles
+**ON**, Bloomwire takes over only the *edges*
 Chatwoot does not own per tenant:
 
 1. It **onboards WhatsApp for the customer** (Ops-driven), so the customer never touches Meta App, webhook, Phone
@@ -88,13 +90,24 @@ Meta GET verify (`hub.challenge`) handshake, a real signed Meta callback, the ac
 A **master toggle** AND-gates all sub-toggles: if the master is OFF, every sub-feature is forced OFF regardless of its
 stored value.
 
+**Privacy-hardening prerequisite (data-handling dependency).** Beyond the master AND-gate, `Bloomwire::Features` enforces
+one **dependency**: the **managed-data** toggles — `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING` and
+`BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` — are **inert unless `BLOOMWIRE_PRIVACY_HARDENING` is also ON**. The moment a managed
+tenant carries real customer data, the §11 gaps (raw `provider_config` DTOs, message bodies in logs/Sidekiq job args,
+token logs, unaudited impersonation/self-add) are live, so managed traffic must **not** run unprotected. Enforcement is
+**fail-closed**: `enabled?(:managed_whatsapp_onboarding)` and `enabled?(:global_webhook_router)` return **false** when
+privacy hardening is OFF, and the SuperAdmin control page **refuses to enable** either managed-data toggle while privacy
+hardening is OFF (offering to enable the bundle). Privacy hardening may be enabled **on its own** — it is a pure no-op
+safety layer when no managed traffic exists. (Phase order already reflects this: Phase 2 privacy foundation lands before
+the Phase 6 router / Phase 7 onboarding slices.)
+
 | Toggle | Suggested key | Default | Controls |
 |---|---|---|---|
 | **Master** — Bloomwire mode | `BLOOMWIRE_MODE_ENABLED` | OFF | Global on/off for the entire Bloomwire layer |
-| Managed WhatsApp onboarding | `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING` | OFF | Ops onboarding flow + statuses + registry writes |
-| Global Meta webhook router | `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` | OFF | Global ingress + `phone_number_id` routing + callback-URL indirection |
+| Managed WhatsApp onboarding | `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING` | OFF | Ops onboarding flow + statuses + registry writes — **requires Privacy hardening ON** (§4.1, §11) |
+| Global Meta webhook router | `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` | OFF | Global ingress + `phone_number_id` routing + callback-URL indirection — **requires Privacy hardening ON** (§4.1, §11) |
 | Restrict native WhatsApp setup | `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` | OFF | Hide tenant WhatsApp UI **and** guard the create APIs |
-| Privacy hardening | `BLOOMWIRE_PRIVACY_HARDENING` | OFF | Secret masking, DTO/log/job scrubbing, impersonation/self-add controls, support audit |
+| Privacy hardening | `BLOOMWIRE_PRIVACY_HARDENING` | OFF | Secret masking, DTO/log/job scrubbing, impersonation/self-add controls, support audit — **prerequisite for managed onboarding/router** |
 | Outgoing gateway *(later)* | `BLOOMWIRE_OUTGOING_GATEWAY` | OFF | Tenant outbound API/webhooks (deferred) |
 | Custom branding *(later)* | `BLOOMWIRE_CUSTOM_BRANDING` | OFF | White-label naming/branding (deferred) |
 
@@ -143,7 +156,7 @@ tenant workspace session does **not** grant it. [RUNTIME-PROVEN, S-07]
 | Setting / action | Type | Notes |
 |---|---|---|
 | Enable Bloomwire mode | toggle | Master (`BLOOMWIRE_MODE_ENABLED`); **reachable even when OFF** — this is the bootstrap control, so the page renders it regardless of master state |
-| Enable managed onboarding / global router / restrict native setup / privacy hardening | toggles | Sub-features |
+| Enable managed onboarding / global router / restrict native setup / privacy hardening | toggles | Sub-features. **Managed onboarding + global router require Privacy hardening ON** — the page refuses to enable them otherwise (offers the bundle); see §4.1 |
 | Global webhook callback URL | read-only | The single Bloomwire ingress URL (from configured host) |
 | Webhook verify token | **masked** field | Meta GET-verify handshake; mask + reveal-on-demand; rotate action |
 | Webhook status | read-only | `not_configured / verified / receiving / error` (driven by registry control state) |
@@ -401,6 +414,7 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 
 ### Phase 4 — Ops UI
 - **Objective:** Super-admin managed-onboarding controls + status transitions + **Ops-only** channel/inbox creation.
+- **Prereq:** Phase 2 privacy hardening (`BLOOMWIRE_PRIVACY_HARDENING` ON) — managed onboarding is **fail-closed** without it (§4.1), since a managed channel carries real Meta secrets + customer data.
 - **Areas:** super-admin Bloomwire controllers/views; Ops service reusing `Whatsapp::ChannelCreationService`.
 - **Tests:** request specs — Ops can create + transition status; **tenant cannot** reach the Ops path.
 - **Runtime validation:** Ops creates channel/inbox; registry written; status → `active` (reuses S-01 mechanics).
@@ -417,6 +431,7 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 
 ### Phase 6 — Global webhook router
 - **Objective:** Bloomwire global ingress (verify one app secret → forward `WhatsappEventsJob`) + callback indirection (URL **and** verify token).
+- **Prereq:** Phase 2 privacy hardening (`BLOOMWIRE_PRIVACY_HARDENING` ON) — the router is **fail-closed** without it (§4.1), since inbound payloads carry customer message bodies through logs/job args.
 - **Areas:** new `Webhooks::Bloomwire*` controller + route; global GET verify-token action; overlay on `webhook_setup_service#setup_webhook` that rewrites **both** `build_callback_url` **and** the registered `verify_token`; re-registration task for existing managed WABAs.
 - **Tests:** request specs with **fake secret + signed body** — valid→forward; invalid/malformed→401; unknown pnid→no message; duplicate→idempotent; GET `hub.challenge` with the global token→200, wrong token→403. **No real Meta.**
 - **Runtime validation:** replicate S-03 (signed sample → 1 message; dup → 1; bad sig → reject).
@@ -463,7 +478,7 @@ signed body**; the `:channel_whatsapp` factory must pass `validate_provider_conf
 
 | Layer | What it asserts | Example |
 |---|---|---|
-| **Unit specs** | `Bloomwire::Features` master AND-gate; defaults OFF | master OFF ⇒ every sub-feature `enabled?` false |
+| **Unit specs** | `Bloomwire::Features` master AND-gate; defaults OFF; **privacy-hardening prerequisite** | master OFF ⇒ every sub-feature `enabled?` false; **managed onboarding/router `enabled?` false unless privacy hardening ON** |
 | **Model specs** | registry validations; **`phone_number_id` unique index**; **no secret columns**; `managed` flag | duplicate pnid rejected |
 | **Request specs** | super-admin page **reachable to SuperAdmin (master-OFF bootstrap) + forbidden to non-SuperAdmin**; native-setup guard (`403` tenant / allow Ops / allow OFF); global webhook verify→forward & fail-closed | invalid signature ⇒ `401`, no message |
 | **Job specs** | `WhatsappEventsJob` routing + idempotency + status reconcile by `source_id` | duplicate `wamid` ⇒ no second message |
