@@ -103,7 +103,8 @@ POST_COLLISION wa_global=2 (unchanged => duplicate rejected)
 
 **UI evidence [RUNTIME-PROVEN]:** Account workspace → Settings → Inboxes (as `john@acme.inc`, "Acme Inc") showed
 **"3 inboxes"**: `Acme Support` (Website) + `S01 Multi WA Test A` (**WhatsApp**, inbox 9) + `S01 Multi WA Test B`
-(**WhatsApp**, inbox 10). Screenshot: [`s01-evidence/01-account1-two-whatsapp-inboxes.png`](./s01-evidence/01-account1-two-whatsapp-inboxes.png).
+(**WhatsApp**, inbox 10). (Screenshot captured locally during the smoke test and **not committed**; the inbox-list
+state is recorded textually here rather than as a binary asset.)
 
 ## 7. What is proven [RUNTIME-PROVEN]
 
@@ -154,7 +155,7 @@ RESIDUE wa_test=0 inbox_test=0
   bypasses the `AccountCacheRevalidator` callback (`inbox.rb:46`), so the account cache key was not bumped and the
   workspace served its cached inbox list. The **DB and API are the source of truth and are clean**; this is a
   client-cache artifact of the raw-SQL cleanup, not a data-integrity issue.
-- **No product code changed.** Only this report, the screenshot under `docs/research/s01-evidence/`, and throwaway
+- **No product code changed.** Only this report, a locally-captured screenshot (**not committed**), and throwaway
   runner scripts (piped via stdin, nothing written to the repo) were used.
 
 ## 11. Decision impact on P-01

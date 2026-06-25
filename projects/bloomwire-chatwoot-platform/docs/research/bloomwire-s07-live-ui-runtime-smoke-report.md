@@ -73,7 +73,9 @@ http://127.0.0.1:3000/app/accounts/1/settings/inboxes/list
 
 ## 4. Screenshots captured
 
-Stored under [`docs/research/s07-evidence/`](./s07-evidence/):
+Screenshots were captured locally during the live smoke test and are **intentionally not committed** to the repo —
+one capture (`03-...-secret-not-masked`) shows an App Secret in cleartext, so committing it would leak a secret. The
+table below is the **textual evidence of record** for what each capture showed:
 
 | File | Shows |
 |---|---|
