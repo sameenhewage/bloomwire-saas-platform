@@ -41,5 +41,9 @@ while tenants use the standard Chatwoot inbox/agent experience.
 
 ## Status
 
-Architecture / documentation phase. **No product code yet.** First implementation slice = Phase 1 feature-toggle
-foundation (see `docs/product/04-prd-first-slice.md`).
+**Phase 1 (feature-toggle foundation) implemented** on branch `feature/bloomwire-phase-1-toggle-foundation`
+(see `docs/adr/0002-phase-1-feature-toggle-foundation.md` and `docs/product/04-prd-first-slice.md`).
+`Bloomwire::Features` (`app/lib/bloomwire/features.rb`) is the single toggle read-seam — all OFF by default, the
+master AND-gates every sub-feature, and managed-data toggles also require privacy hardening (fail-closed) — fronted
+by a SuperAdmin-only bootstrap page at `/super_admin/bloomwire_config`. Tenant-facing behavior is unchanged (OFF =
+stock Chatwoot). Next slice = Phase 2 (privacy hardening) per the architecture plan.
