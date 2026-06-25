@@ -2,12 +2,6 @@ class SuperAdmin::AppConfigsController < SuperAdmin::ApplicationController
   before_action :set_config
   before_action :allowed_configs
 
-  # Bloomwire Phase 2A (ADR-0003): InstallationConfig keys whose stored value must be masked here
-  # (rendered type=password, never echoed) while privacy hardening is ON. OFF => stock Chatwoot.
-  BLOOMWIRE_MASKED_SECRET_KEYS = %w[WHATSAPP_APP_SECRET].freeze
-
-  helper_method :bloomwire_masked_secret_key?
-
   def show
     # ref: https://github.com/rubocop/rubocop/issues/7767
     # rubocop:disable Style/HashTransformValues
@@ -26,7 +20,7 @@ class SuperAdmin::AppConfigsController < SuperAdmin::ApplicationController
     params['app_config'].each do |key, value|
       next unless @allowed_configs.include?(key)
       # Bloomwire Phase 2A: a blank masked-secret submit must not wipe the stored secret (it is never echoed on render).
-      next if bloomwire_masked_secret_key?(key) && value.blank?
+      next if Bloomwire::Features.masked_secret_key?(key) && value.blank?
 
       i = InstallationConfig.where(name: key).first_or_create(value: value, locked: false)
       i.value = value
@@ -41,12 +35,6 @@ class SuperAdmin::AppConfigsController < SuperAdmin::ApplicationController
   end
 
   private
-
-  # Bloomwire Phase 2A (ADR-0003): true only for a masked secret key while privacy hardening is ON
-  # (Bloomwire::Features is the single feature-read seam). Used by the view (render) and create (no-wipe).
-  def bloomwire_masked_secret_key?(key)
-    BLOOMWIRE_MASKED_SECRET_KEYS.include?(key) && Bloomwire::Features.enabled?(:privacy_hardening)
-  end
 
   def set_config
     @config = params[:config] || 'general'

@@ -22,7 +22,7 @@
           <%= form.label "app_config[#{key}]", @installation_configs[key]&.dig('display_title') || key %>
         </div>
         <div class="-mt-2 field-unit__field ">
-          <% if bloomwire_masked_secret_key?(key) %>
+          <% if Bloomwire::Features.masked_secret_key?(key) %>
             <%= form.password_field "app_config[#{key}]",
                 id: "app_config_#{key}",
                 value: nil,

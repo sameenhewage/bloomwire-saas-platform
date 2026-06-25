@@ -22,17 +22,27 @@ not made silently.
 
 ### Phase 2A — LOCKED (implemented in this slice)
 
-1. **SuperAdmin WhatsApp Embedded App Secret masking.** For `InstallationConfig` key `WHATSAPP_APP_SECRET` on the
-   SuperAdmin App Config surface (`/super_admin/app_config?config=whatsapp_embedded`):
-   - render the input as `type="password"` (not `type="text"`);
-   - **never echo** the stored secret back in cleartext (the input value is blank on load; a hint says "leave blank to
-     keep current");
-   - on save, a **blank** App Secret submission **must not overwrite** the stored value (no accidental wipe), while a
-     non-blank submission updates it.
-   - **Gate:** `Bloomwire::Features.enabled?(:privacy_hardening)` (the Phase 1 service is the single feature-read seam).
-     With privacy hardening OFF **or** master OFF, the field renders exactly as stock Chatwoot (`type=text`, echoed) —
-     S-07 baseline. **No tenant-facing change.**
-   - **Scope:** only `WHATSAPP_APP_SECRET` (the WhatsApp Embedded App Secret). Other secret fields are out of 2A scope.
+Phase 2A masks the SuperAdmin **App Secret** (`InstallationConfig` key `WHATSAPP_APP_SECRET`) on **every** SuperAdmin
+console surface that renders it. The masked-key set + the gate live in **one seam** (ADR-0002 §2 single feature-read
+seam): `Bloomwire::Features::MASKED_SECRET_KEYS` + `Bloomwire::Features.masked_secret_key?(name)`, which is
+master-AND-gated via `enabled?(:privacy_hardening)`. No scattered `ENV`/Features reads.
+
+1. **App Config surface** (`/super_admin/app_config?config=whatsapp_embedded`):
+   - render the App Secret input as `type="password"` (not `type="text"`) and **never echo** the stored value (blank on
+     load, with a "leave blank to keep current" hint);
+   - a **blank** submit must **not** overwrite the stored secret; a non-blank submit updates it.
+
+2. **Generic Administrate surface** (`/super_admin/installation_configs` index / show / `:id/edit`):
+   - **index & show**: render a redacted placeholder instead of the stored value (`SerializedField` `_index` / `_show`);
+   - **edit / new form**: render a `type="password"` field with **no echoed value** (`SerializedField` `_form`);
+   - **update / create**: a **blank** value for a masked key is dropped from `resource_params` so it **cannot wipe** the
+     stored secret; the existing managed-data privacy-prerequisite guard is unchanged.
+
+**Gate / OFF = stock:** every behavior above is active only when `Bloomwire::Features.masked_secret_key?(name)` is true
+(master ON **and** privacy hardening ON). With privacy hardening OFF **or** master OFF, both surfaces render
+byte-for-byte stock Chatwoot (S-07 baseline). **No tenant-facing change.**
+
+**Scope:** only keys in `MASKED_SECRET_KEYS` (currently `WHATSAPP_APP_SECRET`). Other secret fields are out of 2A scope.
 
 ### Phase 2B+ — DEFERRED (NOT decided here; open gates)
 

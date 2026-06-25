@@ -65,12 +65,22 @@ class SuperAdmin::InstallationConfigsController < SuperAdmin::ApplicationControl
   # end
 
   def resource_params
-    params.require(:installation_config)
-          .permit(:name, :value)
-          .transform_values { |value| value == '' ? nil : value }.merge(locked: false)
+    permitted = params.require(:installation_config)
+                      .permit(:name, :value)
+                      .transform_values { |value| value == '' ? nil : value }.merge(locked: false)
+    # Bloomwire Phase 2A: never wipe a masked secret on a blank submit (the value is not echoed on the form).
+    permitted.delete(:value) if blank_masked_secret_submission?(permitted)
+    permitted
   end
 
   private
+
+  def blank_masked_secret_submission?(permitted)
+    return false if permitted[:value].present?
+
+    name = permitted[:name].presence || (action_name == 'update' ? requested_resource.name : nil)
+    Bloomwire::Features.masked_secret_key?(name)
+  end
 
   def enforce_bloomwire_privacy_prerequisite
     name = bloomwire_config_name
