@@ -1,7 +1,7 @@
 # Bloomwire / Unecast — Feature-Toggle Managed WhatsApp Onboarding Plan
 
 > **Status:** **Planning document only.** No product code, no branches, no branch switching, no migrations, no PRs,
-> no Chatwoot behavior changes. **S-01…S-06 are NOT started.** Pricing/billing out of scope.
+> no Chatwoot behavior changes. **Update: runtime gates S-01…S-07 are now complete** (§10/§12; final architecture plan §2) — proceed to that plan's **Phase 1**, not back into the spikes; **still no product code**. Pricing/billing out of scope.
 > **Purpose:** Plan how Bloomwire/Unecast **managed WhatsApp onboarding** is added **behind feature toggles** while
 > preserving original Chatwoot behavior.
 > **Sources:** [`bloomwire-evidence-collection-report.md`](./bloomwire-evidence-collection-report.md) ·
@@ -45,8 +45,9 @@ The strategy is deliberately **wrap-not-replace**: Chatwoot remains the **source
 contacts, conversations, and messages; Bloomwire reuses the existing WhatsApp pipeline
 (`Webhooks::WhatsappEventsJob` → incoming-message services) rather than forking it. A **central feature-check
 service** (not scattered `ENV` checks) decides ON/OFF at a small number of well-defined seams identified in the RCA.
-**Rollback is "turn the toggles OFF."** Because the design is additive, the only spikes still required before
-implementation confidence are the runtime gates **S-01…S-06** (S-07 is already complete).
+**Rollback is "turn the toggles OFF."** Because the design is additive, the runtime gates that de-risk this plan
+(**S-01…S-07**) are now **all complete** (see §10/§12 and the final architecture plan §2 evidence table) — proceed to the
+final architecture plan's **Phase 1**, not back into the spikes.
 
 ---
 
