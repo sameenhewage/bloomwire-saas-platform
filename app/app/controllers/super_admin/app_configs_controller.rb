@@ -1,6 +1,7 @@
 class SuperAdmin::AppConfigsController < SuperAdmin::ApplicationController
   before_action :set_config
   before_action :allowed_configs
+
   def show
     # ref: https://github.com/rubocop/rubocop/issues/7767
     # rubocop:disable Style/HashTransformValues
@@ -18,6 +19,8 @@ class SuperAdmin::AppConfigsController < SuperAdmin::ApplicationController
     errors = []
     params['app_config'].each do |key, value|
       next unless @allowed_configs.include?(key)
+      # Bloomwire Phase 2A: a blank masked-secret submit must not wipe the stored secret (it is never echoed on render).
+      next if Bloomwire::Features.masked_secret_key?(key) && value.blank?
 
       i = InstallationConfig.where(name: key).first_or_create(value: value, locked: false)
       i.value = value

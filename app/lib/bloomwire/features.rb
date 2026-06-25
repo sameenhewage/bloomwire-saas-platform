@@ -21,6 +21,11 @@ module Bloomwire::Features
   # privacy prerequisite holds at ANY SuperAdmin config seam, not only the custom Bloomwire page.
   PRIVACY_DEPENDENT_KEYS = PRIVACY_DEPENDENT_FEATURES.map { |feature| SUB_FEATURES.fetch(feature) }.freeze
 
+  # InstallationConfig keys whose stored value must never be shown or echoed in cleartext on SuperAdmin
+  # surfaces while privacy hardening is ON (ADR-0003). Single source of truth for both the app_config
+  # view and the generic Administrate installation_configs editor.
+  MASKED_SECRET_KEYS = %w[WHATSAPP_APP_SECRET].freeze
+
   module_function
 
   def enabled?(feature)
@@ -42,6 +47,12 @@ module Bloomwire::Features
   # before it may be persisted to true (write-path guard, fail-closed).
   def privacy_dependent_key?(name)
     PRIVACY_DEPENDENT_KEYS.include?(name)
+  end
+
+  # True when `name` is a masked secret key AND privacy hardening is effectively ON (master AND-gated
+  # via enabled?). The single seam used by every SuperAdmin config surface to decide masking + no-wipe.
+  def masked_secret_key?(name)
+    MASKED_SECRET_KEYS.include?(name.to_s) && enabled?(:privacy_hardening)
   end
 
   # Stored toggle value WITHOUT the master AND-gate. Used by the SuperAdmin bootstrap page UI.

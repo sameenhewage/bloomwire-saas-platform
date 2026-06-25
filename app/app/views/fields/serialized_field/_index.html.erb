@@ -1,4 +1,6 @@
-<% if field.array? %>
+<% if field.resource.respond_to?(:name) && Bloomwire::Features.masked_secret_key?(field.resource.name) %>
+  <span class="text-slate-400 italic">•••••• (hidden by Bloomwire privacy hardening)</span>
+<% elsif field.array? %>
   <% field.data.each do |sub_field| %>
     <div> 
       <%= sub_field.to_s %>

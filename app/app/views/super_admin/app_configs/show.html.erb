@@ -22,7 +22,18 @@
           <%= form.label "app_config[#{key}]", @installation_configs[key]&.dig('display_title') || key %>
         </div>
         <div class="-mt-2 field-unit__field ">
-          <% if @installation_configs[key]&.dig('type') == 'boolean' %>
+          <% if Bloomwire::Features.masked_secret_key?(key) %>
+            <%= form.password_field "app_config[#{key}]",
+                id: "app_config_#{key}",
+                value: nil,
+                autocomplete: "new-password",
+                placeholder: "Hidden — leave blank to keep the current value",
+                class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full"
+            %>
+            <p class="pt-2 text-xs italic text-slate-400">
+              Hidden by Bloomwire privacy hardening. Leave blank to keep the current value.
+            </p>
+          <% elsif @installation_configs[key]&.dig('type') == 'boolean' %>
             <%= form.select "app_config[#{key}]",
               [["True", true], ["False", false]],
               { selected: ActiveModel::Type::Boolean.new.cast(@app_config[key]) },
