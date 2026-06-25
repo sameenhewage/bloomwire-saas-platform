@@ -32,8 +32,10 @@
 ## 1. Executive summary
 
 Bloomwire/Unecast becomes a **thin, additive control-plane layer** on top of unmodified Chatwoot, switched on by
-feature toggles. With every toggle **OFF**, the app is byte-for-byte stock Chatwoot — exactly today's `develop`
-baseline (S-07 proved this). With toggles **ON**, Bloomwire takes over the *edges* Chatwoot does not own per-tenant:
+feature toggles. With every toggle **OFF**, all **tenant-facing / runtime** behavior is byte-for-byte stock Chatwoot —
+exactly today's `develop` baseline (S-07 proved this); the **only** OFF-state addition is the **SuperAdmin-only** Bloomwire
+control page (the master-toggle bootstrap surface; zero tenant-facing impact, §2.3). With toggles **ON**, Bloomwire takes
+over the *edges* Chatwoot does not own per-tenant:
 it **onboards WhatsApp for the customer** (the customer never touches Meta App, webhook, Phone Number ID, Business
 Account ID, or API key), runs a **single global Meta webhook + router** that resolves inbound messages by
 `phone_number_id` into the correct tenant inbox, keeps an **additive routing/control registry**, and applies
@@ -58,10 +60,10 @@ sub-feature is forced OFF regardless of its stored value.
 | Toggle | Suggested key | Default | Controls |
 |---|---|---|---|
 | **Master** — Bloomwire/Unecast mode | `BLOOMWIRE_MODE_ENABLED` | OFF | Global on/off for the entire Bloomwire layer |
-| Managed WhatsApp onboarding | `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING` | OFF | Ops-driven onboarding flow + statuses + routing-registry writes |
-| Global Meta webhook router | `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` | OFF | Bloomwire global ingress + `phone_number_id` routing + callback-URL indirection |
+| Managed WhatsApp onboarding | `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING` | OFF | Ops-driven onboarding flow + statuses + routing-registry writes — **requires Privacy hardening ON** (§2.2, §8) |
+| Global Meta webhook router | `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` | OFF | Bloomwire global ingress + `phone_number_id` routing + callback-URL indirection — **requires Privacy hardening ON** (§2.2, §8) |
 | Restrict native customer WhatsApp setup | `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` | OFF | Hide tenant WhatsApp UI **and** guard the create APIs |
-| Privacy hardening | `BLOOMWIRE_PRIVACY_HARDENING` | OFF | Secret masking, DTO scrubbing, impersonation/self-add controls, log/job scrubbing, support audit |
+| Privacy hardening | `BLOOMWIRE_PRIVACY_HARDENING` | OFF | Secret masking, DTO scrubbing, impersonation/self-add controls, log/job scrubbing, support audit — **prerequisite for managed onboarding/router** |
 | Outgoing gateway *(later)* | `BLOOMWIRE_OUTGOING_GATEWAY` | OFF | Tenant outbound API/webhooks (deferred; gated on S-04) |
 | Custom branding *(later)* | `BLOOMWIRE_CUSTOM_BRANDING` | OFF | White-label naming/branding (deferred) |
 
@@ -73,6 +75,14 @@ sub-feature is forced OFF regardless of its stored value.
 - **Read path:** a single **central feature-check service** (recommended: `Bloomwire::Features`) exposes
   `Bloomwire::Features.enabled?(:managed_whatsapp_onboarding)` etc., internally AND-ing the master toggle. **No
   scattered `ENV['...']` reads** in controllers/components — they call the service only.
+- **Privacy-hardening prerequisite (fail-closed):** beyond the master AND-gate, the **managed-data** toggles
+  (`BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING`, `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER`) are **inert unless
+  `BLOOMWIRE_PRIVACY_HARDENING` is also ON** — otherwise managed traffic would run through the §8 privacy gaps (raw
+  `provider_config` DTOs, token/message-body logs, Sidekiq job args, unaudited impersonation) on real customer data.
+  So `enabled?(:managed_whatsapp_onboarding)` / `enabled?(:global_webhook_router)` return **false** when privacy
+  hardening is OFF, and the SuperAdmin control page **refuses to enable** either managed-data toggle without it (offering
+  the bundle). Privacy hardening may be enabled on its own (no-op when no managed traffic exists). *(Mirrors the
+  architecture plan §4.1.)*
 - **"Managed account" scoping:** "restrict native setup" must know whether *this account* is Bloomwire-managed. The
   recommended source of truth for that per-account flag is the **routing/control registry** (§6, a `managed`/owner
   marker), so restriction is scoped to managed tenants rather than blanket-applied. *(Exact scope — installation-wide
