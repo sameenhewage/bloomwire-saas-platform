@@ -42,7 +42,9 @@ class Whatsapp::Providers::BaseService
   end
 
   def handle_error(response, message)
-    Rails.logger.error response.body
+    # Bloomwire Phase 2C: redact secrets from the provider error body when privacy hardening is ON (ADR-0003).
+    # OFF => stock (raw body). Output-only; error handling below still uses the original response.
+    Rails.logger.error Bloomwire::SensitiveDataRedactor.redact_response_body(response)
     return if message.blank?
 
     # https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/#sample-response
