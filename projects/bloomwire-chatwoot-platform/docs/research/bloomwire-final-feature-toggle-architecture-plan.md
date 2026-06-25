@@ -36,8 +36,8 @@ Chatwoot does not own per tenant:
    payloads by `phone_number_id` into the correct tenant inbox — reusing Chatwoot's existing `WhatsappEventsJob`.
 3. It keeps an **additive routing/control registry** (non-secret routing identifiers + onboarding/health status) —
    never duplicating conversations, messages, or contacts.
-4. It applies **privacy hardening** (masked secrets, scrubbed DTOs/logs/job args, restricted impersonation/self-add,
-   and a Bloomwire-owned support-access audit) — required because Chatwoot's audit is enterprise-overlay and inert in
+4. It applies **privacy hardening** (masked secrets, scrubbed DTOs/logs, non-mutating Sidekiq log/display redaction
+   or encrypted payload handoff, restricted impersonation/self-add, and a Bloomwire-owned support-access audit) — required because Chatwoot's audit is enterprise-overlay and inert in
    the CE target.
 
 The strategy is deliberately **wrap-not-replace**: Chatwoot remains the **source of truth** for accounts, inboxes,
@@ -403,10 +403,11 @@ Each phase is a thin, independently-reviewable slice. **Default state of every n
 - **Feature-OFF regression:** **tenant-facing / runtime** behavior is byte-for-byte `develop` (S-07 baseline); the **only** additive surface is the **SuperAdmin-only** Bloomwire bootstrap page (zero tenant-facing impact), which is **excluded** from the parity contract.
 
 ### Phase 2 — Privacy / security foundation
-- **Objective:** App-Secret masking, `provider_config` DTO scrub, log/job scrubbing, Bloomwire support-access audit, self-add/impersonation controls — behind `BLOOMWIRE_PRIVACY_HARDENING`.
-- **Areas:** super-admin app-config view (mask); `_inbox.json.jbuilder` (scrub under flag); `callbacks_controller`/`base_service` (log scrub); `whatsapp_controller` (job-arg minimize); `sso_authenticatable` + `account_users_controller` (overlay); new Bloomwire audit model/service.
-- **Tests:** security specs — DTO has no `provider_config` when ON; logs/job args scrubbed; audit row on impersonation/support access; self-add blocked/audited; **OFF leaves stock**.
-- **Runtime validation:** ON → secret masked, DTO scrubbed, audit rows written; OFF → stock.
+- **Objective:** App-Secret masking, `provider_config` DTO scrub, log scrubbing, **non-mutating Sidekiq/job hardening**, Bloomwire support-access audit, self-add/impersonation controls — behind `BLOOMWIRE_PRIVACY_HARDENING`.
+- **Areas:** super-admin app-config view (mask); `_inbox.json.jbuilder` (scrub under flag); `callbacks_controller`/`base_service` (log scrub); `Webhooks::WhatsappController` / Sidekiq handoff (**non-mutating Sidekiq log/display redaction or encrypted payload handoff**, not job-arg minimization); `sso_authenticatable` + `account_users_controller` (overlay); new Bloomwire audit model/service.
+- **Sidekiq invariant:** match §11 exactly — do **not** remove, blank, or rewrite `text.body`, message body, or any fields consumed by `WhatsappEventsJob`. The stock worker needs the payload body via `IncomingMessageServiceHelpers#message_content` to create `Message#content`. Acceptable approaches are: (1) Sidekiq log/display redaction while the worker still receives the full payload; (2) encrypted job args at rest, decrypted in-worker; or (3) out-of-band encrypted payload + minimal reference handoff.
+- **Tests:** security specs — DTO has no `provider_config` when ON; logs/job display redacted or payload encrypted without mutating worker input; inbound text webhook still creates `Message#content` from the payload body; audit row on impersonation/support access; self-add blocked/audited; **OFF leaves stock**.
+- **Runtime validation:** ON → secret masked, DTO scrubbed, audit rows written, inbound text message creation still works; OFF → stock.
 - **Rollback:** toggle OFF.
 - **Feature-OFF regression:** OFF → DTO/logs/secret exactly as `develop`.
 
@@ -488,7 +489,7 @@ signed body**; the `:channel_whatsapp` factory must pass `validate_provider_conf
 | **Model specs** | registry validations; **`phone_number_id` unique index**; **no secret columns**; `managed` flag | duplicate pnid rejected |
 | **Request specs** | super-admin page **reachable to SuperAdmin (master-OFF bootstrap) + forbidden to non-SuperAdmin**; native-setup guard (`403` tenant / allow Ops / allow OFF); global webhook verify→forward & fail-closed | invalid signature ⇒ `401`, no message |
 | **Job specs** | `WhatsappEventsJob` routing + idempotency + status reconcile by `source_id` | duplicate `wamid` ⇒ no second message |
-| **Security specs** | DTO has no `provider_config` when ON; logs/job args scrubbed; audit row on impersonation/support access; self-add restricted | managed inbox DTO omits `api_key` |
+| **Security specs** | DTO has no `provider_config` when ON; logs/job display redacted or payload encrypted without mutating `WhatsappEventsJob` input; inbound text still creates `Message#content`; audit row on impersonation/support access; self-add restricted | managed inbox DTO omits `api_key` |
 | **Feature-OFF regression specs** | each toggle OFF ⇒ stock behavior (the binding S-07 contract) | OFF ⇒ native WhatsApp UI + unguarded APIs + raw DTO |
 | **Runtime smoke** | Chrome MCP for UI hiding; Rails runner for routing/status (the S-01…S-04 method) | managed tenant sees no WhatsApp tiles |
 
@@ -524,7 +525,7 @@ native** (routing, idempotency, status reconcile), the spike runtime proofs (S-0
 | Media / attachment inbound path (Graph media download) | **[BLOCKER]** — needs real Meta (Phase 9) |
 | Secret storage | App Secret masked + never echoed; `provider_config` scrubbed from DTOs; **`provider_config` secret-at-rest = blocking decision gate (encrypt or accept+document) before real managed data — §11, §17** |
 | Bloomwire CE audit enabled | Required (enterprise audit is inert in CE — S-05) |
-| Logs scrubbed | tokens, provider error bodies, **message bodies**, **Sidekiq job args** (S-06) |
+| Logs / job displays hardened | tokens, provider error bodies, **message bodies**, and Sidekiq job displays redacted **without mutating the payload consumed by `WhatsappEventsJob`**; encrypted job args / encrypted handoff acceptable (§11, S-06) |
 | No `.env` commit risk | `.env` kept **untracked/uncommitted**; ensure it stays git-ignored; never echo secrets in any output |
 | Backup / rollback drill | Validate toggles-OFF revert + documented Meta re-point |
 | Support-access controls | impersonation gated/audited; self-add restricted (S-05) |
