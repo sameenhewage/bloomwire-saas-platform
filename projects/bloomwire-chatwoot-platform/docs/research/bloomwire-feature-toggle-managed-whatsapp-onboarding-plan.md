@@ -384,12 +384,16 @@ Activated by the **privacy hardening** toggle (so OFF preserves stock unless exp
   setup" — where does the managed designation live, and does it ever coexist with self-serve accounts? *(§2.2, §4)*
 - **Privacy-in-OFF:** should secret masking / DTO scrubbing apply universally (as a safe fix) or strictly only when
   privacy hardening is ON? *(§8)* — relates to register **Q-04**.
-- **Global webhook ownership (Q-01):** Bloomwire registers its own Meta callback and forwards, vs keeping Chatwoot's
-  per-number registration — gated on **S-03**.
-- **Single Meta App strategy (Q-02):** one app secret + verify token spanning all tenant WABAs vs per-channel
-  secrets — gated on **S-02/S-03**.
-- **Impersonation policy (Q-03):** disable entirely, gate behind explicit tenant consent, or audit-only — gated on **S-05**.
-- **Secret handling (Q-04):** encrypt `provider_config` secrets at rest **and** the exact log/Sidekiq scrubbing set — gated on **S-06**.
+- **Global webhook ownership (Q-01):** **resolved by S-03** — Bloomwire registers one global Meta callback and forwards
+  the unmodified payload into `WhatsappEventsJob` (final plan §9/§17); listed here for history.
+- **Single Meta App strategy (Q-02):** **S-02/S-03 proved** multi-WABA routing + the one-app-secret front-door; what
+  remains open is the **operational** strategy (global verify-token / secret custody + rotation across all tenant WABAs)
+  (final plan §17).
+- **Impersonation policy (Q-03):** disable entirely, gate behind explicit tenant consent, or audit-only — **S-05 proved
+  the gap; the policy decision is still OPEN** and must be made before Phase 2 (final plan §17).
+- **Secret handling (Q-04):** the exact log/Sidekiq scrubbing set is settled (non-mutating redaction, §8), but the
+  **encrypt-`provider_config`-at-rest mechanism decision is still OPEN** and is a blocking gate before real managed data
+  (final plan §17).
 - **OTP / Meta approval mechanics:** in a managed (Ops-run) flow, how is a customer OTP / Meta approval captured and
   relayed, and what UX does the customer see in `waiting_for_customer_otp_or_approval`? *(§5)*
 - **Outgoing gateway shape (Q-05):** reuse `Channel::Api`/Platform API vs a dedicated Bloomwire client API

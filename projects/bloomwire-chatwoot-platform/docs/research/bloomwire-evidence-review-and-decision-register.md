@@ -192,7 +192,7 @@ Classification: **Chatwoot as-is** · **Light customization** · **Bloomwire cus
 
 Each needs a **runtime spike**, a **business/product decision**, or both. Tag in brackets.
 
-- **Q-01 — Global webhook ownership** *(Both)*: Does Bloomwire register its own Meta callback and forward into `WhatsappEventsJob`, or keep Chatwoot's per-number registration? (§D/§E, open q1) — informed by **S-03**.
+- **Q-01 — Global webhook ownership** *(Both)*: Does Bloomwire register its own Meta callback and forward into `WhatsappEventsJob`, or keep Chatwoot's per-number registration? (§D/§E, open q1) — **resolved by S-03**: Bloomwire owns one global webhook and forwards the unmodified payload into `WhatsappEventsJob` (final plan §9, §17). *(Listed here for history.)*
 - **Q-02 — Single Bloomwire Meta App strategy** *(Both)*: One app secret + verify-token spanning all tenant WABAs vs per-channel secrets? (§E, `whatsapp_controller.rb:25-42`) — informed by **S-02/S-03**.
 - **Q-03 — Platform-admin message access policy** *(Business / policy)*: Disable impersonation, gate it behind explicit tenant consent, and/or audit-log every impersonation + cross-tenant access? (§C.4) — informed by **S-05**.
 - **Q-04 — Secret handling** *(Both)*: Encrypt `provider_config` secrets at rest **and** scrub tokens/message bodies from logs/job args? (§C.4) — informed by **S-06**.
@@ -225,5 +225,8 @@ exists (`bloomwire-final-feature-toggle-architecture-plan.md`). **P-01…P-05 ar
 live *send* = production **[BLOCKER]**), P-05 confirmed as a real privacy risk (privacy-hardening workstream, plan §11).
 
 **Recommended next step:** proceed to the architecture plan's **Phase 1** (feature-toggle foundation); do **not** re-run
-the spikes. Business decisions answered by the spikes: **Q-03, Q-04** (→ privacy workstream). Still-open **business**
-decisions to settle as their phases approach: **Q-05, Q-06, Q-07, Q-08, Q-09, Q-10**.
+the spikes. The spikes settled the **evidence** (S-05/S-06 confirmed the impersonation/audit + secret-at-rest gaps are
+real) — they did **not** settle the **policy/mechanism decisions**, which stay **OPEN gates before Phase 2 / real managed
+data**: **Q-03** (impersonation policy — disable / consent-gated / audit-only) and **Q-04** (secret-at-rest **mechanism**
+— `encrypts` vs external custody + rotation), both tracked in the architecture plan **§17**. Still-open decisions to
+settle as their phases approach: **Q-03, Q-04** (privacy — before Phase 2), then **Q-05, Q-06, Q-07, Q-08, Q-09, Q-10**.
