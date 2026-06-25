@@ -302,8 +302,14 @@ Meta → Bloomwire global webhook
   managed number whose `display_phone_number` diverges), carry the resolved channel into processing via a **job overlay**
   (`prepend_mod_with`, `whatsapp_events_job.rb:164`), an explicit channel-handoff arg, or safe payload normalization —
   **tracked as the final plan's Phase 7**. Until then the registry is **control-plane only** (ownership/status/health).
-- **Callback indirection insertion point:** `Whatsapp::WebhookSetupService#build_callback_url`
-  (`webhook_setup_service.rb:75-80`) returns the Bloomwire global URL when the router toggle is ON.
+- **Callback indirection insertion point — override URL *and* verify token together.** The seam is
+  `Whatsapp::WebhookSetupService#setup_webhook` (`webhook_setup_service.rb:58-62`), which registers **both** the callback
+  URL (`build_callback_url`, `:75-80`) **and** the `verify_token` with Meta in the same call. With the router ON the
+  overlay must rewrite **both** — the global URL **and** a Bloomwire-owned **global** verify token — not just the URL.
+  Overriding only `build_callback_url` leaves Meta registering the global callback with the **per-channel**
+  `provider_config['webhook_verify_token']`, while the global GET verifier expects the **global** token → Meta's
+  `hub.challenge` handshake **fails for every managed WABA**. (Two halves — inbound global-token check + outbound global
+  registration — must match; same requirement as final plan §9.2.)
 - **Feasibility:** the resolution chain and the forward target are **[CODE-PROVEN]**, but a Bloomwire-owned global
   ingress with one app secret and **no loss/duplication** across multiple WABAs is **runtime-gated by S-02 + S-03**
   (§10). This plan does not assert it works at runtime.
