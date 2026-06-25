@@ -17,6 +17,10 @@ module Bloomwire::Features
   # Managed-data sub-features that are inert unless privacy hardening is ON (architecture plan §4.1).
   PRIVACY_DEPENDENT_FEATURES = %i[managed_whatsapp_onboarding global_webhook_router].freeze
 
+  # InstallationConfig key names for the managed-data sub-features. Used by the write-path guard so the
+  # privacy prerequisite holds at ANY SuperAdmin config seam, not only the custom Bloomwire page.
+  PRIVACY_DEPENDENT_KEYS = PRIVACY_DEPENDENT_FEATURES.map { |feature| SUB_FEATURES.fetch(feature) }.freeze
+
   module_function
 
   def enabled?(feature)
@@ -32,6 +36,12 @@ module Bloomwire::Features
 
   def master_enabled?
     raw_enabled?(:mode)
+  end
+
+  # True when `name` is a managed-data InstallationConfig key that requires privacy hardening ON
+  # before it may be persisted to true (write-path guard, fail-closed).
+  def privacy_dependent_key?(name)
+    PRIVACY_DEPENDENT_KEYS.include?(name)
   end
 
   # Stored toggle value WITHOUT the master AND-gate. Used by the SuperAdmin bootstrap page UI.
