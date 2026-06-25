@@ -245,9 +245,11 @@ gated implementation.
 | `managed` | Marks the account/integration Bloomwire-managed (drives §6 restriction) |
 
 ### 8.2 Uniqueness + hard rules
-- **`phone_number_id` unique index** is the router contract. S-02 proved routing is keyed on `phone_number_id`
-  (validated against `provider_config['phone_number_id']`); S-01 proved `phone_number` is globally unique already.
-  [RUNTIME-PROVEN]
+- **`phone_number_id` unique index** is the registry's routing key. Native ingress resolves by `phone_number` (display)
+  and then **validates** `provider_config['phone_number_id']` (`whatsapp_events_job.rb:155-161`, S-02 [RUNTIME-PROVEN]);
+  `phone_number` is already globally unique (`channel/whatsapp.rb:17`, S-01). The registry's unique `phone_number_id`
+  index is therefore an **additive** key for registry-first resolution **with native fallback** — it does not change
+  native ingress, which keeps working with the registry absent or the router toggle OFF.
 - **Non-secret policy:** secrets (`api_key`, verify token) **stay** in `Channel::Whatsapp#provider_config`; the
   registry stores **non-secret routing identifiers + status only**. (S-05/S-06 reinforce: never duplicate secrets.)
 - **No duplication** of conversations, messages, or contacts — Chatwoot remains source of truth (D-07). The registry
@@ -262,10 +264,11 @@ gated implementation.
 ### 9.1 Target flow (all steps S-03 [RUNTIME-PROVEN] except the live Meta handshake)
 ```
 Meta → Bloomwire ONE global webhook endpoint
-     → verify signature: "sha256=" + HMAC-SHA256(WHATSAPP_APP_SECRET, raw_body), ActiveSupport::SecurityUtils.secure_compare
-     → extract phone_number_id from entry[].changes[].value.metadata
-     → resolve phone_number_id → account/inbox/channel  (routing registry first; fallback = Channel::Whatsapp lookup)
-     → forward into Webhooks::WhatsappEventsJob  (existing, UNMODIFIED pipeline)
+     → GET hub.challenge: validated by a Bloomwire-owned GLOBAL verify token (see §9.2 code gap)
+     → POST: verify signature "sha256=" + HMAC-SHA256(WHATSAPP_APP_SECRET, raw_body) via ActiveSupport::SecurityUtils.secure_compare
+     → forward the UNMODIFIED payload into Webhooks::WhatsappEventsJob  (existing pipeline)
+     → the job natively resolves the channel from payload metadata
+       (display_phone_number + validates phone_number_id, whatsapp_events_job.rb:155-161) — proven S-02/S-03
      → message persisted in the correct inbox
 ```
 
@@ -281,8 +284,27 @@ Meta → Bloomwire ONE global webhook endpoint
   `phone_number_id` → forwarded but produces **no** message. [RUNTIME-PROVEN, S-03]
 - **Callback indirection insertion point:** `Whatsapp::WebhookSetupService#build_callback_url`
   (`webhook_setup_service.rb:75-80`) returns the Bloomwire global URL when the router toggle is ON.
-- **[BLOCKER]:** the live Meta GET verify (`hub.challenge`) handshake and a real signed Meta callback need real Meta —
-  proven only in production/staging.
+- **Registry is control-plane, not the hot-path router (Phases 1–6).** The front-door only **verifies + forwards the
+  unmodified payload**; the unmodified `WhatsappEventsJob` resolves the channel from payload metadata
+  (`whatsapp_events_job.rb:155-161`) — exactly what S-02/S-03 proved **without** any registry. The routing registry (§8)
+  is populated for **ownership / status / onboarding**, and is **not** consulted on the ingress hot path in these phases.
+- **[CODE GAP] Registry-FIRST routing is NOT free with an unmodified job.** If a later phase wants the front-door to
+  resolve `phone_number_id → channel` via the registry and have the pipeline honor it (e.g. a managed number whose
+  `display_phone_number` normalization diverges, or to override native lookup), the resolved channel must be **explicitly
+  carried into processing** — the stock `perform` re-runs `find_channel_from_whatsapp_business_payload` and **discards**
+  anything resolved in the controller. Carry it via a **job overlay** (`prepend_mod_with`, already used at
+  `whatsapp_events_job.rb:164`), an explicit channel-handoff arg, or safe payload normalization — never by assuming the
+  stock job reads the front-door's resolution. (Tracked as Phase 7.)
+- **[CODE GAP] Global GET verify token is required.** The stock GET verifier cannot validate a global URL: native
+  `Webhooks::WhatsappController#valid_token?` (`whatsapp_controller.rb:19-23`) looks up `Channel::Whatsapp` by
+  `params[:phone_number]` and compares that channel's per-channel `provider_config['webhook_verify_token']`
+  (`channel/whatsapp.rb:124-126`). A global callback has **no** `:phone_number` param → `channel` is nil → `valid_token?`
+  returns falsy → Meta's `hub.challenge` setup **401s**. The router slice must add a **Bloomwire-owned global verify-token
+  store + check** (single `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN` in `InstallationConfig`/ENV, compared in the global GET
+  action) instead of reusing the per-channel verifier. This is a **design requirement**, independent of live Meta.
+- **[BLOCKER — needs real Meta]:** the live Meta GET `hub.challenge` handshake and a real signed Meta callback can only be
+  proven in production/staging (the global verify-token + signature logic itself is S-03-proven via a faithful
+  always-verify replica).
 
 ---
 
@@ -312,6 +334,7 @@ Q §17). Every gap below is **proven**.
 |---|---|---|
 | App Secret rendered cleartext (`type=text`) — [RUNTIME-PROVEN, S-07] | Render secret inputs `type=password`; never echo stored secret in cleartext | **Yes** |
 | Inbox DTO exposes raw `provider_config` (`api_key`, ids) to admins — `_inbox.json.jbuilder:130-138` [CODE/RUNTIME-PROVEN, S-06] | Scrub `provider_config` from tenant-facing inbox serialization (managed tenants get a non-secret DTO) | **Yes** |
+| **Tenant Meta secrets at rest in plaintext jsonb** — `Channel::Whatsapp#provider_config` holds `api_key` (`whatsapp_cloud_service.rb:62`) + `webhook_verify_token` (`channel/whatsapp.rb:124-126`) unencrypted, exposed via DB reads/replicas/backups **even after** UI masking + DTO/log scrubbing [CODE-PROVEN] | **Decide before real managed data:** encrypt `provider_config` secrets at rest (`encrypts` / external custody) **or** formally accept + document the risk | **Yes — decision gate** |
 | **CE audit inert**: `ChatwootApp.enterprise?` falsy → `Enterprise::Audit::*` not mixed in → **0** audit rows even for an audited write; `audit_logs` premium off — [RUNTIME-PROVEN, S-05] | Build a **Bloomwire-owned support-access audit** (CE-safe, independent of enterprise `audit_logs`) | **Yes** |
 | SuperAdmin **self-add** as `AccountUser` (`super_admin/account_users_controller.rb:12-18`) [RUNTIME-PROVEN, S-05] | Restrict and/or audit self-add into accounts | **Yes** |
 | SuperAdmin **impersonation** unaudited (`sso_authenticatable.rb:27-31`; only FE `sessionStorage` flag) [RUNTIME-PROVEN, S-05] | Gate/restrict impersonation; **audit every impersonation start/stop + cross-tenant access** | **Yes** |
@@ -320,8 +343,9 @@ Q §17). Every gap below is **proven**.
 | **Whole inbound payload in Sidekiq job args** → message body in plaintext (`whatsapp_controller.rb:13`) [RUNTIME-PROVEN, S-06] | Minimize/scrub job args (pass minimal refs, not full payload) or scrub bodies | **Yes** |
 
 **Note:** `ParameterFilter` already redacts token/secret/`*_key` params for Rails request-param logging — but **not**
-explicit logger calls, Sidekiq job args, or API DTOs; those are the gaps above. All eight are **mandatory** before a
-managed tenant carries real customer data in production.
+explicit logger calls, Sidekiq job args, or API DTOs; those are the gaps above. Every control above is **mandatory**
+before a managed tenant carries real customer data in production; the **secret-at-rest** row is specifically a **blocking
+decision gate** — encrypt, or formally accept and document the risk.
 
 ---
 
@@ -462,7 +486,7 @@ native** (routing, idempotency, status reconcile), the spike runtime proofs (S-0
 | Real Meta webhook verification (`hub.challenge` GET handshake) | **[BLOCKER]** — needs real Meta (Phase 9) |
 | Real / sandbox outbound send (`WhatsappCloudService#send_message`) | **[BLOCKER]** — needs real Meta (Phase 9) |
 | Media / attachment inbound path (Graph media download) | **[BLOCKER]** — needs real Meta (Phase 9) |
-| Secret storage | App Secret masked + never echoed; `provider_config` scrubbed from DTOs; **encrypt-at-rest = Open Q (§17)** |
+| Secret storage | App Secret masked + never echoed; `provider_config` scrubbed from DTOs; **`provider_config` secret-at-rest = blocking decision gate (encrypt or accept+document) before real managed data — §11, §17** |
 | Bloomwire CE audit enabled | Required (enterprise audit is inert in CE — S-05) |
 | Logs scrubbed | tokens, provider error bodies, **message bodies**, **Sidekiq job args** (S-06) |
 | No `.env` commit risk | `.env` kept **untracked/uncommitted**; ensure it stays git-ignored; never echo secrets in any output |
@@ -491,11 +515,16 @@ native** (routing, idempotency, status reconcile), the spike runtime proofs (S-0
   setup" — and can managed + self-serve accounts coexist on one install? (§4.2, §6)
 - **Privacy-in-OFF** *(policy)*: should secret masking / DTO scrubbing be a **universal** safe fix, or strictly gated by
   the privacy toggle? (§11; register Q-04)
-- **Secret-at-rest** *(security)*: encrypt `provider_config` secrets at rest in addition to masking/scrubbing? (Q-04)
+- **Secret-at-rest mechanics** *(security)*: the **decision** to encrypt `provider_config` secrets at rest (vs. formally
+  accept the risk) is no longer optional — it is a **blocking gate** before real managed data (§11, §15). What remains
+  open is the **mechanism**: `encrypts`-at-rest vs. external secret custody, plus key rotation and searchability
+  trade-offs. (Q-04)
 - **Impersonation policy** *(business)*: disable entirely, gate behind explicit tenant consent, or audit-only? (Q-03 —
   S-05 proved the gap; the *policy* is a business call)
-- **Single Meta App operational strategy** *(ops)*: one verify token spanning all tenant WABAs vs per-channel — the
-  routing is proven (S-02/S-03); the operational token/verify management remains a choice. (Q-02)
+- **Single Meta App operational strategy** *(ops)*: the router slice now **requires** a Bloomwire-owned global
+  verify-token check (§9.2) plus the one global app secret (S-03); routing itself is proven (S-02/S-03). What remains a
+  choice is **operational management** — token/secret custody, rotation, and whether one verify token spans all tenant
+  WABAs. (Q-02)
 - **OTP / Meta-approval mechanics** *(design + [BLOCKER])*: how a customer OTP / Meta approval is captured and relayed
   in an Ops-run managed flow, and the customer UX during `waiting_for_customer_otp_or_approval`. (§7)
 - **Ops auth surface** *(design)*: exact shape of the Ops-only channel-creation path (super-admin endpoint vs internal
