@@ -178,3 +178,73 @@ handled only by Bloomwire Ops/SuperAdmin via the setup-mapping + readiness surfa
   config update; non-WhatsApp (web widget) create succeeds; existing WhatsApp inbox read (show) works; native +
   Bloomwire webhook GET not blocked by the guard; SuperAdmin setup-mapping + readiness pages available; the
   blocked body + logs contain no app secret or provider api_key; the guard makes no outbound HTTP / Meta call.
+
+## Managed WhatsApp setup request / Ops intake (Phase 11A)
+
+With native WhatsApp setup restricted for business users (Phase 10A.2), this slice adds the supported managed
+path: a business/account **administrator** can REQUEST managed WhatsApp setup, and Bloomwire Ops/SuperAdmin
+tracks and processes the request. Only available when `BLOOMWIRE_MODE_ENABLED` is ON; OFF ⇒ stock (inert).
+
+- **New model `Bloomwire::WhatsappSetupRequest`** (new table `bloomwire_whatsapp_setup_requests`), kept
+  SEPARATE from `Bloomwire::WhatsappSetup`. Rationale: that model's `setup_status` is the router/readiness
+  technical-readiness axis (consumed by the global router + `routeable_when_ready_for_webhook`), whereas the
+  intake lifecycle (`pending / in_progress / waiting_for_client / ready_for_setup / blocked / completed`) is an
+  orthogonal Ops-workflow axis. Reusing one status field would conflate the two and risk the router/readiness
+  logic; the existing table also has no requester column and (by PR #35) deliberately allows multiple pending
+  rows per account. The request optionally links to a mapping via `bloomwire_whatsapp_setup_id`. **No secret
+  columns.**
+- **One active request per account** (active = not `completed`/`blocked`) enforced by a partial unique index;
+  `request_for(account:, requested_by:)` is idempotent (returns the existing active request, rescues
+  `ActiveRecord::RecordNotUnique`). A new request is allowed once the previous one is completed/blocked.
+- **Account API** (`/api/v1/accounts/:id/bloomwire/whatsapp_setup_requests`, admin-only via
+  `check_admin_authorization?`; agents → 401): `create` (find-or-create for `Current.account`, attributed to
+  `Current.user`) + `index` (own account's requests). Scoped to `Current.account` (no cross-account access); no
+  secret/Meta-token params are accepted or echoed.
+- **SuperAdmin queue** (`/super_admin/bloomwire_whatsapp_setup_requests`, gated by master mode): view all
+  requests, view one (account / requester / status / reason / timestamps), update `status` + `status_reason`,
+  and jump to the linked setup mapping + real-hop readiness when `bloomwire_whatsapp_setup_id` is set (else
+  "setup mapping pending"). Registered in the SuperAdmin nav skip-list + a manual nav link (the resource has no
+  Administrate Dashboard, like the setups resource).
+- **PR #40 link**: the native-restriction 403 now also returns `managed_request: true` (message text unchanged)
+  to point the client toward this managed path.
+- **Separation**: this is an Ops intake/request flow only — NOT the onboarding wizard, NOT a customer-facing
+  multi-step Meta flow. Real Meta inbound smoke remains separate and still requires external Meta test assets.
+  No secrets are committed or pasted into requests/reports.
+
+### Evidence (Phase 11A)
+- TDD red→green: model spec (14) + account API request spec (10) + SuperAdmin request spec (8) = 32 green.
+  Regression: 190 + 141 green (new + PR #35/#36/#37/#38/#40 + existing inboxes/authorizations controller specs +
+  native `webhooks/whatsapp` controller/job + Phase 2A/2B/2C). RuboCop: no offenses. One new table; no new
+  secret columns; no duplicate message/conversation/contact storage.
+- A SuperAdmin-nav regression was found + fixed during this slice: registering the new resource made Administrate's
+  navigation require a (non-existent) `BloomwireWhatsappSetupRequestDashboard`, 500-ing every SuperAdmin page;
+  fixed by adding the resource to the nav skip-list + a manual link (mirroring the setups resource).
+- Runtime (dev, real stack): 18/18 — OFF ⇒ account API 404 + SuperAdmin queue redirect (inert); ON ⇒ admin
+  creates a pending request (secret params ignored), duplicate returns the same request (dedupe), admin views
+  status, agent + unauthenticated → 401; SuperAdmin queue opens, shows a request without secrets, updates
+  status + reason; PR #40 still blocks native WhatsApp setup (with `managed_request` hint); non-WhatsApp inbox
+  create still works; native webhook route not intercepted; no secrets in logs.
+
+### Phase 11A — review follow-up (operational safety hardening)
+
+PR #41 review surfaced four issues; all fixed model-first/view-first (no schema change, no new dependency):
+
+- **One active request per account is now enforced at the app layer too.** `single_active_request_per_account`
+  validates that no *other* active (`ACTIVE_STATUSES`, `self` excluded) request exists for the `account_id`.
+  Reopening an old closed request while another is active now returns a **422 validation error** instead of a
+  DB `RecordNotUnique` **500**. The partial unique index stays as the DB race backstop; `request_for` rescues
+  both `RecordNotUnique` and `RecordInvalid`.
+- **The SuperAdmin 422 page can no longer render a rejected/unpersisted setup link.** The "setup mapping"
+  links use `bloomwire_whatsapp_setup_id_in_database` (persisted value), not the dirty in-memory id; validation
+  errors are now rendered on the show page so Ops sees *why* an update failed.
+- **Safe DTO Gate (tenant API).** `request_json` now returns only non-secret operational status fields —
+  `status`, `status_reason`, `completed_at`, `created_at`, `updated_at`. Raw internal IDs (`id`, `account_id`,
+  `requested_by_id`, `bloomwire_whatsapp_setup_id`) are **removed** (none are required by the tenant status view;
+  the SuperAdmin HTML queue, which legitimately shows IDs to Ops, is unchanged).
+- **`managed_request: true` is now spec-protected** on the PR #40 native-restriction 403 responses
+  (authorization, inbox create, provider-config update).
+
+Evidence: TDD red→green; combined `rspec` (model + SuperAdmin + account API + native-restriction) = **54 green**;
+RuboCop clean. Runtime (real stack): cross-account link → 422, no rejected links rendered, error shown, DB nil;
+reopen-closed-while-active → 422 (not 500), stays completed; tenant DTO keys =
+`status, status_reason, completed_at, created_at, updated_at`; blocked native WA auth → 403 + `managed_request: true`.

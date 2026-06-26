@@ -342,6 +342,11 @@ Rails.application.routes.draw do
             resource :authorization, only: [:create]
           end
 
+          # Bloomwire managed WhatsApp setup request (Ops intake). Admin-only; inert when Bloomwire mode is OFF.
+          namespace :bloomwire do
+            resources :whatsapp_setup_requests, only: [:index, :create]
+          end
+
           resources :webhooks, only: [:index, :create, :update, :destroy]
           namespace :integrations do
             resources :apps, only: [:index, :show]
@@ -682,6 +687,7 @@ Rails.application.routes.draw do
       resources :bloomwire_whatsapp_setups, only: [:index, :new, :create, :show, :edit, :update] do
         member { get :readiness }
       end
+      resources :bloomwire_whatsapp_setup_requests, only: [:index, :show, :update]
       resource :push_diagnostics, only: [:show, :create] do
         post :destroy_subscriptions, on: :collection
       end
