@@ -45,6 +45,7 @@ class Bloomwire::WhatsappSetupRequest < ApplicationRecord
   belongs_to :bloomwire_whatsapp_setup, class_name: 'Bloomwire::WhatsappSetup', optional: true
 
   validates :status, presence: true, inclusion: { in: STATUSES }
+  validate :bloomwire_whatsapp_setup_belongs_to_account
 
   before_save :stamp_completed_at
 
@@ -66,6 +67,15 @@ class Bloomwire::WhatsappSetupRequest < ApplicationRecord
   end
 
   private
+
+  # The optionally-linked setup mapping must belong to the SAME account as the request — Ops must not link one
+  # tenant's request to another tenant's WhatsApp setup mapping/readiness (cross-account data-integrity).
+  def bloomwire_whatsapp_setup_belongs_to_account
+    return if bloomwire_whatsapp_setup_id.blank?
+    return if bloomwire_whatsapp_setup&.account_id == account_id
+
+    errors.add(:bloomwire_whatsapp_setup_id, 'must belong to the same account as the request')
+  end
 
   def stamp_completed_at
     return unless new_record? || will_save_change_to_status?

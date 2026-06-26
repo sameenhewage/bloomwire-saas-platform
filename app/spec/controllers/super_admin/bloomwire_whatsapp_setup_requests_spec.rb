@@ -83,6 +83,26 @@ RSpec.describe 'SuperAdmin Bloomwire WhatsApp setup requests', type: :request do
       expect(response.body).to include("/super_admin/bloomwire_whatsapp_setups/#{setup.id}/readiness")
     end
 
+    it 'persists a same-account setup mapping link' do
+      setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
+      req = Bloomwire::WhatsappSetupRequest.create!(account: account, status: 'pending')
+      patch "/super_admin/bloomwire_whatsapp_setup_requests/#{req.id}", params: {
+        bloomwire_whatsapp_setup_request: { bloomwire_whatsapp_setup_id: setup.id }
+      }
+      expect(req.reload.bloomwire_whatsapp_setup_id).to eq(setup.id)
+    end
+
+    it 'rejects linking a cross-account setup mapping (422, not persisted)' do
+      other_account = create(:account)
+      other_setup = create(:bloomwire_whatsapp_setup, account: other_account, setup_status: 'pending')
+      req = Bloomwire::WhatsappSetupRequest.create!(account: account, status: 'pending')
+      patch "/super_admin/bloomwire_whatsapp_setup_requests/#{req.id}", params: {
+        bloomwire_whatsapp_setup_request: { bloomwire_whatsapp_setup_id: other_setup.id }
+      }
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(req.reload.bloomwire_whatsapp_setup_id).to be_nil
+    end
+
     it 'does not render secrets in the queue or show page' do
       set_toggle('WHATSAPP_APP_SECRET', 'FAKE-APP-SECRET-QUEUE')
       channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud', validate_provider_config: false, sync_templates: false)

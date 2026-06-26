@@ -97,6 +97,20 @@ RSpec.describe Bloomwire::WhatsappSetupRequest do
       expect(req.reload.bloomwire_whatsapp_setup).to eq(setup)
     end
 
+    it 'allows linking a setup mapping from the same account' do
+      setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
+      req = described_class.new(account: account, status: 'ready_for_setup', bloomwire_whatsapp_setup: setup)
+      expect(req).to be_valid
+    end
+
+    it 'rejects linking a setup mapping that belongs to another account' do
+      other_account = create(:account)
+      other_setup = create(:bloomwire_whatsapp_setup, account: other_account, setup_status: 'pending')
+      req = described_class.new(account: account, status: 'ready_for_setup', bloomwire_whatsapp_setup: other_setup)
+      expect(req).not_to be_valid
+      expect(req.errors[:bloomwire_whatsapp_setup_id]).to include('must belong to the same account as the request')
+    end
+
     it 'stores no secret columns' do
       secretish = described_class.column_names.grep(/api_key|token|secret|password|provider_config/i)
       expect(secretish).to be_empty
