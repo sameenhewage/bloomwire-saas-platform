@@ -85,6 +85,26 @@ RSpec.describe Bloomwire::Features do
     end
   end
 
+  # The global WhatsApp webhook verify token is a sensitive secret and must follow the Phase 2A masking
+  # contract on SuperAdmin surfaces (masked + no-wipe) once privacy hardening is effectively ON.
+  describe 'global WhatsApp webhook verify token is a masked secret' do
+    it 'is registered as a masked secret key' do
+      expect(described_class::MASKED_SECRET_KEYS).to include('BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN')
+    end
+
+    it 'is masked when master + privacy hardening are ON' do
+      set_toggle(described_class::MASTER, true)
+      set_toggle('BLOOMWIRE_PRIVACY_HARDENING', true)
+      expect(described_class.masked_secret_key?('BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN')).to be(true)
+    end
+
+    it 'is not masked while privacy hardening is OFF (stock SuperAdmin behavior)' do
+      set_toggle(described_class::MASTER, true)
+      set_toggle('BLOOMWIRE_PRIVACY_HARDENING', false)
+      expect(described_class.masked_secret_key?('BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN')).to be(false)
+    end
+  end
+
   # Feature-OFF regression contract: OFF == stock Chatwoot (nothing activates).
   describe 'feature-OFF regression (OFF = stock Chatwoot)' do
     it 'reports nothing enabled when the whole layer is OFF (fresh install)' do

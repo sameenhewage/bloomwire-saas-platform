@@ -2,8 +2,9 @@
 
 - Status: Accepted (implemented; feature-gated OFF by default)
 - Extends: ADR-0001 / ADR-0002 / ADR-0003 / ADR-0004 (never overrides)
-- Scope: routing foundation only. **No** Meta registration/E2E, onboarding wizard, routing registry,
-  outgoing gateway, AI bot, analytics, or new message/conversation/contact storage.
+- Scope: routing foundation + GET verification (registration **readiness**) only. **No** Meta registration API
+  call / real Meta E2E, onboarding wizard, routing registry, outgoing gateway, AI bot, analytics, new secret
+  columns, or new message/conversation/contact storage.
 
 ## Context
 
@@ -43,11 +44,30 @@ it re-resolves to the mapped channel and runs the existing contact/conversation/
 a **routing gate**, not a new processor: no new message/conversation/contact tables.
 
 ### Auth + privacy
-- Meta signature is verified (reuse `MetaTokenVerifyConcern`, HMAC-SHA256 of the raw body vs the global
-  `WHATSAPP_APP_SECRET`); invalid signature ⇒ 401.
+- Meta signature is verified on **POST only** (`before_action :verify_meta_signature!, only: :process_payload`,
+  reuse `MetaTokenVerifyConcern`, HMAC-SHA256 of the raw body vs the global `WHATSAPP_APP_SECRET`); invalid
+  signature ⇒ 401.
 - Always returns `head :ok` to Meta when authorized (no retry storms); the routing decision is fail-closed.
 - The router logs **only** a redacted, masked `phone_number_id` tail and never the payload, message content,
   tokens, or secrets. It never reads `provider_config` secrets.
+
+### GET verification (registration readiness — added slice)
+`GET /bloomwire/webhooks/whatsapp` → `Bloomwire::Webhooks::WhatsappController#verify` serves Meta's
+webhook-callback verification handshake so the global endpoint can be registered as a Meta callback URL.
+- **Same gate**: `ensure_router_enabled` applies to GET too — feature OFF ⇒ `head :not_found` (inert, no param
+  echo); native `webhooks/whatsapp/:phone_number` GET/POST untouched.
+- **Global verify token, not per-customer**: the global front-door has no `:phone_number` in the URL (unlike
+  the native per-channel `valid_token?`), so it validates one InstallationConfig key
+  **`BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN`** (read via `GlobalConfigService`), constant-time compare. Valid ⇒
+  echo `hub.challenge`; missing config or wrong/absent token ⇒ **fail closed** (401). **Not** `WHATSAPP_APP_SECRET`
+  (that stays dedicated to POST signature).
+- **No signature, no `phone_number_id`, no mapping, no enqueue**: verification never enters resolution or the
+  processing job; the verify token itself is never logged.
+- **Secret hygiene**: the verify token is added to `Bloomwire::Features::MASKED_SECRET_KEYS`, so the existing
+  Phase 2A seam masks it (password input, no cleartext on index/show/edit) and never wipes it on a blank submit
+  on SuperAdmin surfaces while privacy hardening is ON. It is not exposed on any tenant/business surface.
+- **Registration-ready only**: this makes the endpoint registrable; it does **not** call the Meta registration
+  API or perform real Meta E2E.
 
 ## Alternatives considered
 - **Call `IncomingMessageWhatsappCloudService` directly with the mapping's inbox** — rejected: skips the job's
@@ -59,8 +79,9 @@ a **routing gate**, not a new processor: no new message/conversation/contact tab
   is the executor. OFF ⇒ stock. No secret/message duplication.
 
 ## Deferred (follow-ups, out of this slice)
-- **GET verification + Meta webhook registration** for the global endpoint (needs a global verify-token,
-  tied to managed onboarding) — required before any real Meta E2E.
+- **Meta webhook registration API call + real Meta E2E** for the global endpoint. GET verification (above) makes
+  the endpoint *registration-ready*; the actual Meta App webhook-subscription call and live send/receive remain
+  deferred (tied to managed onboarding) and require a separate approval.
 - Inbound message content currently still appears in Rails' framework `Parameters:` request log (identical to
   the native `webhooks/whatsapp` controller; governed by the global `config.filter_parameters`, which already
   redacts secret/key/access keys). A global logging-policy decision to suppress message bodies is a separate item.
@@ -71,3 +92,15 @@ a **routing gate**, not a new processor: no new message/conversation/contact tab
 - Runtime (dev, curl): OFF ⇒ 404; ON + valid signature + matching `phone_number_id` ⇒ 200 (handoff enqueued);
   ON + unknown ⇒ 200 fail-closed (redacted diagnostic `****`); invalid signature ⇒ 401; resolver resolves the
   correct setup live and returns nil for unknown; signing secret + api_key absent from logs.
+
+## Evidence (GET verification slice)
+- TDD red→green: 9 failures before implementation (no GET route ⇒ diagnostic 404 echoed the `hub.challenge`
+  param; masking key absent) → GET verify request spec (12) + Features masking unit (3 new) green. Regression
+  green: 154 examples / 0 failures (new GET verify + PR #36 router POST + PR #35 setup model/controller +
+  Phase 1/2A/2B/2C + native `webhooks/whatsapp` controller + `WhatsappEventsJob`). RuboCop: no offenses.
+  No migration / no new tables / no new secret columns.
+- Runtime: 22/22 in-process integration drive over the real dev stack + live `curl` on the dev server —
+  OFF ⇒ GET 404 (empty body, `hub.challenge` not echoed), POST 404, native routes unchanged; ON ⇒ valid token
+  echoes `hub.challenge`, invalid/absent token ⇒ 401, missing token config ⇒ 401 (fail closed); GET never
+  enqueues `Webhooks::WhatsappEventsJob` and needs no `phone_number_id`/`Bloomwire::WhatsappSetup`; verify token,
+  `WHATSAPP_APP_SECRET`, message body, and full unknown `phone_number_id` all absent from logs.
