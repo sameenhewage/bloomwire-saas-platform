@@ -28,10 +28,19 @@ Resolve a single `Bloomwire::WhatsappSetup.ready_for_webhook` by `phone_number_i
 route) when: phone_number_id blank, no match, status not `ready_for_webhook`, more than one match (defensive;
 the partial-unique index prevents it), or the row is missing `inbox_id`/`channel_whatsapp_id`.
 
-### Handoff
-On a resolved mapping, forward the **raw payload** to the existing `Webhooks::WhatsappEventsJob` — the stock
-processing path (it re-resolves to the mapped channel and runs the existing contact/conversation/message
-creation). The router is a **routing gate**, not a new processor: no new message/conversation/contact tables.
+### Handoff (channel-alignment enforced — PR #36 review fix)
+Forwarding the raw payload to `Webhooks::WhatsappEventsJob` is safe **only if** that job will re-resolve to the
+*same* mapped channel. The job resolves by `Channel::Whatsapp.find_by(phone_number: "+<display_phone_number>")`
+and accepts it only when `provider_config['phone_number_id']` equals the payload's `phone_number_id`. So
+`resolve_handoff_safe_setup(payload)` returns a setup **only when** all hold (else nil, fail-closed):
+- payload `phone_number_id` == `setup.phone_number_id` (from `resolve`),
+- `setup.channel_whatsapp` and `setup.inbox` exist and `channel.inbox.id == setup.inbox_id`,
+- `channel.provider_config['phone_number_id']` == payload `phone_number_id`,
+- `channel.phone_number` == `"+<display_phone_number>"` (mirrors `get_channel_from_wb_payload`).
+
+Only then is the **raw payload** forwarded to the existing `Webhooks::WhatsappEventsJob` (stock processing path:
+it re-resolves to the mapped channel and runs the existing contact/conversation/message creation). The router is
+a **routing gate**, not a new processor: no new message/conversation/contact tables.
 
 ### Auth + privacy
 - Meta signature is verified (reuse `MetaTokenVerifyConcern`, HMAC-SHA256 of the raw body vs the global

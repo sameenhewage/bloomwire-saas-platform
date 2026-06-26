@@ -48,9 +48,14 @@ RSpec.describe 'Bloomwire global WhatsApp webhook router', type: :request do
     post '/bloomwire/webhooks/whatsapp', params: body, headers: headers
   end
 
-  def ready_setup(phone_number_id:)
-    channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud', sync_templates: false,
+  # Aligned with the native job resolution path: channel.phone_number == "+<display>" and
+  # channel.provider_config['phone_number_id'] == the setup's phone_number_id (the default payload display).
+  def ready_setup(phone_number_id:, display_phone_number: '15551230001')
+    channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
+                                        phone_number: "+#{display_phone_number}", sync_templates: false,
                                         validate_provider_config: false)
+    channel.update!(provider_config: channel.provider_config.merge('phone_number_id' => phone_number_id,
+                                                                   'source' => 'embedded_signup'))
     create(:bloomwire_whatsapp_setup, account: account, inbox: channel.inbox, channel_whatsapp: channel,
                                       phone_number_id: phone_number_id, setup_status: 'ready_for_webhook')
     channel
@@ -96,6 +101,14 @@ RSpec.describe 'Bloomwire global WhatsApp webhook router', type: :request do
                                         phone_number_id: 'PNID-CFG', setup_status: 'configured')
       expect(Webhooks::WhatsappEventsJob).not_to receive(:perform_later)
       post_webhook(meta_payload(phone_number_id: 'PNID-CFG'))
+      expect(response).to have_http_status(:ok)
+    end
+
+    it 'does not enqueue when the mapped channel alignment fails (provider_config phone_number_id mismatch)' do
+      channel = ready_setup(phone_number_id: 'PNID-1')
+      channel.update!(provider_config: channel.provider_config.merge('phone_number_id' => 'PNID-DIFFERENT'))
+      expect(Webhooks::WhatsappEventsJob).not_to receive(:perform_later)
+      post_webhook(meta_payload(phone_number_id: 'PNID-1'))
       expect(response).to have_http_status(:ok)
     end
 

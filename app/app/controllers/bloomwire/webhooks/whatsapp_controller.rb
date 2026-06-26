@@ -11,13 +11,13 @@ class Bloomwire::Webhooks::WhatsappController < ActionController::API
 
   def process_payload
     payload = params.to_unsafe_hash
-    setup = Bloomwire::Webhooks::WhatsappRouter.resolve(payload)
+    # Only hand off when the existing job is guaranteed to re-resolve to this exact mapped channel/inbox.
+    setup = Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)
 
     if setup
-      # Hand off to the existing Chatwoot WhatsApp processing path; it re-resolves to the mapped channel.
       Webhooks::WhatsappEventsJob.perform_later(payload)
     else
-      Rails.logger.info("[BLOOMWIRE ROUTER] no routeable setup for phone_number_id #{redacted_phone_number_id(payload)}")
+      Rails.logger.info("[BLOOMWIRE ROUTER] no handoff-safe setup for phone_number_id #{redacted_phone_number_id(payload)}")
     end
 
     # Always 200 so Meta does not retry; routing decision is fail-closed above.

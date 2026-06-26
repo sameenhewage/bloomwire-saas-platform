@@ -26,4 +26,36 @@ class Bloomwire::Webhooks::WhatsappRouter
 
     setup
   end
+
+  # Returns a setup ONLY when the existing Webhooks::WhatsappEventsJob (get_channel_from_wb_payload) is
+  # guaranteed to re-resolve to this exact mapped channel/inbox from the same payload — otherwise nil
+  # (fail-closed). This prevents enqueueing a payload that the native job would route to a different (or no)
+  # channel. Mirrors the native resolution: channel.phone_number == "+<display>" AND
+  # channel.provider_config['phone_number_id'] == payload phone_number_id, with the channel's own inbox.
+  def self.resolve_handoff_safe_setup(payload)
+    setup = resolve(payload)
+    return unless setup && channel_aligned_with_payload?(setup, payload)
+
+    setup
+  end
+
+  # True only when the native job (get_channel_from_wb_payload) would re-resolve to this exact mapped
+  # channel/inbox: the channel exists with the setup's own inbox, its provider_config phone_number_id equals
+  # the payload's phone_number_id, and its phone_number equals the normalized display number.
+  def self.channel_aligned_with_payload?(setup, payload)
+    channel = setup.channel_whatsapp
+    return false unless channel && setup.inbox
+    return false unless channel.inbox&.id == setup.inbox_id
+    return false unless channel.provider_config.to_h['phone_number_id'] == phone_number_id_from(payload)
+
+    channel.phone_number == normalized_display_phone_number(payload)
+  end
+
+  # Mirrors Webhooks::WhatsappEventsJob#get_channel_from_wb_payload, which finds the channel by "+<display>".
+  def self.normalized_display_phone_number(payload)
+    display_phone_number = payload.dig('entry', 0, 'changes', 0, 'value', 'metadata', 'display_phone_number')
+    return if display_phone_number.blank?
+
+    "+#{display_phone_number}"
+  end
 end
