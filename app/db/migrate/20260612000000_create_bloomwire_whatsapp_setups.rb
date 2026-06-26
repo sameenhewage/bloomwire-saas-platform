@@ -17,7 +17,9 @@ class CreateBloomwireWhatsappSetups < ActiveRecord::Migration[7.1]
       t.timestamps
     end
 
-    add_index :bloomwire_whatsapp_setups, :phone_number_id
+    # phone_number_id is globally unique at Meta, but may be nil for pending/pre-channel setup rows.
+    # Partial unique index enforces uniqueness only when present (multiple nil rows are allowed).
+    add_index :bloomwire_whatsapp_setups, :phone_number_id, unique: true, where: 'phone_number_id IS NOT NULL'
     add_index :bloomwire_whatsapp_setups, :setup_status
   end
 end

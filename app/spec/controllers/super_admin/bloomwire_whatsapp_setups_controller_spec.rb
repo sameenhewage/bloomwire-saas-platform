@@ -80,9 +80,18 @@ RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup Mapping', type: :request do
       it 'updates a setup status' do
         setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
         patch "/super_admin/bloomwire_whatsapp_setups/#{setup.id}", params: {
-          bloomwire_whatsapp_setup: { setup_status: 'ready_for_webhook', status_reason: 'creds validated' }
+          bloomwire_whatsapp_setup: { setup_status: 'configured', status_reason: 'creds entered' }
         }
-        expect(setup.reload.setup_status).to eq('ready_for_webhook')
+        expect(setup.reload.setup_status).to eq('configured')
+      end
+
+      it 'rejects marking ready_for_webhook without the required routing fields' do
+        setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
+        patch "/super_admin/bloomwire_whatsapp_setups/#{setup.id}", params: {
+          bloomwire_whatsapp_setup: { setup_status: 'ready_for_webhook' }
+        }
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(setup.reload.setup_status).to eq('pending')
       end
 
       it 'shows a setup' do
