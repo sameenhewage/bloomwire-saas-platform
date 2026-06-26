@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_11_184600) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_12_000000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -259,6 +259,24 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_11_184600) do
     t.datetime "updated_at", null: false
     t.boolean "active", default: true, null: false
     t.index ["account_id"], name: "index_automation_rules_on_account_id"
+  end
+
+  create_table "bloomwire_whatsapp_setups", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "inbox_id"
+    t.bigint "channel_whatsapp_id"
+    t.string "setup_status", default: "pending", null: false
+    t.text "status_reason"
+    t.string "waba_id"
+    t.string "phone_number_id"
+    t.string "display_phone_number"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_bloomwire_whatsapp_setups_on_account_id"
+    t.index ["channel_whatsapp_id"], name: "index_bloomwire_whatsapp_setups_on_channel_whatsapp_id", unique: true
+    t.index ["inbox_id"], name: "index_bloomwire_whatsapp_setups_on_inbox_id"
+    t.index ["phone_number_id"], name: "index_bloomwire_whatsapp_setups_on_phone_number_id", unique: true, where: "(phone_number_id IS NOT NULL)"
+    t.index ["setup_status"], name: "index_bloomwire_whatsapp_setups_on_setup_status"
   end
 
   create_table "calls", force: :cascade do |t|
@@ -1345,6 +1363,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_11_184600) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "bloomwire_whatsapp_setups", "accounts"
+  add_foreign_key "bloomwire_whatsapp_setups", "channel_whatsapp"
+  add_foreign_key "bloomwire_whatsapp_setups", "inboxes"
   add_foreign_key "inboxes", "portals"
   add_foreign_key "user_sessions", "users"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).

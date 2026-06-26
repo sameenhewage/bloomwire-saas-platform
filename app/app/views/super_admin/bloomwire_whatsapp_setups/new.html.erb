@@ -1,0 +1,11 @@
+<% content_for(:title) do %>
+  New WhatsApp Setup Mapping
+<% end %>
+
+<header class="main-content__header" role="banner">
+  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+</header>
+
+<section class="main-content__body">
+  <%= render 'form', url: super_admin_bloomwire_whatsapp_setups_path, method: :post %>
+</section>
