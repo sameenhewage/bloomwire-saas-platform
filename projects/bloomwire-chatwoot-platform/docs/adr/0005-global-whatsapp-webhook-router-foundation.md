@@ -144,3 +144,37 @@ missing?" — **without calling Meta** and **without ever rendering secret value
   `provider_config.phone_number_id` mismatch (exact reason shown); the page never renders the app secret, verify
   token, provider api_key, or full phone identifiers; logs contain none of those; the service makes no outbound
   HTTP / Meta call; live `curl` confirms the route is wired and auth-gated (302 → `/super_admin/sign_in`).
+
+## Native WhatsApp setup restriction (Phase 10A.2)
+
+When Bloomwire mode + `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` are ON, business (account) users cannot
+create / authorize / reconnect / reconfigure native Chatwoot WhatsApp channels directly — WhatsApp setup is
+handled only by Bloomwire Ops/SuperAdmin via the setup-mapping + readiness surfaces. OFF ⇒ stock Chatwoot.
+
+- **Gate:** `Bloomwire::Features.restrict_native_whatsapp_setup?` = `master_enabled? && raw_enabled?(:restrict_native_whatsapp_setup)`
+  (reuses the existing Phase 1 toggle; no new toggle, no schema change).
+- **Guard:** controller concern `Bloomwire::RestrictsNativeWhatsappSetup` adds a `restrict_native_whatsapp_setup!`
+  before_action that renders **403** `{ error: I18n.t('bloomwire.native_whatsapp_setup_restricted') }`
+  ("WhatsApp setup is managed by Bloomwire Ops. Please contact support.") only for native WhatsApp setup actions
+  (`native_whatsapp_setup_request?`, overridable per controller). It reads no secrets and echoes none.
+- **Entry points guarded:** `Api::V1::Accounts::Whatsapp::AuthorizationsController#create` (embedded signup +
+  reauthorize/reconnect — always WhatsApp); `Api::V1::Accounts::InboxesController#create` (only when
+  `channel.type == 'whatsapp'`); `#update` (only when the inbox's channel is `Channel::Whatsapp` and channel
+  params are present). The Vue SPA calls these API endpoints, so this is the server-side control plane.
+- **Not guarded (by design):** native + Bloomwire webhook GET/POST endpoints and jobs, read paths (inbox/
+  conversation/message), non-WhatsApp channel setup, the SuperAdmin Bloomwire setup-mapping/readiness pages, and
+  the EE WhatsApp voice-calling toggles (operational, not channel setup).
+- **Separation:** this is a control-plane guard only. The real Meta inbound smoke remains a separate slice and
+  still requires external Meta test assets (WABA / phone_number_id / display number / dashboard access / phone).
+  No real secrets are committed or pasted into reports.
+
+### Evidence (Phase 10A.2)
+- TDD red→green: 9 failures first (Features helper + guard-blocking cases) → Features helper (4) + guard request
+  spec (18) green. Regression: 263 + 43 green (new + existing WhatsApp authorization + inboxes controller specs +
+  PR #35/#36/#37/#38 + native `webhooks/whatsapp` controller/job + Phase 2A/2B/2C). RuboCop: no offenses. No
+  migration / no new tables / no new secret columns.
+- Runtime (dev, real stack): 15/15 — OFF ⇒ guard inactive (stock 422 validation); ON ⇒ admin + agent get 403 +
+  message on authorize/embedded-signup, admin blocked on WhatsApp inbox create (no channel created) + provider-
+  config update; non-WhatsApp (web widget) create succeeds; existing WhatsApp inbox read (show) works; native +
+  Bloomwire webhook GET not blocked by the guard; SuperAdmin setup-mapping + readiness pages available; the
+  blocked body + logs contain no app secret or provider api_key; the guard makes no outbound HTTP / Meta call.

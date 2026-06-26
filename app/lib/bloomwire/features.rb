@@ -43,6 +43,12 @@ module Bloomwire::Features
     raw_enabled?(:mode)
   end
 
+  # True when native (account-level) WhatsApp setup/configuration must be blocked for business users:
+  # Bloomwire master mode ON AND the restrict toggle ON. The single gate the native setup guard reads.
+  def restrict_native_whatsapp_setup?
+    master_enabled? && raw_enabled?(:restrict_native_whatsapp_setup)
+  end
+
   # True when `name` is a managed-data InstallationConfig key that requires privacy hardening ON
   # before it may be persisted to true (write-path guard, fail-closed).
   def privacy_dependent_key?(name)

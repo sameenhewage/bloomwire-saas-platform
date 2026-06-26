@@ -85,6 +85,31 @@ RSpec.describe Bloomwire::Features do
     end
   end
 
+  # Phase 10A.2: the single gate the native WhatsApp setup guard reads (master AND the restrict toggle).
+  describe '.restrict_native_whatsapp_setup?' do
+    it 'is OFF by default (stock-safe)' do
+      expect(described_class.restrict_native_whatsapp_setup?).to be(false)
+    end
+
+    it 'is inactive when Bloomwire mode is OFF even if the restrict toggle is stored ON' do
+      set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
+      set_toggle(described_class::MASTER, false)
+      expect(described_class.restrict_native_whatsapp_setup?).to be(false)
+    end
+
+    it 'is inactive when the restrict toggle is OFF (native behavior unchanged)' do
+      set_toggle(described_class::MASTER, true)
+      set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', false)
+      expect(described_class.restrict_native_whatsapp_setup?).to be(false)
+    end
+
+    it 'is active only when master mode AND the restrict toggle are ON' do
+      set_toggle(described_class::MASTER, true)
+      set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
+      expect(described_class.restrict_native_whatsapp_setup?).to be(true)
+    end
+  end
+
   # The global WhatsApp webhook verify token is a sensitive secret and must follow the Phase 2A masking
   # contract on SuperAdmin surfaces (masked + no-wipe) once privacy hardening is effectively ON.
   describe 'global WhatsApp webhook verify token is a masked secret' do

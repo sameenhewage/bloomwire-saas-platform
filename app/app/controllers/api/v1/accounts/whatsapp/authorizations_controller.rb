@@ -1,4 +1,9 @@
 class Api::V1::Accounts::Whatsapp::AuthorizationsController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsNativeWhatsappSetup
+
+  # Bloomwire: when native WhatsApp setup is restricted, business users cannot start embedded signup /
+  # authorization / reauthorization (reconnect). This whole controller is a native WhatsApp setup surface.
+  before_action :restrict_native_whatsapp_setup!, only: [:create]
   before_action :fetch_and_validate_inbox, if: -> { params[:inbox_id].present? }
 
   # POST /api/v1/accounts/:account_id/whatsapp/authorization
