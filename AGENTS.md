@@ -30,18 +30,16 @@ re-read this file before acting.
    - Before **any** analysis, design, bugfix, or implementation, establish the
      current situation from the **graphify** code graph — never from memory or
      assumption. *Read the graph, understand reality, then act.*
-   - **Update → read → then act, in this order:**
-     - **1) Update if stale** — the graph is stale when its `Built from commit` in
-       `app/graphify-out/GRAPH_REPORT.md` differs from `git rev-parse HEAD`, or when
-       there are uncommitted changes in the area you will touch. If stale, run
-       `graphify update .` at the graph root (currently `app/`) — incremental,
-       cached, and **$0** (no LLM/API cost).
-     - **2) Read** the relevant slice for what you will touch:
-       `graphify explain "<Symbol>"`, `graphify query "<intent>"`, or
-       `graphify path "<A>" "<B>"` (quick map: grep node labels in
-       `app/graphify-out/graph.json`).
-     - **3) Then** analyse or implement — only after the graph reflects HEAD and you
-       have read it.
+   - **Read** the relevant slice for what you will touch:
+     `graphify explain "<Symbol>"`, `graphify query "<intent>"`, or
+     `graphify path "<A>" "<B>"` (quick map: grep node labels in
+     `app/graphify-out/graph.json`).
+   - **No manual updates needed.** The graph **auto-refreshes** via git hooks
+     (`graphify hook` — post-commit + post-checkout, incremental, cached, **$0**;
+     redirected to the `app/` graph root via `graphify-out/.graphify_root`). Do
+     **not** run `graphify update` by hand. Only if you suspect the graph is stale
+     — e.g. large *uncommitted* changes in the area you will touch — confirm
+     against source (or, as a one-off, run `graphify update .` from `app/`).
    - **Ground-truth caveat** — the graph is AST-only (code symbols, not string
      literals) and the `projects/<name>/docs` are **not** in it unless ingested.
      Confirm against source, and ingest docs with `graphify add projects/<name>/docs`

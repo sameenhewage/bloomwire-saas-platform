@@ -10,10 +10,11 @@ repository.
 
 ## Before you do anything
 
-1. **Graph-first.** If the graphify code graph is stale, run `graphify update .`
-   (incremental, cached, $0); then **read** the relevant slice to establish the
-   current situation — *before* any analysis or implementation. This is
-   `AGENTS.md` → "What every agent MUST do" step 1; follow it without exception.
+1. **Graph-first.** **Read** the relevant slice of the graphify code graph to
+   establish the current situation — *before* any analysis or implementation.
+   The graph **auto-refreshes** via git hooks (post-commit + post-checkout), so
+   you do **not** run `graphify update` by hand. This is `AGENTS.md` → "What
+   every agent MUST do" step 1; follow it without exception.
 2. **Read `AGENTS.md`.** Follow it without exception.
 3. **Understand the current task.** Find the issue, task brief, or PRD that
    authorizes the work. If there is none, stop and ask.
