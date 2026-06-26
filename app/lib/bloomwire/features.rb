@@ -24,7 +24,7 @@ module Bloomwire::Features
   # InstallationConfig keys whose stored value must never be shown or echoed in cleartext on SuperAdmin
   # surfaces while privacy hardening is ON (ADR-0003). Single source of truth for both the app_config
   # view and the generic Administrate installation_configs editor.
-  MASKED_SECRET_KEYS = %w[WHATSAPP_APP_SECRET].freeze
+  MASKED_SECRET_KEYS = %w[WHATSAPP_APP_SECRET BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN].freeze
 
   module_function
 

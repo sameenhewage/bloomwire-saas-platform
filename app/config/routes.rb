@@ -623,6 +623,7 @@ Rails.application.routes.draw do
   get 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#verify'
   post 'webhooks/whatsapp/:phone_number', to: 'webhooks/whatsapp#process_payload'
   # Bloomwire global Meta WhatsApp webhook router (gated by Bloomwire::Features.global_webhook_router).
+  get 'bloomwire/webhooks/whatsapp', to: 'bloomwire/webhooks/whatsapp#verify'
   post 'bloomwire/webhooks/whatsapp', to: 'bloomwire/webhooks/whatsapp#process_payload'
   get 'webhooks/instagram', to: 'webhooks/instagram#verify'
   post 'webhooks/instagram', to: 'webhooks/instagram#events'

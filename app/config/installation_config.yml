@@ -597,4 +597,10 @@
   value: false
   locked: false
   type: boolean
+# Single global verify token for the Bloomwire global Meta WhatsApp webhook GET verification handshake
+# (not per-customer). Sensitive: masked + no-wipe on SuperAdmin surfaces while privacy hardening is ON.
+- name: BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN
+  display_title: 'Bloomwire Global WhatsApp Verify Token'
+  description: 'Verify token Meta echoes when registering the Bloomwire global webhook callback URL. Keep secret.'
+  locked: false
 ## ------- End of Bloomwire / Unecast Feature Toggles ------- ##
