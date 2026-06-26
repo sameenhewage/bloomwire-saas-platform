@@ -603,4 +603,10 @@
   display_title: 'Bloomwire Global WhatsApp Verify Token'
   description: 'Verify token Meta echoes when registering the Bloomwire global webhook callback URL. Keep secret.'
   locked: false
+# Non-secret public HTTPS host (e.g. staging domain or tunnel) used only to display the full Bloomwire webhook
+# callback URL on the Ops real-hop readiness console. Hostname only — NOT a secret, NOT masked.
+- name: BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST
+  display_title: 'Bloomwire Public WhatsApp Callback Host'
+  description: 'Public HTTPS host (no scheme) for the global webhook callback URL, e.g. wa.example.com. Non-secret.'
+  locked: false
 ## ------- End of Bloomwire / Unecast Feature Toggles ------- ##

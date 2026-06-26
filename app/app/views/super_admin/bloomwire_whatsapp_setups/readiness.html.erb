@@ -1,0 +1,100 @@
+<% content_for(:title) do %>
+  WhatsApp Real-Hop Readiness — Setup #<%= @setup.id %>
+<% end %>
+
+<% groups = {
+  'feature_toggles' => 'Feature toggles',
+  'secrets_config'  => 'Secrets / config',
+  'setup_mapping'   => 'Setup mapping',
+  'channel_alignment' => 'Channel alignment',
+  'callback_url'    => 'Callback URL'
+} %>
+
+<header class="main-content__header" role="banner">
+  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+  <div>
+    <%= link_to 'Back to setup', super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button button--secondary' %>
+  </div>
+</header>
+
+<section class="main-content__body">
+  <% blocked = @readiness[:status] == 'blocked' %>
+  <div class="mb-6 p-4 rounded border <%= blocked ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50' %>"
+       data-overall-status="<%= @readiness[:status] %>">
+    <p class="text-lg font-semibold <%= blocked ? 'text-red-700' : 'text-green-700' %>">
+      Overall: <%= blocked ? 'Blocked' : 'Ready' %>
+    </p>
+    <ul class="mt-2 text-sm text-slate-600">
+      <li>Ready for inbound webhook mapping:
+        <strong><%= @readiness[:ready_for_inbound_mapping] ? 'Ready' : 'Blocked' %></strong></li>
+      <li>Ready for GET verification config:
+        <strong><%= @readiness[:ready_for_get_verification_config] ? 'Ready' : 'Blocked' %></strong></li>
+    </ul>
+  </div>
+
+  <div class="mb-6 text-sm">
+    <p class="text-slate-500">Masked routing identifiers (this setup):</p>
+    <ul class="mt-1 text-slate-700">
+      <li>Phone Number ID: <code><%= @readiness[:masked][:phone_number_id] %></code></li>
+      <li>Channel phone number: <code><%= @readiness[:masked][:channel_phone_number] %></code></li>
+      <li>Display phone number: <code><%= @readiness[:masked][:display_phone_number] %></code></li>
+    </ul>
+  </div>
+
+  <% groups.each do |group_key, group_label| %>
+    <% checks = @readiness[:checks].select { |c| c['group'] == group_key || c[:group] == group_key } %>
+    <% next if checks.empty? %>
+    <h2 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500"><%= group_label %></h2>
+    <ul class="text-sm">
+      <% checks.each do |c| %>
+        <% pass = (c[:status] || c['status']) == 'pass' %>
+        <li class="flex items-start py-2 border-b border-slate-50">
+          <span class="w-20 shrink-0 font-semibold <%= pass ? 'text-green-600' : 'text-red-600' %>">
+            <%= pass ? 'PASS' : 'BLOCKED' %>
+          </span>
+          <span class="text-slate-700">
+            <%= (c[:key] || c['key']).to_s.humanize %>
+            <% message = c[:message] || c['message'] %>
+            <% if message.present? %>
+              <span class="block text-red-600"><%= message %></span>
+            <% end %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <h2 class="mt-8 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Callback URL</h2>
+  <div class="text-sm">
+    <p class="text-slate-700">Callback path (copy into the Meta dashboard):</p>
+    <input type="text" readonly value="<%= @readiness[:callback_path] %>"
+           class="mt-1 w-full max-w-md px-2 py-1 border border-slate-200 rounded font-mono text-xs" />
+    <% if @readiness[:callback_url].present? %>
+      <p class="mt-2 text-slate-700">Full callback URL:</p>
+      <input type="text" readonly value="<%= @readiness[:callback_url] %>"
+             class="mt-1 w-full max-w-md px-2 py-1 border border-slate-200 rounded font-mono text-xs" />
+    <% else %>
+      <p class="mt-2 text-red-600">No public HTTPS host documented yet — set
+        <code>BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST</code> (a non-secret hostname) to build the full URL.</p>
+    <% end %>
+  </div>
+
+  <h2 class="mt-8 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Next manual Meta steps (masked runbook)</h2>
+  <ol class="text-sm text-slate-700 list-decimal ml-5 space-y-1">
+    <li>Configure the Meta webhook callback URL to the path above on your public HTTPS host.</li>
+    <li>Use the configured global verify token (<code>BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN</code>) — value never shown here.</li>
+    <li>Subscribe the app to the <strong>messages</strong> field.</li>
+    <li>Send <strong>one</strong> real inbound test message from an allowed test phone to the test number.</li>
+    <li>Verify the correct inbox/conversation/message appears in Chatwoot.</li>
+  </ol>
+
+  <div class="mt-8 p-4 rounded border border-amber-200 bg-amber-50 text-sm text-amber-800">
+    <p class="font-semibold">Warnings</p>
+    <ul class="mt-1 list-disc ml-5 space-y-1">
+      <li>No real Meta end-to-end test has been performed by this console.</li>
+      <li>Do not paste real secrets, tokens, or full phone numbers into reports or screenshots.</li>
+      <li>The real inbound test stays blocked until a Meta test WABA, phone_number_id, display number,
+          Meta dashboard access, and a physical test phone are available.</li>
+    </ul>
+  </div>
+</section>

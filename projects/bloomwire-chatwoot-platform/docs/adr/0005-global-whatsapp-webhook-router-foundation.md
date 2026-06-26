@@ -104,3 +104,43 @@ webhook-callback verification handshake so the global endpoint can be registered
   echoes `hub.challenge`, invalid/absent token ⇒ 401, missing token config ⇒ 401 (fail closed); GET never
   enqueues `Webhooks::WhatsappEventsJob` and needs no `phone_number_id`/`Bloomwire::WhatsappSetup`; verify token,
   `WHATSAPP_APP_SECRET`, message body, and full unknown `phone_number_id` all absent from logs.
+
+## Real-hop readiness console (Phase 10A.1)
+
+A SuperAdmin/Ops-only, read-only console answers "is a real Meta inbound test ready or blocked, and what is
+missing?" — **without calling Meta** and **without ever rendering secret values**.
+
+- **Service** `Bloomwire::WhatsappRealHopReadiness` (PORO, no DB writes): given a `Bloomwire::WhatsappSetup`
+  it returns `{ status: ready|blocked, ready_for_inbound_mapping, ready_for_get_verification_config,
+  checks: [{ key, group, status, message }], callback_path, callback_url, masked: {…} }`. Secret checks report
+  only **configured/missing** (never the value); phone identifiers are **masked** (`****`-tail).
+- **Checks (grouped):** feature toggles (`BLOOMWIRE_MODE_ENABLED` / `…PRIVACY_HARDENING` / `…GLOBAL_WEBHOOK_ROUTER`),
+  secrets/config (`WHATSAPP_APP_SECRET`, `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN` configured), setup mapping
+  (present / `ready_for_webhook` / phone_number_id / account / inbox / channel + the three consistency rules),
+  channel alignment (`whatsapp_cloud` provider / phone_number / `provider_config.phone_number_id` match /
+  `WhatsappRouter.resolve_handoff_safe_setup` would pass for a sample aligned payload), and callback URL.
+- **Surface:** member action `readiness` on `SuperAdmin::BloomwireWhatsappSetupsController`
+  (`/super_admin/bloomwire_whatsapp_setups/:id/readiness`), gated by `authenticate_super_admin!` +
+  `ensure_bloomwire_mode_enabled` (OFF ⇒ stock). The page shows the overall verdict, the grouped checklist, the
+  copyable callback path, a masked next-steps runbook, and warnings (no real Meta E2E performed; never paste
+  secrets; real test stays blocked until external Meta assets exist).
+- **Config:** one **non-secret** `InstallationConfig` `BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST` (hostname only,
+  not masked, not a secret) lets Ops record the staging/tunnel host so the full callback URL can be displayed.
+  No new tables, no new secret columns, no duplicate secret storage.
+
+### External assets required for the real hop (none are stored in git)
+- A Meta test **WABA** + its **`phone_number_id`** and **`display_phone_number`**.
+- Meta Developer **dashboard access** (to set the callback URL and run GET verification).
+- A **physical test phone** to send one inbound message.
+- A **public HTTPS callback URL** (staging or tunnel) → record its host in `BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST`.
+- The real `WHATSAPP_APP_SECRET` and a chosen `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN` (set in env/config only).
+
+### Evidence (Phase 10A.1)
+- TDD red→green: service spec (17) + SuperAdmin request spec (12) = 29 green. Regression: 183 examples / 0
+  failures (new + PR #35/#36/#37 + Phase 1/2A/2B/2C + native `webhooks/whatsapp` controller + `WhatsappEventsJob`).
+  RuboCop: no offenses. No migration / no new tables / no new secret columns.
+- Runtime (dev, real stack): 18/18 — unauthenticated + business/agent users redirected to super_admin sign in;
+  SuperAdmin sees BLOCKED (missing config) → READY (fake aligned config) → BLOCKED again on a
+  `provider_config.phone_number_id` mismatch (exact reason shown); the page never renders the app secret, verify
+  token, provider api_key, or full phone identifiers; logs contain none of those; the service makes no outbound
+  HTTP / Meta call; live `curl` confirms the route is wired and auth-gated (302 → `/super_admin/sign_in`).

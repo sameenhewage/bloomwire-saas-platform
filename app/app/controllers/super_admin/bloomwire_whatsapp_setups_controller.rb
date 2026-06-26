@@ -1,12 +1,17 @@
 class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationController
   before_action :ensure_bloomwire_mode_enabled
-  before_action :set_setup, only: [:show, :edit, :update]
+  before_action :set_setup, only: [:show, :edit, :update, :readiness]
 
   def index
     @setups = Bloomwire::WhatsappSetup.includes(:account, :inbox, :channel_whatsapp).order(created_at: :desc)
   end
 
   def show; end
+
+  # Read-only real-hop readiness console (Phase 10A.1). Computes a secret-free checklist; never calls Meta.
+  def readiness
+    @readiness = Bloomwire::WhatsappRealHopReadiness.new(@setup).result
+  end
 
   def new
     @setup = Bloomwire::WhatsappSetup.new
