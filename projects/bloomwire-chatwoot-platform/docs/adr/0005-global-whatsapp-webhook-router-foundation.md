@@ -66,7 +66,7 @@ a **routing gate**, not a new processor: no new message/conversation/contact tab
   redacts secret/key/access keys). A global logging-policy decision to suppress message bodies is a separate item.
 
 ## Evidence (this slice)
-- Tests: resolver spec (8) + controller request spec (9) = 17, all green; regression (PR #35 + Phase 1/2A/2B/2C
+- Tests: resolver spec (14) + controller request spec (10) = 24, all green; regression (PR #35 + Phase 1/2A/2B/2C
   + native webhook controller/events job) green (118 total). RuboCop: no offenses. No migration / no new tables.
 - Runtime (dev, curl): OFF ⇒ 404; ON + valid signature + matching `phone_number_id` ⇒ 200 (handoff enqueued);
   ON + unknown ⇒ 200 fail-closed (redacted diagnostic `****`); invalid signature ⇒ 401; resolver resolves the
