@@ -64,6 +64,40 @@ RSpec.describe Bloomwire::WhatsappSetup do
     end
   end
 
+  describe 'blank routing identifier normalization' do
+    it 'normalizes blank phone_number_id / waba_id / display_phone_number to nil' do
+      setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending',
+                                                phone_number_id: '', waba_id: '', display_phone_number: '')
+      setup.reload
+      expect(setup.phone_number_id).to be_nil
+      expect(setup.waba_id).to be_nil
+      expect(setup.display_phone_number).to be_nil
+    end
+
+    it 'allows multiple pending rows submitted with a blank-string phone_number_id (no DB uniqueness crash)' do
+      first = create(:bloomwire_whatsapp_setup, account: account, phone_number_id: '')
+      second = nil
+      expect { second = create(:bloomwire_whatsapp_setup, account: other_account, phone_number_id: '') }.not_to raise_error
+      expect(first.reload.phone_number_id).to be_nil
+      expect(second.reload.phone_number_id).to be_nil
+    end
+
+    it 'still rejects a real duplicate phone_number_id after normalization' do
+      create(:bloomwire_whatsapp_setup, account: account, phone_number_id: 'PNID-DUP')
+      dup = described_class.new(account: other_account, phone_number_id: 'PNID-DUP', setup_status: 'pending')
+      expect(dup).not_to be_valid
+      expect(dup.errors[:phone_number_id]).to be_present
+    end
+
+    it 'rejects ready_for_webhook when phone_number_id is a blank string (normalizes to nil)' do
+      channel = whatsapp_channel_for(account)
+      setup = described_class.new(account: account, inbox: channel.inbox, channel_whatsapp: channel,
+                                  setup_status: 'ready_for_webhook', phone_number_id: '')
+      expect(setup).not_to be_valid
+      expect(setup.errors[:phone_number_id]).to be_present
+    end
+  end
+
   describe 'ready_for_webhook routeability' do
     let(:channel) { whatsapp_channel_for(account) }
 

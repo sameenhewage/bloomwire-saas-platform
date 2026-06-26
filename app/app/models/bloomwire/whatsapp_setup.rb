@@ -15,6 +15,10 @@ class Bloomwire::WhatsappSetup < ApplicationRecord
   belongs_to :inbox, optional: true
   belongs_to :channel_whatsapp, class_name: 'Channel::Whatsapp', optional: true
 
+  # Normalize blank routing identifiers to nil BEFORE validation so a form-submitted empty string does not
+  # collide with the partial unique index (which treats '' as a real value, unlike NULL).
+  before_validation :normalize_blank_routing_identifiers
+
   validates :setup_status, presence: true, inclusion: { in: SETUP_STATUSES }
   validates :channel_whatsapp_id, uniqueness: true, allow_nil: true
   validates :phone_number_id, uniqueness: true, allow_blank: true
@@ -27,6 +31,14 @@ class Bloomwire::WhatsappSetup < ApplicationRecord
   scope :ready_for_webhook, -> { where(setup_status: ROUTEABLE_STATUS) }
 
   private
+
+  # Coerce blank ('' / whitespace) routing identifiers to nil so NULL semantics apply at the DB (the
+  # partial unique index is `where phone_number_id IS NOT NULL`, so multiple pending/blank rows are allowed).
+  def normalize_blank_routing_identifiers
+    self.phone_number_id = phone_number_id.presence
+    self.waba_id = waba_id.presence
+    self.display_phone_number = display_phone_number.presence
+  end
 
   # The referenced inbox must belong to the same account as the setup (prevents cross-tenant routing).
   def inbox_belongs_to_account
