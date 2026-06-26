@@ -23,15 +23,11 @@ class Api::V1::Accounts::Bloomwire::WhatsappSetupRequestsController < Api::V1::A
     head :not_found unless ::Bloomwire::Features.master_enabled?
   end
 
-  # Safe DTO: only non-secret intake fields. No provider_config / api_key / token is ever stored or returned.
+  # Safe DTO: only non-secret operational status fields (no internal IDs). No provider_config / api_key / token is ever stored or returned.
   def request_json(request)
     {
-      id: request.id,
-      account_id: request.account_id,
       status: request.status,
       status_reason: request.status_reason,
-      requested_by_id: request.requested_by_id,
-      bloomwire_whatsapp_setup_id: request.bloomwire_whatsapp_setup_id,
       completed_at: request.completed_at,
       created_at: request.created_at,
       updated_at: request.updated_at

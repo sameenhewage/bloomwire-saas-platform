@@ -57,16 +57,37 @@ RSpec.describe Bloomwire::WhatsappSetupRequest do
   end
 
   describe 'one active request per account (DB partial unique index)' do
-    it 'rejects a second active row for the same account at the database level' do
+    it 'rejects a second active row for the same account at the database level (validation bypassed)' do
       described_class.create!(account: account, status: 'pending')
-      expect do
-        described_class.create!(account: account, status: 'in_progress')
-      end.to raise_error(ActiveRecord::RecordNotUnique)
+      duplicate = described_class.new(account: account, status: 'in_progress')
+      expect { duplicate.save!(validate: false) }.to raise_error(ActiveRecord::RecordNotUnique)
     end
 
     it 'permits multiple closed (completed/blocked) rows for the same account' do
       described_class.create!(account: account, status: 'completed')
       expect { described_class.create!(account: account, status: 'blocked') }.not_to raise_error
+    end
+  end
+
+  describe 'one active request per account (model validation, before DB)' do
+    it 'allows a closed (completed) request to coexist with an active request' do
+      described_class.create!(account: account, status: 'pending')
+      coexisting = described_class.new(account: account, status: 'completed')
+      expect(coexisting).to be_valid
+    end
+
+    it 'is invalid to reopen a closed request to an active status while another active request exists' do
+      described_class.create!(account: account, status: 'pending')
+      closed = described_class.create!(account: account, status: 'completed')
+      closed.status = 'in_progress'
+      expect(closed).not_to be_valid
+      expect(closed.errors[:status]).to be_present
+    end
+
+    it 'allows reopening a closed request when no other active request exists' do
+      closed = described_class.create!(account: account, status: 'completed')
+      closed.status = 'in_progress'
+      expect(closed).to be_valid
     end
   end
 

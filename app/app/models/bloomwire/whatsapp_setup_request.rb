@@ -46,19 +46,21 @@ class Bloomwire::WhatsappSetupRequest < ApplicationRecord
 
   validates :status, presence: true, inclusion: { in: STATUSES }
   validate :bloomwire_whatsapp_setup_belongs_to_account
+  validate :single_active_request_per_account
 
   before_save :stamp_completed_at
 
   scope :active, -> { where(status: ACTIVE_STATUSES) }
 
-  # Idempotent intake: return the account's existing ACTIVE request, or create a new pending one. The partial
-  # unique index closes the create race; on a concurrent active insert we re-find the existing active request.
+  # Idempotent intake: return the account's existing ACTIVE request, or create a new pending one. The model
+  # validation and the partial unique index both close the create race (app-layer RecordInvalid or DB-layer
+  # RecordNotUnique); on a concurrent active insert we re-find the existing active request.
   def self.request_for(account:, requested_by: nil)
     existing = active.find_by(account_id: account.id)
     return existing if existing
 
     create!(account: account, requested_by: requested_by, status: 'pending')
-  rescue ActiveRecord::RecordNotUnique
+  rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
     active.find_by!(account_id: account.id)
   end
 
@@ -75,6 +77,20 @@ class Bloomwire::WhatsappSetupRequest < ApplicationRecord
     return if bloomwire_whatsapp_setup&.account_id == account_id
 
     errors.add(:bloomwire_whatsapp_setup_id, 'must belong to the same account as the request')
+  end
+
+  # Only one ACTIVE request may exist per account. This fails closed at the app layer (so reopening an old
+  # closed request returns a 422 validation error instead of a DB RecordNotUnique 500); the partial unique
+  # index remains the DB-level safety backstop for the create race.
+  def single_active_request_per_account
+    return if account_id.blank?
+    return unless ACTIVE_STATUSES.include?(status)
+
+    conflicting = self.class.active.where(account_id: account_id)
+    conflicting = conflicting.where.not(id: id) if persisted?
+    return unless conflicting.exists?
+
+    errors.add(:status, 'cannot be set to active: another active setup request already exists for this account')
   end
 
   def stamp_completed_at

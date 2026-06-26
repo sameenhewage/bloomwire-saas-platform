@@ -224,3 +224,27 @@ tracks and processes the request. Only available when `BLOOMWIRE_MODE_ENABLED` i
   status, agent + unauthenticated → 401; SuperAdmin queue opens, shows a request without secrets, updates
   status + reason; PR #40 still blocks native WhatsApp setup (with `managed_request` hint); non-WhatsApp inbox
   create still works; native webhook route not intercepted; no secrets in logs.
+
+### Phase 11A — review follow-up (operational safety hardening)
+
+PR #41 review surfaced four issues; all fixed model-first/view-first (no schema change, no new dependency):
+
+- **One active request per account is now enforced at the app layer too.** `single_active_request_per_account`
+  validates that no *other* active (`ACTIVE_STATUSES`, `self` excluded) request exists for the `account_id`.
+  Reopening an old closed request while another is active now returns a **422 validation error** instead of a
+  DB `RecordNotUnique` **500**. The partial unique index stays as the DB race backstop; `request_for` rescues
+  both `RecordNotUnique` and `RecordInvalid`.
+- **The SuperAdmin 422 page can no longer render a rejected/unpersisted setup link.** The "setup mapping"
+  links use `bloomwire_whatsapp_setup_id_in_database` (persisted value), not the dirty in-memory id; validation
+  errors are now rendered on the show page so Ops sees *why* an update failed.
+- **Safe DTO Gate (tenant API).** `request_json` now returns only non-secret operational status fields —
+  `status`, `status_reason`, `completed_at`, `created_at`, `updated_at`. Raw internal IDs (`id`, `account_id`,
+  `requested_by_id`, `bloomwire_whatsapp_setup_id`) are **removed** (none are required by the tenant status view;
+  the SuperAdmin HTML queue, which legitimately shows IDs to Ops, is unchanged).
+- **`managed_request: true` is now spec-protected** on the PR #40 native-restriction 403 responses
+  (authorization, inbox create, provider-config update).
+
+Evidence: TDD red→green; combined `rspec` (model + SuperAdmin + account API + native-restriction) = **54 green**;
+RuboCop clean. Runtime (real stack): cross-account link → 422, no rejected links rendered, error shown, DB nil;
+reopen-closed-while-active → 422 (not 500), stays completed; tenant DTO keys =
+`status, status_reason, completed_at, created_at, updated_at`; blocked native WA auth → 403 + `managed_request: true`.

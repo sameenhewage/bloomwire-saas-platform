@@ -44,17 +44,18 @@ RSpec.describe 'Account managed WhatsApp setup requests API', type: :request do
         expect(response).to have_http_status(:success)
         body = response.parsed_body
         expect(body['status']).to eq('pending')
-        expect(body['account_id']).to eq(account.id)
-        expect(body['requested_by_id']).to eq(administrator.id)
+        expect(body).not_to have_key('id')
+        expect(body).not_to have_key('account_id')
+        expect(body).not_to have_key('requested_by_id')
+        expect(body).not_to have_key('bloomwire_whatsapp_setup_id')
       end
 
       it 'is idempotent: a duplicate request returns the existing active one (no duplicate)' do
         post "/api/v1/accounts/#{account.id}/bloomwire/whatsapp_setup_requests", headers: administrator.create_new_auth_token, as: :json
-        first_id = response.parsed_body['id']
         expect do
           post "/api/v1/accounts/#{account.id}/bloomwire/whatsapp_setup_requests", headers: administrator.create_new_auth_token, as: :json
         end.not_to change(Bloomwire::WhatsappSetupRequest, :count)
-        expect(response.parsed_body['id']).to eq(first_id)
+        expect(Bloomwire::WhatsappSetupRequest.where(account_id: account.id).count).to eq(1)
       end
 
       it 'lets the admin view the current request status' do

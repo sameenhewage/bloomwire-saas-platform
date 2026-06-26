@@ -10,6 +10,16 @@
 </header>
 
 <section class="main-content__body">
+  <% if @request.errors.any? %>
+    <div class="mb-4 max-w-lg rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+      <ul class="list-disc pl-5">
+        <% @request.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
   <dl class="text-sm">
     <% {
       'Account ID' => @request.account_id,
@@ -29,13 +39,14 @@
 
   <div class="mt-6">
     <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Setup mapping</h2>
-    <% if @request.bloomwire_whatsapp_setup_id.present? %>
+    <% linked_setup_id = @request.bloomwire_whatsapp_setup_id_in_database %>
+    <% if linked_setup_id.present? %>
       <p class="text-sm">
         <%= link_to 'Open setup mapping',
-              super_admin_bloomwire_whatsapp_setup_path(@request.bloomwire_whatsapp_setup_id), class: 'text-woot-500' %>
+              super_admin_bloomwire_whatsapp_setup_path(linked_setup_id), class: 'text-woot-500' %>
         &middot;
         <%= link_to 'Open real-hop readiness',
-              readiness_super_admin_bloomwire_whatsapp_setup_path(@request.bloomwire_whatsapp_setup_id), class: 'text-woot-500' %>
+              readiness_super_admin_bloomwire_whatsapp_setup_path(linked_setup_id), class: 'text-woot-500' %>
       </p>
     <% else %>
       <p class="text-sm text-slate-400">Setup mapping is still pending — none linked to this request yet.</p>

@@ -41,6 +41,7 @@ RSpec.describe 'Bloomwire native WhatsApp setup restriction', type: :request do
            params: { code: 'x', business_id: 'y', waba_id: 'z' }, headers: administrator.create_new_auth_token, as: :json
       expect(response).to have_http_status(:forbidden)
       expect(response.parsed_body['error']).to eq(restricted_message)
+      expect(response.parsed_body['managed_request']).to be(true)
     end
 
     it 'blocks an agent from starting WhatsApp authorization' do
@@ -59,6 +60,7 @@ RSpec.describe 'Bloomwire native WhatsApp setup restriction', type: :request do
       end.not_to change(Channel::Whatsapp, :count)
       expect(response).to have_http_status(:forbidden)
       expect(response.parsed_body['error']).to eq(restricted_message)
+      expect(response.parsed_body['managed_request']).to be(true)
     end
 
     it 'blocks an administrator from updating a WhatsApp channel provider config' do
@@ -68,6 +70,7 @@ RSpec.describe 'Bloomwire native WhatsApp setup restriction', type: :request do
             headers: administrator.create_new_auth_token, as: :json
       expect(response).to have_http_status(:forbidden)
       expect(response.parsed_body['error']).to eq(restricted_message)
+      expect(response.parsed_body['managed_request']).to be(true)
     end
 
     it 'does NOT block creating a non-WhatsApp (web widget) channel' do
