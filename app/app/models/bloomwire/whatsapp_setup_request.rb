@@ -1,0 +1,75 @@
+# Phase 11A: Bloomwire-managed WhatsApp setup REQUEST (Ops intake). When native WhatsApp setup is restricted
+# (PR #40), a business/account admin requests managed setup; Bloomwire Ops then works the request through this
+# lifecycle and, later, creates/links the technical Bloomwire::WhatsappSetup mapping + readiness.
+#
+# This record is intentionally SEPARATE from Bloomwire::WhatsappSetup: that model's setup_status is the
+# router/readiness technical-readiness axis, whereas this tracks the Ops intake workflow. It stores ONLY
+# non-secret intake fields (status, optional reason, requester, optional mapping link) — never any credentials.
+# One ACTIVE request per account (active = not completed/blocked) is enforced by a partial unique index.
+# == Schema Information
+#
+# Table name: bloomwire_whatsapp_setup_requests
+#
+#  id                          :bigint           not null, primary key
+#  completed_at                :datetime
+#  status                      :string           default("pending"), not null
+#  status_reason               :text
+#  created_at                  :datetime         not null
+#  updated_at                  :datetime         not null
+#  account_id                  :bigint           not null
+#  bloomwire_whatsapp_setup_id :bigint
+#  requested_by_id             :bigint
+#
+# Indexes
+#
+#  idx_bw_wa_setup_requests_one_active_per_account             (account_id) UNIQUE WHERE (active statuses only)
+#  idx_on_bloomwire_whatsapp_setup_id_d6e0b0d31d               (bloomwire_whatsapp_setup_id)
+#  index_bloomwire_whatsapp_setup_requests_on_account_id       (account_id)
+#  index_bloomwire_whatsapp_setup_requests_on_requested_by_id  (requested_by_id)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (account_id => accounts.id)
+#  fk_rails_...  (bloomwire_whatsapp_setup_id => bloomwire_whatsapp_setups.id)
+#  fk_rails_...  (requested_by_id => users.id)
+#
+class Bloomwire::WhatsappSetupRequest < ApplicationRecord
+  self.table_name = 'bloomwire_whatsapp_setup_requests'
+
+  STATUSES = %w[pending in_progress waiting_for_client ready_for_setup blocked completed].freeze
+  CLOSED_STATUSES = %w[completed blocked].freeze
+  ACTIVE_STATUSES = (STATUSES - CLOSED_STATUSES).freeze
+
+  belongs_to :account
+  belongs_to :requested_by, class_name: 'User', optional: true
+  belongs_to :bloomwire_whatsapp_setup, class_name: 'Bloomwire::WhatsappSetup', optional: true
+
+  validates :status, presence: true, inclusion: { in: STATUSES }
+
+  before_save :stamp_completed_at
+
+  scope :active, -> { where(status: ACTIVE_STATUSES) }
+
+  # Idempotent intake: return the account's existing ACTIVE request, or create a new pending one. The partial
+  # unique index closes the create race; on a concurrent active insert we re-find the existing active request.
+  def self.request_for(account:, requested_by: nil)
+    existing = active.find_by(account_id: account.id)
+    return existing if existing
+
+    create!(account: account, requested_by: requested_by, status: 'pending')
+  rescue ActiveRecord::RecordNotUnique
+    active.find_by!(account_id: account.id)
+  end
+
+  def active?
+    ACTIVE_STATUSES.include?(status)
+  end
+
+  private
+
+  def stamp_completed_at
+    return unless new_record? || will_save_change_to_status?
+
+    self.completed_at = status == 'completed' ? (completed_at || Time.current) : nil
+  end
+end

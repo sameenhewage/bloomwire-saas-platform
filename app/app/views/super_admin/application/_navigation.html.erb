@@ -33,7 +33,7 @@ as defined by the routes in the `admin/` namespace
     <ul class="my-4">
       <%= render partial: "nav_item", locals: { icon: 'icon-grid-line', url: super_admin_root_url, label: 'Dashboard' } %>
       <% Administrate::Namespace.new(namespace).resources.each do |resource| %>
-        <% next if ["account_users", "access_tokens", "installation_configs", "dashboard", "devise/sessions", "app_configs", "bloomwire_configs", "bloomwire_whatsapp_setups", "instance_statuses", "settings", "push_diagnostics"].include?  resource.resource %>
+        <% next if ["account_users", "access_tokens", "installation_configs", "dashboard", "devise/sessions", "app_configs", "bloomwire_configs", "bloomwire_whatsapp_setups", "bloomwire_whatsapp_setup_requests", "instance_statuses", "settings", "push_diagnostics"].include?  resource.resource %>
         <% next if resource.resource == "platform_banners" && !ChatwootApp.chatwoot_cloud? %>
         <%= render partial: "nav_item", locals: {
             icon: sidebar_icons[resource.resource.to_sym],
@@ -46,6 +46,7 @@ as defined by the routes in the `admin/` namespace
       <%= render partial: "nav_item", locals: { icon: 'icon-flag-line', url: super_admin_bloomwire_config_url, label: 'Bloomwire Features' } %>
       <% if Bloomwire::Features.master_enabled? %>
         <%= render partial: "nav_item", locals: { icon: 'icon-whatsapp-line', url: super_admin_bloomwire_whatsapp_setups_url, label: 'WhatsApp Setup' } %>
+        <%= render partial: "nav_item", locals: { icon: 'icon-inbox-line', url: super_admin_bloomwire_whatsapp_setup_requests_url, label: 'WhatsApp Requests' } %>
       <% end %>
       <%= render 'settings_menu', open: settings_open? %>
     </ul>

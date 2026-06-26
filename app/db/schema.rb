@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_12_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_26_000000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -259,6 +259,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_12_000000) do
     t.datetime "updated_at", null: false
     t.boolean "active", default: true, null: false
     t.index ["account_id"], name: "index_automation_rules_on_account_id"
+  end
+
+  create_table "bloomwire_whatsapp_setup_requests", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "requested_by_id"
+    t.string "status", default: "pending", null: false
+    t.text "status_reason"
+    t.bigint "bloomwire_whatsapp_setup_id"
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "idx_bw_wa_setup_requests_one_active_per_account", unique: true, where: "((status)::text <> ALL ((ARRAY['completed'::character varying, 'blocked'::character varying])::text[]))"
+    t.index ["account_id"], name: "index_bloomwire_whatsapp_setup_requests_on_account_id"
+    t.index ["bloomwire_whatsapp_setup_id"], name: "idx_on_bloomwire_whatsapp_setup_id_d6e0b0d31d"
+    t.index ["requested_by_id"], name: "index_bloomwire_whatsapp_setup_requests_on_requested_by_id"
   end
 
   create_table "bloomwire_whatsapp_setups", force: :cascade do |t|
@@ -1363,6 +1378,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_12_000000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "bloomwire_whatsapp_setup_requests", "accounts"
+  add_foreign_key "bloomwire_whatsapp_setup_requests", "bloomwire_whatsapp_setups"
+  add_foreign_key "bloomwire_whatsapp_setup_requests", "users", column: "requested_by_id"
   add_foreign_key "bloomwire_whatsapp_setups", "accounts"
   add_foreign_key "bloomwire_whatsapp_setups", "channel_whatsapp"
   add_foreign_key "bloomwire_whatsapp_setups", "inboxes"

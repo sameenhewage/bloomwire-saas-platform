@@ -15,7 +15,8 @@ module Bloomwire::RestrictsNativeWhatsappSetup
     return unless Bloomwire::Features.restrict_native_whatsapp_setup?
     return unless native_whatsapp_setup_request?
 
-    render json: { error: I18n.t('bloomwire.native_whatsapp_setup_restricted') }, status: :forbidden
+    # Phase 11A: point the client toward the managed request path (no secrets; message text unchanged).
+    render json: { error: I18n.t('bloomwire.native_whatsapp_setup_restricted'), managed_request: true }, status: :forbidden
   end
 
   # Default: the including controller is a WhatsApp-only setup surface. Controllers that also serve
