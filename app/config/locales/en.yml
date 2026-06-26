@@ -31,6 +31,8 @@
 
 en:
   hello: 'Hello world'
+  bloomwire:
+    native_whatsapp_setup_restricted: 'WhatsApp setup is managed by Bloomwire Ops. Please contact support.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'

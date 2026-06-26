@@ -1,6 +1,10 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
+  include Bloomwire::RestrictsNativeWhatsappSetup
   before_action :fetch_inbox, except: [:index, :create]
+  # Bloomwire: block native WhatsApp channel create / provider-config update for business users when the
+  # restriction toggle is ON. Scoped to WhatsApp via native_whatsapp_setup_request?; non-WhatsApp is untouched.
+  before_action :restrict_native_whatsapp_setup!, only: [:create, :update]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
@@ -84,6 +88,17 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def fetch_inbox
     @inbox = Current.account.inboxes.find(params[:id])
     authorize @inbox, :show?
+  end
+
+  # Bloomwire guard scope: only a WhatsApp channel CREATE (channel.type == 'whatsapp') or a WhatsApp channel
+  # provider-config UPDATE (existing WhatsApp inbox + channel params present) counts as native WhatsApp setup.
+  # Non-WhatsApp channels and inbox-only updates (name/working hours) are never restricted.
+  def native_whatsapp_setup_request?
+    if action_name == 'create'
+      params.dig(:channel, :type).to_s == 'whatsapp'
+    else
+      @inbox&.channel.is_a?(Channel::Whatsapp) && params[:channel].present?
+    end
   end
 
   def fetch_agent_bot
