@@ -10,6 +10,7 @@ class Bloomwire::WhatsappRealHopReadiness
   APP_SECRET_KEY = 'WHATSAPP_APP_SECRET'.freeze
   VERIFY_TOKEN_KEY = 'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN'.freeze
   PUBLIC_HOST_KEY = 'BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST'.freeze
+  PUBLIC_HOST_FORMAT = /\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::\d{1,5})?\z/i
 
   # Checks that gate the inbound POST path (Meta -> router -> existing job).
   INBOUND_KEYS = %w[
@@ -46,7 +47,7 @@ class Bloomwire::WhatsappRealHopReadiness
       checks: checks,
       callback_path: CALLBACK_PATH,
       callback_url: callback_url,
-      public_callback_host_configured: public_host.present?,
+      public_callback_host_configured: public_host_valid?,
       masked: masked_identifiers
     }
   end
@@ -110,8 +111,7 @@ class Bloomwire::WhatsappRealHopReadiness
   end
 
   def callback_host_check
-    check(:public_callback_host_configured, :callback_url, public_host.present?,
-          "No public HTTPS callback host documented (set #{PUBLIC_HOST_KEY})")
+    check(:public_callback_host_configured, :callback_url, public_host_valid?, callback_host_message)
   end
 
   # Consistency predicates: when the referenced record is absent the dedicated presence check carries the
@@ -171,11 +171,21 @@ class Bloomwire::WhatsappRealHopReadiness
   end
 
   def public_host
-    GlobalConfigService.load(PUBLIC_HOST_KEY, nil).presence
+    @public_host ||= GlobalConfigService.load(PUBLIC_HOST_KEY, nil).to_s.strip.presence
+  end
+
+  def public_host_valid?
+    public_host.present? && public_host.match?(PUBLIC_HOST_FORMAT)
+  end
+
+  def callback_host_message
+    return "No public HTTPS callback host documented (set #{PUBLIC_HOST_KEY})" if public_host.blank?
+
+    "#{PUBLIC_HOST_KEY} must be a hostname only (for example: chat.example.com)"
   end
 
   def callback_url
-    public_host.present? ? "https://#{public_host}#{CALLBACK_PATH}" : nil
+    public_host_valid? ? "https://#{public_host}#{CALLBACK_PATH}" : nil
   end
 
   def masked_identifiers

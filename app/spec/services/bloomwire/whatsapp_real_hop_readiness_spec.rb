@@ -122,6 +122,16 @@ RSpec.describe Bloomwire::WhatsappRealHopReadiness do
       expect(check(result, :public_callback_host_configured)[:status]).to eq('blocked')
       expect(result[:ready_for_inbound_mapping]).to be(true)
     end
+
+    it 'is blocked when the public callback host includes a scheme or path' do
+      enable_all_config
+      setup = ready_setup
+      set_cfg('BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST', 'https://smoke.example.com/path')
+      result = described_class.new(setup).result
+      expect(check(result, :public_callback_host_configured)[:status]).to eq('blocked')
+      expect(result[:ready_for_get_verification_config]).to be(false)
+      expect(result[:callback_url]).to be_nil
+    end
   end
 
   describe 'setup mapping' do
