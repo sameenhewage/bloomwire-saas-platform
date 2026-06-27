@@ -1,5 +1,9 @@
 class Tiktok::CallbacksController < ApplicationController
   include Tiktok::IntegrationHelper
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: fail closed BEFORE token exchange / channel persistence. OFF => stock.
+  before_action :restrict_provider_setup!
 
   def show
     return handle_authorization_error if params[:error].present?

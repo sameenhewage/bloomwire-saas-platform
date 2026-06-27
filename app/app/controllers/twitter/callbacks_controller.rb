@@ -1,5 +1,9 @@
 class Twitter::CallbacksController < Twitter::BaseController
   include TwitterConcern
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: fail closed BEFORE token exchange / channel persistence. OFF => stock.
+  before_action :restrict_provider_setup!
 
   def show
     return redirect_to twitter_app_redirect_url if permitted_params[:denied]
