@@ -1,6 +1,12 @@
 class Api::V1::Accounts::AgentBotsController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsBotManagement
+
   before_action :current_account
   before_action :check_authorization
+  # Bloomwire (Phase 11B.7D): in managed mode bots are Ops-owned. Block ALL bot endpoints for business/customer
+  # account users (admins AND agents) when BLOOMWIRE_RESTRICT_BOT_MANAGEMENT is ON, including list/show which
+  # expose access_token/secret/bot_config. Runs after authorization so OFF => stock policy path is unchanged.
+  before_action :restrict_bot_management!
   before_action :agent_bot, except: [:index, :create]
 
   def index

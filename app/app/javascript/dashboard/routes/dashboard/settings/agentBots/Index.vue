@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useMapGetter, useStore } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import { useI18n } from 'vue-i18n';
 import { picoSearch } from '@scmmishra/pico-search';
 
@@ -24,6 +25,9 @@ const MODAL_TYPES = {
 
 const store = useStore();
 const { t } = useI18n();
+// Bloomwire (11B.7D): bots are Ops-owned in managed mode. Hide the page/actions and skip the
+// secret-exposing fetch when blocked; backend (restrict_bot_management!) still 403s the API.
+const { canManageBots } = useBloomwireCapabilities();
 
 const agentBots = useMapGetter('agentBots/getBots');
 const uiFlags = useMapGetter('agentBots/getUIFlags');
@@ -87,12 +91,26 @@ const confirmDeletion = () => {
 };
 
 onMounted(() => {
-  store.dispatch('agentBots/get');
+  // Method-level guard: do not call the (secret-exposing) bot list endpoint when Ops-managed.
+  if (canManageBots.value) store.dispatch('agentBots/get');
 });
 </script>
 
 <template>
+  <!-- Bloomwire (11B.7D): managed-mode route block — direct access shows the Ops-managed state -->
+  <div
+    v-if="!canManageBots"
+    class="flex flex-col items-center justify-center w-full max-w-lg gap-2 p-8 mx-auto text-center"
+  >
+    <h3 class="text-heading-2 text-n-slate-12">
+      {{ t('AGENT_BOTS.MANAGED_BY_OPS.TITLE') }}
+    </h3>
+    <p class="text-body-main text-n-slate-11">
+      {{ t('AGENT_BOTS.MANAGED_BY_OPS.BODY') }}
+    </p>
+  </div>
   <SettingsLayout
+    v-else
     :is-loading="uiFlags.isFetching"
     :loading-message="t('AGENT_BOTS.LIST.LOADING')"
     :no-records-found="!agentBots.length"

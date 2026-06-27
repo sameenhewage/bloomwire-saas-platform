@@ -2,6 +2,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
   include Bloomwire::RestrictsNativeWhatsappSetup
   include Bloomwire::RestrictsProviderSetup
+  include Bloomwire::RestrictsBotManagement
   before_action :fetch_inbox, except: [:index, :create]
   # Bloomwire: block native WhatsApp channel create / provider-config update for business users when the
   # restriction toggle is ON. Scoped to WhatsApp via native_whatsapp_setup_request?; non-WhatsApp is untouched.
@@ -18,6 +19,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   # web_widget/api deletion stays allowed (scoped via managed_provider_inbox_destroy?). OFF => stock.
   # (register_webhook re-registration is guarded inside WhatsappHealthManagement, where that action is defined.)
   before_action :restrict_managed_provider_inbox_destroy!, only: [:destroy]
+  # Bloomwire (Phase 11B.7D): inbox-level bot management is Ops-owned in managed mode. Block the bot read
+  # (renders access_token/secret/bot_config) and set/disconnect when BLOOMWIRE_RESTRICT_BOT_MANAGEMENT is ON.
+  before_action :restrict_bot_management!, only: [:agent_bot, :set_agent_bot]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox

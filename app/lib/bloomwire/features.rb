@@ -11,6 +11,7 @@ module Bloomwire::Features
     restrict_native_whatsapp_setup: 'BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP',
     restrict_account_admin: 'BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN',
     restrict_provider_setup: 'BLOOMWIRE_RESTRICT_PROVIDER_SETUP',
+    restrict_bot_management: 'BLOOMWIRE_RESTRICT_BOT_MANAGEMENT',
     privacy_hardening: 'BLOOMWIRE_PRIVACY_HARDENING',
     outgoing_gateway: 'BLOOMWIRE_OUTGOING_GATEWAY',
     custom_branding: 'BLOOMWIRE_CUSTOM_BRANDING'
@@ -64,6 +65,14 @@ module Bloomwire::Features
   # In managed mode these flows are Ops/SuperAdmin-owned. The single gate the provider-setup guard reads.
   def restrict_provider_setup?
     master_enabled? && raw_enabled?(:restrict_provider_setup)
+  end
+
+  # True when business/customer account users (admins AND agents) must be blocked from bot management
+  # (agent-bot list/show — which expose access_token/secret/bot_config — plus create/update/destroy/avatar,
+  # token/secret reset, and inbox-level set/disconnect bot): Bloomwire master mode ON AND the restrict
+  # bot-management toggle ON. In managed mode bots are Ops/SuperAdmin-owned. The single gate the bot guard reads.
+  def restrict_bot_management?
+    master_enabled? && raw_enabled?(:restrict_bot_management)
   end
 
   # True when `name` is a managed-data InstallationConfig key that requires privacy hardening ON

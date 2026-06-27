@@ -59,6 +59,7 @@ describe('useBloomwireCapabilities', () => {
       'canDeleteManagedProviderInbox',
       'canRegisterProviderWebhook',
       'canCreateInbox',
+      'canManageBots',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
   });

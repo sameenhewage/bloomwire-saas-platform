@@ -2,6 +2,7 @@
 import { ref, computed, reactive, watch } from 'vue';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import { useI18n } from 'vue-i18n';
 import { required, helpers, url } from '@vuelidate/validators';
 import { useVuelidate } from '@vuelidate/core';
@@ -34,6 +35,9 @@ const MODAL_TYPES = {
 
 const store = useStore();
 const { t } = useI18n();
+// Bloomwire (11B.7D): defense-in-depth — even though this modal is only reachable from the (managed-blocked)
+// bots list, guard every bot-mutating dispatch so it cannot fire when bot management is Ops-owned.
+const { canManageBots } = useBloomwireCapabilities();
 const dialogRef = ref(null);
 const uiFlags = useMapGetter('agentBots/getUIFlags');
 
@@ -132,6 +136,7 @@ const handleImageUpload = ({ file, url: avatarUrl }) => {
 };
 
 const handleAvatarDelete = async () => {
+  if (!canManageBots.value) return;
   if (props.selectedBot?.id) {
     try {
       await store.dispatch(
@@ -151,6 +156,7 @@ const handleAvatarDelete = async () => {
 };
 
 const handleSubmit = async () => {
+  if (!canManageBots.value) return;
   v$.value.$touch();
   if (v$.value.$invalid) return;
   if (showAccessToken.value) return;
@@ -246,6 +252,7 @@ const onCopySecret = async value => {
 };
 
 const onResetSecret = async () => {
+  if (!canManageBots.value) return;
   const response = await store.dispatch(
     'agentBots/resetSecret',
     props.selectedBot.id
@@ -259,6 +266,7 @@ const onResetSecret = async () => {
 };
 
 const onResetToken = async () => {
+  if (!canManageBots.value) return;
   const response = await store.dispatch(
     'agentBots/resetAccessToken',
     props.selectedBot.id

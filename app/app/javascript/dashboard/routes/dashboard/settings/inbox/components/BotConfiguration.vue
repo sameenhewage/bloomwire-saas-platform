@@ -1,6 +1,7 @@
 <script>
 import { mapGetters } from 'vuex';
 import { useAlert } from 'dashboard/composables';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import SettingsFieldSection from 'dashboard/components-next/Settings/SettingsFieldSection.vue';
 import LoadingState from 'dashboard/components/widgets/LoadingState.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
@@ -18,6 +19,11 @@ export default {
       type: Object,
       default: () => ({}),
     },
+  },
+  setup() {
+    // Bloomwire (11B.7D): inbox-level bot set/disconnect is Ops-owned in managed mode.
+    const { canManageBots } = useBloomwireCapabilities();
+    return { canManageBots };
   },
   data() {
     return {
@@ -49,10 +55,13 @@ export default {
 
   methods: {
     fetchBotData() {
+      // Method-level guard: skip the secret-exposing bot reads when bot management is Ops-managed.
+      if (!this.canManageBots) return;
       this.$store.dispatch('agentBots/get');
       this.$store.dispatch('agentBots/fetchAgentBotInbox', this.currentInboxId);
     },
     async updateActiveAgentBot() {
+      if (!this.canManageBots) return;
       try {
         await this.$store.dispatch('agentBots/setAgentBotInbox', {
           inboxId: this.inbox.id,
@@ -65,6 +74,7 @@ export default {
       }
     },
     async disconnectBot() {
+      if (!this.canManageBots) return;
       try {
         await this.$store.dispatch('agentBots/disconnectBot', {
           inboxId: this.inbox.id,
@@ -85,7 +95,18 @@ export default {
 
 <template>
   <div class="mx-6 max-w-4xl">
-    <LoadingState v-if="uiFlags.isFetching || uiFlags.isFetchingAgentBot" />
+    <!-- Bloomwire (11B.7D): inbox-level bot config is Ops-managed in managed mode -->
+    <div v-if="!canManageBots" class="flex flex-col gap-1 py-4">
+      <h3 class="text-base font-medium text-n-slate-12">
+        {{ $t('AGENT_BOTS.MANAGED_BY_OPS.TITLE') }}
+      </h3>
+      <p class="text-body-main text-n-slate-11">
+        {{ $t('AGENT_BOTS.MANAGED_BY_OPS.BODY') }}
+      </p>
+    </div>
+    <LoadingState
+      v-else-if="uiFlags.isFetching || uiFlags.isFetchingAgentBot"
+    />
     <form v-else @submit.prevent="updateActiveAgentBot">
       <SettingsFieldSection
         :label="$t('AGENT_BOTS.BOT_CONFIGURATION.TITLE')"
