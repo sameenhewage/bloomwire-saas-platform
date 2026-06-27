@@ -1,10 +1,15 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   include Api::V1::InboxesHelper
   include Bloomwire::RestrictsNativeWhatsappSetup
+  include Bloomwire::RestrictsProviderSetup
   before_action :fetch_inbox, except: [:index, :create]
   # Bloomwire: block native WhatsApp channel create / provider-config update for business users when the
   # restriction toggle is ON. Scoped to WhatsApp via native_whatsapp_setup_request?; non-WhatsApp is untouched.
   before_action :restrict_native_whatsapp_setup!, only: [:create, :update]
+  # Bloomwire (Phase 11B.4B): block business admins from creating/updating EXTERNAL-credential channel inboxes
+  # (email/sms/line/telegram/voice) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. Scoped via
+  # external_provider_channel_setup_request?; web_widget/api/WhatsApp/core paths untouched. OFF => stock.
+  before_action :restrict_external_provider_channel_setup!, only: [:create, :update]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
@@ -98,6 +103,22 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       params.dig(:channel, :type).to_s == 'whatsapp'
     else
       @inbox&.channel.is_a?(Channel::Whatsapp) && params[:channel].present?
+    end
+  end
+
+  # External-credential channel types creatable via inboxes#create (voice = enterprise Twilio voice). Note
+  # 'sms' is Channel::Sms (e.g. Bandwidth); Twilio SMS/voice is Channel::TwilioSms.
+  EXTERNAL_CREDENTIAL_CHANNEL_TYPES = %w[email sms line telegram voice].freeze
+  EXTERNAL_CREDENTIAL_CHANNEL_CLASSES = %w[Channel::Email Channel::Sms Channel::Line Channel::Telegram Channel::TwilioSms].freeze
+
+  # Bloomwire (Phase 11B.4B) guard scope: a CREATE of an external-credential channel type, or an UPDATE whose
+  # existing channel is one of those types with channel params present (a credential / provider-config change).
+  # Inbox-only updates (name/working hours), web_widget, api, and WhatsApp (its own native guard) never match.
+  def external_provider_channel_setup_request?
+    if action_name == 'create'
+      EXTERNAL_CREDENTIAL_CHANNEL_TYPES.include?(params.dig(:channel, :type).to_s)
+    else
+      params[:channel].present? && EXTERNAL_CREDENTIAL_CHANNEL_CLASSES.include?(@inbox&.channel_type)
     end
   end
 

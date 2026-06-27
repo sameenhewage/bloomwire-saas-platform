@@ -17,6 +17,28 @@ module Bloomwire::RestrictsProviderSetup
   def restrict_provider_setup!
     return unless Bloomwire::Features.restrict_provider_setup?
 
+    render_provider_setup_restricted
+  end
+
+  # Scoped, admin-gated variant for mixed controllers (e.g. inboxes) that also serve safe/core channels.
+  # The including controller overrides `external_provider_channel_setup_request?` to mark ONLY the
+  # external-credential channel create/update requests that must be blocked; web_widget/api/core paths and
+  # WhatsApp (which keeps its own native guard) stay untouched. Agents remain on the controller's existing
+  # policy (admin-only) — the business administrator is the locked-down actor here.
+  def restrict_external_provider_channel_setup!
+    return unless Bloomwire::Features.restrict_provider_setup?
+    return unless @current_account_user&.administrator?
+    return unless external_provider_channel_setup_request?
+
+    render_provider_setup_restricted
+  end
+
+  # Default: not an external-credential channel setup request. Mixed controllers override this.
+  def external_provider_channel_setup_request?
+    false
+  end
+
+  def render_provider_setup_restricted
     render json: { error: I18n.t('bloomwire.provider_setup_restricted'), managed_by_ops: true }, status: :forbidden
   end
 end
