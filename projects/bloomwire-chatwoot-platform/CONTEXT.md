@@ -38,6 +38,9 @@ while tenants use the standard Chatwoot inbox/agent experience.
 - **Decisions:** `docs/adr/0001-technical-baseline.md` + the decision register in
   `docs/research/bloomwire-evidence-review-and-decision-register.md`
 - **Product framing:** `docs/product/`
+- **Backend security boundary (Phase 11B):** `docs/security/` — backend guard map, feature-toggle reference,
+  UI-hiding source-of-truth (for 11B.6), and Tier-B existing-ops decisions; runtime evidence consolidated in
+  `docs/runtime/phase-11b-validation-index.md`.
 
 ## Status
 
