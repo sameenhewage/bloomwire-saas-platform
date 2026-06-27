@@ -1,4 +1,9 @@
 class Api::V1::Accounts::OauthAuthorizationController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: provider OAuth setup (Google/Instagram/Microsoft/TikTok/Notion subclasses) is
+  # Ops-owned. Runs before check_authorization so it applies uniformly to all callers. OFF => stock.
+  before_action :restrict_provider_setup!
   before_action :check_authorization
 
   protected

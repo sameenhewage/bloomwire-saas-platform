@@ -10,6 +10,7 @@ module Bloomwire::Features
     global_webhook_router: 'BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER',
     restrict_native_whatsapp_setup: 'BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP',
     restrict_account_admin: 'BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN',
+    restrict_provider_setup: 'BLOOMWIRE_RESTRICT_PROVIDER_SETUP',
     privacy_hardening: 'BLOOMWIRE_PRIVACY_HARDENING',
     outgoing_gateway: 'BLOOMWIRE_OUTGOING_GATEWAY',
     custom_branding: 'BLOOMWIRE_CUSTOM_BRANDING'
@@ -55,6 +56,14 @@ module Bloomwire::Features
   # account-admin toggle ON. The single gate the account-control-plane guard reads.
   def restrict_account_admin?
     master_enabled? && raw_enabled?(:restrict_account_admin)
+  end
+
+  # True when business/customer account users (admins AND agents) must be blocked from external provider /
+  # channel setup flows (Facebook page register/reauthorize, Twilio channel create, provider OAuth
+  # authorizations, Shopify connect): Bloomwire master mode ON AND the restrict provider-setup toggle ON.
+  # In managed mode these flows are Ops/SuperAdmin-owned. The single gate the provider-setup guard reads.
+  def restrict_provider_setup?
+    master_enabled? && raw_enabled?(:restrict_provider_setup)
   end
 
   # True when `name` is a managed-data InstallationConfig key that requires privacy hardening ON

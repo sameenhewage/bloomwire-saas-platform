@@ -1,4 +1,9 @@
 class Api::V1::Accounts::CallbacksController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: Facebook page register/reauthorize/list is Ops-owned provider setup. Runs first so
+  # it blocks agents too (these endpoints are only authentication-gated in stock). OFF => stock.
+  before_action :restrict_provider_setup!, only: [:register_facebook_page, :facebook_pages, :reauthorize_page]
   before_action :inbox, only: [:reauthorize_page]
 
   def register_facebook_page

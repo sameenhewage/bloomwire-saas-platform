@@ -1,5 +1,10 @@
 class Api::V1::Accounts::Integrations::ShopifyController < Api::V1::Accounts::BaseController
   include Shopify::IntegrationHelper
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: Shopify connect (auth) is Ops-owned provider setup. Scoped to :auth only so the
+  # runtime :orders read and :destroy stay stock. Runs first so agents (auth-only in stock) are blocked too.
+  before_action :restrict_provider_setup!, only: [:auth]
   before_action :setup_shopify_context, only: [:orders]
   before_action :fetch_hook, except: [:auth]
   before_action :validate_contact, only: [:orders]
