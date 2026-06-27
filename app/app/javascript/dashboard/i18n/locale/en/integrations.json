@@ -1,5 +1,9 @@
 {
   "INTEGRATION_SETTINGS": {
+    "MANAGED_BY_OPS": {
+      "TITLE": "Integrations are managed by Bloomwire",
+      "BODY": "Integration setup and configuration are handled by Bloomwire Ops in managed mode. Please contact support to connect or change an integration."
+    },
     "SHOPIFY": {
       "HEADER": "Shopify",
       "DELETE": {

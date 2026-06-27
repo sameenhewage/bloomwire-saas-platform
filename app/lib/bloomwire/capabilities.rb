@@ -21,7 +21,12 @@ module Bloomwire::Capabilities
       # Phase 11B.7C: ALL inbox creation (incl. self-service web_widget/api) is Ops-owned in managed mode.
       canCreateInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?),
       # Phase 11B.7D: bot management (agent bots + inbox-level set/disconnect) is Ops-owned in managed mode.
-      canManageBots: capability(admin, Bloomwire::Features.restrict_bot_management?)
+      canManageBots: capability(admin, Bloomwire::Features.restrict_bot_management?),
+      # Phase 11B.7E: integrations (catalog/connect/config admin surface) are Ops-owned in managed mode.
+      # Connect/config writes are already blocked server-side (PR #47); this drives the UI hide + route block.
+      # The catalog READ (apps#index/show) intentionally stays open — it is consumed by runtime conversation
+      # surfaces (ContactPanel Linear, video-call button, label suggestions), so it must not 403.
+      canAccessIntegrations: capability(admin, Bloomwire::Features.restrict_provider_setup?)
     }
   end
 

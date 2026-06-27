@@ -44,5 +44,6 @@ export function useBloomwireCapabilities() {
     canRegisterProviderWebhook: buildCapability('canRegisterProviderWebhook'),
     canCreateInbox: buildCapability('canCreateInbox'),
     canManageBots: buildCapability('canManageBots'),
+    canAccessIntegrations: buildCapability('canAccessIntegrations'),
   };
 }

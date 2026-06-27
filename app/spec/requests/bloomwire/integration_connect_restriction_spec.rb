@@ -1,12 +1,16 @@
 require 'rails_helper'
 
-# Phase 11B.4C: when Bloomwire mode + BLOOMWIRE_RESTRICT_PROVIDER_SETUP are ON, business account ADMINISTRATORS
-# cannot create/update integration-connect records that store tokens / API keys / webhook URLs / provider
-# settings via integrations/hooks#create|#update and integrations/slack#create|#update. These are Ops-owned in
-# managed mode. Runtime/read endpoints (hooks#process_event, slack#list_all_channels) and #destroy stay
-# allowed; agents remain on the existing admin-only policy/auth path, unchanged. OFF == stock Chatwoot.
-# 403 with a non-secret message; no secrets/tokens/settings read or echoed. Fake values only; the ON guard
-# short-circuits before any code->token exchange or persistence.
+# Phase 11B.4C (+ 11B.7E): when Bloomwire mode + BLOOMWIRE_RESTRICT_PROVIDER_SETUP are ON, business account
+# ADMINISTRATORS cannot create/update integration-connect records that store tokens / API keys / webhook URLs /
+# provider settings via integrations/hooks#create|#update and integrations/slack#create|#update. These are
+# Ops-owned in managed mode. Runtime/read endpoints (hooks#process_event, slack#list_all_channels) and #destroy
+# stay allowed; agents remain on the existing admin-only policy/auth path, unchanged.
+#
+# Phase 11B.7E makes the integrations *admin surface* Ops-owned via UI hide + route block + the canAccessIntegrations
+# capability — but the integrations CATALOG read (integrations/apps#index/#show) intentionally stays OPEN, because
+# it is consumed by runtime conversation surfaces (ContactPanel Linear, video-call button, label suggestions);
+# 403'ing it would break runtime. This spec asserts that catalog read stays open in managed mode.
+# OFF == stock Chatwoot. 403 with a non-secret message; no secrets/tokens/settings read or echoed.
 RSpec.describe 'Bloomwire integration connect restriction', type: :request do
   let(:account) { create(:account) }
   let!(:administrator) { create(:user, account: account, role: :administrator) }
@@ -92,6 +96,20 @@ RSpec.describe 'Bloomwire integration connect restriction', type: :request do
            headers: agent.create_new_auth_token, params: { code: SecureRandom.hex }, as: :json
       expect(response).to have_http_status(:unauthorized)
       expect(response.parsed_body['managed_by_ops']).to be_nil
+    end
+
+    # Phase 11B.7E: the catalog READ must stay open (runtime conversation surfaces consume it).
+    it 'does NOT block the integrations catalog read (apps#index) for an administrator' do
+      get "/api/v1/accounts/#{account.id}/integrations/apps",
+          headers: administrator.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['managed_by_ops']).to be_nil
+    end
+
+    it 'does NOT block the integrations catalog read (apps#index) for an agent (runtime)' do
+      get "/api/v1/accounts/#{account.id}/integrations/apps",
+          headers: agent.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:success)
     end
   end
 

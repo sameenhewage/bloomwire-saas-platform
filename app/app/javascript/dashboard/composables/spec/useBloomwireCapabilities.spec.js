@@ -60,6 +60,7 @@ describe('useBloomwireCapabilities', () => {
       'canRegisterProviderWebhook',
       'canCreateInbox',
       'canManageBots',
+      'canAccessIntegrations',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
   });
