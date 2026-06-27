@@ -1,5 +1,12 @@
 class Linear::CallbacksController < ApplicationController
   include Linear::IntegrationHelper
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire (Phase 11B.4C): Linear is an integration-connect callback that exchanges the OAuth code and
+  # persists an Integrations::Hook (access/refresh tokens). Fail closed BEFORE the exchange/persistence when
+  # BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. Unconditional (no account_user on this browser callback), mirroring
+  # the other OAuth callback guards. OFF => stock.
+  before_action :restrict_provider_setup!
 
   def show
     return redirect_to(safe_linear_redirect_uri) if params[:code].blank? || account_id.blank?

@@ -93,6 +93,27 @@ RSpec.describe 'Bloomwire provider/channel OAuth callback restriction', type: :r
       end.not_to change(Integrations::Hook, :count)
       expect_blocked
     end
+
+    # Phase 11B.4C (PR #47 reviewer fix): Linear is an integration-connect callback (< ApplicationController,
+    # NOT the guarded OauthCallbackController base) that exchanges the OAuth code and persists an
+    # Integrations::Hook with access/refresh tokens. Even with a fully stubbed successful token exchange it must
+    # fail closed BEFORE the exchange/persistence.
+    it 'fails closed on the Linear integration callback before token exchange or persistence' do
+      client_secret = 'test_linear_secret'
+      allow(GlobalConfigService).to receive(:load).and_call_original
+      allow(GlobalConfigService).to receive(:load).with('LINEAR_CLIENT_ID', nil).and_return('test_client_id')
+      allow(GlobalConfigService).to receive(:load).with('LINEAR_CLIENT_SECRET', nil).and_return(client_secret)
+      linear_token = stub_request(:post, 'https://api.linear.app/oauth/token')
+                     .to_return(status: 200,
+                                body: { access_token: 'AT', refresh_token: 'RT', token_type: 'Bearer' }.to_json,
+                                headers: { 'Content-Type' => 'application/json' })
+      linear_state = JWT.encode({ sub: account.id, iat: Time.current.to_i }, client_secret, 'HS256')
+      expect do
+        get linear_callback_url, params: { code: 'thecode', state: linear_state }
+      end.not_to change(Integrations::Hook, :count)
+      expect_blocked
+      expect(linear_token).not_to have_been_requested
+    end
   end
 
   describe 'when provider-setup restriction is OFF (stock not intercepted)' do

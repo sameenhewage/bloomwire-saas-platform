@@ -38,6 +38,17 @@ module Bloomwire::RestrictsProviderSetup
     false
   end
 
+  # Admin-gated guard for mixed controllers whose specific WRITE actions are integration/provider connect,
+  # scoped via `only:` at the call site (e.g. integration hooks create/update, Slack connect/update). Blocks
+  # the business administrator on those actions; agents stay on the controller's existing admin-only
+  # policy/auth path (unchanged). OFF => stock.
+  def restrict_provider_setup_for_account_admin!
+    return unless Bloomwire::Features.restrict_provider_setup?
+    return unless @current_account_user&.administrator?
+
+    render_provider_setup_restricted
+  end
+
   def render_provider_setup_restricted
     render json: { error: I18n.t('bloomwire.provider_setup_restricted'), managed_by_ops: true }, status: :forbidden
   end

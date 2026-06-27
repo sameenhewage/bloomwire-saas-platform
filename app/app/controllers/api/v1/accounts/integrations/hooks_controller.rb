@@ -1,6 +1,12 @@
 class Api::V1::Accounts::Integrations::HooksController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsProviderSetup
+
   before_action :fetch_hook, except: [:create]
   before_action :check_authorization
+  # Bloomwire (Phase 11B.4C): block business admins from integration-connect create/update (stores tokens /
+  # API keys / settings) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. process_event (runtime) + destroy stay
+  # allowed; agents stay on the existing HookPolicy path. OFF => stock.
+  before_action :restrict_provider_setup_for_account_admin!, only: [:create, :update]
 
   def create
     @hook = Current.account.hooks.create!(permitted_params)

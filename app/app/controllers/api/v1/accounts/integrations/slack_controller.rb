@@ -1,6 +1,12 @@
 class Api::V1::Accounts::Integrations::SlackController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsProviderSetup
+
   before_action :check_admin_authorization?
   before_action :fetch_hook, only: [:update, :destroy, :list_all_channels]
+  # Bloomwire (Phase 11B.4C): block business admins from Slack connect (code->token) + channel-mapping update
+  # when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. list_all_channels (read) + destroy stay allowed; agents stay
+  # on the existing admin-only path. OFF => stock.
+  before_action :restrict_provider_setup_for_account_admin!, only: [:create, :update]
 
   def list_all_channels
     @channels = channel_builder.fetch_channels
