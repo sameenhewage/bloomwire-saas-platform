@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n';
 import { frontendURL } from '../../../../helper/URLHelper';
 import { useAlert } from 'dashboard/composables';
 import { useBranding } from 'shared/composables/useBranding';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -27,6 +28,10 @@ const { t } = useI18n();
 const store = useStore();
 const router = useRouter();
 const { replaceInstallationName } = useBranding();
+// Bloomwire (11B.6C): hide provider-integration connect when Ops-managed (backend PR #47
+// still enforces). Configure-navigation and disconnect stay so existing integrations remain
+// viewable and removable.
+const { canManageProviderSetup } = useBloomwireCapabilities();
 
 const dialogRef = ref(null);
 
@@ -115,7 +120,7 @@ const confirmDeletion = () => {
           </div>
         </div>
       </router-link>
-      <div v-if="!integrationEnabled">
+      <div v-if="!integrationEnabled && canManageProviderSetup">
         <slot name="action">
           <a :href="integrationAction">
             <Button

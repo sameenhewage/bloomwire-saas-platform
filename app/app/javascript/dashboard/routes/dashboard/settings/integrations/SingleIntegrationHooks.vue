@@ -1,6 +1,7 @@
 <script setup>
 import { useIntegrationHook } from 'dashboard/composables/useIntegrationHook';
 import { useBranding } from 'shared/composables/useBranding';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import Button from 'dashboard/components-next/button/Button.vue';
 
 const props = defineProps({
@@ -17,6 +18,9 @@ const { integration, hasConnectedHooks } = useIntegrationHook(
 );
 
 const { replaceInstallationName } = useBranding();
+// Bloomwire (11B.6C): hide hook/integration connect when Ops-managed (backend PR #47 still
+// enforces). Disconnect stays so an existing hook can still be removed.
+const { canManageProviderSetup } = useBloomwireCapabilities();
 </script>
 
 <template>
@@ -52,7 +56,7 @@ const { replaceInstallationName } = useBranding();
             />
           </div>
         </div>
-        <div v-else>
+        <div v-else-if="canManageProviderSetup">
           <Button
             blue
             faded

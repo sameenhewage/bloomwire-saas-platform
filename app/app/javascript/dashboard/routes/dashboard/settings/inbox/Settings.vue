@@ -2,6 +2,7 @@
 import { mapGetters } from 'vuex';
 import { shouldBeUrl } from 'shared/helpers/Validators';
 import { useAlert } from 'dashboard/composables';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import { useVuelidate } from '@vuelidate/core';
 import Avatar from 'next/avatar/Avatar.vue';
 import SettingIntroBanner from 'dashboard/components/widgets/SettingIntroBanner.vue';
@@ -79,7 +80,15 @@ export default {
   },
   mixins: [inboxMixin],
   setup() {
-    return { v$: useVuelidate() };
+    // Bloomwire (11B.6C): hide provider/native-WhatsApp reauthorize prompts when Ops-managed
+    // (backend still enforces). Reconnecting an Ops-owned inbox is not a business-admin action.
+    const { canManageProviderSetup, canManageNativeWhatsappSetup } =
+      useBloomwireCapabilities();
+    return {
+      v$: useVuelidate(),
+      canManageProviderSetup,
+      canManageNativeWhatsappSetup,
+    };
   },
   data() {
     return {
@@ -695,37 +704,37 @@ export default {
     <section class="w-full overflow-auto py-8">
       <div class="max-w-7xl mx-auto w-full">
         <MicrosoftReauthorize
-          v-if="microsoftUnauthorized"
+          v-if="microsoftUnauthorized && canManageProviderSetup"
           :inbox="inbox"
           class="mb-4"
           :class="bannerMaxWidth"
         />
         <FacebookReauthorize
-          v-if="facebookUnauthorized"
+          v-if="facebookUnauthorized && canManageProviderSetup"
           :inbox="inbox"
           class="mb-4"
           :class="bannerMaxWidth"
         />
         <GoogleReauthorize
-          v-if="googleUnauthorized"
+          v-if="googleUnauthorized && canManageProviderSetup"
           :inbox="inbox"
           class="mb-4"
           :class="bannerMaxWidth"
         />
         <InstagramReauthorize
-          v-if="instagramUnauthorized"
+          v-if="instagramUnauthorized && canManageProviderSetup"
           :inbox="inbox"
           class="mb-4"
           :class="bannerMaxWidth"
         />
         <TiktokReauthorize
-          v-if="tiktokUnauthorized"
+          v-if="tiktokUnauthorized && canManageProviderSetup"
           :inbox="inbox"
           class="mb-4"
           :class="bannerMaxWidth"
         />
         <WhatsappReauthorize
-          v-if="whatsappUnauthorized"
+          v-if="whatsappUnauthorized && canManageNativeWhatsappSetup"
           :whatsapp-registration-incomplete="whatsappRegistrationIncomplete"
           :inbox="inbox"
           class="mb-4"
