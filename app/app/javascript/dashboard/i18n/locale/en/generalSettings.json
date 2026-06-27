@@ -75,7 +75,8 @@
       "NAME": {
         "LABEL": "Account name",
         "PLACEHOLDER": "Your account name",
-        "ERROR": "Please enter a valid account name"
+        "ERROR": "Please enter a valid account name",
+        "MANAGED_BY_OPS": "Your business name is managed by Bloomwire. Contact support to change it."
       },
       "LANGUAGE": {
         "LABEL": "Site language",
