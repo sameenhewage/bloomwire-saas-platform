@@ -9,6 +9,7 @@ module Bloomwire::Features
     managed_whatsapp_onboarding: 'BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING',
     global_webhook_router: 'BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER',
     restrict_native_whatsapp_setup: 'BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP',
+    restrict_account_admin: 'BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN',
     privacy_hardening: 'BLOOMWIRE_PRIVACY_HARDENING',
     outgoing_gateway: 'BLOOMWIRE_OUTGOING_GATEWAY',
     custom_branding: 'BLOOMWIRE_CUSTOM_BRANDING'
@@ -47,6 +48,13 @@ module Bloomwire::Features
   # Bloomwire master mode ON AND the restrict toggle ON. The single gate the native setup guard reads.
   def restrict_native_whatsapp_setup?
     master_enabled? && raw_enabled?(:restrict_native_whatsapp_setup)
+  end
+
+  # True when business account ADMINISTRATORS must be blocked from dangerous account-admin / control-plane
+  # actions (agent & role management, account settings, webhooks): Bloomwire master mode ON AND the restrict
+  # account-admin toggle ON. The single gate the account-control-plane guard reads.
+  def restrict_account_admin?
+    master_enabled? && raw_enabled?(:restrict_account_admin)
   end
 
   # True when `name` is a managed-data InstallationConfig key that requires privacy hardening ON

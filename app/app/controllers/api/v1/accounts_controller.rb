@@ -1,6 +1,7 @@
 class Api::V1::AccountsController < Api::BaseController
   include AuthHelper
   include CacheKeysHelper
+  include Bloomwire::RestrictsAccountControlPlane
 
   skip_before_action :authenticate_user!, :set_current_user, :handle_with_exception,
                      only: [:create], raise: false
@@ -9,6 +10,9 @@ class Api::V1::AccountsController < Api::BaseController
   before_action :validate_captcha, only: [:create]
   before_action :fetch_account, except: [:create]
   before_action :check_authorization, except: [:create]
+  # Bloomwire managed mode: block business admins from account settings update. Runs after
+  # check_authorization so agents stay on the stock policy path. OFF => stock.
+  before_action :restrict_account_control_plane!, only: [:update]
 
   rescue_from CustomExceptions::Account::InvalidEmail,
               CustomExceptions::Account::InvalidParams,

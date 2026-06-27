@@ -1,5 +1,10 @@
 class Api::V1::Accounts::WebhooksController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsAccountControlPlane
+
   before_action :check_authorization
+  # Bloomwire managed mode: block business admins from webhook config. Runs after check_authorization
+  # so agents stay on the stock policy path. OFF => stock.
+  before_action :restrict_account_control_plane!, only: [:create, :update, :destroy]
   before_action :fetch_webhook, only: [:update, :destroy]
 
   def index
