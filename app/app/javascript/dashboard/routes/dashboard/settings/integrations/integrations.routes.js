@@ -9,12 +9,15 @@ import Slack from './Slack.vue';
 import Linear from './Linear.vue';
 import Notion from './Notion.vue';
 import Shopify from './Shopify.vue';
+// Bloomwire (11B.7E): redirect away from the integrations admin surface when Ops-managed.
+import { redirectIfIntegrationsManaged } from './integrations.routeGuards';
 
 export default {
   routes: [
     {
       path: frontendURL('accounts/:accountId/settings/integrations'),
       component: SettingsWrapper,
+      beforeEnter: redirectIfIntegrationsManaged,
       props: {},
       children: [
         {
@@ -49,6 +52,7 @@ export default {
     {
       path: frontendURL('accounts/:accountId/settings/integrations'),
       component: SettingsWrapper,
+      beforeEnter: redirectIfIntegrationsManaged,
       children: [
         {
           path: 'slack',

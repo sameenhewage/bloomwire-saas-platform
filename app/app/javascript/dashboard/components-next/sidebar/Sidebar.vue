@@ -44,8 +44,8 @@ const emit = defineEmits([
 ]);
 
 const { accountScopedRoute, isOnChatwootCloud } = useAccount();
-// Bloomwire (11B.7D): hide the Agent Bots settings entry when bot management is Ops-managed.
-const { canManageBots } = useBloomwireCapabilities();
+// Bloomwire (11B.7D/11B.7E): hide Ops-managed settings entries (bots, integrations) in managed mode.
+const { canManageBots, canAccessIntegrations } = useBloomwireCapabilities();
 const store = useStore();
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
@@ -806,12 +806,16 @@ const menuItems = computed(() => {
           icon: 'i-lucide-message-square-quote',
           to: accountScopedRoute('canned_list'),
         },
-        {
-          name: 'Settings Integrations',
-          label: t('SIDEBAR.INTEGRATIONS'),
-          icon: 'i-lucide-blocks',
-          to: accountScopedRoute('settings_applications'),
-        },
+        ...(canAccessIntegrations.value
+          ? [
+              {
+                name: 'Settings Integrations',
+                label: t('SIDEBAR.INTEGRATIONS'),
+                icon: 'i-lucide-blocks',
+                to: accountScopedRoute('settings_applications'),
+              },
+            ]
+          : []),
         {
           name: 'Settings Audit Logs',
           label: t('SIDEBAR.AUDIT_LOGS'),

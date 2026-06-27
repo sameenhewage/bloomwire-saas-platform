@@ -33,6 +33,7 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
                                          canManageAccountControlPlane canManageProviderSetup
                                          canManageNativeWhatsappSetup canDeleteManagedProviderInbox
                                          canRegisterProviderWebhook canCreateInbox canManageBots
+                                         canAccessIntegrations
                                        ])
       expect(caps.values).to all(be_in([true, false]))
     end
@@ -70,11 +71,23 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
     it 'reports canCreateInbox=false for an agent' do
       expect(caps_for(agent)['canCreateInbox']).to be(false)
     end
+
+    it 'reports canAccessIntegrations=false for a business admin (11B.7E)' do
+      expect(caps_for(administrator)['canAccessIntegrations']).to be(false)
+    end
+
+    it 'reports canAccessIntegrations=false for an agent (11B.7E)' do
+      expect(caps_for(agent)['canAccessIntegrations']).to be(false)
+    end
   end
 
   describe 'when Bloomwire is OFF (stock) — canCreateInbox' do
     it 'reports canCreateInbox=true for a business admin' do
       expect(caps_for(administrator)['canCreateInbox']).to be(true)
+    end
+
+    it 'reports canAccessIntegrations=true for a business admin' do
+      expect(caps_for(administrator)['canAccessIntegrations']).to be(true)
     end
   end
 
