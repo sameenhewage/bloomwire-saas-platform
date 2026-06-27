@@ -64,7 +64,53 @@ against `../security/ui-hiding-source-of-truth.md` Group A.
   PR #52 (managed-inbox delete + register-webhook, `3526efa`). Each confirmed the `bloomwire_capabilities`
   payload (no raw `BLOOMWIRE_*`), the backend `403` regressions (`managed_by_ops` / `managed_request`),
   Group-B reads intact, SuperAdmin/Ops auth-gated, and throwaway fixtures cleaned to baseline.
-- **11B.7** corrects the managed-mode **permission model** — the business owner/admin regains agents/teams
-  management + full in-account visibility, while platform/provider/bot/integration **setup** stays Ops-owned.
-  Contract + corrected guard map: `../security/business-owner-permission-matrix.md`. Slices **11B.7A–E** land
-  as separate PRs; **11B.7R** will add the runtime evidence here once they merge.
+
+---
+
+## Phase 11B.7 — permission-model correction (MERGED + validated)
+
+11B.7 corrects the managed-mode permission model — the business owner/admin regains agents/teams management +
+full in-account visibility, while platform/provider/bot/integration **setup** stays Ops-owned. Contract:
+`../security/business-owner-permission-matrix.md`; guard map: `../security/backend-guard-map.md`.
+
+| Slice | PR | Merge SHA | What it does |
+|---|---|---|---|
+| **11B.7A** | #54 | `ea16eb6` | Account name (and locale/domain/support-email) **readonly/disabled** + managed helper; Save stays hidden. Frontend-only (backend `accounts#update` 403 already enforced by PR #43). |
+| **11B.7B** | #55 | `38b46bd` | **Restore** business-admin **agents/teams** management (remove the account-control guard from `AgentsController`); stock Enterprise usage limit preserved (402); `accounts#update` + webhooks stay blocked. |
+| **11B.7C** | #56 | `d8099de` | **Block ALL inbox creation** (incl. `web_widget`/`api`) via `restrict_inbox_creation!` + `canCreateInbox`; reads/settings + self-service delete unchanged. |
+| **11B.7D** | #57 | `1872037` | **Bots Ops-owned** — new toggle `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT` (default OFF) + `canManageBots`; blocks agent-bot reads/writes/reset + inbox-level set/disconnect; no secret leak; runtime bot execution untouched. Feature head: `f8138de`. |
+| **11B.7E** | #58 | `a8023a78` | **Integrations Ops-owned** — `canAccessIntegrations` + sidebar hide + route-block; connect/config writes already 403 (PR #47); catalog read intentionally open for runtime. Feature commits: `de42d74` + `c49ea80`. |
+
+### 11B.7R — combined runtime/security validation — **PASS** (`a8023a78`)
+
+Deployed `version_1 @ a8023a78` to `dev.unecast.com` (image rebuilt with GIT_SHA, rails+sidekiq recreated
+`--no-deps`, pg/redis volumes preserved, `db:migrate` no-op). `/app/.git_sha = a8023a78`; internal + external
+health **200**. Toggles ON: `MODE_ENABLED · RESTRICT_ACCOUNT_ADMIN · RESTRICT_PROVIDER_SETUP ·
+RESTRICT_NATIVE_WHATSAPP_SETUP · RESTRICT_BOT_MANAGEMENT` (the bot toggle enabled via `InstallationConfig`,
+not `.env`).
+
+- **Capability payload:** all **8** `bloomwire_capabilities` = `false` for the business admin
+  (`canManageAccountControlPlane, canManageProviderSetup, canManageNativeWhatsappSetup,
+  canDeleteManagedProviderInbox, canRegisterProviderWebhook, canCreateInbox, canManageBots,
+  canAccessIntegrations`); **no raw `BLOOMWIRE_*`** in the body.
+- **Backend/API:** `accounts#update` 403; inbox create `web_widget`/`api`/`email` 403 `managed_by_ops`,
+  `whatsapp` 403 `managed_request`; bot index/show/create/update/destroy/reset 403 (**no `access_token`/
+  `secret`/`bot_config` leak**); inbox-level `agent_bot`/`set_agent_bot` 403; integrations hooks/slack write
+  403; **integrations catalog read 200** (runtime-open); webhooks 403; **agents create/update/delete allowed**
+  (limit 402 preserved); non-admin agent 401; **teams allowed**.
+- **UI/MCP:** account fields disabled + Save hidden + managed helper; agents New visible; New Inbox hidden +
+  direct website/api create → managed-state; Bots sidebar hidden + direct route managed-state; Integrations
+  sidebar hidden + direct route redirect; conversations/contacts render; no console errors.
+- **Role matrix:** business admin allowed agents/teams + workspace, blocked setup; agent gains no admin/setup
+  + no bot secrets; SuperAdmin/Ops `/super_admin*` **302 → sign_in** (auth-gated, Bloomwire pages unaffected).
+- **Cleanup:** throwaway fixtures removed, residue **0**, counts at baseline; no secrets printed; no Meta/
+  WhatsApp outgoing; no DB reset / volume removal / `.env` drift.
+
+### Phase 11B Exit Gate / Phase 12 Readiness — code/runtime/security/UI **PASS**
+
+The exit gate re-confirmed (on `a8023a78`): git/PR state (PR #53–#58 merged, 0 open, clean tree), code-level
+guard verification (no dead/duplicate/stale guards), runtime (SHA + health + no pending migrations + stable
+rails/sidekiq), toggles, capability payload (8/false, no raw toggles), backend/API 403 boundary, UI/MCP, role
+matrix, and cleanup — **all PASS**. The gate's **only** blocker was **stale documentation**; this docs-sync
+brings the canonical security/runtime docs to the merged reality and resolves that blocker. Phase 11B is then
+complete; **Phase 12 = WhatsApp E2E**.

@@ -1,19 +1,24 @@
-# Bloomwire Business-Owner Permission Matrix (Phase 11B.7)
+# Bloomwire Business-Owner Permission Matrix (Phase 11B.7 — COMPLETE)
 
-Canonical **product permission contract** for Bloomwire **managed mode**. It corrects the permission *model*
-that Phase 11B (PR #43–#48 + the 11B.6 UI hiding) hardened: that lockdown treated the business
-owner/admin as a near-fully-restricted user (account control-plane blocked ⇒ agent management blocked too).
-The product intent is the opposite for **people/visibility inside the business's own workspace**:
+Canonical **product permission contract** for Bloomwire **managed mode**, now **implemented and
+runtime-validated** (Phase 11B.7A–E + 11B.7R). It corrected the permission *model* that Phase 11B (PR #43–#48
++ the 11B.6 UI hiding) had hardened too broadly (account control-plane blocked ⇒ agent management blocked
+too). The product intent — now realized — for **people/visibility inside the business's own workspace**:
 
-> The business owner/admin must have **100% transparency and people-management inside their own account**.
+> The business owner/admin has **100% transparency and people-management inside their own account**.
 > Only **platform / provider / channel / bot / integration SETUP** is **Bloomwire Ops-owned**.
 
 **Hard rule (unchanged).** The backend `403` is the security boundary (see `backend-guard-map.md`); UI hiding
 is cosmetic / UX + defense-in-depth (see `ui-hiding-source-of-truth.md`). This matrix is the **source of
-truth for which side of that boundary each surface belongs on** after Phase 11B.7.
+truth for which side of that boundary each surface belongs on**, as shipped through Phase 11B.7.
 
-- **Baseline:** `version_1 @ 3526efa` (PR #52 merge), runtime-validated on `dev.unecast.com`.
+- **Baseline:** `version_1 @ a8023a78` (PR #58 merge — Phase 11B.7A–E complete), runtime-validated on
+  `dev.unecast.com` (11B.7R PASS + exit gate). Prior planning baseline was `3526efa` (PR #52).
 - **Toggle seam:** `Bloomwire::Features` (all OFF by default; master AND-gates). OFF ⇒ stock Chatwoot.
+
+> **Phase 12 scope note.** With Phase 11B complete, the next phase — **Phase 12 — is WhatsApp E2E**, **not** an
+> Ops Console / users-&-roles management page. This permission model is the foundation Phase 12 builds on; no
+> further account-permission UI is in scope for Phase 12.
 
 ---
 
@@ -29,31 +34,32 @@ truth for which side of that boundary each surface belongs on** after Phase 11B.
 
 ## 1. Business Owner / Admin — ALLOWED (inside their own account)
 
-| Capability | Status today | Slice |
+| Capability | Status (shipped) | Slice / PR |
 |---|---|---|
-| View **all inboxes / conversations** in their account | allowed | — |
-| View **all agents / team members** | allowed | — |
-| **Create / manage agents** (add / edit / delete / invite) — *subject to Bloomwire plan limits* | **BLOCKED today (must be restored)** | **11B.7B** |
-| **Create / manage teams** — *subject to Bloomwire plan limits* | allowed (stock) — confirm not regressed | **11B.7B** |
-| 100% transparency inside their own workspace (read everything in their account) | allowed | — |
+| View **all inboxes / conversations** in their account | **allowed** | — |
+| View **all agents / team members** | **allowed** | — |
+| **Create / manage agents** (add / edit / delete / invite) — *subject to the stock Enterprise usage limit* | **ALLOWED — restored** | **11B.7B / PR #55** |
+| **Create / manage teams** | **allowed (stock)** — confirmed not regressed | **11B.7B / PR #55** |
+| 100% transparency inside their own workspace (read everything in their account) | **allowed** | — |
 | Self-service kept from prior phases: `reset_secret`, `sync_templates`, WhatsApp **health read**, conversations/contacts reads, live-call/conference | allowed (Tier-B) | — |
 
 ## 2. Business Owner / Admin — BLOCKED (Bloomwire Ops-owned)
 
-| Restricted capability | Backend boundary today | UX gap | Slice |
+| Restricted capability | Backend boundary (shipped) | UI (shipped) | Slice / PR |
 |---|---|---|---|
-| Change the **registered business / account name** after registration | `accounts#update` blocked (PR #43) | name field still **looks editable**; only the save button is hidden (PR #50) | **11B.7A** |
-| Create **inboxes / channels** — **any** type, including `web_widget` / `api` | provider/WhatsApp create blocked (PR #40/#44/#46); **`web_widget` / `api` create is still ALLOWED** | "Add Inbox" still reachable for self-service types | **11B.7C** |
-| Configure **provider channels** (FB/IG/X/TikTok/Google/MS/Twilio/Shopify/email/SMS/LINE/Telegram/voice) | blocked (PR #44/#46) + UI hidden (11B.6C) | — | done |
-| Configure **WhatsApp** setup / webhooks / provider credentials / reconfigure | blocked (PR #40/#48) + UI hidden (11B.6C/D) | — | done |
-| Add / manage **bots** (agent bots) | **NOT blocked today** | "Add Bot" / bot management still visible & usable | **11B.7D** |
-| Access / manage **integrations** | connect/config mutation blocked (PR #47); **catalog/detail pages still reachable** | Integrations sidebar entry + routes still accessible | **11B.7E** |
+| Change the **registered business / account name** after registration | `accounts#update` blocked (PR #43) | name + locale/domain/support-email **readonly/disabled** + managed helper; Save hidden | **11B.7A / PR #54** |
+| Create **inboxes / channels** — **any** type, including `web_widget` / `api` | **all** `inboxes#create` blocked (`restrict_inbox_creation!`, PR #56) on top of PR #40/#44/#46 | "Add Inbox" hidden; channel cards + direct create routes → managed-state | **11B.7C / PR #56** |
+| Configure **provider channels** (FB/IG/X/TikTok/Google/MS/Twilio/Shopify/email/SMS/LINE/Telegram/voice) | blocked (PR #44/#46) | UI hidden (11B.6C) | done |
+| Configure **WhatsApp** setup / webhooks / provider credentials / reconfigure | blocked (PR #40/#48) | UI hidden (11B.6C/D) | done |
+| Add / manage **bots** (agent bots) + inbox-level bot set/disconnect | blocked (`BLOOMWIRE_RESTRICT_BOT_MANAGEMENT`, PR #57) | Bots sidebar hidden + page route-blocked; Add/Edit/Delete/reset hidden; BotConfiguration hidden | **11B.7D / PR #57** |
+| Access / manage **integrations** | connect/config mutation blocked (PR #47); **catalog read intentionally open for runtime** | Integrations sidebar hidden; routes redirect to dashboard | **11B.7E / PR #58** |
 | Manage Bloomwire / platform-owned setup | Ops/SuperAdmin only | — | — |
-| Account **webhooks** add/edit/delete (platform integration plumbing) | blocked (PR #43) + UI hidden (11B.6B) — **stays Ops-owned** | — | unchanged |
+| Account **webhooks** add/edit/delete (platform integration plumbing) | blocked (PR #43) — **stays Ops-owned** | UI hidden (11B.6B) | unchanged |
 
-> **Account control-plane split (correction to PR #43).** PR #43 currently treats `accounts#update`,
-> `agents#*`, and `webhooks#*` as one "account control-plane" block. Phase 11B.7 splits it: **`agents#*`
-> moves to ALLOWED** (with plan limits, 11B.7B); **`accounts#update` (name) and `webhooks#*` stay BLOCKED**.
+> **Account control-plane split (PR #43 → corrected in 11B.7B/PR #55 — DONE).** PR #43 originally treated
+> `accounts#update`, `agents#*`, and `webhooks#*` as one "account control-plane" block. Phase 11B.7B split it:
+> **`agents#*` is now ALLOWED** (stock Enterprise usage limit applies); **`accounts#update` (name) and
+> `webhooks#*` stay BLOCKED**.
 
 ## 3. Bloomwire SuperAdmin / Ops
 
@@ -72,68 +78,67 @@ truth for which side of that boundary each surface belongs on** after Phase 11B.
 
 ---
 
-## 5. Plan-limit requirement (agents / teams)
+## 5. Plan-limit requirement (agents / teams) — resolved in 11B.7B
 
-Agent and team creation are **"subject to Bloomwire plan limits."** However:
+Agent creation is **subject to the existing stock Enterprise usage limit** — **no fake billing was invented**:
 
-- **`CONTEXT.md` states pricing/billing is out of scope**, and **no plan-limit / billing model exists today**.
-- **11B.7B must NOT invent a fake billing/plan system.** Acceptable approaches, decided **before** coding:
-  1. **Minimal enforcement hook** that reads an existing or explicitly-placeholder limit source (e.g. an
-     installation/account config value) and 403s past it, with an **audit-log** of agent/team mutations; or
-  2. if no credible source exists, ship the **management restore without a hard limit**, behind a clearly
-     documented **placeholder hook + risk note** ("plan-limit not yet enforced — Ops trusts the business").
-- Either way: **do not silently allow unbounded creation while claiming a limit exists.** State the chosen
-  option and its risk in the 11B.7B PR.
+- 11B.7B kept the stock `AgentsController#validate_limit` / `validate_limit_for_bulk_create`, which read
+  `Account#usage_limits[:agents]` (Enterprise `PlanUsageAndLimits`: `custom_attributes['subscribed_quantity']`
+  → `account.limits['agents']` → `InstallationConfig['ACCOUNT_AGENTS_LIMIT']` → default). Over-limit ⇒ **402**.
+- Removing the Bloomwire account-control guard from `AgentsController` simply lets this **pre-existing** limit
+  hook apply; Ops can set a per-plan agent limit via `account.limits['agents']` / `ACCOUNT_AGENTS_LIMIT`.
+- Teams have no stock numeric limit and are stock-allowed. No unbounded-creation-while-claiming-a-limit issue.
 
 ---
 
-## 6. Current gaps — guards / PRs needing correction
+## 6. Corrections — RESOLVED (merged + validated)
 
-| Surface | Current behavior | Required correction | Slice |
+| Surface | Pre-11B.7 behavior | Resolution (shipped) | Slice / PR |
 |---|---|---|---|
-| **Agents** create/update/destroy/bulk_create | Backend **403** (PR #43); UI add/edit/delete **hidden** (PR #50) | **Un-block** for business admin; restore UI; add plan-limit hook + audit | **11B.7B** |
-| **Teams** management | Stock-allowed; not Bloomwire-touched | Keep allowed; confirm UI not regressed; apply plan-limit hook | **11B.7B** |
-| **Account name** | `accounts#update` **403** (PR #43); save button hidden (PR #50) | Make the name field **readonly / managed-by-Bloomwire** (clear UX, not a hidden save) | **11B.7A** |
-| **Inbox creation** (`web_widget` / `api`) | **Allowed** (PR #46/#48 deliberately leave self-service create) | **Block all** inbox creation in managed mode; hide "Add Inbox"; block direct route + API | **11B.7C** |
-| **Bots** | **Allowed** — no guard; "Add Bot" visible | Add backend **403** for bot create/update/destroy; hide bot management UI | **11B.7D** |
-| **Integrations** | Connect/config **403** (PR #47), but catalog/detail **pages reachable**; sidebar entry visible | Hide Integrations sidebar entry; route-block with safe managed state; decide catalog-read = 403 vs read-only (document first) | **11B.7E** |
+| **Agents** create/update/destroy/bulk_create | Backend **403** (PR #43); UI add/edit/delete **hidden** (PR #50) | **Un-blocked** for business admin; UI restored; stock Enterprise usage limit applies (402) | **11B.7B / PR #55** |
+| **Teams** management | Stock-allowed; not Bloomwire-touched | Kept allowed; UI confirmed not regressed | **11B.7B / PR #55** |
+| **Account name** | `accounts#update` **403** (PR #43); save button hidden (PR #50) | Name (+ locale/domain/support-email) **readonly/disabled** + managed-by-Bloomwire helper | **11B.7A / PR #54** |
+| **Inbox creation** (`web_widget` / `api`) | self-service create was **allowed** | **All** inbox creation blocked (`restrict_inbox_creation!`); Add Inbox hidden; cards/routes managed-state | **11B.7C / PR #56** |
+| **Bots** | **unguarded**; "Add Bot" visible | Backend **403** (`BLOOMWIRE_RESTRICT_BOT_MANAGEMENT`) on reads/writes/reset + inbox set/disconnect; UI hidden/route-blocked | **11B.7D / PR #57** |
+| **Integrations** | Connect/config **403** (PR #47), but catalog/detail pages reachable; sidebar visible | Sidebar hidden + routes redirect; catalog read **intentionally open** (runtime); writes stay 403 | **11B.7E / PR #58** |
 
-> **Important nuance for 11B.7C vs PR #52.** PR #52 (11B.6D) hides **delete** for managed/provider inboxes and
-> keeps **web_widget/API delete visible**. 11B.7C changes **creation** only. Unless the product owner decides
-> otherwise, **self-service web_widget/API *delete* stays as PR #52 shipped** — 11B.7C does **not** silently
-> change delete behavior.
+> **Nuance preserved (11B.7C vs PR #52).** PR #52 (11B.6D) hides **delete** for managed/provider inboxes and
+> keeps **web_widget/API delete visible**. 11B.7C changed **creation** only — self-service `web_widget`/`API`
+> **delete stays as PR #52 shipped** (unchanged).
 
 ---
 
-## 7. Implementation slices (one branch + one PR each; no mega-PR)
+## 7. Implementation slices — all merged
 
-| Slice | Scope | Touches |
-|---|---|---|
-| **11B.7-DOC** (this doc) | Permission matrix + correction plan | docs only |
-| **11B.7A** | Account name immutable UX (readonly / managed message) | frontend only (backend already blocks) |
-| **11B.7B** | Restore agents/teams management for business admin + plan-limit hook/audit | backend (relax PR #43 agents; add limit hook) + frontend (restore PR #50 agent UI) |
-| **11B.7C** | All inbox creation Ops-owned | backend (block web_widget/api create) + frontend (hide Add Inbox, route/API block) |
-| **11B.7D** | Bots Ops-owned | backend (403 bot create/update/destroy) + frontend (hide bot management) |
-| **11B.7E** | Integrations Ops-owned | frontend (hide sidebar + route-block) + backend decision on catalog read |
-| **11B.7R** | Combined runtime / security validation after merges | validation only |
+| Slice | PR | Merge SHA | Status |
+|---|---|---|---|
+| **11B.7-DOC** (this doc) | #53 | — | merged |
+| **11B.7A** — Account name immutable UX | #54 | `ea16eb6` | merged |
+| **11B.7B** — Restore agents/teams management | #55 | `38b46bd` | merged |
+| **11B.7C** — All inbox creation Ops-owned | #56 | `d8099de` | merged |
+| **11B.7D** — Bots Ops-owned | #57 | `1872037` (feature `f8138de`) | merged |
+| **11B.7E** — Integrations Ops-owned | #58 | `a8023a78` (features `de42d74` + `c49ea80`) | merged |
+| **11B.7R** — Combined runtime/security validation | — | `a8023a78` | **PASS** |
 
-## 8. Target corrected guard map (end state)
+## 8. Corrected guard map (END STATE — achieved on `a8023a78`)
 
 | Surface | Business Admin (managed mode) | Agent | Ops |
 |---|---|---|---|
 | View inboxes/conversations/agents/teams (own account) | **allow** | scoped | structure-visible |
-| Agents create/manage | **allow (plan-limited)** | block | manage |
-| Teams create/manage | **allow (plan-limited)** | block | manage |
+| Agents create/manage | **allow (stock usage limit)** | block | manage |
+| Teams create/manage | **allow** | block | manage |
 | Account name change | **block** | block | manage |
 | Account webhooks | **block** | block | manage |
 | Inbox/channel create (any) | **block** | block | manage |
 | Provider / WhatsApp setup/reconfigure | **block** | block | manage |
-| Bots add/manage | **block** | block | manage |
-| Integrations access/manage | **block** | block | manage |
+| Bots add/manage (+ inbox-level set/disconnect) | **block** | block | manage |
+| Integrations access/manage (admin surface) | **block** | block | manage |
+| Integrations catalog read (runtime) | allow (open by design) | allow | allow |
 | Customer conversation content | allow (own account) | scoped | **block by default** |
 
 ---
 
-*Stage 1 is documentation only — no app/runtime behavior changes. Each slice (11B.7A–E) lands as its own PR
-with failing-test-first, backend request specs for every block, frontend unit tests for every UI change, and
-`11B.7R` validates the deployed result.*
+*Phase 11B.7 is **complete**: every slice (11B.7A–E) shipped as its own PR with failing-test-first backend
+request specs for each block and frontend unit tests for each UI change; **11B.7R** validated the deployed
+result on `dev.unecast.com` (`a8023a78`, PASS). This doc-sync brings the canonical docs to that merged
+reality. **Next: Phase 12 = WhatsApp E2E** (not an Ops Console / users-&-roles page).*

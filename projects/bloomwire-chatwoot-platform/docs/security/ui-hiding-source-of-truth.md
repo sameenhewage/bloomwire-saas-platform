@@ -1,18 +1,35 @@
-# UI Hiding Source of Truth (for Phase 11B.6)
+# UI Hiding Source of Truth (Phase 11B.6 + 11B.7)
 
-Canonical list of what the dashboard UI may hide for business/customer account users in Bloomwire managed
+Canonical list of what the dashboard UI hides for business/customer account users in Bloomwire managed
 mode. **Hard rule:** UI hiding is **cosmetic / UX + defense-in-depth only**. The **backend** (see
 `backend-guard-map.md`) is the security boundary and returns `403` regardless of UI. Never hide a control as a
 substitute for a backend guard, and never leave a backend-blocked control visible-and-clickable without
 flagging it.
 
-11B.6 must not assume effective Bloomwire toggle state is already available in the frontend. Proactive
-toggle-gated UI hiding requires a safe frontend config/API/capability seam that exposes only non-secret
-effective Bloomwire UI capabilities. Until that seam exists, backend `403` responses (`managed_by_ops` /
-`managed_request`) remain the enforcement source, and the UI may only react to those responses.
-
 Detection hint for the frontend: an Ops-managed block responds `403` with `managed_by_ops: true`
-(account/provider guards) or `managed_request: true` (native WhatsApp). See `backend-guard-map.md`.
+(account/provider/bot guards) or `managed_request: true` (native WhatsApp). See `backend-guard-map.md`.
+
+## Capability seam (IMPLEMENTED — 11B.6B onward)
+
+The frontend now receives effective Bloomwire UI state via a **non-secret, server-derived capability map**, so
+hiding is proactive (no longer only reactive to `403`):
+
+- **Backend:** `Bloomwire::Capabilities.for(account_user)` (`app/lib/bloomwire/capabilities.rb`) is emitted as
+  `bloomwire_capabilities` on the account payload (`_account.json.jbuilder`). It returns **only derived
+  `can*` booleans** — **never** raw `BLOOMWIRE_*` toggle names/values. Each capability = `admin && !restricted?`.
+- **Frontend:** `useBloomwireCapabilities()` (`dashboard/composables/useBloomwireCapabilities.js`) reads only
+  that map; **stock-safe default `true`** when a key is absent (Bloomwire OFF / older backend / not loaded).
+
+| Capability | False (hidden) when | Drives |
+|---|---|---|
+| `canManageAccountControlPlane` | `RESTRICT_ACCOUNT_ADMIN` ON | account settings save + fields readonly (11B.7A); account webhooks controls |
+| `canManageProviderSetup` | `RESTRICT_PROVIDER_SETUP` ON | provider/channel connect cards & buttons |
+| `canManageNativeWhatsappSetup` | `RESTRICT_NATIVE_WHATSAPP_SETUP` ON | native WhatsApp setup/reconfigure |
+| `canDeleteManagedProviderInbox` | `RESTRICT_PROVIDER_SETUP` ON | delete button for managed/provider inboxes (self-service stays) |
+| `canRegisterProviderWebhook` | `RESTRICT_PROVIDER_SETUP` ON | WhatsApp register-webhook action |
+| `canCreateInbox` | `RESTRICT_PROVIDER_SETUP` ON | New Inbox button + all channel cards/factory (11B.7C) |
+| `canManageBots` | `RESTRICT_BOT_MANAGEMENT` ON | Bots sidebar entry + page route-block + Add/Edit/Delete/reset + inbox BotConfiguration (11B.7D) |
+| `canAccessIntegrations` | `RESTRICT_PROVIDER_SETUP` ON | Integrations sidebar entry + route-block (11B.7E) |
 
 ---
 
@@ -23,9 +40,12 @@ These controls map 1:1 to a validated backend guard. Hiding them only removes a 
 
 | UI surface (business admin) | Backend guard | Toggle |
 |---|---|---|
-| Account **settings save/update** | PR #43 `accounts#update` | `RESTRICT_ACCOUNT_ADMIN` |
-| **Add / edit / delete agent**, bulk agent import | PR #43 `agents#*` | `RESTRICT_ACCOUNT_ADMIN` |
+| Account **settings save/update** (and name/locale/domain/support-email **readonly**, 11B.7A) | PR #43 `accounts#update` | `RESTRICT_ACCOUNT_ADMIN` |
+| ~~Add / edit / delete agent, bulk agent import~~ → **REVERTED in 11B.7B (PR #55): agent controls are now VISIBLE** for the business admin | — (agents no longer backend-blocked) | — |
 | Account **webhooks** add/edit/delete | PR #43 `webhooks#*` | `RESTRICT_ACCOUNT_ADMIN` |
+| **New Inbox** button + all channel cards/factory (incl. `web_widget`/`api`) | PR #56 `inboxes#create` (`canCreateInbox`) | `RESTRICT_PROVIDER_SETUP` |
+| **Bots**: sidebar entry, page (route-blocked to managed-state), Add/Edit/Delete/reset-token/reset-secret, inbox-level `BotConfiguration` set/disconnect | PR #57 (`canManageBots`) | `RESTRICT_BOT_MANAGEMENT` |
+| **Integrations**: sidebar entry + route (redirect/managed-state); Connect/Add/Configure | PR #58 UI + PR #47 write 403 (`canAccessIntegrations`) | `RESTRICT_PROVIDER_SETUP` |
 | Connect **Facebook/Instagram/X/TikTok/Google/Microsoft/Shopify** (OAuth init + "reauthorize") | PR #44 provider setup + callbacks | `RESTRICT_PROVIDER_SETUP` |
 | Create **Twilio** channel | PR #44 `channels/twilio_channels#create` | `RESTRICT_PROVIDER_SETUP` |
 | Create/edit **email / SMS / LINE / Telegram / voice** inbox | PR #46 `inboxes#create|update` | `RESTRICT_PROVIDER_SETUP` |
@@ -61,31 +81,37 @@ Hiding these would remove working, legitimate functionality. Leave visible.
 
 ---
 
-## Phase 11B.7 corrections (planned — see `business-owner-permission-matrix.md`)
+## Phase 11B.7 corrections — IMPLEMENTED (final UI expectations)
 
-The 11B.6 hiding is being corrected to match the business-owner permission contract (business owner/admin
-keeps full in-account visibility + people-management; only setup is Ops-owned):
+The 11B.6 hiding was corrected to match the business-owner permission contract (business owner/admin keeps
+full in-account visibility + people-management; only setup is Ops-owned). **All merged + runtime-validated
+(`a8023a78`, 11B.7R PASS).** Final UI state for a business admin in managed mode:
 
-- **Revert** the agent add/edit/delete hiding (11B.6B) — business admins **should** manage agents
-  (plan-limited). [11B.7B]
-- **Extend** inbox-create hiding to **all** types incl. `web_widget` / `api` (currently kept visible in
-  group B) — backend block added first. [11B.7C]
-- **Add** hiding for **bots** management ("Add Bot") — backend guard added first. [11B.7D]
-- **Add** hiding + safe route-block for **Integrations** (sidebar entry + routes), beyond the connect-button
-  hiding already shipped. [11B.7E]
-- **Account name**: move from "hidden save button" to a **readonly / managed-by-Bloomwire** field. [11B.7A]
+- **Account name (11B.7A):** the name input (and locale / custom-domain / support-email) is **disabled /
+  readonly** with a **"managed by Bloomwire"** helper; the Save button stays hidden.
+- **Agents/Teams (11B.7B):** agent **New / Edit / Delete** controls are **VISIBLE** again (governed only by
+  stock `isAdmin` / `showEditAction` / `showDeleteAction`); the earlier 11B.6B hiding was reverted. Teams stay
+  visible.
+- **Inboxes (11B.7C):** **New Inbox** button is **hidden**; channel cards (`ChannelList`) and direct
+  `/settings/inboxes/new/:channel` routes (`ChannelFactory`) render a **managed-by-ops state** for **all**
+  channel types incl. `web_widget`/`api`. Inbox **list/read/settings stay visible**; self-service
+  `web_widget`/`api` **delete stays allowed** (PR #52 unchanged).
+- **Bots (11B.7D):** **Bots sidebar entry hidden**; the bots page is **route-blocked to a managed-state** and
+  performs **no secret-exposing fetch**; Add/Edit/Delete/reset-token/reset-secret are not reachable; the
+  inbox-level **BotConfiguration** set/disconnect is hidden + method-guarded.
+- **Integrations (11B.7E):** **Integrations sidebar entry hidden**; integration routes **redirect to the
+  dashboard** (`redirectIfIntegrationsManaged`, stock-safe). **Catalog read stays open** — it is consumed by
+  runtime conversation surfaces (ContactPanel/Linear, video-call, label suggestions) — but the **admin
+  surface UI is hidden**, and connect/config writes remain backend-403 (PR #47).
 
-Each remains backend-first (or already backend-enforced) per the hard rule above. Self-service `web_widget`/
-`API` **delete** (PR #52) is **unchanged** unless the product owner decides otherwise.
+Each is backend-first (or already backend-enforced) per the hard rule above.
 
 ---
 
-## 11B.6 go/no-go
+## Status: COMPLETE
 
-**GO** to implement UI hiding for **Group A** only — **conditioned on first building the frontend capability
-seam described above** (the frontend does not yet receive effective Bloomwire toggle state), or, until that
-seam exists, **reacting to the backend `403` / `managed_by_ops` / `managed_request` responses** — with the
-explicit contract that the backend guard remains the enforcement. The `Toggle` column above names the
-**backend** governing toggle for each surface (what the future capability seam would derive from), not a value
-the frontend currently has. **NO-GO** for Groups B and C. Any Group-C control that gets hidden ahead of a
-backend slice must be called out as **not yet backend-enforced**.
+Phase 11B.6 (capability seam + UI hiding Groups A) **and** Phase 11B.7 (permission-model correction) are
+**implemented and runtime-validated** on `version_1 @ a8023a78`. Groups **B** (must-not-hide / allowed) and
+**C** (deferred product decisions) above remain as documented. The frontend capability seam (top of this doc)
+is live; UI hiding is proactive via `can*` capabilities, with the backend `403` map as the enduring
+enforcement boundary.
