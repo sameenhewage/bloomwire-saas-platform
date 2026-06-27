@@ -191,8 +191,13 @@ export default {
               type="text"
               class="w-full"
               :placeholder="$t('GENERAL_SETTINGS.FORM.NAME.PLACEHOLDER')"
+              :disabled="!canManageAccountControlPlane"
               @blur="v$.name.$touch"
             />
+            <!-- Bloomwire (11B.7A): account name/settings are Ops-managed; backend PR #43 enforces -->
+            <template v-if="!canManageAccountControlPlane" #help>
+              {{ $t('GENERAL_SETTINGS.FORM.NAME.MANAGED_BY_OPS') }}
+            </template>
           </WithLabel>
           <WithLabel
             name="site-language"
@@ -200,7 +205,11 @@ export default {
             :label="$t('GENERAL_SETTINGS.FORM.LANGUAGE.LABEL')"
             :error-message="$t('GENERAL_SETTINGS.FORM.LANGUAGE.ERROR')"
           >
-            <select v-model="locale" class="!mb-0 text-sm">
+            <select
+              v-model="locale"
+              class="!mb-0 text-sm"
+              :disabled="!canManageAccountControlPlane"
+            >
               <option
                 v-for="lang in languagesSortedByCode"
                 :key="lang.iso_639_1_code"
@@ -220,6 +229,7 @@ export default {
               type="text"
               class="w-full"
               :placeholder="$t('GENERAL_SETTINGS.FORM.DOMAIN.PLACEHOLDER')"
+              :disabled="!canManageAccountControlPlane"
             />
             <template #help>
               {{
@@ -245,6 +255,7 @@ export default {
               :placeholder="
                 $t('GENERAL_SETTINGS.FORM.SUPPORT_EMAIL.PLACEHOLDER')
               "
+              :disabled="!canManageAccountControlPlane"
             />
           </WithLabel>
           <div v-if="canManageAccountControlPlane">
