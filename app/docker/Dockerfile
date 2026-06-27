@@ -86,8 +86,18 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
   && rm -rf spec node_modules tmp/cache; \
   fi
 
-# Generate .git_sha file with current commit hash
-RUN git rev-parse HEAD > /app/.git_sha
+# Generate the .git_sha file with the current commit hash.
+# Resolution order (so the build never fails on the missing-.git case):
+#   1. the GIT_SHA build arg, if provided (works when the build context has no .git directory, e.g.
+#      when the Docker context is the Rails app subdirectory) — deploy/CI should pass it;
+#   2. `git rev-parse HEAD`, when a git checkout is present in the context (preserves local behavior);
+#   3. "unknown" as a last resort.
+ARG GIT_SHA=""
+RUN if [ -n "$GIT_SHA" ]; then \
+      echo "$GIT_SHA"; \
+    else \
+      git rev-parse HEAD 2>/dev/null || echo "unknown"; \
+    fi > /app/.git_sha
 
 # Remove unnecessary files
 RUN rm -rf /gems/ruby/3.4.0/cache/*.gem \
