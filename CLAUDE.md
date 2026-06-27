@@ -22,10 +22,42 @@ repository.
 
 ---
 
+## Claude operating mode
+
+Use **Controlled Autonomy Mode** for approved tasks.
+
+Claude may proceed without asking for every small step when the task scope is
+clear and approved. Within that scope, Claude may inspect, edit, test, push a
+feature branch, and open a PR.
+
+Claude must stop and ask before:
+
+- merging a PR,
+- pushing directly to `main`, `master`, `version_1`, or any release/version
+  branch,
+- starting CI/CD, production deployment, release/versioning, or unrelated phase
+  work,
+- running destructive DB/container operations,
+- changing production/customer data,
+- exposing or committing secrets,
+- changing authentication/authorization architecture beyond the approved slice,
+- adding dependencies or broad new abstractions,
+- expanding into UI/Tier-2/Tier-3/Enterprise/production work unless approved.
+
+For implementation work, write or update failing tests first where practical,
+prove RED for the right reason, then implement the smallest safe change. For
+runtime-validation-only work, do not add unnecessary tests; validate the deployed
+behavior and report evidence.
+
+---
+
 ## Rules for Claude Code
 
 - **Understand the task before editing.** No edits without a clear goal and a
   defined scope.
+- **First explain the existing flow/root cause before editing.** For fixes,
+  identify the behavior owner and why the bug happens. For features, explain the
+  current flow and why the change is needed.
 - **Do not create product or ADR docs unless explicitly asked.** Specifically,
   do not create `docs/product/` or `docs/adr/` on your own.
 - **Do not implement features without a clear issue or task.** If the request
@@ -38,6 +70,8 @@ repository.
 - **Preserve existing project conventions.** Match naming, structure, style,
   and tooling already in use. Do not introduce new dependencies or patterns
   without explicit approval.
+- **Open PRs, do not merge them.** After opening a PR, report the URL, evidence,
+  and merge status, then stop unless the user explicitly asks for more.
 
 ---
 
@@ -67,16 +101,20 @@ task. Do not restate or fork them here — read them there. In short:
 10. **Docs / Decision-Log Gate** — update the right level; no stale contradictory docs.
 11. **Final PASS Report Standard** — see "After every task" below.
 12. **Project-specific contracts live in the project** — read the project's
-    `CONTEXT.md` (e.g. `projects/pepper-st-dashboard/CONTEXT.md`) before working in it.
+    `CONTEXT.md` before working in it.
 
 ---
 
 ## How to respond
 
 - Be concise and practical. Lead with the action or answer.
-- When proposing changes, describe the plan briefly, then implement the
-  agreed slice.
+- When proposing changes, describe the plan briefly, then implement the agreed
+  slice.
 - Work in **vertical slices** and keep changes small and reversible.
+- If blocked, say exactly what is blocking progress and what decision or access
+  is needed.
+
+---
 
 ## After every task
 
@@ -84,13 +122,14 @@ End with the **Final PASS Report Standard** (`AGENTS.md` Engineering rule 11; se
 also `.claude/templates/implementation-summary-template.md`):
 
 1. **Requirement understood** (the "X / Y / Z" acceptance truth).
-2. **Root cause** (for fixes).
+2. **Root cause** (for fixes) or feature reason/current flow (for features).
 3. **Files read** and **files changed** (created / modified / deleted).
 4. **Tests added/updated**, and **proof they failed before the fix** (or an honest
    reason they could not fail).
 5. **Runtime / browser / network proof** where behavior is user-visible.
-6. **Security proof** for any API/DTO change.
-7. **What was NOT changed**, **remaining risks**, and the **next recommended step**.
+6. **Security proof** for any API/DTO/auth/secrets change.
+7. **What was NOT changed**, **remaining risks**, **next recommended step**, and
+   PR URL/merge status when applicable.
 
 **Forbidden PASS:** "all tests pass" only, "build green" only, "I added a guard"
 only, or "looks good" without runtime proof.
