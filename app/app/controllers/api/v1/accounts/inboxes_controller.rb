@@ -10,6 +10,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   # (email/sms/line/telegram/voice) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. Scoped via
   # external_provider_channel_setup_request?; web_widget/api/WhatsApp/core paths untouched. OFF => stock.
   before_action :restrict_external_provider_channel_setup!, only: [:create, :update]
+  # Bloomwire (Phase 11B.7C): block business admins from creating ANY inbox/channel (incl. self-service
+  # web_widget/api) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. List/read/update + self-service delete untouched.
+  before_action :restrict_inbox_creation!, only: [:create]
   # Bloomwire (Phase 11B.5B): block business admins from DESTROYING Ops-owned managed/provider inboxes
   # (WhatsApp/email/sms/line/telegram/social) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON; self-service
   # web_widget/api deletion stays allowed (scoped via managed_provider_inbox_destroy?). OFF => stock.

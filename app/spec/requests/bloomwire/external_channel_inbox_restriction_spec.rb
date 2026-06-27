@@ -1,12 +1,13 @@
 require 'rails_helper'
 
-# Phase 11B.4B: when Bloomwire mode + BLOOMWIRE_RESTRICT_PROVIDER_SETUP are ON, business account ADMINISTRATORS
-# cannot create or update inbox/channel types that store EXTERNAL credentials via inboxes#create / #update
-# (email, sms, line, telegram, and enterprise voice). These are Ops/SuperAdmin-owned in managed mode. Core
-# channels (web_widget) and api inboxes stay allowed; WhatsApp keeps its own native guard; agents stay on the
-# existing InboxPolicy (admin-only) path, unchanged. OFF == stock Chatwoot. 403 with a non-secret message;
-# no secrets/tokens/credentials/provider ids read or echoed. Fake values only; the ON guard short-circuits
-# before channel build / token exchange / persistence.
+# Phase 11B.4B (+ 11B.7C): when Bloomwire mode + BLOOMWIRE_RESTRICT_PROVIDER_SETUP are ON, business account
+# ADMINISTRATORS cannot create or update inbox/channel types that store EXTERNAL credentials via inboxes#create
+# / #update (email, sms, line, telegram, and enterprise voice). Phase 11B.7C extends this so ALL inbox creation
+# is Ops-owned in managed mode — including self-service web_widget and api (blocked via restrict_inbox_creation!).
+# Existing inbox UPDATE for self-service web_widget stays allowed (settings/read unchanged) and self-service
+# DELETE is unchanged (PR #52). WhatsApp keeps its own native guard; agents stay on the existing InboxPolicy
+# (admin-only) path. OFF == stock Chatwoot. 403 with a non-secret message; no secrets/tokens/credentials/provider
+# ids read or echoed. Fake values only; the ON guard short-circuits before channel build / persistence.
 RSpec.describe 'Bloomwire external-credential channel inbox restriction', type: :request do
   let(:account) { create(:account) }
   let!(:administrator) { create(:user, account: account, role: :administrator) }
@@ -67,22 +68,23 @@ RSpec.describe 'Bloomwire external-credential channel inbox restriction', type: 
       end
     end
 
-    it 'still allows an administrator to create a web_widget inbox' do
+    # Phase 11B.7C: self-service web_widget/api creation is now also Ops-owned in managed mode.
+    it 'blocks an administrator from creating a web_widget inbox (403, no side effect)' do
       expect do
         post "/api/v1/accounts/#{account.id}/inboxes",
              headers: administrator.create_new_auth_token,
              params: { name: 'WW', channel: { type: 'web_widget', website_url: 'test.com' } }, as: :json
-      end.to change(Channel::WebWidget, :count).by(1)
-      expect(response).to have_http_status(:success)
+      end.not_to change(Channel::WebWidget, :count)
+      expect_blocked
     end
 
-    it 'still allows an administrator to create an api inbox' do
+    it 'blocks an administrator from creating an api inbox (403, no side effect)' do
       expect do
         post "/api/v1/accounts/#{account.id}/inboxes",
              headers: administrator.create_new_auth_token,
              params: { name: 'API', channel: { type: 'api', webhook_url: 'http://test.com' } }, as: :json
-      end.to change(Channel::Api, :count).by(1)
-      expect(response).to have_http_status(:success)
+      end.not_to change(Channel::Api, :count)
+      expect_blocked
     end
 
     it 'blocks an administrator from updating an existing email channel credentials (403, unchanged)' do
@@ -128,6 +130,15 @@ RSpec.describe 'Bloomwire external-credential channel inbox restriction', type: 
         post "/api/v1/accounts/#{account.id}/inboxes",
              headers: administrator.create_new_auth_token, params: create_params('email'), as: :json
       end.to change(Channel::Email, :count).by(1)
+      expect(response).to have_http_status(:success)
+    end
+
+    it 'allows an administrator to create a web_widget inbox (11B.7C OFF-safe)' do
+      expect do
+        post "/api/v1/accounts/#{account.id}/inboxes",
+             headers: administrator.create_new_auth_token,
+             params: { name: 'WW', channel: { type: 'web_widget', website_url: 'test.com' } }, as: :json
+      end.to change(Channel::WebWidget, :count).by(1)
       expect(response).to have_http_status(:success)
     end
 

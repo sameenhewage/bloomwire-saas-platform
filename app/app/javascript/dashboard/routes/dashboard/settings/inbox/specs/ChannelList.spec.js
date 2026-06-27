@@ -14,6 +14,7 @@ vi.mock('dashboard/composables/useBloomwireCapabilities');
 const mountList = ({
   canManageProviderSetup = true,
   canManageNativeWhatsappSetup = true,
+  canCreateInbox = true,
 } = {}) => {
   useMapGetter.mockReturnValue(ref({ apiChannelName: 'API' }));
   useAccount.mockReturnValue({
@@ -23,6 +24,7 @@ const mountList = ({
   useBloomwireCapabilities.mockReturnValue({
     canManageProviderSetup: ref(canManageProviderSetup),
     canManageNativeWhatsappSetup: ref(canManageNativeWhatsappSetup),
+    canCreateInbox: ref(canCreateInbox),
   });
 
   return shallowMount(ChannelList, {
@@ -73,5 +75,23 @@ describe('ChannelList.vue (Bloomwire provider/whatsapp setup hiding)', () => {
   it('keeps whatsapp visible while hiding providers (independent capabilities)', () => {
     const keys = channelKeys(mountList({ canManageProviderSetup: false }));
     expect(keys).toContain('whatsapp');
+  });
+
+  // Phase 11B.7C: managed mode blocks ALL inbox creation, so even website/api cards are hidden.
+  it('hides every channel card (incl. website/api) when inbox creation is Ops-managed', () => {
+    const keys = channelKeys(mountList({ canCreateInbox: false }));
+    expect(keys).toHaveLength(0);
+  });
+
+  it('still shows website/api when only provider/whatsapp are managed but inbox creation is allowed', () => {
+    const keys = channelKeys(
+      mountList({
+        canManageProviderSetup: false,
+        canManageNativeWhatsappSetup: false,
+        canCreateInbox: true,
+      })
+    );
+    expect(keys).toContain('website');
+    expect(keys).toContain('api');
   });
 });

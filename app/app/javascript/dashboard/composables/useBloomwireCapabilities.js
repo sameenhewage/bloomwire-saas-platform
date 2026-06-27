@@ -42,5 +42,6 @@ export function useBloomwireCapabilities() {
       'canDeleteManagedProviderInbox'
     ),
     canRegisterProviderWebhook: buildCapability('canRegisterProviderWebhook'),
+    canCreateInbox: buildCapability('canCreateInbox'),
   };
 }
