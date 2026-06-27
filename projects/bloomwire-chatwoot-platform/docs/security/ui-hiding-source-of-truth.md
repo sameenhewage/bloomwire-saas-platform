@@ -61,6 +61,25 @@ Hiding these would remove working, legitimate functionality. Leave visible.
 
 ---
 
+## Phase 11B.7 corrections (planned — see `business-owner-permission-matrix.md`)
+
+The 11B.6 hiding is being corrected to match the business-owner permission contract (business owner/admin
+keeps full in-account visibility + people-management; only setup is Ops-owned):
+
+- **Revert** the agent add/edit/delete hiding (11B.6B) — business admins **should** manage agents
+  (plan-limited). [11B.7B]
+- **Extend** inbox-create hiding to **all** types incl. `web_widget` / `api` (currently kept visible in
+  group B) — backend block added first. [11B.7C]
+- **Add** hiding for **bots** management ("Add Bot") — backend guard added first. [11B.7D]
+- **Add** hiding + safe route-block for **Integrations** (sidebar entry + routes), beyond the connect-button
+  hiding already shipped. [11B.7E]
+- **Account name**: move from "hidden save button" to a **readonly / managed-by-Bloomwire** field. [11B.7A]
+
+Each remains backend-first (or already backend-enforced) per the hard rule above. Self-service `web_widget`/
+`API` **delete** (PR #52) is **unchanged** unless the product owner decides otherwise.
+
+---
+
 ## 11B.6 go/no-go
 
 **GO** to implement UI hiding for **Group A** only — **conditioned on first building the frontend capability
