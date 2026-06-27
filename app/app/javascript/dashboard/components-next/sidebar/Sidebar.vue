@@ -2,6 +2,7 @@
 import { h, ref, computed, onMounted, watch } from 'vue';
 import { provideSidebarContext, useSidebarResize } from './provider';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import { useKbd } from 'dashboard/composables/utils/useKbd';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useStore } from 'vuex';
@@ -43,6 +44,8 @@ const emit = defineEmits([
 ]);
 
 const { accountScopedRoute, isOnChatwootCloud } = useAccount();
+// Bloomwire (11B.7D): hide the Agent Bots settings entry when bot management is Ops-managed.
+const { canManageBots } = useBloomwireCapabilities();
 const store = useStore();
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
@@ -781,12 +784,16 @@ const menuItems = computed(() => {
           icon: 'i-lucide-repeat',
           to: accountScopedRoute('automation_list'),
         },
-        {
-          name: 'Settings Agent Bots',
-          label: t('SIDEBAR.AGENT_BOTS'),
-          icon: 'i-lucide-bot',
-          to: accountScopedRoute('agent_bots'),
-        },
+        ...(canManageBots.value
+          ? [
+              {
+                name: 'Settings Agent Bots',
+                label: t('SIDEBAR.AGENT_BOTS'),
+                icon: 'i-lucide-bot',
+                to: accountScopedRoute('agent_bots'),
+              },
+            ]
+          : []),
         {
           name: 'Settings Macros',
           label: t('SIDEBAR.MACROS'),

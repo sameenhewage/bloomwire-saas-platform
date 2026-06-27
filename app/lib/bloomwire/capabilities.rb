@@ -19,7 +19,9 @@ module Bloomwire::Capabilities
       canDeleteManagedProviderInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?),
       canRegisterProviderWebhook: capability(admin, Bloomwire::Features.restrict_provider_setup?),
       # Phase 11B.7C: ALL inbox creation (incl. self-service web_widget/api) is Ops-owned in managed mode.
-      canCreateInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?)
+      canCreateInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      # Phase 11B.7D: bot management (agent bots + inbox-level set/disconnect) is Ops-owned in managed mode.
+      canManageBots: capability(admin, Bloomwire::Features.restrict_bot_management?)
     }
   end
 

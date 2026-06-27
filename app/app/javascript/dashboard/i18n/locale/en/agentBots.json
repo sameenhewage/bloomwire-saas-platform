@@ -1,6 +1,10 @@
 {
   "AGENT_BOTS": {
     "HEADER": "Bots",
+    "MANAGED_BY_OPS": {
+      "TITLE": "Bots are managed by Bloomwire",
+      "BODY": "Bot setup and management are handled by Bloomwire Ops in managed mode. Please contact support to add or change bots."
+    },
     "LOADING_EDITOR": "Loading editor...",
     "DESCRIPTION": "Agent Bots are like the most fabulous members of your team. They can handle the small stuff, so you can focus on the stuff that matters. Give them a try. You can manage your bots from this page or create new ones using the 'Add Bot' button.",
     "LEARN_MORE": "Learn about agent bots",
