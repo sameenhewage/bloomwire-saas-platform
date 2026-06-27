@@ -9,6 +9,7 @@ import {
   useStore,
   useMapGetter,
 } from 'dashboard/composables/store';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 import AddAgent from './AddAgent.vue';
 import EditAgent from './EditAgent.vue';
@@ -19,6 +20,8 @@ import Button from 'dashboard/components-next/button/Button.vue';
 const getters = useStoreGetters();
 const store = useStore();
 const { t } = useI18n();
+// Bloomwire (11B.6B): hide account-control-plane management when Ops-managed (backend PR #43 still enforces).
+const { canManageAccountControlPlane } = useBloomwireCapabilities();
 
 const loading = ref({});
 const showAddPopup = ref(false);
@@ -167,6 +170,7 @@ const confirmDeletion = () => {
         </template>
         <template #actions>
           <Button
+            v-if="canManageAccountControlPlane"
             :label="$t('AGENT_MGMT.HEADER_BTN_TXT')"
             size="sm"
             @click="openAddPopup"
@@ -255,7 +259,7 @@ const confirmDeletion = () => {
           </div>
           <div class="flex justify-end gap-3">
             <Button
-              v-if="showEditAction(agent)"
+              v-if="showEditAction(agent) && canManageAccountControlPlane"
               v-tooltip.top="$t('AGENT_MGMT.EDIT.BUTTON_TEXT')"
               icon="i-woot-edit-pen"
               slate
@@ -263,7 +267,7 @@ const confirmDeletion = () => {
               @click="openEditPopup(agent)"
             />
             <Button
-              v-if="showDeleteAction(agent)"
+              v-if="showDeleteAction(agent) && canManageAccountControlPlane"
               v-tooltip.top="$t('AGENT_MGMT.DELETE.BUTTON_TEXT')"
               icon="i-woot-bin"
               slate

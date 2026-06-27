@@ -2,6 +2,7 @@
 import { mapGetters } from 'vuex';
 import { useAlert } from 'dashboard/composables';
 import { useBranding } from 'shared/composables/useBranding';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import { picoSearch } from '@scmmishra/pico-search';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import { BaseTable } from 'dashboard/components-next/table';
@@ -23,7 +24,9 @@ export default {
   },
   setup() {
     const { replaceInstallationName } = useBranding();
-    return { replaceInstallationName };
+    // Bloomwire (11B.6B): hide webhook management when Ops-managed (backend PR #43 enforces).
+    const { canManageAccountControlPlane } = useBloomwireCapabilities();
+    return { replaceInstallationName, canManageAccountControlPlane };
   },
   data() {
     return {
@@ -132,6 +135,7 @@ export default {
         </template>
         <template #actions>
           <NextButton
+            v-if="canManageAccountControlPlane"
             blue
             :label="$t('INTEGRATION_SETTINGS.WEBHOOK.HEADER_BTN_TXT')"
             size="sm"
