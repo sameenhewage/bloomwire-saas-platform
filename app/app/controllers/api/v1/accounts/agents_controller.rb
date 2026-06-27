@@ -1,11 +1,10 @@
 class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
-  include Bloomwire::RestrictsAccountControlPlane
-
   before_action :fetch_agent, except: [:create, :index, :bulk_create]
   before_action :check_authorization
-  # Bloomwire managed mode: block business admins from agent/role management (privilege escalation).
-  # Runs after check_authorization so agents stay on the stock policy path. OFF => stock.
-  before_action :restrict_account_control_plane!, only: [:create, :update, :destroy, :bulk_create]
+  # Bloomwire (11B.7B): agent/team management is owned by the business admin (per the business-owner
+  # permission matrix), NOT Ops. The account-control restriction (PR #43) deliberately no longer applies
+  # here; it remains on AccountsController#update and WebhooksController. Stock admin policy + the stock
+  # Enterprise usage limit (validate_limit) still apply. OFF => stock.
   before_action :validate_limit, only: [:create]
   before_action :validate_limit_for_bulk_create, only: [:bulk_create]
 

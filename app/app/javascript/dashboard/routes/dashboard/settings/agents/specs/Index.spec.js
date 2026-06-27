@@ -6,11 +6,9 @@ import {
   useStore,
   useMapGetter,
 } from 'dashboard/composables/store';
-import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: key => key }) }));
 vi.mock('dashboard/composables/store');
-vi.mock('dashboard/composables/useBloomwireCapabilities');
 vi.mock('dashboard/composables', () => ({ useAlert: vi.fn() }));
 
 const agents = [
@@ -30,10 +28,7 @@ const agents = [
   },
 ];
 
-const mountIndex = (canManageAccountControlPlane = true) => {
-  useBloomwireCapabilities.mockReturnValue({
-    canManageAccountControlPlane: ref(canManageAccountControlPlane),
-  });
+const mountIndex = () => {
   useStore.mockReturnValue({ dispatch: vi.fn() });
   useMapGetter.mockReturnValue(ref([]));
   useStoreGetters.mockReturnValue({
@@ -61,17 +56,32 @@ const mountIndex = (canManageAccountControlPlane = true) => {
   });
 };
 
-describe('Agents/Index.vue (Bloomwire account-control hiding)', () => {
-  it('shows agent add/edit/delete actions when account control-plane is manageable', () => {
-    const wrapper = mountIndex(true);
-    // Add (header) + edit + delete per agent
+// Phase 11B.7B: agent management is a business-owner capability and is NOT gated by the Bloomwire
+// account-control capability anymore (only stock admin role gating applies).
+describe('Agents/Index.vue (Bloomwire 11B.7B — agent management restored)', () => {
+  it('renders agent management actions (not gated by the Bloomwire account-control capability)', () => {
+    const wrapper = mountIndex();
+    // Add (header) + edit + delete per agent → > 0
     expect(
       wrapper.findAllComponents({ name: 'Button' }).length
     ).toBeGreaterThan(0);
   });
 
-  it('hides all agent management actions when account control-plane is Ops-managed', () => {
-    const wrapper = mountIndex(false);
-    expect(wrapper.findAllComponents({ name: 'Button' })).toHaveLength(0);
+  it('shows the Add Agent button', () => {
+    const labels = mountIndex()
+      .findAllComponents({ name: 'Button' })
+      .map(b => b.props('label'))
+      .filter(Boolean);
+    expect(labels).toContain('AGENT_MGMT.HEADER_BTN_TXT');
+  });
+
+  it('shows per-agent edit and delete actions for other admins', () => {
+    // currentUserId=99 (≠ agent ids) and two confirmed admins → edit + delete shown for each
+    const icons = mountIndex()
+      .findAllComponents({ name: 'Button' })
+      .map(b => b.props('icon'))
+      .filter(Boolean);
+    expect(icons).toContain('i-woot-edit-pen');
+    expect(icons).toContain('i-woot-bin');
   });
 });

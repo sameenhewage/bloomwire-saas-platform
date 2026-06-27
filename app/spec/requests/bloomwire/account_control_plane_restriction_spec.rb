@@ -1,10 +1,11 @@
 require 'rails_helper'
 
-# Phase 11B.2: when Bloomwire mode + BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN are ON, business account ADMINISTRATORS
-# are blocked from dangerous account-admin / control-plane actions (agent & role management, account settings,
-# webhooks); these move to Bloomwire Ops/SuperAdmin (separate /super_admin surface, unaffected). The guard runs
-# AFTER the existing Pundit authorization, so agents stay on the stock policy path (unchanged, not loosened).
-# OFF == stock Chatwoot. 403 with a non-secret message; no secrets read or echoed. Fake values only.
+# Phase 11B.2 (+ 11B.7B correction): when Bloomwire mode + BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN are ON, business
+# account ADMINISTRATORS are blocked from the Ops-owned account-control actions: ACCOUNT SETTINGS update and
+# account WEBHOOKS. Phase 11B.7B re-scoped the guard so AGENT management (create/update/destroy/bulk_create) is
+# NOW ALLOWED for the business admin (still subject to the stock Enterprise usage limit), per the business-owner
+# permission matrix. The guard still runs AFTER Pundit, so non-admin agents stay on the stock policy path.
+# OFF == stock Chatwoot. 403 (managed_by_ops) with a non-secret message; no secrets read or echoed. Fake values only.
 RSpec.describe 'Bloomwire account control-plane restriction', type: :request do
   let(:account) { create(:account) }
   let!(:administrator) { create(:user, account: account, role: :administrator) }
@@ -30,49 +31,61 @@ RSpec.describe 'Bloomwire account control-plane restriction', type: :request do
   describe 'when restriction is ON' do
     before { enable_restriction }
 
-    it 'blocks an administrator from creating an agent (403, managed_by_ops, no side effect)' do
+    # Phase 11B.7B: agent management is NO LONGER part of the account-control restriction.
+    it 'ALLOWS an administrator to create an agent in managed mode (11B.7B)' do
       expect do
         post "/api/v1/accounts/#{account.id}/agents",
              params: { agent: { name: 'New', email: 'new-agent@example.com', role: 'agent' } },
              headers: administrator.create_new_auth_token, as: :json
-      end.not_to change(User, :count)
-      expect(response).to have_http_status(:forbidden)
-      expect(response.parsed_body['error']).to eq(restricted_message)
-      expect(response.parsed_body['managed_by_ops']).to be(true)
+      end.to change(User, :count).by(1)
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['managed_by_ops']).to be_nil
     end
 
-    it 'blocks an administrator from promoting an agent to administrator (403, role unchanged)' do
+    it 'ALLOWS an administrator to promote an agent to administrator in managed mode (11B.7B)' do
       target = agent
       patch "/api/v1/accounts/#{account.id}/agents/#{target.id}",
             params: { agent: { role: 'administrator' } },
             headers: administrator.create_new_auth_token, as: :json
-      expect(response).to have_http_status(:forbidden)
-      expect(account.account_users.find_by(user_id: target.id).reload.role).to eq('agent')
+      expect(response).to have_http_status(:success)
+      expect(account.account_users.find_by(user_id: target.id).reload.role).to eq('administrator')
     end
 
-    it 'blocks an administrator from deleting an agent (403, agent retained)' do
+    it 'ALLOWS an administrator to delete an agent in managed mode (11B.7B)' do
       target = agent
       delete "/api/v1/accounts/#{account.id}/agents/#{target.id}",
              headers: administrator.create_new_auth_token, as: :json
-      expect(response).to have_http_status(:forbidden)
-      expect(account.account_users.exists?(user_id: target.id)).to be(true)
+      expect(response).to have_http_status(:success)
+      expect(account.account_users.exists?(user_id: target.id)).to be(false)
     end
 
-    it 'blocks an administrator from bulk-creating agents (403, no side effect)' do
+    it 'ALLOWS an administrator to bulk-create agents in managed mode (11B.7B)' do
       expect do
         post "/api/v1/accounts/#{account.id}/agents/bulk_create",
              params: { emails: ['a@example.com', 'b@example.com'] },
              headers: administrator.create_new_auth_token, as: :json
-      end.not_to change(User, :count)
-      expect(response).to have_http_status(:forbidden)
+      end.to change(User, :count).by(2)
+      expect(response).to have_http_status(:success)
     end
 
-    it 'blocks an administrator from updating account settings (403, name unchanged)' do
+    it 'still enforces the stock agent usage limit (402) in managed mode (11B.7B)' do
+      # The stock `validate_limit` before_action is unchanged by 11B.7B; only the Bloomwire guard was removed.
+      # OSS test env hardcodes usage_limits to max, so stub it to the current count to trip the stock limit.
+      allow_any_instance_of(Account).to receive(:usage_limits).and_return(agents: account.users.count) # rubocop:disable RSpec/AnyInstance
+      post "/api/v1/accounts/#{account.id}/agents",
+           params: { agent: { name: 'Over', email: 'over-limit@example.com', role: 'agent' } },
+           headers: administrator.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:payment_required)
+    end
+
+    it 'STILL blocks an administrator from updating account settings (403 managed_by_ops, name unchanged)' do
       original = account.name
       patch "/api/v1/accounts/#{account.id}",
             params: { name: 'Hacked Name' },
             headers: administrator.create_new_auth_token, as: :json
       expect(response).to have_http_status(:forbidden)
+      expect(response.parsed_body['error']).to eq(restricted_message)
+      expect(response.parsed_body['managed_by_ops']).to be(true)
       expect(account.reload.name).to eq(original)
     end
 
