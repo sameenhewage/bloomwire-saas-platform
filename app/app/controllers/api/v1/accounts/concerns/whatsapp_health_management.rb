@@ -3,6 +3,10 @@ module Api::V1::Accounts::Concerns::WhatsappHealthManagement
 
   included do
     skip_before_action :check_authorization, only: [:health, :register_webhook]
+    # Bloomwire (Phase 11B.5B): in managed mode the global webhook router owns provider webhooks, so a business
+    # admin must not re-register the Meta Cloud webhook. Runs before the admin/cloud checks so the managed_by_ops
+    # 403 is returned without invoking the webhook setup service. OFF / agents => existing path (unchanged).
+    before_action :restrict_provider_setup_for_account_admin!, only: [:register_webhook]
     before_action :check_admin_authorization?, only: [:register_webhook]
     before_action :validate_whatsapp_cloud_channel, only: [:health, :register_webhook]
   end
