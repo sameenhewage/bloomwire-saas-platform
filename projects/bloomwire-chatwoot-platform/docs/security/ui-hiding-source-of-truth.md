@@ -6,8 +6,10 @@ mode. **Hard rule:** UI hiding is **cosmetic / UX + defense-in-depth only**. The
 substitute for a backend guard, and never leave a backend-blocked control visible-and-clickable without
 flagging it.
 
-Gate the hiding on the same effective toggles the backend uses (read via the account/installation config the
-frontend already receives) so OFF == stock UI.
+11B.6 must not assume effective Bloomwire toggle state is already available in the frontend. Proactive
+toggle-gated UI hiding requires a safe frontend config/API/capability seam that exposes only non-secret
+effective Bloomwire UI capabilities. Until that seam exists, backend `403` responses (`managed_by_ops` /
+`managed_request`) remain the enforcement source, and the UI may only react to those responses.
 
 Detection hint for the frontend: an Ops-managed block responds `403` with `managed_by_ops: true`
 (account/provider guards) or `managed_request: true` (native WhatsApp). See `backend-guard-map.md`.
@@ -61,6 +63,10 @@ Hiding these would remove working, legitimate functionality. Leave visible.
 
 ## 11B.6 go/no-go
 
-**GO** to implement UI hiding for **Group A** only, gated on the same effective toggles, with the explicit
-contract that the backend guard remains the enforcement. **NO-GO** for Groups B and C. Any Group-C control
-that gets hidden ahead of a backend slice must be called out as **not yet backend-enforced**.
+**GO** to implement UI hiding for **Group A** only — **conditioned on first building the frontend capability
+seam described above** (the frontend does not yet receive effective Bloomwire toggle state), or, until that
+seam exists, **reacting to the backend `403` / `managed_by_ops` / `managed_request` responses** — with the
+explicit contract that the backend guard remains the enforcement. The `Toggle` column above names the
+**backend** governing toggle for each surface (what the future capability seam would derive from), not a value
+the frontend currently has. **NO-GO** for Groups B and C. Any Group-C control that gets hidden ahead of a
+backend slice must be called out as **not yet backend-enforced**.
