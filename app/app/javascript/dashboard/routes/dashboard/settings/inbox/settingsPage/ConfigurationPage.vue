@@ -152,6 +152,8 @@ export default {
       }
     },
     async updateWhatsAppInboxAPIKey() {
+      // Bloomwire (11B.6C): manual provider_config (api key) update is Ops-owned native WhatsApp setup.
+      if (!this.canManageNativeWhatsappSetup) return;
       try {
         const payload = {
           id: this.inbox.id,
@@ -401,7 +403,9 @@ export default {
         >
           <woot-code :script="inbox.provider_config.api_key" />
         </SettingsFieldSection>
+        <!-- Bloomwire (11B.6C): hide manual native WhatsApp api-key/provider-config update when Ops-managed -->
         <SettingsFieldSection
+          v-if="canManageNativeWhatsappSetup"
           :label="$t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_TITLE')"
           :help-text="
             $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_SUBHEADER')
