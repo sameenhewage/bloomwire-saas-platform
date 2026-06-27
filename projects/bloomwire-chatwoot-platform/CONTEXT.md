@@ -41,6 +41,10 @@ while tenants use the standard Chatwoot inbox/agent experience.
 - **Backend security boundary (Phase 11B):** `docs/security/` — backend guard map, feature-toggle reference,
   UI-hiding source-of-truth (for 11B.6), and Tier-B existing-ops decisions; runtime evidence consolidated in
   `docs/runtime/phase-11b-validation-index.md`.
+- **Business-owner permission contract (Phase 11B.7):**
+  `docs/security/business-owner-permission-matrix.md` — canonical allowed/blocked matrix for business
+  owner/admin vs Bloomwire Ops vs agent in managed mode. Corrects the over-broad 11B lockdown (business owner
+  keeps agents/teams + full in-account visibility; only setup is Ops-owned) and defines slices 11B.7A–E.
 
 ## Status
 

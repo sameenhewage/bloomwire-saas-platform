@@ -147,3 +147,21 @@ inboxes#register_webhook                                  PR#48  managed_by_ops
 ```
 
 See `ui-hiding-source-of-truth.md` for the allow/hide/defer breakdown for Phase 11B.6.
+
+---
+
+## Phase 11B.7 — pending permission-model corrections (planned, not yet implemented)
+
+The map above is accurate for `version_1 @ 3526efa`. Phase 11B.7 (see
+`business-owner-permission-matrix.md`) **corrects the managed-mode permission model** so the business
+owner/admin regains people-management + full visibility inside their own account, while platform / provider /
+bot / integration **setup** stays Ops-owned. Planned guard changes:
+
+| Guard | Planned change | Slice |
+|---|---|---|
+| PR #43 `agents#{create,update,destroy,bulk_create}` | **Relax** — allow business admin; add plan-limit hook + audit. `accounts#update` (name) and `webhooks#*` **stay blocked**. | 11B.7B |
+| Inbox create (`web_widget` / `api`) — currently stock-allowed | **Add block** — all inbox creation Ops-owned in managed mode. | 11B.7C |
+| Bots create/update/destroy — currently unguarded | **Add block** — bots Ops-owned. | 11B.7D |
+| Integrations catalog/detail read — currently reachable | **Decision pending** (403 vs read-only) then route-block; connect/config already blocked (PR #47). | 11B.7E |
+
+Until each slice merges and is validated (11B.7R), the **current-state** rows above remain in force.

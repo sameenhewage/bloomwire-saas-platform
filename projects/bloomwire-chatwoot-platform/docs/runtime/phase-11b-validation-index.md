@@ -56,3 +56,15 @@ WhatsApp readiness all intact. Deployed on `bf3357d`.
 
 **Verdict:** all Phase 11B backend lockdowns validated on dev through PR #48. UI hiding (11B.6) may proceed
 against `../security/ui-hiding-source-of-truth.md` Group A.
+
+## Phase 11B.6 (UI hiding) + 11B.7 (permission-model correction)
+
+- **11B.6BR / 11B.6CR / 11B.6DR** runtime-validated the UI-hiding PRs on dev — all **PASS**: PR #50
+  (capability seam + account control-plane, `f3e3f60`), PR #51 (provider / native-WhatsApp setup, `c5776a8`),
+  PR #52 (managed-inbox delete + register-webhook, `3526efa`). Each confirmed the `bloomwire_capabilities`
+  payload (no raw `BLOOMWIRE_*`), the backend `403` regressions (`managed_by_ops` / `managed_request`),
+  Group-B reads intact, SuperAdmin/Ops auth-gated, and throwaway fixtures cleaned to baseline.
+- **11B.7** corrects the managed-mode **permission model** — the business owner/admin regains agents/teams
+  management + full in-account visibility, while platform/provider/bot/integration **setup** stays Ops-owned.
+  Contract + corrected guard map: `../security/business-owner-permission-matrix.md`. Slices **11B.7A–E** land
+  as separate PRs; **11B.7R** will add the runtime evidence here once they merge.
