@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 
 import ButtonV4 from 'next/button/Button.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 const props = defineProps({
   healthData: {
@@ -19,6 +20,9 @@ const props = defineProps({
 const emit = defineEmits(['registerWebhook']);
 
 const { t } = useI18n();
+// Bloomwire (11B.6D): hide the WhatsApp register-webhook action when Ops-managed (backend PR #48
+// still 403s register_webhook). Health/status read view + template sync remain visible.
+const { canRegisterProviderWebhook } = useBloomwireCapabilities();
 
 const QUALITY_COLORS = {
   GREEN: 'text-n-teal-11',
@@ -159,6 +163,8 @@ const webhookUrlMismatch = computed(
 );
 
 const handleRegisterWebhook = () => {
+  // Bloomwire (11B.6D): defense-in-depth — never dispatch the register action when Ops-managed.
+  if (!canRegisterProviderWebhook.value) return;
   emit('registerWebhook');
 };
 </script>
@@ -275,7 +281,10 @@ const handleRegisterWebhook = () => {
               }}
             </span>
             <ButtonV4
-              v-if="!webhookConfigured || webhookUrlMismatch"
+              v-if="
+                (!webhookConfigured || webhookUrlMismatch) &&
+                canRegisterProviderWebhook
+              "
               sm
               solid
               blue

@@ -5,6 +5,7 @@ import { useAlert } from 'dashboard/composables';
 import { picoSearch } from '@scmmishra/pico-search';
 import Avatar from 'next/avatar/Avatar.vue';
 import { useAdmin } from 'dashboard/composables/useAdmin';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import SettingsLayout from '../SettingsLayout.vue';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import {
@@ -12,6 +13,7 @@ import {
   useStoreGetters,
   useStore,
 } from 'dashboard/composables/store';
+import { INBOX_TYPES } from 'dashboard/helper/inbox';
 import ChannelName from './components/ChannelName.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
@@ -20,6 +22,17 @@ const getters = useStoreGetters();
 const store = useStore();
 const { t } = useI18n();
 const { isAdmin } = useAdmin();
+// Bloomwire (11B.6D): hide delete for Ops-owned managed/provider inboxes when managed
+// (backend PR #48 still 403s the destroy). Self-service web_widget/api delete stays.
+const { canDeleteManagedProviderInbox } = useBloomwireCapabilities();
+
+// Mirrors the backend SELF_SERVICE_CHANNEL_TYPES (InboxesController): every other channel type
+// is an Ops-owned managed/provider inbox in managed mode.
+const SELF_SERVICE_CHANNEL_TYPES = [INBOX_TYPES.WEB, INBOX_TYPES.API];
+
+const canDeleteInbox = inbox =>
+  SELF_SERVICE_CHANNEL_TYPES.includes(inbox.channel_type) ||
+  canDeleteManagedProviderInbox.value;
 
 const showDeletePopup = ref(false);
 const selectedInbox = ref({});
@@ -166,7 +179,7 @@ const openDelete = inbox => {
               />
             </router-link>
             <Button
-              v-if="isAdmin"
+              v-if="isAdmin && canDeleteInbox(inbox)"
               v-tooltip.top="$t('INBOX_MGMT.DELETE.BUTTON_TEXT')"
               icon="i-woot-bin"
               slate

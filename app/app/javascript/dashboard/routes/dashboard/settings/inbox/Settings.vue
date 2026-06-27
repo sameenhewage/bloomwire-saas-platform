@@ -82,12 +82,16 @@ export default {
   setup() {
     // Bloomwire (11B.6C): hide provider/native-WhatsApp reauthorize prompts when Ops-managed
     // (backend still enforces). Reconnecting an Ops-owned inbox is not a business-admin action.
-    const { canManageProviderSetup, canManageNativeWhatsappSetup } =
-      useBloomwireCapabilities();
+    const {
+      canManageProviderSetup,
+      canManageNativeWhatsappSetup,
+      canRegisterProviderWebhook,
+    } = useBloomwireCapabilities();
     return {
       v$: useVuelidate(),
       canManageProviderSetup,
       canManageNativeWhatsappSetup,
+      canRegisterProviderWebhook,
     };
   },
   data() {
@@ -524,6 +528,9 @@ export default {
     },
     async registerWebhook() {
       if (!this.inbox) return;
+      // Bloomwire (11B.6D): register_webhook is an Ops-owned action; never dispatch when Ops-managed
+      // (backend PR #48 still 403s it). Method-level guard backs the hidden AccountHealth button.
+      if (!this.canRegisterProviderWebhook) return;
 
       try {
         this.isRegisteringWebhook = true;
