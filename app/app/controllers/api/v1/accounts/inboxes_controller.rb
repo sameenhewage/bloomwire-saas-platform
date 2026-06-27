@@ -10,6 +10,11 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   # (email/sms/line/telegram/voice) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. Scoped via
   # external_provider_channel_setup_request?; web_widget/api/WhatsApp/core paths untouched. OFF => stock.
   before_action :restrict_external_provider_channel_setup!, only: [:create, :update]
+  # Bloomwire (Phase 11B.5B): block business admins from DESTROYING Ops-owned managed/provider inboxes
+  # (WhatsApp/email/sms/line/telegram/social) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON; self-service
+  # web_widget/api deletion stays allowed (scoped via managed_provider_inbox_destroy?). OFF => stock.
+  # (register_webhook re-registration is guarded inside WhatsappHealthManagement, where that action is defined.)
+  before_action :restrict_managed_provider_inbox_destroy!, only: [:destroy]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
@@ -120,6 +125,16 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     else
       params[:channel].present? && EXTERNAL_CREDENTIAL_CHANNEL_CLASSES.include?(@inbox&.channel_type)
     end
+  end
+
+  # Channel STI types that are self-service (the business owns these). Every OTHER inbox channel type is a
+  # managed/provider channel whose lifecycle is owned by Bloomwire Ops in managed mode.
+  SELF_SERVICE_CHANNEL_TYPES = %w[Channel::WebWidget Channel::Api].freeze
+
+  # Bloomwire (Phase 11B.5B): a DESTROY targets a managed/provider inbox when the inbox's channel is NOT one of
+  # the self-service types. Drives restrict_managed_provider_inbox_destroy! (admin-gated + toggle-gated). OFF => stock.
+  def managed_provider_inbox_destroy?
+    @inbox.present? && SELF_SERVICE_CHANNEL_TYPES.exclude?(@inbox.channel_type)
   end
 
   def fetch_agent_bot
