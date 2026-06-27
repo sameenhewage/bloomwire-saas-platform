@@ -248,3 +248,23 @@ Evidence: TDD red→green; combined `rspec` (model + SuperAdmin + account API + 
 RuboCop clean. Runtime (real stack): cross-account link → 422, no rejected links rendered, error shown, DB nil;
 reopen-closed-while-active → 422 (not 500), stays completed; tenant DTO keys =
 `status, status_reason, completed_at, created_at, updated_at`; blocked native WA auth → 403 + `managed_request: true`.
+
+### Phase 10B — dev deployment stabilization (decision log)
+
+The dev deployment (`dev.unecast.com`, `version_1 @ 7ade9dc`) and the real Meta inbound smoke (PASS) surfaced
+deployment-level learnings, now folded back into the repo (no runtime/secret changes):
+
+- **Docker `.git_sha` build step made context-tolerant.** Upstream's `RUN git rev-parse HEAD > /app/.git_sha`
+  (followed by `rm -rf .git`) assumes a git checkout in the build context. This fork builds with the context at
+  `app/` (no `.git`), so the step failed the build. `app/docker/Dockerfile` now resolves the sha as: `GIT_SHA`
+  build arg → `git rev-parse HEAD` (when a checkout is present) → `"unknown"`. Display-only; the build never
+  fails. Deploy/CI passes `--build-arg GIT_SHA=$(git rev-parse HEAD)`.
+- **`phone_number_id` is an exact-match routing key.** The router resolves by full `phone_number_id`; a value
+  sharing only the masked last-4 will fail closed. Seeds/`.env` must carry the exact Meta value.
+- **Verify token is never logged; nginx logs the webhook path without its query string.** Token rotation +
+  nginx `webhook_safe` log_format are documented in `docs/ops/whatsapp-webhook-deployment-runbook.md`.
+- **`.env` stays gitignored / never committed**; secrets remain server-local (`.env` / `InstallationConfig` /
+  `Channel::Whatsapp#provider_config`).
+
+Evidence + record: `docs/runtime/phase-10b-dev-deployment-stabilization.md`;
+runbook: `docs/ops/whatsapp-webhook-deployment-runbook.md`.
