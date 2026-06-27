@@ -14,21 +14,32 @@ master toggle OFF so the feature can be enabled from the UI without out-of-band 
   `managed_whatsapp_onboarding`) additionally require `BLOOMWIRE_PRIVACY_HARDENING` ON — they stay inert
   otherwise.
 
-## The six toggles in scope for the backend security boundary
+## The seven toggles in scope for the backend security boundary
 
 | Toggle (InstallationConfig key) | `Features` helper | Effective when | Governs |
 |---|---|---|---|
 | `BLOOMWIRE_MODE_ENABLED` | `master_enabled?` | (master) | AND-gates **all** sub-features. Master OFF ⇒ everything stock except the SuperAdmin bootstrap page. |
-| `BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN` | `restrict_account_admin?` | master ON **and** key ON | PR #43 account control-plane guard (`accounts#update`, `agents`, `webhooks`). |
-| `BLOOMWIRE_RESTRICT_PROVIDER_SETUP` | `restrict_provider_setup?` | master ON **and** key ON | PR #44/#46/#47/#48 provider/channel/integration setup, inbox create/update/destroy, register_webhook, hooks/slack/Linear connect. |
+| `BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN` | `restrict_account_admin?` | master ON **and** key ON | PR #43 account control-plane guard. **Scope (post-11B.7B):** `accounts#update` + `webhooks#*` only. Agents/teams management is **no longer** gated here (restored to the business admin in PR #55). |
+| `BLOOMWIRE_RESTRICT_PROVIDER_SETUP` | `restrict_provider_setup?` | master ON **and** key ON | PR #44/#46/#47/#48 provider/channel/integration setup, inbox create/update/destroy, register_webhook, hooks/slack/Linear connect; **+ PR #56** all inbox creation (incl. `web_widget`/`api`); **+ PR #58** integrations admin-surface UI route-block (catalog read stays open for runtime). |
 | `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` | `restrict_native_whatsapp_setup?` | master ON **and** key ON | PR #40 native WhatsApp setup guard. |
+| `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT` | `restrict_bot_management?` | master ON **and** key ON | **PR #57 (11B.7D)** bot management guard — agent-bot list/show/create/update/destroy/avatar/reset_access_token/reset_secret + inbox-level `agent_bot`/`set_agent_bot`. Not admin-gated (blocks agents too; bot reads expose secrets). |
 | `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` | `enabled?(:global_webhook_router)` | master ON **and** `privacy_hardening` ON **and** key ON | Global Meta WhatsApp webhook router (ADR-0005). Privacy-dependent (fail-closed). |
 | `BLOOMWIRE_PRIVACY_HARDENING` | `enabled?(:privacy_hardening)` | master ON **and** key ON | Secret masking + the prerequisite that unlocks the privacy-dependent managed-data features. |
 
-## Dev-validated state (11B.5BR, `582f3d0`)
+> `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT` is a **new toggle (Phase 11B.7D)** and, like all toggles, **defaults OFF**
+> (master AND-gated by `BLOOMWIRE_MODE_ENABLED`).
 
-All six ON: `MODE_ENABLED · RESTRICT_ACCOUNT_ADMIN · RESTRICT_PROVIDER_SETUP · RESTRICT_NATIVE_WHATSAPP_SETUP ·
-GLOBAL_WEBHOOK_ROUTER(effective) · PRIVACY_HARDENING(effective)` = `true`.
+## Dev-validated state (11B.7R + exit gate, `a8023a78`)
+
+Managed-mode toggles ON on `dev.unecast.com`:
+`MODE_ENABLED · RESTRICT_ACCOUNT_ADMIN · RESTRICT_PROVIDER_SETUP · RESTRICT_NATIVE_WHATSAPP_SETUP ·
+RESTRICT_BOT_MANAGEMENT` = `true` (plus `GLOBAL_WEBHOOK_ROUTER` / `PRIVACY_HARDENING` effective for the
+WhatsApp router from the earlier 11B.5BR baseline).
+
+- **`BLOOMWIRE_RESTRICT_BOT_MANAGEMENT` on dev is ON via `InstallationConfig` (DB) only — it is NOT in the
+  server `.env`.** It was enabled during 11B.7R/exit-gate validation (the toggle defaults OFF). **If the dev DB
+  is reseeded it will reset to OFF** unless it is also added to the server `app/.env`. Persisting it in `.env`
+  is the follow-up for a permanently bots-managed dev.
 
 ## Other Bloomwire toggles (not part of this backend-guard boundary)
 

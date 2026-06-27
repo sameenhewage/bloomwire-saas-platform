@@ -38,13 +38,14 @@ while tenants use the standard Chatwoot inbox/agent experience.
 - **Decisions:** `docs/adr/0001-technical-baseline.md` + the decision register in
   `docs/research/bloomwire-evidence-review-and-decision-register.md`
 - **Product framing:** `docs/product/`
-- **Backend security boundary (Phase 11B):** `docs/security/` — backend guard map, feature-toggle reference,
-  UI-hiding source-of-truth (for 11B.6), and Tier-B existing-ops decisions; runtime evidence consolidated in
-  `docs/runtime/phase-11b-validation-index.md`.
-- **Business-owner permission contract (Phase 11B.7):**
+- **Backend security boundary (Phase 11B — COMPLETE):** `docs/security/` — backend guard map, feature-toggle
+  reference, UI-hiding source-of-truth (11B.6 + 11B.7), and Tier-B existing-ops decisions; runtime evidence
+  consolidated in `docs/runtime/phase-11b-validation-index.md` (incl. 11B.7R PASS + the exit gate).
+- **Business-owner permission contract (Phase 11B.7 — COMPLETE):**
   `docs/security/business-owner-permission-matrix.md` — canonical allowed/blocked matrix for business
-  owner/admin vs Bloomwire Ops vs agent in managed mode. Corrects the over-broad 11B lockdown (business owner
-  keeps agents/teams + full in-account visibility; only setup is Ops-owned) and defines slices 11B.7A–E.
+  owner/admin vs Bloomwire Ops vs agent in managed mode. Corrected the over-broad 11B lockdown (business owner
+  keeps agents/teams + full in-account visibility; only setup is Ops-owned); slices **11B.7A–E merged +
+  runtime-validated** on `version_1 @ a8023a78`.
 
 ## Status
 
@@ -54,3 +55,9 @@ while tenants use the standard Chatwoot inbox/agent experience.
 master AND-gates every sub-feature, and managed-data toggles also require privacy hardening (fail-closed) — fronted
 by a SuperAdmin-only bootstrap page at `/super_admin/bloomwire_config`. Tenant-facing behavior is unchanged (OFF =
 stock Chatwoot). Next slice = Phase 2 (privacy hardening) per the architecture plan.
+
+**Phase 11B — COMPLETE (after this docs sync).** The managed-mode security boundary (PR #40–#48), the UI-hiding
+capability seam (11B.6), and the business-owner permission-model correction (11B.7A–E) are all **merged and
+runtime-validated** on `version_1 @ a8023a78` (11B.7R PASS + exit gate PASS for code/runtime/security/UI). The
+canonical docs in `docs/security/` + `docs/runtime/phase-11b-validation-index.md` now reflect that merged
+reality. **Next focus = Phase 12 — WhatsApp E2E** (not an Ops Console / users-&-roles management page).
