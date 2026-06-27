@@ -5,14 +5,25 @@ import { useRouter } from 'vue-router';
 import { useMapGetter } from 'dashboard/composables/store';
 
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 import ChannelItem from 'dashboard/components/widgets/ChannelItem.vue';
 
 const { t } = useI18n();
 const router = useRouter();
 const { accountId, currentAccount } = useAccount();
+// Bloomwire (11B.6C): hide provider/native-WhatsApp channel setup entries when Ops-managed
+// (backend PR #40/#44/#46/#47 still enforces the 403). Self-service channels stay visible.
+const { canManageProviderSetup, canManageNativeWhatsappSetup } =
+  useBloomwireCapabilities();
 
 const globalConfig = useMapGetter('globalConfig/get');
+
+// Channels the business/customer admin can always self-serve, even in managed mode.
+const SELF_SERVICE_CHANNELS = ['website', 'api'];
+// Native WhatsApp setup channels (gated by canManageNativeWhatsappSetup); everything
+// else that is not self-service is a provider/external channel (canManageProviderSetup).
+const NATIVE_WHATSAPP_CHANNELS = ['whatsapp', 'whatsapp_call'];
 
 const enabledFeatures = ref({});
 
@@ -105,6 +116,17 @@ const channelList = computed(() => {
   return channels;
 });
 
+const isChannelSetupAllowed = key => {
+  if (SELF_SERVICE_CHANNELS.includes(key)) return true;
+  if (NATIVE_WHATSAPP_CHANNELS.includes(key))
+    return canManageNativeWhatsappSetup.value;
+  return canManageProviderSetup.value;
+};
+
+const visibleChannelList = computed(() =>
+  channelList.value.filter(channel => isChannelSetupAllowed(channel.key))
+);
+
 const initializeEnabledFeatures = async () => {
   enabledFeatures.value = currentAccount.value.features;
 };
@@ -127,7 +149,7 @@ onMounted(() => {
     class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 mx-0 gap-6 sm:grid-cols-3 p-8"
   >
     <ChannelItem
-      v-for="channel in channelList"
+      v-for="channel in visibleChannelList"
       :key="channel.key"
       :channel="channel"
       :enabled-features="enabledFeatures"

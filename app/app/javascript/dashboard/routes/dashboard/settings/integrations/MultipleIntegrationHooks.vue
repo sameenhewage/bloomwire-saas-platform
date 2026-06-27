@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useIntegrationHook } from 'dashboard/composables/useIntegrationHook';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import {
   BaseTable,
   BaseTableRow,
@@ -30,6 +31,9 @@ const { integration, isHookTypeInbox, hasConnectedHooks } = useIntegrationHook(
 );
 
 const globalConfig = useMapGetter('globalConfig/get');
+// Bloomwire (11B.6C): hide hook add/connect when Ops-managed (backend PR #47 still enforces).
+// Per-hook delete stays so existing hooks can be removed.
+const { canManageProviderSetup } = useBloomwireCapabilities();
 const searchQuery = ref('');
 
 const hookHeaders = computed(() => {
@@ -92,7 +96,7 @@ const inboxName = hook => (hook.inbox ? hook.inbox.name : '');
       </template>
       <template #actions>
         <NextButton
-          v-if="showAddButton"
+          v-if="showAddButton && canManageProviderSetup"
           :label="$t('INTEGRATION_APPS.ADD_BUTTON')"
           size="sm"
           @click="$emit('add')"

@@ -1,5 +1,6 @@
 <script>
 import { useAlert } from 'dashboard/composables';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import inboxMixin from 'shared/mixins/inboxMixin';
 import SettingsFieldSection from 'dashboard/components-next/Settings/SettingsFieldSection.vue';
 import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsToggleSection.vue';
@@ -32,7 +33,10 @@ export default {
     },
   },
   setup() {
-    return { v$: useVuelidate() };
+    // Bloomwire (11B.6C): hide the native WhatsApp (embedded signup) reconfigure entry point
+    // when Ops-managed. Backend still enforces; this only hides the UI setup/reconfigure action.
+    const { canManageNativeWhatsappSetup } = useBloomwireCapabilities();
+    return { v$: useVuelidate(), canManageNativeWhatsappSetup };
   },
   data() {
     return {
@@ -148,6 +152,8 @@ export default {
       }
     },
     async updateWhatsAppInboxAPIKey() {
+      // Bloomwire (11B.6C): manual provider_config (api key) update is Ops-owned native WhatsApp setup.
+      if (!this.canManageNativeWhatsappSetup) return;
       try {
         const payload = {
           id: this.inbox.id,
@@ -167,6 +173,8 @@ export default {
       }
     },
     async handleReconfigure() {
+      // Bloomwire (11B.6C): reconfigure is an Ops-owned native WhatsApp setup action.
+      if (!this.canManageNativeWhatsappSetup) return;
       if (this.$refs.whatsappReauth) {
         await this.$refs.whatsappReauth.requestAuthorization();
       }
@@ -361,8 +369,9 @@ export default {
     <div v-if="inbox.provider_config">
       <!-- Embedded Signup Section -->
       <template v-if="isEmbeddedSignupWhatsApp">
+        <!-- Bloomwire (11B.6C): hide reconfigure (native WhatsApp setup) when Ops-managed -->
         <SettingsFieldSection
-          v-if="whatsappAppId"
+          v-if="whatsappAppId && canManageNativeWhatsappSetup"
           :label="
             $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_EMBEDDED_SIGNUP_TITLE')
           "
@@ -394,7 +403,9 @@ export default {
         >
           <woot-code :script="inbox.provider_config.api_key" />
         </SettingsFieldSection>
+        <!-- Bloomwire (11B.6C): hide manual native WhatsApp api-key/provider-config update when Ops-managed -->
         <SettingsFieldSection
+          v-if="canManageNativeWhatsappSetup"
           :label="$t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_TITLE')"
           :help-text="
             $t('INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_SECTION_UPDATE_SUBHEADER')
@@ -435,8 +446,9 @@ export default {
         </NextButton>
       </SettingsFieldSection>
     </div>
+    <!-- Bloomwire (11B.6C): gate the hidden reconfigure bridge so the action cannot fire when Ops-managed -->
     <WhatsappReauthorize
-      v-if="isEmbeddedSignupWhatsApp"
+      v-if="isEmbeddedSignupWhatsApp && canManageNativeWhatsappSetup"
       ref="whatsappReauth"
       :inbox="inbox"
       class="hidden"
