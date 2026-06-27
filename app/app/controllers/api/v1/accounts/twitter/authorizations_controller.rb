@@ -1,6 +1,9 @@
 class Api::V1::Accounts::Twitter::AuthorizationsController < Api::V1::Accounts::BaseController
   include TwitterConcern
+  include Bloomwire::RestrictsProviderSetup
 
+  # Bloomwire managed mode: Twitter/X OAuth setup is Ops-owned. Runs before check_authorization. OFF => stock.
+  before_action :restrict_provider_setup!, only: [:create]
   before_action :check_authorization
 
   def create

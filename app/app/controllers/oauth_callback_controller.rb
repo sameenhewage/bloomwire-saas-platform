@@ -1,4 +1,11 @@
 class OauthCallbackController < ApplicationController
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: fail closed BEFORE the OAuth code->token exchange / channel persistence (covers
+  # Google/Microsoft/Notion subclasses). Closes the in-flight bypass where a flow started while the toggle was
+  # OFF could complete after it is turned ON. OFF => stock.
+  before_action :restrict_provider_setup!
+
   def show
     @response = oauth_client.auth_code.get_token(
       oauth_code,

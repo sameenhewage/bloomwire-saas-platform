@@ -1,5 +1,9 @@
 class Shopify::CallbacksController < ApplicationController
   include Shopify::IntegrationHelper
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: fail closed BEFORE token exchange / hook persistence. OFF => stock.
+  before_action :restrict_provider_setup!
 
   def show
     verify_account!

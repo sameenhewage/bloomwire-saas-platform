@@ -2,6 +2,11 @@
 # No need to retain this controller as we could handle everything centrally in inboxes controller
 
 class Api::V1::Accounts::Channels::TwilioChannelsController < Api::V1::Accounts::BaseController
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: Twilio channel setup (stores account_sid/auth_token) is Ops-owned. Runs before the
+  # authorize check. OFF => stock.
+  before_action :restrict_provider_setup!, only: [:create]
   before_action :authorize_request
 
   def create

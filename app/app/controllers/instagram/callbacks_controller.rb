@@ -1,6 +1,10 @@
 class Instagram::CallbacksController < ApplicationController
   include InstagramConcern
   include Instagram::IntegrationHelper
+  include Bloomwire::RestrictsProviderSetup
+
+  # Bloomwire managed mode: fail closed BEFORE token exchange / channel persistence. OFF => stock.
+  before_action :restrict_provider_setup!
 
   def show
     # Check if Instagram redirected with an error (user canceled authorization)
