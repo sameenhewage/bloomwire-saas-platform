@@ -116,8 +116,8 @@ Agent creation is **subject to the existing stock Enterprise usage limit** — *
 | **11B.7A** — Account name immutable UX | #54 | `ea16eb6` | merged |
 | **11B.7B** — Restore agents/teams management | #55 | `38b46bd` | merged |
 | **11B.7C** — All inbox creation Ops-owned | #56 | `d8099de` | merged |
-| **11B.7D** — Bots Ops-owned | #57 | `f8138de` | merged |
-| **11B.7E** — Integrations Ops-owned | #58 | `de42d74` (merge `a8023a78`) | merged |
+| **11B.7D** — Bots Ops-owned | #57 | `1872037` (feature `f8138de`) | merged |
+| **11B.7E** — Integrations Ops-owned | #58 | `a8023a78` (features `de42d74` + `c49ea80`) | merged |
 | **11B.7R** — Combined runtime/security validation | — | `a8023a78` | **PASS** |
 
 ## 8. Corrected guard map (END STATE — achieved on `a8023a78`)

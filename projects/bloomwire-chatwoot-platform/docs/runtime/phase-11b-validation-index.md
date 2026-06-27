@@ -78,8 +78,8 @@ full in-account visibility, while platform/provider/bot/integration **setup** st
 | **11B.7A** | #54 | `ea16eb6` | Account name (and locale/domain/support-email) **readonly/disabled** + managed helper; Save stays hidden. Frontend-only (backend `accounts#update` 403 already enforced by PR #43). |
 | **11B.7B** | #55 | `38b46bd` | **Restore** business-admin **agents/teams** management (remove the account-control guard from `AgentsController`); stock Enterprise usage limit preserved (402); `accounts#update` + webhooks stay blocked. |
 | **11B.7C** | #56 | `d8099de` | **Block ALL inbox creation** (incl. `web_widget`/`api`) via `restrict_inbox_creation!` + `canCreateInbox`; reads/settings + self-service delete unchanged. |
-| **11B.7D** | #57 | `f8138de` | **Bots Ops-owned** — new toggle `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT` (default OFF) + `canManageBots`; blocks agent-bot reads/writes/reset + inbox-level set/disconnect; no secret leak; runtime bot execution untouched. |
-| **11B.7E** | #58 | `de42d74` (merge `a8023a78`) | **Integrations Ops-owned** — `canAccessIntegrations` + sidebar hide + route-block; connect/config writes already 403 (PR #47); catalog read intentionally open for runtime. |
+| **11B.7D** | #57 | `1872037` | **Bots Ops-owned** — new toggle `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT` (default OFF) + `canManageBots`; blocks agent-bot reads/writes/reset + inbox-level set/disconnect; no secret leak; runtime bot execution untouched. Feature head: `f8138de`. |
+| **11B.7E** | #58 | `a8023a78` | **Integrations Ops-owned** — `canAccessIntegrations` + sidebar hide + route-block; connect/config writes already 403 (PR #47); catalog read intentionally open for runtime. Feature commits: `de42d74` + `c49ea80`. |
 
 ### 11B.7R — combined runtime/security validation — **PASS** (`a8023a78`)
 
