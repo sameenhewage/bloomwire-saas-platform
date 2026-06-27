@@ -31,3 +31,6 @@ json.name @account.name
 json.support_email @account.support_email
 json.status @account.status
 json.cache_keys @account.cache_keys
+# Bloomwire (Phase 11B.6B): non-secret, server-derived UI capability booleans (no raw BLOOMWIRE_* toggles).
+# Emitted only when the requesting account_user is known; absent => the frontend keeps stock UI behavior.
+json.bloomwire_capabilities Bloomwire::Capabilities.for(@current_account_user) if @current_account_user.present?

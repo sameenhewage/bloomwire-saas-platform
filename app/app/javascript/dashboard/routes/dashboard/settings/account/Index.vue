@@ -6,6 +6,7 @@ import { useAlert } from 'dashboard/composables';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useConfig } from 'dashboard/composables/useConfig';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 import { FEATURE_FLAGS } from '../../../../featureFlags';
 import WithLabel from 'v3/components/Form/WithLabel.vue';
 import NextInput from 'next/input/Input.vue';
@@ -33,9 +34,18 @@ export default {
     const { updateUISettings, uiSettings } = useUISettings();
     const { enabledLanguages } = useConfig();
     const { accountId } = useAccount();
+    // Bloomwire (11B.6B): hide the account-settings save action when Ops-managed (backend PR #43 enforces).
+    const { canManageAccountControlPlane } = useBloomwireCapabilities();
     const v$ = useVuelidate();
 
-    return { updateUISettings, uiSettings, v$, enabledLanguages, accountId };
+    return {
+      updateUISettings,
+      uiSettings,
+      v$,
+      enabledLanguages,
+      accountId,
+      canManageAccountControlPlane,
+    };
   },
   data() {
     return {
@@ -237,7 +247,7 @@ export default {
               "
             />
           </WithLabel>
-          <div>
+          <div v-if="canManageAccountControlPlane">
             <NextButton blue :is-loading="isUpdating" type="submit">
               {{ $t('GENERAL_SETTINGS.SUBMIT') }}
             </NextButton>

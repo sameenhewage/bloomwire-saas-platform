@@ -5,6 +5,7 @@ import ShowMore from 'dashboard/components/widgets/ShowMore.vue';
 import { useI18n } from 'vue-i18n';
 import { BaseTableRow, BaseTableCell } from 'dashboard/components-next/table';
 import Button from 'dashboard/components-next/button/Button.vue';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 const props = defineProps({
   webhook: {
@@ -19,6 +20,8 @@ const props = defineProps({
 
 const emit = defineEmits(['edit', 'delete']);
 const { t } = useI18n();
+// Bloomwire (11B.6B): hide webhook edit/delete row actions when Ops-managed (backend PR #43 enforces).
+const { canManageAccountControlPlane } = useBloomwireCapabilities();
 const subscribedEvents = computed(() => {
   const { subscriptions } = props.webhook;
   return subscriptions
@@ -58,7 +61,10 @@ const subscribedEvents = computed(() => {
       </BaseTableCell>
 
       <BaseTableCell align="end" class="w-24">
-        <div class="flex justify-end gap-3 flex-shrink-0">
+        <div
+          v-if="canManageAccountControlPlane"
+          class="flex justify-end gap-3 flex-shrink-0"
+        >
           <Button
             v-tooltip.top="$t('INTEGRATION_SETTINGS.WEBHOOK.EDIT.BUTTON_TEXT')"
             icon="i-woot-edit-pen"
