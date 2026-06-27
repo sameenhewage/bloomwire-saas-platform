@@ -14,6 +14,10 @@ re-read this file before acting.
   area, and existing conventions before making any change.
 - **No random coding.** Do not write, refactor, or "improve" code that is not
   part of an explicit, agreed task.
+- **Controlled autonomy.** For an approved implementation or validation task,
+  agents may investigate, edit, test, push a feature branch, and open a PR
+  without asking for every small step. They must still stop for risky decisions,
+  scope changes, production changes, destructive operations, or merges.
 - **Ask when unclear.** If requirements are ambiguous, ask clarifying questions
   before implementing. A short question now beats a wrong implementation later.
 - **Small, reversible changes.** Prefer the smallest change that fully solves
@@ -21,6 +25,23 @@ re-read this file before acting.
 - **Vertical slices.** Deliver complete, working slices (UI + API + validation +
   data + tests when relevant) rather than horizontal half-features.
 - **Explain assumptions.** State any assumption you make before acting on it.
+
+---
+
+## Branch, commit, and PR rules
+
+- Work on the current branch unless the task explicitly asks for a new feature
+  branch or the current branch is a protected/base branch.
+- Never push directly to `main`, `master`, `version_1`, or any release/version
+  branch unless the user explicitly instructs it for that exact action.
+- For approved implementation work, agents may create commits on the current
+  feature branch or a task-specific feature branch.
+- Do not create commits for pure analysis/review tasks unless the user asks for
+  a file change.
+- Do not merge PRs unless the user explicitly approves the exact PR merge.
+- Do not start CI/CD, production deployment, release tagging, or versioning work
+  unless the user explicitly starts that phase.
+- If a PR is opened, stop after reporting the PR URL and evidence. Do not merge.
 
 ---
 
@@ -61,7 +82,15 @@ re-read this file before acting.
    - If a task grows beyond a small slice, stop and split it.
    - Avoid unrelated edits in the same change.
 
-5. **Report after every task**
+5. **Use the right validation mode**
+   - For implementation tasks, write or update failing tests first where
+     practical, prove the failure is for the right reason, then implement the
+     smallest safe change.
+   - For runtime-validation-only tasks, do not add unnecessary tests. Validate
+     the already-implemented behavior on the real target stack and report
+     evidence.
+
+6. **Report after every task**
    Every completed task must end with the **Final PASS Report Standard**
    (Engineering rule 11 below): requirement understood, root cause (for fixes),
    files read, files changed, tests added/updated, proof the tests failed before
@@ -69,7 +98,7 @@ re-read this file before acting.
    where relevant, security proof where relevant, what was **not** changed,
    remaining risks, and the next recommended step.
 
-6. **Preserve conventions**
+7. **Preserve conventions**
    - Match existing structure, naming, and style.
    - Do not introduce new patterns, libraries, or tools without approval.
 
@@ -88,6 +117,12 @@ re-read this file before acting.
 - **Do not install packages or add dependencies** without explicit approval.
 - **Do not invent requirements.** If it is not specified, ask.
 - **Do not leave the codebase in a broken state.**
+- **Do not expose secrets.** Never print, log, commit, or echo `.env` values,
+  tokens, passwords, private keys, app secrets, provider credentials, access
+  tokens, or production credentials.
+- **Do not run destructive data operations** without explicit approval. This
+  includes `db:reset`, `db:schema:load`, `docker compose down -v`, volume
+  deletion, data deletion, or production/customer-data mutation.
 - **Do not mask a bug with a defensive patch before the root cause is proven**
   (see Engineering rule 3).
 - **Do not return / claim PASS** on "tests pass", "build green", or "I added a
@@ -268,9 +303,9 @@ Team docs: see `docs/agents/`.
 - Tests protect the **business contract** and fail-first where practical (rule 5).
 - **Runtime/browser/network proof** provided where behavior is user-visible
   (rule 6); **safe DTOs** verified for any API change (rule 8).
+- Branch/commit/PR rules were followed; no direct protected-branch push and no
+  merge without explicit user approval.
 - Report follows the **Final PASS Report Standard** (rule 11).
-- No unapproved architecture, dependency, or duplicate-state changes (rules 7, 9).
-- Relevant docs updated; nothing left stale or contradictory (rule 10).
 
 ---
 
