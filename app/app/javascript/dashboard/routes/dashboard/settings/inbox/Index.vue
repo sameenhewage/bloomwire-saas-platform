@@ -24,7 +24,10 @@ const { t } = useI18n();
 const { isAdmin } = useAdmin();
 // Bloomwire (11B.6D): hide delete for Ops-owned managed/provider inboxes when managed
 // (backend PR #48 still 403s the destroy). Self-service web_widget/api delete stays.
-const { canDeleteManagedProviderInbox } = useBloomwireCapabilities();
+// Bloomwire (11B.7C): hide the New Inbox entry point when ALL inbox creation is Ops-owned
+// (backend restrict_inbox_creation! still 403s create). List/read/settings stay visible.
+const { canDeleteManagedProviderInbox, canCreateInbox } =
+  useBloomwireCapabilities();
 
 // Mirrors the backend SELF_SERVICE_CHANNEL_TYPES (InboxesController): every other channel type
 // is an Ops-owned managed/provider inbox in managed mode.
@@ -114,7 +117,10 @@ const openDelete = inbox => {
           </span>
         </template>
         <template #actions>
-          <router-link v-if="isAdmin" :to="{ name: 'settings_inbox_new' }">
+          <router-link
+            v-if="isAdmin && canCreateInbox"
+            :to="{ name: 'settings_inbox_new' }"
+          >
             <Button :label="$t('SETTINGS.INBOXES.NEW_INBOX')" size="sm" />
           </router-link>
         </template>

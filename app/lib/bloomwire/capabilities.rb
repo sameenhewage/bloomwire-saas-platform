@@ -13,11 +13,18 @@ module Bloomwire::Capabilities
     admin = account_user.respond_to?(:administrator?) && account_user.administrator?
 
     {
-      canManageAccountControlPlane: admin && !Bloomwire::Features.restrict_account_admin?,
-      canManageProviderSetup: admin && !Bloomwire::Features.restrict_provider_setup?,
-      canManageNativeWhatsappSetup: admin && !Bloomwire::Features.restrict_native_whatsapp_setup?,
-      canDeleteManagedProviderInbox: admin && !Bloomwire::Features.restrict_provider_setup?,
-      canRegisterProviderWebhook: admin && !Bloomwire::Features.restrict_provider_setup?
+      canManageAccountControlPlane: capability(admin, Bloomwire::Features.restrict_account_admin?),
+      canManageProviderSetup: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      canManageNativeWhatsappSetup: capability(admin, Bloomwire::Features.restrict_native_whatsapp_setup?),
+      canDeleteManagedProviderInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      canRegisterProviderWebhook: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      # Phase 11B.7C: ALL inbox creation (incl. self-service web_widget/api) is Ops-owned in managed mode.
+      canCreateInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?)
     }
+  end
+
+  # A capability is true only when the user is an administrator AND the matching restriction is NOT in effect.
+  def capability(admin, restricted)
+    admin && !restricted
   end
 end

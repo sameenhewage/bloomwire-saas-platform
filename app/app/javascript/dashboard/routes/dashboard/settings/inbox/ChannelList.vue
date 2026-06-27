@@ -12,9 +12,9 @@ import ChannelItem from 'dashboard/components/widgets/ChannelItem.vue';
 const { t } = useI18n();
 const router = useRouter();
 const { accountId, currentAccount } = useAccount();
-// Bloomwire (11B.6C): hide provider/native-WhatsApp channel setup entries when Ops-managed
-// (backend PR #40/#44/#46/#47 still enforces the 403). Self-service channels stay visible.
-const { canManageProviderSetup, canManageNativeWhatsappSetup } =
+// Bloomwire (11B.6C/11B.7C): hide channel setup entries when Ops-managed (backend still enforces the 403).
+// 11B.7C: in managed mode ALL inbox creation is Ops-owned, so even self-service website/api cards are hidden.
+const { canManageProviderSetup, canManageNativeWhatsappSetup, canCreateInbox } =
   useBloomwireCapabilities();
 
 const globalConfig = useMapGetter('globalConfig/get');
@@ -117,6 +117,8 @@ const channelList = computed(() => {
 });
 
 const isChannelSetupAllowed = key => {
+  // 11B.7C: managed mode blocks ALL inbox creation, so self-service channels are gated too.
+  if (!canCreateInbox.value) return false;
   if (SELF_SERVICE_CHANNELS.includes(key)) return true;
   if (NATIVE_WHATSAPP_CHANNELS.includes(key))
     return canManageNativeWhatsappSetup.value;

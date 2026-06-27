@@ -7,11 +7,16 @@ vi.mock('dashboard/composables/useBloomwireCapabilities');
 
 const mountFactory = (
   channelName,
-  { canManageProviderSetup = true, canManageNativeWhatsappSetup = true } = {}
+  {
+    canManageProviderSetup = true,
+    canManageNativeWhatsappSetup = true,
+    canCreateInbox = true,
+  } = {}
 ) => {
   useBloomwireCapabilities.mockReturnValue({
     canManageProviderSetup: ref(canManageProviderSetup),
     canManageNativeWhatsappSetup: ref(canManageNativeWhatsappSetup),
+    canCreateInbox: ref(canCreateInbox),
   });
 
   return shallowMount(ChannelFactory, {
@@ -54,5 +59,15 @@ describe('ChannelFactory.vue (Bloomwire direct-route setup guard)', () => {
       canManageProviderSetup: false,
     });
     expect(isBlocked(wrapper)).toBe(false);
+  });
+
+  // Phase 11B.7C: direct website/api routes are blocked when ALL inbox creation is Ops-owned.
+  it('shows the managed-by-ops state for website/api when inbox creation is Ops-managed', () => {
+    expect(isBlocked(mountFactory('website', { canCreateInbox: false }))).toBe(
+      true
+    );
+    expect(isBlocked(mountFactory('api', { canCreateInbox: false }))).toBe(
+      true
+    );
   });
 });

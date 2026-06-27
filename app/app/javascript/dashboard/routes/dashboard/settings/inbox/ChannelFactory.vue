@@ -22,11 +22,12 @@ const props = defineProps({
   },
 });
 
-// Bloomwire (11B.6C): defense-in-depth for direct URL access to a provider/native-WhatsApp
-// channel setup route. ChannelList cards are the normal entry point and are hidden when
-// Ops-managed; if a guarded route is still reached directly, show a safe managed-by-ops
-// state instead of the create form. Backend (PR #40/#44/#46/#47) remains the 403 enforcement.
-const { canManageProviderSetup, canManageNativeWhatsappSetup } =
+// Bloomwire (11B.6C/11B.7C): defense-in-depth for direct URL access to a channel setup route.
+// ChannelList cards are the normal entry point and are hidden when Ops-managed; if a guarded route
+// is still reached directly, show a safe managed-by-ops state instead of the create form. 11B.7C:
+// in managed mode ALL inbox creation is Ops-owned, so even website/api direct routes are blocked.
+// Backend remains the 403 enforcement.
+const { canManageProviderSetup, canManageNativeWhatsappSetup, canCreateInbox } =
   useBloomwireCapabilities();
 
 const SELF_SERVICE_CHANNELS = ['website', 'api'];
@@ -54,6 +55,8 @@ const channelComponent = computed(
 
 const isChannelSetupAllowed = computed(() => {
   const key = props.channelName;
+  // 11B.7C: managed mode blocks ALL inbox creation, so self-service routes are gated too.
+  if (!canCreateInbox.value) return false;
   if (SELF_SERVICE_CHANNELS.includes(key)) return true;
   if (NATIVE_WHATSAPP_CHANNELS.includes(key))
     return canManageNativeWhatsappSetup.value;

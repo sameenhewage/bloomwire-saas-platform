@@ -49,6 +49,14 @@ module Bloomwire::RestrictsProviderSetup
     render_provider_setup_restricted
   end
 
+  # Phase 11B.7C: block business admins from creating ANY inbox/channel (incl. self-service web_widget/api) in
+  # managed mode. A DISTINCT before_action name is required because the inbox controller already wires
+  # restrict_provider_setup_for_account_admin! for :register_webhook (via WhatsappHealthManagement), and Rails
+  # would dedup the two callbacks. Delegates to that guard; scoped via `only: [:create]` at the call site.
+  def restrict_inbox_creation!
+    restrict_provider_setup_for_account_admin!
+  end
+
   # Scoped, admin-gated guard for DESTROYING an Ops-owned managed/provider inbox (Phase 11B.5B). The including
   # controller overrides `managed_provider_inbox_destroy?` to mark ONLY the channel types whose lifecycle is
   # Ops-owned in managed mode; self-service inboxes (web_widget/api) stay deletable and agents remain on the

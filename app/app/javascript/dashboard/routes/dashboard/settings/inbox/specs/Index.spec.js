@@ -21,7 +21,11 @@ const inboxOf = channelType => ({
   channel_type: channelType,
 });
 
-const mountList = (channelType, canDeleteManagedProviderInbox = false) => {
+const mountList = (
+  channelType,
+  canDeleteManagedProviderInbox = false,
+  canCreateInbox = true
+) => {
   useMapGetter.mockReturnValue(ref([inboxOf(channelType)]));
   useStoreGetters.mockReturnValue({
     'inboxes/getUIFlags': ref({ isFetching: false }),
@@ -30,6 +34,7 @@ const mountList = (channelType, canDeleteManagedProviderInbox = false) => {
   useAdmin.mockReturnValue({ isAdmin: ref(true) });
   useBloomwireCapabilities.mockReturnValue({
     canDeleteManagedProviderInbox: ref(canDeleteManagedProviderInbox),
+    canCreateInbox: ref(canCreateInbox),
   });
 
   return shallowMount(InboxIndex, {
@@ -54,6 +59,25 @@ const hasDeleteButton = wrapper =>
   wrapper
     .findAllComponents({ name: 'Button' })
     .some(b => b.props('icon') === 'i-woot-bin');
+
+const hasNewInboxButton = wrapper =>
+  wrapper
+    .findAllComponents({ name: 'Button' })
+    .some(b => b.props('label') === 'SETTINGS.INBOXES.NEW_INBOX');
+
+describe('Inbox Index.vue (Bloomwire 11B.7C — New Inbox hiding)', () => {
+  it('shows the New Inbox button when inbox creation is allowed (stock/managed-off)', () => {
+    expect(
+      hasNewInboxButton(mountList('Channel::WebWidget', false, true))
+    ).toBe(true);
+  });
+
+  it('hides the New Inbox button when inbox creation is Ops-managed', () => {
+    expect(
+      hasNewInboxButton(mountList('Channel::WebWidget', false, false))
+    ).toBe(false);
+  });
+});
 
 describe('Inbox Index.vue (Bloomwire managed-inbox delete hiding)', () => {
   it('hides delete for a managed/provider inbox when delete is Ops-managed', () => {
