@@ -31,6 +31,24 @@ Business Owners and Agents **never** configure the provider and **never** see pr
 
 ---
 
+## Quick path — one-step provisioning (Phase 14 S3)
+
+Instead of doing §1 + §3 by hand, Ops can use **SuperAdmin → Provision Customer**
+(`/super_admin/bloomwire_customer_provisionings/new`). One form creates, in a single transaction:
+Account + Business Owner (administrator) + optional Staff/Agents + a **credential-less WhatsApp channel shell**
+(+ its inbox) + a `Bloomwire::WhatsappSetup` mapping (status `configured`).
+
+- **No access token is entered or stored** here — the shell channel has no `api_key`. Enter it afterwards on the
+  setup's **Channel credentials** page (§3.1 / Phase 14 S2). The form then redirects you straight to that setup.
+- **No Meta calls, no native webhook, no invitation emails:** the shell uses `source = bloomwire_managed`
+  (skips native webhook + template sync) and owners/agents are created confirmed (they set passwords via the
+  standard password-reset flow — no email is sent by this step).
+- After provisioning, continue at **§3.1 (enter credentials)** → **§4 (Meta webhook)** → **§5 (readiness gate)**.
+
+The manual steps below (§1, §3.2–§3.5) remain valid if you prefer to build the records individually.
+
+---
+
 ## 1. Customer / account setup
 
 1. **Create a clean Account** for the customer (SuperAdmin → Accounts → new). Use a fresh account — **do not reuse a

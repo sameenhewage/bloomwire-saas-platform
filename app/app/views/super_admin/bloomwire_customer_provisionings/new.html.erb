@@ -1,0 +1,57 @@
+<% content_for(:title) do %>
+  Provision new managed WhatsApp customer
+<% end %>
+
+<header class="main-content__header" role="banner">
+  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+  <div>
+    <%= link_to 'Back to setups', super_admin_bloomwire_whatsapp_setups_path, class: 'button button--secondary' %>
+  </div>
+</header>
+
+<section class="main-content__body">
+  <% if @provisioning_error.present? %>
+    <div class="mb-6 text-sm text-red-400"><%= @provisioning_error %></div>
+  <% end %>
+
+  <div class="mb-6 p-4 rounded border border-slate-200 bg-slate-50 text-xs text-slate-600">
+    <p>Creates an Account + Business Owner (admin) + optional Staff/Agents + a <strong>credential-less</strong>
+      WhatsApp channel shell + a Bloomwire WhatsApp setup mapping (status <em>configured</em>).</p>
+    <ul class="list-disc pl-4 mt-2">
+      <li><strong>No access token is entered here.</strong> After provisioning, enter the token via the setup's
+        <em>Channel credentials</em> page, then run the readiness console and flip to <em>ready_for_webhook</em>.</li>
+      <li>No Meta calls, no native webhook registration (inbound uses the global router), and no invitation
+        emails are sent — owner/agents set their password via the standard password-reset flow.</li>
+    </ul>
+  </div>
+
+  <%= form_with url: super_admin_bloomwire_customer_provisionings_path, method: :post do |form| %>
+    <% {
+      account_name: ['Account / business name', 'text'],
+      owner_email: ['Business owner email (becomes administrator)', 'email'],
+      owner_name: ['Business owner name (optional)', 'text'],
+      agent_emails: ['Staff/agent emails (optional, comma or space separated)', 'text'],
+      display_phone_number: ['WhatsApp display phone number (e.g. 15551230001)', 'text'],
+      phone_number_id: ['Meta Phone Number ID (non-secret)', 'text'],
+      business_account_id: ['Meta Business Account ID / WABA ID (non-secret)', 'text']
+    }.each do |field, (label, type)| %>
+      <div class="flex mb-6">
+        <div class="field-unit__label"><%= form.label "provisioning_#{field}", label %></div>
+        <div class="-mt-2 field-unit__field">
+          <%= form.text_field "provisioning[#{field}]", id: "provisioning_#{field}", type: type,
+                value: (@provisioning || {})[field.to_s], autocomplete: 'off',
+                class: 'mt-2 border border-slate-100 p-1.5 rounded-md w-96' %>
+        </div>
+      </div>
+    <% end %>
+
+    <p class="mb-6 text-xs italic text-slate-400">
+      No API key / access token field exists here by design &mdash; credentials are entered only on the
+      Channel credentials page (Phase 14 S2) and stored encrypted at rest.
+    </p>
+
+    <div class="form-actions">
+      <%= form.submit 'Provision customer' %>
+    </div>
+  <% end %>
+</section>
