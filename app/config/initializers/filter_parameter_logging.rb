@@ -6,6 +6,13 @@ Rails.application.config.filter_parameters += [
   :otp_secret, :otp_code, :backup_code, :mfa_token, :otp_backup_codes
 ]
 
+# Bloomwire Phase 13D.2: Meta webhook (WhatsApp/Facebook/Instagram) request payloads carry customer PII
+# (wa_id/phone, profile name, routing phone_number_id, message `from`, status `recipient_id`) — all nested
+# under the `entry` container. Deep-filtering `entry` redacts the whole payload from the controller
+# `Parameters:` log without filtering generic inner keys (from/name/id) globally. Logging-only: `params[:entry]`
+# used by the webhook processing path is unaffected.
+Rails.application.config.filter_parameters += [:entry]
+
 # Regex to filter all occurrences of 'token' in keys except for 'website_token'
 filter_regex = /\A(?!.*\bwebsite_token\b).*token/i
 
