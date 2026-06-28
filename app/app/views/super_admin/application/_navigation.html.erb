@@ -16,7 +16,8 @@
   }
   hidden_resources = %w[account_users access_tokens installation_configs dashboard devise/sessions app_configs
                         bloomwire_configs bloomwire_whatsapp_setups bloomwire_whatsapp_setup_requests
-                        bloomwire_customer_provisionings instance_statuses settings push_diagnostics]
+                        bloomwire_customer_provisionings bloomwire_platform_admins instance_statuses settings
+                        push_diagnostics]
 %>
 
 <nav class="bw-sidebar" role="navigation">
@@ -63,6 +64,9 @@
         </li>
       <% end %>
       <%= render partial: 'nav_item', locals: { icon: 'icon-gear', url: super_admin_bloomwire_config_url, label: 'Bloomwire Features' } %>
+      <% if bw_platform_owner? %>
+        <%= render partial: 'nav_item', locals: { icon: 'icon-lock-line', url: super_admin_bloomwire_platform_admins_url, label: 'Platform Admins' } %>
+      <% end %>
       <li class="bw-nav-soon" title="Planned — not yet available">
         <svg width="16" height="16"><use xlink:href="#icon-paint-brush-line" /></svg>
         <span>Customer Themes</span><span class="bw-nav-soon__tag">Soon</span>

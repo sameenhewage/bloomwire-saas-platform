@@ -87,4 +87,61 @@ RSpec.describe Bloomwire::PlatformAdmin, type: :model do
       expect(described_class.new(user: user)).not_to be_valid
     end
   end
+
+  # --- Phase 15A.1: ownership invariants ---
+
+  describe 'ownership + last-owner protection' do
+    def owner_row(user = create(:user))
+      described_class.create!(user: user, role: :owner, enabled: true)
+    end
+
+    it 'last_active_owner? is true for the only active owner' do
+      expect(owner_row.last_active_owner?).to be(true)
+    end
+
+    it 'last_active_owner? is false when a second active owner exists' do
+      first = owner_row
+      owner_row
+      expect(first.last_active_owner?).to be(false)
+    end
+
+    it 'last_active_owner? is false for a non-owner row' do
+      record = described_class.create!(user: create(:user), role: :admin, enabled: true)
+      expect(record.last_active_owner?).to be(false)
+    end
+
+    it 'soft_revoke! refuses to revoke the last active owner' do
+      record = owner_row
+      expect { record.soft_revoke! }.to raise_error(described_class::LastOwnerError)
+      expect(record.reload.active?).to be(true)
+    end
+
+    it 'soft_revoke! allows revoking an owner when another active owner remains' do
+      first = owner_row
+      owner_row
+      expect { first.soft_revoke! }.not_to raise_error
+      expect(first.reload.active?).to be(false)
+    end
+
+    it 'soft_revoke! soft-revokes an admin (keeps the row, flips inactive)' do
+      record = described_class.create!(user: create(:user), role: :admin, enabled: true)
+      record.soft_revoke!(reason: 'offboard')
+      expect(record).to be_persisted
+      expect(record.active?).to be(false)
+      expect(record.revoked_at).to be_present
+    end
+
+    it 'reactivate! re-enables a revoked row with the new role + reason' do
+      record = described_class.create!(user: create(:user), role: :admin, enabled: false, revoked_at: Time.current)
+      record.reactivate!(role: :support, reason: 'rejoin')
+      expect(record.active?).to be(true)
+      expect(record.role).to eq('support')
+      expect(record.reason).to eq('rejoin')
+    end
+
+    it 'class revoke!(user:) refuses the last active owner' do
+      record = owner_row
+      expect { described_class.revoke!(user: record.user) }.to raise_error(described_class::LastOwnerError)
+    end
+  end
 end

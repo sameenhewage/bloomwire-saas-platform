@@ -12,6 +12,16 @@ module SuperAdmin::BloomwireUiHelper
        bloomwire_whatsapp_setup_requests].include?(controller_name)
   end
 
+  # Whether the current SuperAdmin is an active platform OWNER (drives owner-only nav: Platform Admins).
+  def bw_platform_owner?
+    admin = current_super_admin if respond_to?(:current_super_admin)
+    return false if admin.blank?
+
+    Bloomwire::PlatformAdmin.active_owners.exists?(user_id: admin.id)
+  rescue StandardError
+    false
+  end
+
   # Environment label for the header/footer. Prefers an explicit BLOOMWIRE_ENV label (optional, read-only)
   # and falls back to Rails.env. Reading an optional env var does not change any toggle/behavior.
   def bw_environment_label

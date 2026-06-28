@@ -98,3 +98,40 @@ model/service/tests + the bootstrap path are the documented mechanism. A future 
 
 No Ops management UI, no per-`role` access differentiation, no change to tenant `account_users.role`
 semantics, no WhatsApp/secret changes, no deploy.
+
+---
+
+## Phase 15A.1 — Ownership model + owner-only management UI (Accepted)
+
+Adds the ownership/management layer on top of the 15A boundary. No new migration (schema-only table from 15A
+is reused); no `users.type` business roles; no WhatsApp/S2/S3/Meta changes.
+
+### Primary owner bootstrap (env-driven, not hardcoded)
+- `BLOOMWIRE_PLATFORM_OWNER_EMAIL` (env/config) names the primary owner. **Never hardcode the email in a
+  migration.**
+- `Bloomwire::EnsurePlatformOwnerService` (+ rake `bloomwire:ensure_platform_owner`): find user by email →
+  ensure `users.type = 'SuperAdmin'` → ensure an active `bloomwire_platform_admins` row with `role = owner`
+  (`enabled = true`, `revoked_at = nil`). **Idempotent.** **Fail-safe**: raises (no create) if the email is
+  unset or the user does not exist. Output prints `user_id`/`role`/`active` only — **no raw email/secret**.
+
+### Ownership invariants (model)
+- `role = owner` is the management role. `last_active_owner?` protects the **only** active owner from
+  revoke/demote (`Bloomwire::PlatformAdmin::LastOwnerError`), covering both "revoke last owner" and
+  "self-revoke leaving zero owners".
+- **Soft revoke only** (`soft_revoke!`): `enabled = false` + `revoked_at`, row kept for audit; reversible via
+  `reactivate!` (records the new role/reason). No hard delete in this slice.
+
+### Owner-only management UI (`/super_admin/bloomwire_platform_admins`)
+- Inherits the 15A auth chain **and** adds an owner-only gate (`require_platform_owner!`): only an active
+  `owner` may list/grant/revoke/reactivate. `admin`/`support` are bounced to the dashboard.
+- **Add = create + grant by email** (`Bloomwire::PlatformAdminInviter`):
+  - new email ⇒ create a `SuperAdmin` + active approval row + role; send a Devise reset-password email so the
+    new admin sets their own password (**no raw password** created in/returned to the UI);
+  - existing `SuperAdmin` ⇒ (re)grant/reactivate + set role (refusing to demote the last owner);
+  - **existing business/customer user (`users.type = nil`) ⇒ REFUSED** — never converted to `SuperAdmin`;
+    business roles stay in `account_users.role`.
+- Owner shown as **"Platform Owner"**; the last owner shows "Protected (last owner)" with no revoke control.
+
+### Validation (specs + local; no deploy)
+Setup task makes the owner a SuperAdmin + active owner; owner can access `/super_admin`; revoking/demoting the
+last owner is blocked; unapproved SuperAdmins and business users are blocked; no WhatsApp/S2/S3/Meta change.

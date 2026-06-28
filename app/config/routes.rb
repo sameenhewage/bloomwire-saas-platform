@@ -697,6 +697,13 @@ Rails.application.routes.draw do
       # :index is present so the SuperAdmin/Administrate layout can resolve the resource's collection path; it
       # just redirects to the provisioning form.
       resources :bloomwire_customer_provisionings, only: [:index, :new, :create]
+      # Bloomwire Phase 15A.1: owner-only platform-admin management (grant/soft-revoke/reactivate).
+      resources :bloomwire_platform_admins, only: [:index, :create] do
+        member do
+          patch :revoke
+          patch :reactivate
+        end
+      end
       resource :push_diagnostics, only: [:show, :create] do
         post :destroy_subscriptions, on: :collection
       end

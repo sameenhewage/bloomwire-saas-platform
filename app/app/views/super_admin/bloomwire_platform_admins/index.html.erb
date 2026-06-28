@@ -1,0 +1,82 @@
+<% content_for(:title) do %>
+  Platform Admins
+<% end %>
+<% content_for(:breadcrumb) do %>
+  <%= bw_crumbs('Bloomwire', 'Platform Admins') %>
+<% end %>
+
+<div class="bw-page-head">
+  <div>
+    <h1 class="bw-page-title">Platform Admins</h1>
+    <p class="bw-page-subtitle">
+      Owner-only. Control who may access the Bloomwire <strong>/super_admin</strong> console. Being a SuperAdmin
+      is not enough — an active approval row here is required. The last active <strong>owner</strong> cannot be
+      revoked. Business/customer users can never be added here.
+    </p>
+  </div>
+</div>
+
+<div class="bw-card bw-card--form-lg">
+  <h2 class="bw-card__title">Add platform admin</h2>
+  <p class="bw-card__subtitle">
+    If the email is new, a Bloomwire SuperAdmin is created and sent a password-setup email. If it already
+    belongs to a customer/business user, the request is refused (no conversion).
+  </p>
+  <%= form_with url: super_admin_bloomwire_platform_admins_path, method: :post do |f| %>
+    <div class="bw-field bw-field--md">
+      <%= f.label 'platform_admin[name]', 'Name', class: 'bw-label' %>
+      <%= f.text_field 'platform_admin[name]', class: 'bw-input', autocomplete: 'off' %>
+    </div>
+    <div class="bw-field bw-field--md">
+      <%= f.label 'platform_admin[email]', 'Internal admin email', class: 'bw-label' %>
+      <%= f.email_field 'platform_admin[email]', class: 'bw-input', autocomplete: 'off' %>
+    </div>
+    <div class="bw-field bw-field--sm">
+      <%= f.label 'platform_admin[role]', 'Platform role', class: 'bw-label' %>
+      <%= f.select 'platform_admin[role]', @roles.map { |r| [r.titleize, r] }, { selected: 'admin' }, class: 'bw-select' %>
+    </div>
+    <div class="bw-field bw-field--lg">
+      <%= f.label 'platform_admin[reason]', 'Reason / note (required, non-secret)', class: 'bw-label' %>
+      <%= f.text_field 'platform_admin[reason]', class: 'bw-input', autocomplete: 'off' %>
+    </div>
+    <%= f.submit 'Add / grant platform admin', class: 'bw-btn bw-btn--primary' %>
+  <% end %>
+</div>
+
+<div class="bw-card bw-card--flush">
+  <table class="bw-table">
+    <thead>
+      <tr><th>Admin</th><th>Email</th><th>Role</th><th>Status</th><th>Updated</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% @platform_admins.each do |pa| %>
+        <tr>
+          <td><%= pa.user&.name.presence || '—' %></td>
+          <td class="text-xs"><%= pa.user&.email %></td>
+          <td>
+            <% if pa.owner? %>
+              <span class="bw-badge bw-badge--info">Platform Owner</span>
+            <% else %>
+              <span class="bw-badge bw-badge--neutral"><%= pa.role.titleize %></span>
+            <% end %>
+          </td>
+          <td>
+            <%= bw_status_badge(pa.active? ? 'active' : 'revoked', label: pa.active? ? 'Active' : 'Revoked') %>
+          </td>
+          <td class="text-xs"><%= pa.updated_at&.to_fs(:short) %></td>
+          <td class="whitespace-nowrap">
+            <% if pa.active? && pa.last_active_owner? %>
+              <span class="bw-help">Protected (last owner)</span>
+            <% elsif pa.active? %>
+              <%= button_to 'Revoke', revoke_super_admin_bloomwire_platform_admin_path(pa), method: :patch,
+                            class: 'bw-btn bw-btn--ghost', form: { data: { turbo_confirm: 'Revoke this platform admin?' } } %>
+            <% else %>
+              <%= button_to 'Reactivate', reactivate_super_admin_bloomwire_platform_admin_path(pa), method: :patch,
+                            class: 'bw-btn bw-btn--secondary' %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
