@@ -6,6 +6,9 @@
   <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
   <div>
     <%= link_to 'Real-hop readiness', readiness_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button' %>
+    <% if @setup.channel_whatsapp_id.present? %>
+      <%= link_to 'Channel credentials', credentials_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button button--secondary ml-2' %>
+    <% end %>
     <%= link_to 'Edit', edit_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button button--secondary ml-2' %>
     <%= link_to 'Back', super_admin_bloomwire_whatsapp_setups_path, class: 'button button--secondary ml-2' %>
   </div>

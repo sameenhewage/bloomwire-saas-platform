@@ -13,6 +13,12 @@ Rails.application.config.filter_parameters += [
 # used by the webhook processing path is unaffected.
 Rails.application.config.filter_parameters += [:entry]
 
+# Bloomwire Phase 14 S2d: WhatsApp provider credentials are submitted/handled under a `provider_config` key
+# (Ops credential-capture surface + the inbox provider-config update path). `api_key` is already covered by the
+# `:_key` filter, but deep-filtering the whole `provider_config` container redacts the entire credential blob
+# (token + routing ids) from request-parameter logs. Logging-only: controllers still read params[:provider_config].
+Rails.application.config.filter_parameters += [:provider_config]
+
 # Regex to filter all occurrences of 'token' in keys except for 'website_token'
 filter_regex = /\A(?!.*\bwebsite_token\b).*token/i
 

@@ -685,7 +685,12 @@ Rails.application.routes.draw do
       resource :app_config, only: [:show, :create]
       resource :bloomwire_config, only: [:show, :create]
       resources :bloomwire_whatsapp_setups, only: [:index, :new, :create, :show, :edit, :update] do
-        member { get :readiness }
+        member do
+          get :readiness
+          # Bloomwire Phase 14 S2a: Ops-only credential-capture surface for the linked channel's provider_config.
+          get :credentials
+          patch :update_credentials
+        end
       end
       resources :bloomwire_whatsapp_setup_requests, only: [:index, :show, :update]
       resource :push_diagnostics, only: [:show, :create] do
