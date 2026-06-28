@@ -27,6 +27,8 @@
           <th class="py-2 pr-4">Inbox</th>
           <th class="py-2 pr-4">Channel</th>
           <th class="py-2 pr-4">Status</th>
+          <th class="py-2 pr-4">Readiness</th>
+          <th class="py-2 pr-4">Request</th>
           <th class="py-2 pr-4">Phone Number ID</th>
           <th class="py-2 pr-4">Display Number</th>
           <th class="py-2 pr-4"></th>
@@ -34,14 +36,28 @@
       </thead>
       <tbody>
         <% @setups.each do |setup| %>
+          <% readiness = @readiness[setup] %>
+          <% blocked = readiness[:status] == 'blocked' %>
+          <% linked = @linked_setup_ids.include?(setup.id) %>
           <tr class="border-b border-slate-50">
             <td class="py-2 pr-4"><%= setup.id %></td>
             <td class="py-2 pr-4"><%= setup.account_id %></td>
             <td class="py-2 pr-4"><%= setup.inbox_id || '—' %></td>
             <td class="py-2 pr-4"><%= setup.channel_whatsapp_id || '—' %></td>
             <td class="py-2 pr-4"><%= setup.setup_status.titleize %></td>
-            <td class="py-2 pr-4"><%= setup.phone_number_id || '—' %></td>
-            <td class="py-2 pr-4"><%= setup.display_phone_number || '—' %></td>
+            <td class="py-2 pr-4">
+              <span data-readiness="<%= readiness[:status] %>"
+                    class="px-2 py-0.5 rounded text-xs font-semibold <%= blocked ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700' %>">
+                <%= blocked ? 'Blocked' : 'Ready' %>
+              </span>
+            </td>
+            <td class="py-2 pr-4">
+              <span data-request="<%= linked ? 'linked' : 'unlinked' %>" class="text-xs <%= linked ? 'text-slate-700' : 'text-slate-400' %>">
+                <%= linked ? 'Linked' : 'Unlinked' %>
+              </span>
+            </td>
+            <td class="py-2 pr-4 font-mono text-xs"><%= readiness[:masked][:phone_number_id] %></td>
+            <td class="py-2 pr-4 font-mono text-xs"><%= readiness[:masked][:display_phone_number] %></td>
             <td class="py-2 pr-4">
               <%= link_to 'View', super_admin_bloomwire_whatsapp_setup_path(setup), class: 'text-woot-500' %>
               <%= link_to 'Edit', edit_super_admin_bloomwire_whatsapp_setup_path(setup), class: 'text-woot-500 ml-2' %>
