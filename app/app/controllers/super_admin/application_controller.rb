@@ -8,6 +8,8 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
   include ActionView::Helpers::TagHelper
   include ActionView::Context
   include SuperAdmin::NavigationHelper
+  # Phase 15A (ADR-0007): platform-admin boundary on top of the SuperAdmin identity.
+  include Bloomwire::RequiresPlatformAdmin
 
   # Bloomwire SuperAdmin UI helpers (shell breadcrumb/badges/footer + status pills) available to every view.
   helper SuperAdmin::BloomwireUiHelper
@@ -15,6 +17,8 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
   helper_method :render_vue_component, :settings_open?, :settings_pages
   # authenticiation done via devise : SuperAdmin Model
   before_action :authenticate_super_admin!
+  # Bloomwire Mode ON => also require an explicit Bloomwire platform-admin approval (fail-closed). Mode OFF => stock.
+  before_action :require_bloomwire_platform_admin!
 
   # Override this value to specify the number of elements to display at a time
   # on index pages. Defaults to 20.

@@ -726,7 +726,9 @@ Rails.application.routes.draw do
       # resources that doesn't appear in primary navigation in super admin
       resources :account_users, only: [:new, :create, :show, :destroy]
     end
-    authenticated :super_admin do
+    # Phase 15A (ADR-0007): when Bloomwire Mode is ON, the monitoring mount also requires an approved Bloomwire
+    # platform admin (unapproved SuperAdmins do not match the route => no disclosure). Mode OFF => stock.
+    authenticated :super_admin, ->(user) { !Bloomwire::Features.master_enabled? || Bloomwire::PlatformAdmin.approved?(user) } do
       mount Sidekiq::Web => '/monitoring/sidekiq'
     end
   end

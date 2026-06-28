@@ -8,6 +8,12 @@ class SuperAdmin::Devise::SessionsController < Devise::SessionsController
   def create
     redirect_to(super_admin_session_path, flash: { error: @error_message }) && return unless valid_credentials?
 
+    # Phase 15A (ADR-0007): when Bloomwire Mode is ON, a SuperAdmin must also be an approved Bloomwire platform
+    # admin. Refuse login (no session established) otherwise, with a non-secret message. Mode OFF => stock.
+    if Bloomwire::Features.master_enabled? && !Bloomwire::PlatformAdmin.approved?(@super_admin)
+      redirect_to(super_admin_session_path, flash: { error: I18n.t('bloomwire.platform_admin_required') }) && return
+    end
+
     sign_in(:super_admin, @super_admin)
     flash.discard
     redirect_to super_admin_users_path
