@@ -23,11 +23,14 @@ class Api::V1::Accounts::Bloomwire::WhatsappSetupRequestsController < Api::V1::A
     head :not_found unless ::Bloomwire::Features.master_enabled?
   end
 
-  # Safe DTO: only non-secret operational status fields (no internal IDs). No provider_config / api_key / token is ever stored or returned.
+  # Safe DTO: only non-secret operational status fields (no internal IDs). No provider_config / api_key / token
+  # is ever stored or returned. `setup_state` is a non-secret derivation of the linked Ops setup mapping's
+  # progress (Phase 12D) so the account API reflects request + setup state without exposing the mapping itself.
   def request_json(request)
     {
       status: request.status,
       status_reason: request.status_reason,
+      setup_state: request.account_facing_setup_state,
       completed_at: request.completed_at,
       created_at: request.created_at,
       updated_at: request.updated_at

@@ -96,6 +96,12 @@ PASS: toggles ON; `WHATSAPP_APP_SECRET` + `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKE
 (provider `whatsapp_cloud`, phone `+<display_phone_number>`, provider_config `phone_number_id` == setup
 `phone_number_id`); and `router_handoff_safe`. If anything is BLOCKED, stop and fix before configuring Meta.
 
+The readiness page (`/super_admin/bloomwire_whatsapp_setups/:id/readiness`) includes a consolidated **Global
+webhook registration readiness** panel (Phase 12F): it shows the exact callback path/URL plus the GET-verify
+prerequisites (global router enabled, privacy hardening enabled, global verify token configured, app secret
+configured, public callback host configured) as PASS/BLOCKED. Use it to confirm step 3 is safe to perform.
+Secret values are never displayed.
+
 ## 7. Secret hygiene (non-negotiable)
 
 - `.env` stays gitignored; never commit/stage it. Secrets live only in server-local `.env` / `InstallationConfig`

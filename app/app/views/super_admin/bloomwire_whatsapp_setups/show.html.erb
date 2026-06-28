@@ -12,6 +12,26 @@
 </header>
 
 <section class="main-content__body">
+  <% blocked = @readiness[:status] == 'blocked' %>
+  <div class="mb-6 p-4 rounded border <%= blocked ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50' %>">
+    <p class="text-sm">Operational readiness:
+      <span data-readiness="<%= @readiness[:status] %>" class="font-semibold <%= blocked ? 'text-red-700' : 'text-green-700' %>">
+        <%= blocked ? 'Blocked' : 'Ready' %>
+      </span>
+    </p>
+    <p class="text-sm mt-1">Setup request:
+      <span data-request="<%= @request_linked ? 'linked' : 'unlinked' %>" class="font-semibold">
+        <%= @request_linked ? 'Linked' : 'Unlinked' %>
+      </span>
+    </p>
+    <ul class="mt-2 text-xs text-slate-600">
+      <li>Ready for inbound webhook mapping: <strong><%= @readiness[:ready_for_inbound_mapping] ? 'Ready' : 'Blocked' %></strong></li>
+      <li>Ready for GET verification config: <strong><%= @readiness[:ready_for_get_verification_config] ? 'Ready' : 'Blocked' %></strong></li>
+    </ul>
+    <p class="mt-2 text-xs text-slate-500">Full real-hop checklist on the
+      <%= link_to 'readiness page', readiness_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'text-woot-500' %>.</p>
+  </div>
+
   <dl class="text-sm">
     <% {
       'Account ID' => @setup.account_id,
@@ -19,8 +39,8 @@
       'WhatsApp Channel ID' => @setup.channel_whatsapp_id,
       'Setup Status' => @setup.setup_status.titleize,
       'WABA ID' => @setup.waba_id,
-      'Phone Number ID' => @setup.phone_number_id,
-      'Display Phone Number' => @setup.display_phone_number,
+      'Phone Number ID (masked)' => @readiness[:masked][:phone_number_id],
+      'Display Phone Number (masked)' => @readiness[:masked][:display_phone_number],
       'Status Reason / Notes' => @setup.status_reason
     }.each do |label, value| %>
       <div class="flex py-2 border-b border-slate-50">

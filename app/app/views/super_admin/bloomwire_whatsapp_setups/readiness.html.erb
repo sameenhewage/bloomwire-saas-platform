@@ -64,29 +64,57 @@
     </ul>
   <% end %>
 
-  <h2 class="mt-8 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Callback URL</h2>
-  <div class="text-sm">
-    <p class="text-slate-700">Callback path (copy into the Meta dashboard):</p>
+  <% registration_prereq_keys = %w[global_webhook_router_enabled privacy_hardening_enabled
+                                   global_verify_token_configured app_secret_configured
+                                   public_callback_host_configured] %>
+  <% check_by_key = @readiness[:checks].index_by { |c| (c[:key] || c['key']).to_s } %>
+  <% registration_ready = @readiness[:ready_for_get_verification_config] %>
+
+  <h2 class="mt-8 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Global webhook registration readiness</h2>
+  <div data-registration-readiness="<%= registration_ready ? 'ready' : 'blocked' %>"
+       class="p-4 rounded border <%= registration_ready ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50' %>">
+    <p class="text-sm font-semibold <%= registration_ready ? 'text-green-700' : 'text-red-700' %>">
+      GET verification prerequisites: <%= registration_ready ? 'Ready to register' : 'Blocked' %>
+    </p>
+    <ul class="mt-2 text-sm">
+      <% registration_prereq_keys.each do |key| %>
+        <% check = check_by_key[key] %>
+        <% pass = check && (check[:status] || check['status']) == 'pass' %>
+        <li data-prereq="<%= key %>" data-prereq-status="<%= pass ? 'pass' : 'blocked' %>" class="flex items-start py-1">
+          <span class="w-20 shrink-0 font-semibold <%= pass ? 'text-green-600' : 'text-red-600' %>">
+            <%= pass ? 'PASS' : 'BLOCKED' %>
+          </span>
+          <span class="text-slate-700"><%= key.humanize %>
+            <% msg = check && (check[:message] || check['message']) %>
+            <% if msg.present? %><span class="block text-red-600"><%= msg %></span><% end %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+
+    <p class="mt-3 text-slate-700 text-sm">Callback path (copy into the Meta dashboard):</p>
     <input type="text" readonly value="<%= @readiness[:callback_path] %>"
            class="mt-1 w-full max-w-md px-2 py-1 border border-slate-200 rounded font-mono text-xs" />
     <% if @readiness[:callback_url].present? %>
-      <p class="mt-2 text-slate-700">Full callback URL:</p>
+      <p class="mt-2 text-slate-700 text-sm">Full callback URL:</p>
       <input type="text" readonly value="<%= @readiness[:callback_url] %>"
              class="mt-1 w-full max-w-md px-2 py-1 border border-slate-200 rounded font-mono text-xs" />
     <% else %>
-      <p class="mt-2 text-red-600">No public HTTPS host documented yet — set
+      <p class="mt-2 text-red-600 text-sm">No public HTTPS host documented yet — set
         <code>BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST</code> (a non-secret hostname) to build the full URL.</p>
     <% end %>
   </div>
 
-  <h2 class="mt-8 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Next manual Meta steps (masked runbook)</h2>
+  <h2 class="mt-8 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Register the callback in Meta (manual)</h2>
   <ol class="text-sm text-slate-700 list-decimal ml-5 space-y-1">
-    <li>Configure the Meta webhook callback URL to the path above on your public HTTPS host.</li>
-    <li>Use the configured global verify token (<code>BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN</code>) — value never shown here.</li>
+    <li>In the Meta dashboard, set the webhook callback URL to the full URL above (or the path on your public HTTPS host).</li>
+    <li>Use the configured global verify token (<code>BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN</code>) — its value is never shown here.</li>
     <li>Subscribe the app to the <strong>messages</strong> field.</li>
-    <li>Send <strong>one</strong> real inbound test message from an allowed test phone to the test number.</li>
-    <li>Verify the correct inbox/conversation/message appears in Chatwoot.</li>
+    <li>Confirm Meta's GET verification returns 200 with the challenge, then run the live-hop checklist.</li>
   </ol>
+  <p class="mt-2 text-xs text-slate-500">
+    Full operational steps: <code>projects/bloomwire-chatwoot-platform/docs/ops/whatsapp-webhook-deployment-runbook.md</code>.
+  </p>
 
   <div class="mt-8 p-4 rounded border border-amber-200 bg-amber-50 text-sm text-amber-800">
     <p class="font-semibold">Warnings</p>

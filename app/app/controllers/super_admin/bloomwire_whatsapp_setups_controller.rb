@@ -4,9 +4,17 @@ class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationCon
 
   def index
     @setups = Bloomwire::WhatsappSetup.includes(:account, :inbox, :channel_whatsapp).order(created_at: :desc)
+    # Phase 12E: per-setup non-secret operational observability (reuses the readiness calculator; never Meta).
+    @readiness = @setups.index_with { |setup| Bloomwire::WhatsappRealHopReadiness.new(setup).result }
+    @linked_setup_ids = Bloomwire::WhatsappSetupRequest.where.not(bloomwire_whatsapp_setup_id: nil)
+                                                       .distinct.pluck(:bloomwire_whatsapp_setup_id).to_set
   end
 
-  def show; end
+  def show
+    # Phase 12E: surface the same non-secret operational state (masked ids + readiness) on the detail page.
+    @readiness = Bloomwire::WhatsappRealHopReadiness.new(@setup).result
+    @request_linked = Bloomwire::WhatsappSetupRequest.exists?(bloomwire_whatsapp_setup_id: @setup.id)
+  end
 
   # Read-only real-hop readiness console (Phase 10A.1). Computes a secret-free checklist; never calls Meta.
   def readiness

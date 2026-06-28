@@ -23,6 +23,18 @@ while tenants use the standard Chatwoot inbox/agent experience.
 - **WhatsWay is reference-only.** Concepts may inform design; never copy its code or architecture.
 - **Pricing / billing out of scope.**
 
+## QA gate
+
+Every Bloomwire task, slice, phase, and PR is governed by the **Strict QA gate** in
+root `AGENTS.md` — **nothing is `QA PASS` / merge-ready until an independent QA pass
+verifies it** (a builder's "implementation complete" is not enough). For this
+project the **phase** QA pass must explicitly prove the non-negotiable contract
+above: **OFF == stock Chatwoot (tenant-facing)**, **no duplicated conversations /
+messages / contacts**, **no secret in diff / API / UI / docs / logs**, and **no real
+Meta/WhatsApp call** unless explicitly approved — plus **runtime / MCP evidence** for
+any UI-visible change. Allowed final states: **IMPLEMENTATION COMPLETE / QA PASS /
+PASS-BUT-BLOCKED / FAIL**.
+
 ## Source of truth / ownership
 
 - **Inbound routing:** native `Webhooks::WhatsappEventsJob` resolves the channel by payload metadata; the registry is
