@@ -1,6 +1,6 @@
 <%= form_with model: @setup, url: url, method: method do |form| %>
   <% if @setup.errors.any? %>
-    <div class="mb-6 text-sm text-red-400">
+    <div class="bw-error-state" style="margin-bottom: 16px;">
       <ul class="list-disc pl-4">
         <% @setup.errors.full_messages.each do |message| %>
           <li><%= message %></li>
@@ -9,70 +9,52 @@
     </div>
   <% end %>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :account_id, 'Account ID' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.number_field :account_id, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :account_id, 'Account ID', class: 'bw-label' %>
+    <%= form.number_field :account_id, class: 'bw-input' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :inbox_id, 'Inbox ID (optional)' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.number_field :inbox_id, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :inbox_id, 'Inbox ID (optional)', class: 'bw-label' %>
+    <%= form.number_field :inbox_id, class: 'bw-input' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :channel_whatsapp_id, 'WhatsApp Channel ID (optional)' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.number_field :channel_whatsapp_id, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :channel_whatsapp_id, 'WhatsApp Channel ID (optional)', class: 'bw-label' %>
+    <%= form.number_field :channel_whatsapp_id, class: 'bw-input' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :setup_status, 'Setup Status' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.select :setup_status,
-        Bloomwire::WhatsappSetup::SETUP_STATUSES.map { |status| [status.titleize, status] },
-        {}, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :setup_status, 'Setup Status', class: 'bw-label' %>
+    <%= form.select :setup_status,
+      Bloomwire::WhatsappSetup::SETUP_STATUSES.map { |status| [status.titleize, status] },
+      {}, class: 'bw-select' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :waba_id, 'WABA ID (non-secret)' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.text_field :waba_id, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :waba_id, 'WABA ID (non-secret)', class: 'bw-label' %>
+    <%= form.text_field :waba_id, class: 'bw-input' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :phone_number_id, 'Phone Number ID (non-secret)' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.text_field :phone_number_id, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :phone_number_id, 'Phone Number ID (non-secret)', class: 'bw-label' %>
+    <%= form.text_field :phone_number_id, class: 'bw-input' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :display_phone_number, 'Display Phone Number' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.text_field :display_phone_number, class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :display_phone_number, 'Display Phone Number', class: 'bw-label' %>
+    <%= form.text_field :display_phone_number, class: 'bw-input' %>
   </div>
 
-  <div class="flex mb-6">
-    <div class="field-unit__label"><%= form.label :status_reason, 'Status Reason / Notes' %></div>
-    <div class="-mt-2 field-unit__field">
-      <%= form.text_area :status_reason, rows: 3, class: 'mt-2 border border-slate-100 p-1 rounded-md w-96' %>
-    </div>
+  <div class="bw-field">
+    <%= form.label :status_reason, 'Status Reason / Notes', class: 'bw-label' %>
+    <%= form.text_area :status_reason, rows: 3, class: 'bw-input' %>
   </div>
 
-  <p class="mb-6 text-xs italic text-slate-400">
+  <p class="bw-help" style="margin-bottom: 20px;">
     Secrets (API key / webhook verify token) are never entered or stored here &mdash; they live in the
     WhatsApp channel configuration and stay protected by Bloomwire privacy hardening.
   </p>
 
-  <div class="form-actions">
-    <%= form.submit 'Save setup mapping' %>
-  </div>
+  <%= form.submit 'Save setup mapping', class: 'bw-btn bw-btn--primary' %>
 <% end %>

@@ -1,51 +1,50 @@
 <% content_for(:title) do %>
   WhatsApp Setup Requests
 <% end %>
+<% content_for(:breadcrumb) do %>
+  <%= bw_crumbs('Bloomwire', ['WhatsApp Setups', super_admin_bloomwire_whatsapp_setups_path], 'WhatsApp Requests') %>
+<% end %>
 
-<header class="main-content__header" role="banner">
-  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
-</header>
+<div class="bw-page-head">
+  <div>
+    <h1 class="bw-page-title">WhatsApp Requests</h1>
+    <p class="bw-page-subtitle">
+      Managed WhatsApp setup requests from business accounts. Ops works each request through its status and, when
+      ready, links it to a setup mapping. Credentials are never part of this request flow.
+    </p>
+  </div>
+</div>
 
-<section class="main-content__body">
-  <p class="mb-6 text-sm text-slate-500">
-    Managed WhatsApp setup requests from business accounts. Bloomwire Ops works each request through its status
-    and, when ready, links it to a WhatsApp setup mapping. Credentials are never part of this request flow.
-  </p>
-
+<div class="bw-card" style="padding: 0; overflow: hidden;">
   <% if @requests.empty? %>
-    <p class="text-sm text-slate-400">No managed WhatsApp setup requests yet.</p>
+    <div class="bw-empty">
+      <span class="bw-empty__icon"><svg width="22" height="22"><use xlink:href="#icon-message-line" /></svg></span>
+      <p class="bw-empty__title">No setup requests yet</p>
+      <p class="bw-empty__text">Managed WhatsApp setup requests from business accounts will appear here.</p>
+    </div>
   <% else %>
-    <table class="w-full text-sm text-left">
-      <thead class="text-xs uppercase text-slate-500 border-b border-slate-100">
+    <table class="bw-table">
+      <thead>
         <tr>
-          <th class="py-2 pr-4">ID</th>
-          <th class="py-2 pr-4">Account</th>
-          <th class="py-2 pr-4">Requested by</th>
-          <th class="py-2 pr-4">Status</th>
-          <th class="py-2 pr-4">Reason</th>
-          <th class="py-2 pr-4">Setup mapping</th>
-          <th class="py-2 pr-4">Requested</th>
-          <th class="py-2 pr-4">Updated</th>
-          <th class="py-2 pr-4"></th>
+          <th>ID</th><th>Account</th><th>Requested by</th><th>Status</th><th>Reason</th>
+          <th>Setup mapping</th><th>Requested</th><th>Updated</th><th></th>
         </tr>
       </thead>
       <tbody>
         <% @requests.each do |request| %>
-          <tr class="border-b border-slate-50">
-            <td class="py-2 pr-4"><%= request.id %></td>
-            <td class="py-2 pr-4"><%= request.account_id %></td>
-            <td class="py-2 pr-4"><%= request.requested_by_id || '—' %></td>
-            <td class="py-2 pr-4"><%= request.status.titleize %></td>
-            <td class="py-2 pr-4"><%= request.status_reason.presence || '—' %></td>
-            <td class="py-2 pr-4"><%= request.bloomwire_whatsapp_setup_id || 'Pending' %></td>
-            <td class="py-2 pr-4"><%= request.created_at.to_fs(:short) %></td>
-            <td class="py-2 pr-4"><%= request.updated_at.to_fs(:short) %></td>
-            <td class="py-2 pr-4">
-              <%= link_to 'View', super_admin_bloomwire_whatsapp_setup_request_path(request), class: 'text-woot-500' %>
-            </td>
+          <tr>
+            <td><%= request.id %></td>
+            <td><%= request.account_id %></td>
+            <td><%= request.requested_by_id || '—' %></td>
+            <td><%= bw_status_badge(request.status) %></td>
+            <td><%= request.status_reason.presence || '—' %></td>
+            <td><%= request.bloomwire_whatsapp_setup_id || 'Pending' %></td>
+            <td class="whitespace-nowrap"><%= request.created_at.to_fs(:short) %></td>
+            <td class="whitespace-nowrap"><%= request.updated_at.to_fs(:short) %></td>
+            <td><%= link_to 'View', super_admin_bloomwire_whatsapp_setup_request_path(request), class: 'bw-link' %></td>
           </tr>
         <% end %>
       </tbody>
     </table>
   <% end %>
-</section>
+</div>

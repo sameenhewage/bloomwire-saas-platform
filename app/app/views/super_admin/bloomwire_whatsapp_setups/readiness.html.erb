@@ -1,6 +1,10 @@
 <% content_for(:title) do %>
   WhatsApp Real-Hop Readiness — Setup #<%= @setup.id %>
 <% end %>
+<% content_for(:breadcrumb) do %>
+  <%= bw_crumbs('Bloomwire', ['WhatsApp Setups', super_admin_bloomwire_whatsapp_setups_path],
+                ["Setup ##{@setup.id}", super_admin_bloomwire_whatsapp_setup_path(@setup)], 'Readiness') %>
+<% end %>
 
 <% groups = {
   'feature_toggles' => 'Feature toggles',
@@ -10,14 +14,15 @@
   'callback_url'    => 'Callback URL'
 } %>
 
-<header class="main-content__header" role="banner">
-  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+<div class="bw-page-head">
   <div>
-    <%= link_to 'Back to setup', super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button button--secondary' %>
+    <h1 class="bw-page-title">Real-Hop Readiness</h1>
+    <p class="bw-page-subtitle">Setup #<%= @setup.id %> — operational readiness checklist (read-only).</p>
   </div>
-</header>
+  <%= link_to 'Back to setup', super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'bw-btn bw-btn--secondary' %>
+</div>
 
-<section class="main-content__body">
+<div class="bw-card">
   <% blocked = @readiness[:status] == 'blocked' %>
   <div class="mb-6 p-4 rounded border <%= blocked ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50' %>"
        data-overall-status="<%= @readiness[:status] %>">
@@ -125,4 +130,4 @@
           Meta dashboard access, and a physical test phone are available.</li>
     </ul>
   </div>
-</section>
+</div>
