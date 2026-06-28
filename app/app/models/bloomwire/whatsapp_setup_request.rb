@@ -68,6 +68,20 @@ class Bloomwire::WhatsappSetupRequest < ApplicationRecord
     ACTIVE_STATUSES.include?(status)
   end
 
+  # Phase 12D: non-secret, business-facing reflection of the linked Ops setup mapping's progress. Derived
+  # ONLY from the mapping's non-secret setup_status — never a credential, raw routing id, or internal record
+  # id. Returns 'unlinked' until Ops links a Bloomwire::WhatsappSetup. Keeps the request (Ops-workflow axis)
+  # and the setup (technical-readiness axis) separate while letting the account API surface overall progress.
+  def account_facing_setup_state
+    return 'unlinked' if bloomwire_whatsapp_setup_id.blank?
+
+    case bloomwire_whatsapp_setup&.setup_status
+    when 'ready_for_webhook' then 'ready'
+    when 'blocked' then 'blocked'
+    else 'in_progress' # pending / configured (or a not-yet-loaded link)
+    end
+  end
+
   private
 
   # The optionally-linked setup mapping must belong to the SAME account as the request — Ops must not link one
