@@ -82,13 +82,11 @@ class Bloomwire::CustomerProvisioningService
   end
 
   def create_account_and_owner
-    @owner, @account = AccountBuilder.new(
-      account_name: @account_name,
-      email: @owner_email,
-      user_full_name: @owner_name,
-      user_password: temp_password,
-      confirmed: true # confirmed => no Devise confirmation email; AccountUser is administrator, no inviter
-    ).perform
+    # Resolve the owner first (create new / confirm existing unconfirmed — never emailing), then let
+    # AccountBuilder create the account and link this user as administrator. Passing user: makes AccountBuilder
+    # reuse the existing user instead of raising UserExists on an already-registered email.
+    @owner = find_or_create_confirmed_user(@owner_email, name: @owner_name)
+    _user, @account = AccountBuilder.new(account_name: @account_name, email: @owner_email, user: @owner).perform
   end
 
   def create_agents
@@ -103,16 +101,32 @@ class Bloomwire::CustomerProvisioningService
     end
   end
 
-  # Mirrors AgentBuilder/Seeders::AccountSeeder but with skip_confirmation! so no invitation email is sent.
-  def find_or_create_confirmed_user(email)
+  # Resolves a User for the owner/agent flows without ever sending an email:
+  # - existing confirmed user   => returned unchanged
+  # - existing unconfirmed user => confirmed in place (no email), then returned
+  # - new user                  => created with a temp password + skip_confirmation! (no email)
+  def find_or_create_confirmed_user(email, name: nil)
     existing = User.from_email(email)
-    return existing if existing
+    if existing
+      confirm_without_email(existing) unless existing.confirmed?
+      return existing
+    end
 
     password = temp_password
-    user = User.new(email: email, name: email.split('@').first, password: password, password_confirmation: password)
+    user = User.new(email: email, name: name.presence || email.split('@').first,
+                    password: password, password_confirmation: password)
     user.skip_confirmation!
     user.save!
     user
+  end
+
+  # Marks an existing user confirmed WITHOUT dispatching any email. A normal save of an unconfirmed user
+  # re-triggers Devise's confirmation mailer, so we set confirmed_at via update_column to skip callbacks
+  # (and validations) entirely — confirmed? only reads confirmed_at.
+  def confirm_without_email(user)
+    # rubocop:disable Rails/SkipsModelValidations
+    user.update_column(:confirmed_at, Time.current)
+    # rubocop:enable Rails/SkipsModelValidations
   end
 
   # Credential-less shell: no api_key (entered later via the S2 credential page). validate: false skips the

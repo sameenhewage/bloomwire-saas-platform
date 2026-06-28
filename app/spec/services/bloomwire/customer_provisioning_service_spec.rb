@@ -4,6 +4,16 @@ require 'rails_helper'
 # agents + a credential-less WhatsApp shell channel + inbox + Bloomwire::WhatsappSetup mapping, in one
 # transaction, with NO Meta calls, NO access token, and NO invitation emails. Fake values only.
 RSpec.describe Bloomwire::CustomerProvisioningService do
+  include ActiveJob::TestHelper
+
+  # Counts only the mail jobs enqueued by the given block (clears the queue first so fixture-created
+  # unconfirmed users' confirmation mails don't leak into the count).
+  def mail_jobs_enqueued_by
+    clear_enqueued_jobs
+    yield
+    enqueued_jobs.count { |job| job[:job].to_s.include?('Mail') }
+  end
+
   let(:base_attrs) do
     {
       account_name: 'Aroma Flora',
@@ -21,12 +31,13 @@ RSpec.describe Bloomwire::CustomerProvisioningService do
 
   describe 'happy path' do
     it 'creates account + confirmed admin owner with no invitation email' do
-      result = provision
-      expect(result[:account]).to be_persisted
+      result = nil
+      mail_count = mail_jobs_enqueued_by { result = provision }
       owner_au = AccountUser.find_by(account: result[:account], user: result[:owner])
+      expect(result[:account]).to be_persisted
       expect(owner_au.role).to eq('administrator')
       expect(result[:owner].confirmed?).to be(true) # confirmed => Devise sends nothing
-      expect(ActionMailer::Base.deliveries).to be_empty
+      expect(mail_count).to eq(0)
     end
 
     it 'creates a credential-less whatsapp_cloud shell channel (no api_key)' do
@@ -64,19 +75,71 @@ RSpec.describe Bloomwire::CustomerProvisioningService do
 
   describe 'agents' do
     it 'creates confirmed agents (no email), links them as agents, and adds them to the inbox' do
-      result = provision(agent_emails: 'a1@example.com, a2@example.com')
+      result = nil
+      mail_count = mail_jobs_enqueued_by { result = provision(agent_emails: 'a1@example.com, a2@example.com') }
       expect(result[:agents].map(&:email)).to contain_exactly('a1@example.com', 'a2@example.com')
       result[:agents].each do |agent|
         expect(agent.confirmed?).to be(true)
         expect(AccountUser.find_by(account: result[:account], user: agent).role).to eq('agent')
         expect(InboxMember.exists?(inbox: result[:inbox], user: agent)).to be(true)
       end
-      expect(ActionMailer::Base.deliveries).to be_empty
+      expect(mail_count).to eq(0)
     end
 
     it 'skips an agent email that duplicates the owner' do
       result = provision(agent_emails: 'owner@example.com')
       expect(result[:agents]).to be_empty
+    end
+  end
+
+  describe 'existing users (confirm in place, never email)' do
+    it 'confirms an existing unconfirmed agent, links them, and adds them to the inbox' do
+      agent = create(:user, skip_confirmation: false, email: 'existing-agent@example.com')
+      expect(agent.confirmed?).to be(false)
+
+      result = provision(agent_emails: agent.email)
+
+      expect(agent.reload.confirmed?).to be(true)
+      expect(AccountUser.find_by(account: result[:account], user: agent).role).to eq('agent')
+      expect(InboxMember.exists?(inbox: result[:inbox], user: agent)).to be(true)
+    end
+
+    it 'confirms an existing unconfirmed owner and links them as administrator' do
+      owner = create(:user, skip_confirmation: false, email: 'existing-owner@example.com')
+      expect(owner.confirmed?).to be(false)
+
+      result = provision(owner_email: owner.email)
+
+      expect(owner.reload.confirmed?).to be(true)
+      expect(AccountUser.find_by(account: result[:account], user: owner).role).to eq('administrator')
+    end
+
+    it 'sends no email when confirming existing unconfirmed owner + agent' do
+      owner = create(:user, skip_confirmation: false, email: 'existing-owner@example.com')
+      agent = create(:user, skip_confirmation: false, email: 'existing-agent@example.com')
+
+      expect(mail_jobs_enqueued_by { provision(owner_email: owner.email, agent_emails: agent.email) }).to eq(0)
+    end
+
+    it 'leaves an existing confirmed user confirmed (no change, no email)' do
+      user = create(:user, email: 'already-confirmed@example.com') # factory confirms by default
+      original_confirmed_at = user.confirmed_at
+
+      expect(mail_jobs_enqueued_by { provision(agent_emails: user.email) }).to eq(0)
+      expect(user.reload.confirmed?).to be(true)
+      expect(user.confirmed_at).to be_within(1.second).of(original_confirmed_at)
+    end
+
+    it 'makes no graph.facebook.com call when linking existing users' do
+      agent = create(:user, skip_confirmation: false, email: 'existing-agent@example.com')
+      provision(agent_emails: agent.email)
+      expect(a_request(:any, /graph\.facebook\.com/)).not_to have_been_made
+    end
+
+    it 'stores no api_key/token on the shell channel when linking existing users' do
+      agent = create(:user, skip_confirmation: false, email: 'existing-agent@example.com')
+      result = provision(agent_emails: agent.email)
+      expect(result[:channel].provider_config).not_to have_key('api_key')
     end
   end
 
