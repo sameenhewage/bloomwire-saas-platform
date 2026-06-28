@@ -2,6 +2,12 @@ class ActionCableBroadcastJob < ApplicationJob
   queue_as :critical
   include Events::Types
 
+  # Bloomwire Phase 13D: `data` is the realtime DTO (for message events it carries the contact phone + name),
+  # and `members` are pubsub tokens. ActiveJob's default arg logging would print them in cleartext in the
+  # enqueue/perform log lines for every broadcast — PII in logs. Suppress argument logging for this job only;
+  # the job still receives members/event/data and broadcasts (logging-only, no behavior change).
+  self.log_arguments = false
+
   CONVERSATION_UPDATE_EVENTS = [
     CONVERSATION_READ,
     CONVERSATION_UPDATED,

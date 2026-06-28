@@ -1,5 +1,10 @@
 class Webhooks::WhatsappEventsJob < MutexApplicationJob
   queue_as :low
+  # Bloomwire Phase 13D: the job argument is the raw Meta webhook payload (customer wa_id/phone, profile name,
+  # routing phone_number_id). ActiveJob's default arg logging would print it in cleartext in the enqueue/perform
+  # log lines — PII in logs. Suppress argument logging for this job only; the job still receives + processes the
+  # full payload, so behavior is unchanged (logging-only). Secrets are not in this payload.
+  self.log_arguments = false
   # Retry budget (19 × 2s = 38s) must exceed the 30s lock TTL set in `perform`, otherwise
   # a webhook that arrives just after the lock is acquired can exhaust retries before the
   # holder finishes and silently drop its message.
