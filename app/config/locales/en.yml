@@ -36,6 +36,7 @@ en:
     account_control_plane_restricted: 'Account administration is managed by Bloomwire Ops. Please contact support.'
     provider_setup_restricted: 'Provider and channel setup is managed by Bloomwire Ops. Please contact support.'
     bot_management_restricted: 'Bot management is managed by Bloomwire Ops. Please contact support.'
+    platform_admin_required: 'This account is not authorized for the Bloomwire platform console. Please contact support.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'

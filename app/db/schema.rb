@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_26_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_28_000000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -259,6 +259,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_26_000000) do
     t.datetime "updated_at", null: false
     t.boolean "active", default: true, null: false
     t.index ["account_id"], name: "index_automation_rules_on_account_id"
+  end
+
+  create_table "bloomwire_platform_admins", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "role", default: 1, null: false
+    t.boolean "enabled", default: true, null: false
+    t.bigint "approved_by_id"
+    t.datetime "approved_at"
+    t.datetime "revoked_at"
+    t.text "reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["approved_by_id"], name: "index_bloomwire_platform_admins_on_approved_by_id"
+    t.index ["user_id"], name: "index_bloomwire_platform_admins_on_user_id", unique: true
   end
 
   create_table "bloomwire_whatsapp_setup_requests", force: :cascade do |t|
@@ -1378,6 +1392,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_26_000000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "bloomwire_platform_admins", "users", column: "approved_by_id", on_delete: :nullify
+  add_foreign_key "bloomwire_platform_admins", "users", on_delete: :cascade
   add_foreign_key "bloomwire_whatsapp_setup_requests", "accounts"
   add_foreign_key "bloomwire_whatsapp_setup_requests", "bloomwire_whatsapp_setups"
   add_foreign_key "bloomwire_whatsapp_setup_requests", "users", column: "requested_by_id"
