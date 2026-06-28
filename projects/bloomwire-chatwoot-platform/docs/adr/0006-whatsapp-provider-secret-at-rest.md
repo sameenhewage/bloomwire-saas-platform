@@ -1,7 +1,10 @@
 # ADR-0006 — WhatsApp Provider Secret-at-Rest (decision gate)
 
-- Status: **Proposed — DECISION GATE (no implementation)**. Resolves the secret-at-rest gate flagged in
-  ADR-0003 / CONTEXT.md ("encrypt or accept+document").
+- Status: **Accepted — Option A implemented in Phase 13B.1.** `Channel::Whatsapp` now declares
+  `encrypts :provider_config if Chatwoot.encryption_configured?` (commit on `feature/bloomwire-phase-13b-…`).
+  The model/code change is done and tested; the **production rollout** (provision AR encryption keys +
+  re-encrypt legacy rows) remains a deliberate ops step (see "Remaining for production" below). Originally
+  raised as a decision gate resolving ADR-0003 / CONTEXT.md ("encrypt or accept+document").
 - Extends: ADR-0001…ADR-0005 (never overrides).
 - Scope: inspect where WhatsApp provider secrets live, decide whether the existing repo pattern supports safe
   encryption, and record the decision. **No secrets moved, no schema change, no new secret columns, no
@@ -54,22 +57,29 @@ question is not "is there a pattern" but "can it be applied to WhatsApp *safely 
 - **C — Accept + document (interim)**: keep current plaintext until keys are provisioned and a deliberate
   rollout is approved.
 
-## Recommendation
-**Option A** is the smallest path that reuses the approved pattern and should be the chosen implementation —
-**but only as a deliberate, separately-approved slice**, because it requires encryption keys + a
-`support_unencrypted_data` transition + a backfill + JSONB-encryption test coverage. Per the Phase 12H hard
-stop (storage redesign / backfill ⇒ record the gate), **it is NOT implemented here**. Interim posture: **Option C**
-(documented acceptance) for test/non-production credentials only.
+## Recommendation (chosen)
+**Option A** — the smallest path that reuses the approved pattern. **Implemented in Phase 13B.1**:
+`encrypts :provider_config if Chatwoot.encryption_configured?` on `Channel::Whatsapp`, non-deterministic,
+relying on the already-global `support_unencrypted_data = true` transition. JSONB-encryption is covered by
+`spec/models/channel/whatsapp_provider_config_encryption_spec.rb` (round-trip with/without keys; "no plaintext
+at rest" + legacy-plaintext backfill proven with ephemeral keys). With no keys configured (default), the
+declaration is skipped → **OFF == stock plaintext jsonb**, so nothing changes until keys are provisioned.
 
-## What is blocked until this decision is implemented
-- **Production managed onboarding of real customer WhatsApp secrets** at scale (do not load real customer
-  `api_key`s into plaintext `provider_config` in production before Option A ships).
-- **A secret-entry Ops UI** (architecture "Phase 4" Ops channel creation) — must not accept real Meta
-  credentials into plaintext at rest; blocked on Option A.
-- **Not blocked:** a single operator-controlled **test-number live hop** (Phase 12G) with the documented
+## Remaining for production (deliberate ops steps — not code)
+1. **Provision AR encryption keys** in the target env (`ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY` /
+   `…_DETERMINISTIC_KEY` / `…_KEY_DERIVATION_SALT`) so `Chatwoot.encryption_configured?` is true.
+2. **Backfill** existing rows by re-saving each `Channel::Whatsapp` so plaintext `provider_config` is
+   re-encrypted (a controlled data op; `save!(validate: false)` avoids the remote credential re-check). New
+   writes encrypt automatically; `support_unencrypted_data` keeps legacy rows readable until then.
+
+## What is unblocked vs still gated
+- **Unblocked (code):** the encryption itself ships in the Phase 13B PR.
+- **Still gated on the ops steps above:** loading **real customer** `api_key`s at scale and any secret-entry
+  Ops UI in production — do this only after keys are provisioned and the backfill has run.
+- **Not blocked:** a single operator-controlled **test-number live hop** (Phase 12G/13C) with the documented
   interim risk (test token, rotatable), since no production customer secret is at rest.
 
 ## Decision-gate status
-No code, schema, migration, backfill, or secret movement in this ADR. Implementing Option A requires explicit
-approval plus a transition + backfill plan and JSONB-encryption tests. This ADR records the gate and the
-recommended direction so the choice is deliberate.
+**Resolved.** Option A is implemented in code (Phase 13B.1) with JSONB-encryption tests. No schema change, no
+new secret columns, no secret-entry UI, and no automatic backfill in code (backfill is the deliberate ops step
+above). Production rollout proceeds once the encryption keys are provisioned.
