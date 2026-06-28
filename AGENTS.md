@@ -235,6 +235,94 @@ project.** Keep at most a one-line illustrative example in the global files.
 
 ---
 
+## Strict QA gate (mandatory)
+
+**No task, slice, phase, or PR is `PASS` / complete / merge-ready until an
+independent strict-QA pass has verified it.** This gate sits on top of the
+Engineering rules above and enforces the Final PASS Report Standard (rule 11). It
+is **not optional** and applies to every project and every agent.
+
+### 1. Task completion is not QA completion
+- A builder / implementation agent may only say **"IMPLEMENTATION COMPLETE"** —
+  never "PASS", "done", or "merge-ready".
+- Only a **QA agent** may say **"QA PASS"**, and only after **independently**
+  verifying the work — it must not trust the builder's claims.
+- Only **after** QA PASS may the orchestrator declare **"phase PASS"** or
+  **"merge-ready"**.
+
+### 2. Mandatory QA after every task / slice
+Before any commit, and before moving to the next slice, a QA gate must run and
+cover:
+- **Source / diff check** — read the real diff; every changed line is intended.
+- **Tests + exact command output** — paste the real command and its result
+  (e.g. `N examples, 0 failures`), not a paraphrase.
+- **Security / permission check** — backend authorization proven for the change.
+- **No-secret check** — no secret in diff, command output, logs, or docs.
+- **Feature-OFF behavior check** — with the toggle OFF, behavior is stock/baseline.
+- **No external / live-API-call proof** where applicable (no real Meta/WhatsApp).
+- **Runtime / MCP or rendered-DOM proof** for any UI-visible change.
+- **Regression impact check** — touched controllers / components / areas still pass.
+
+### 3. Mandatory strict QA after every phase
+Before pushing, opening a PR, or merging a PR, a **separate** QA pass must verify:
+- PR / task scope matches the report.
+- All changed files are expected.
+- No unrelated or untracked files are included.
+- Required specs reproduce locally.
+- RuboCop / lint passes.
+- UI / runtime evidence exists if UI changed.
+- Backend authorization is proven.
+- No secrets in diff / API / UI / docs / logs.
+- No real Meta/WhatsApp calls unless explicitly approved.
+- Bloomwire OFF behavior remains stock / inert.
+- No duplicated Chatwoot conversations / messages / contacts.
+- The report makes **no fake PASS claims**.
+- The merge-gate status is described correctly — **conflict-free** and
+  **review/status-blocked** are different states and must not be conflated.
+
+### 4. QA sub-agents for large phases
+For a large phase batch, the orchestrator must assign dedicated QA sub-agents:
+- **Source / Diff QA Agent**
+- **Test QA Agent**
+- **Security / Privacy QA Agent**
+- **Runtime / UI MCP QA Agent**
+- **Docs / PR QA Agent**
+- **Merge-Gate QA Agent**
+
+### 5. PASS wording standard
+The only allowed final states are:
+- **IMPLEMENTATION COMPLETE** — code / docs done, QA not yet complete.
+- **QA PASS** — independent QA passed.
+- **PASS-BUT-BLOCKED** — QA passed, but branch protection / review / status blocks
+  the merge.
+- **FAIL** — any required evidence is missing, or a test / security / runtime check
+  failed.
+
+### 6. No fake PASS
+Never claim:
+- **runtime PASS** without runtime / MCP / rendered-DOM evidence,
+- **live Meta/WhatsApp PASS** without real human-operated evidence,
+- **security PASS** without backend authorization proof,
+- **merge-ready** when GitHub branch protection / review / status is blocked.
+
+### 7. QA report format
+Every QA report must include:
+- **Verdict:** QA PASS / PASS-BUT-BLOCKED / FAIL
+- **Files read**
+- **Files changed**
+- **Commands run**
+- **Test counts**
+- **Runtime / MCP evidence** (or the reason it is not applicable)
+- **Security proof**
+- **No-secret proof**
+- **Feature-OFF proof**
+- **No-real-external-call proof**
+- **Regression proof**
+- **Remaining blockers**
+- **What was not verified**
+
+---
+
 ## Project bootstrap rule
 
 Every generated project under `projects/<project-name>/` must start from a
@@ -284,7 +372,7 @@ jumps straight to implementation without scope and context.
 | Solution Architect Agent | Thinks about boundaries, data ownership, auth, tenancy, scalability. |
 | Prototype Agent | Builds disposable prototypes only when requested. |
 | Fullstack Builder Agent | Implements one vertical slice at a time. |
-| QA Review Agent | Reviews changes, outputs PASS / FAIL with reasons. |
+| QA Review Agent | Independently verifies a slice/phase against the **Strict QA gate**; outputs **QA PASS / PASS-BUT-BLOCKED / FAIL** with evidence. A builder's own claim never counts as QA PASS. |
 | Handoff Agent | Summarizes work, files, tests, risks, next steps. |
 
 Full definitions: see `.claude/agents/`.
@@ -306,6 +394,8 @@ Team docs: see `docs/agents/`.
 - Branch/commit/PR rules were followed; no direct protected-branch push and no
   merge without explicit user approval.
 - Report follows the **Final PASS Report Standard** (rule 11).
+- An **independent QA gate** verified the work (see "Strict QA gate"); a builder's
+  own "implementation complete" is **not** QA PASS.
 
 ---
 

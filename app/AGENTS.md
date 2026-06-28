@@ -19,6 +19,25 @@
 - **rbenv setup**: Before running any `bundle` or `rspec` commands, init rbenv in your shell (`eval "$(rbenv init -)"`) so the correct Ruby/Bundler versions are used
 - Always prefer `bundle exec` for Ruby CLI tasks (rspec, rake, rubocop, etc.)
 
+## QA gate (Bloomwire)
+
+Before any work is called complete, an **independent QA pass must verify it** — see
+root `AGENTS.md` → **"Strict QA gate (mandatory)"** (the canonical gate). A builder
+may only say **"IMPLEMENTATION COMPLETE"**; only QA may say **"QA PASS"**, and only
+the orchestrator (after QA PASS) may say **"phase PASS" / "merge-ready"**.
+
+QA must paste **exact command output** (cwd `app/`, after `eval "$(rbenv init -)"`):
+- Tests: `bundle exec rspec <paths>` → e.g. `N examples, 0 failures`.
+- Ruby lint: `bundle exec rubocop <changed files>` → `no offenses detected`.
+- Frontend (when touched): `pnpm test` and `pnpm eslint`.
+
+QA must also prove, where applicable: **Bloomwire OFF == stock Chatwoot**, **no
+secrets** in diff / output / logs, **no real Meta/WhatsApp Graph calls** (specs stay
+WebMock-blocked) unless explicitly approved, **runtime / MCP or rendered-DOM proof**
+for UI-visible changes, and **no duplicated** Chatwoot conversations / messages /
+contacts. Allowed final states: **IMPLEMENTATION COMPLETE / QA PASS /
+PASS-BUT-BLOCKED / FAIL**.
+
 ## Code Style
 
 - **Ruby**: Follow RuboCop rules (150 character max line length)

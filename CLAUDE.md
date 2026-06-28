@@ -105,6 +105,28 @@ task. Do not restate or fork them here — read them there. In short:
 
 ---
 
+## Strict QA gate (mandatory)
+
+**`AGENTS.md` → "Strict QA gate (mandatory)" is the canonical gate.** Do not fork
+it here — read it there. In short:
+
+- **Task completion is not QA completion.** You may say **"IMPLEMENTATION
+  COMPLETE"**; only an **independent** QA pass may say **"QA PASS"**; only after QA
+  PASS may the orchestrator say **"phase PASS" / "merge-ready"**.
+- **QA after every task/slice** (before commit) and **strict QA after every phase**
+  (before push / PR / merge): source-diff, tests + **exact** command output,
+  security / permission, no-secret, feature-OFF, no real Meta/WhatsApp call,
+  runtime / MCP proof for UI, and regression checks.
+- **Allowed final states only:** **IMPLEMENTATION COMPLETE**, **QA PASS**,
+  **PASS-BUT-BLOCKED** (QA passed but branch protection / review / status blocks the
+  merge), or **FAIL**.
+- **No fake PASS:** no runtime PASS without runtime/MCP evidence; no live
+  Meta/WhatsApp PASS without real human-operated evidence; no security PASS without
+  backend authorization proof; never "merge-ready" when GitHub protection / review /
+  status is blocked.
+
+---
+
 ## How to respond
 
 - Be concise and practical. Lead with the action or answer.
