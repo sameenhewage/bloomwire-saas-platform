@@ -25,7 +25,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
   describe '#send_message' do
     context 'when called' do
       it 'calls message endpoints for normal messages' do
-        stub_request(:post, 'https://graph.facebook.com/v13.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp',
@@ -40,7 +40,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
       end
 
       it 'calls message endpoints for a reply to messages' do
-        stub_request(:post, 'https://graph.facebook.com/v13.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp',
@@ -141,7 +141,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
                                        { title: 'Sushi', value: 'Sushi' }
                                      ]
                                    })
-        stub_request(:post, 'https://graph.facebook.com/v13.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp', to: '+123456789',
@@ -168,7 +168,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
           sections: [{ rows: %w[Burito Pasta Sushi Salad].map { |i| { id: i, title: i } } }]
         }.to_json
 
-        stub_request(:post, 'https://graph.facebook.com/v13.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp', to: '+123456789',
@@ -216,7 +216,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
 
     context 'when called' do
       it 'calls message endpoints with template params for template messages' do
-        stub_request(:post, 'https://graph.facebook.com/v13.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
           .with(
             body: template_body.to_json
           )
@@ -292,6 +292,41 @@ describe Whatsapp::Providers::WhatsappCloudService do
         with_modified_env WHATSAPP_CLOUD_BASE_URL: 'http://test.com' do
           expect(subject.send(:api_base_path)).to eq('http://test.com')
         end
+      end
+    end
+  end
+
+  describe 'Ability to configure Graph API version (Bloomwire Phase 13B.3)' do
+    let(:phone_number_id) { whatsapp_channel.provider_config['phone_number_id'] }
+
+    context 'when WHATSAPP_CLOUD_API_VERSION is not set' do
+      it 'uses the default api version for the message path' do
+        expect(subject.send(:phone_id_path)).to eq("https://graph.facebook.com/v24.0/#{phone_number_id}")
+      end
+
+      it 'uses the default api version for the media path' do
+        expect(subject.media_url('MEDIA-1')).to eq('https://graph.facebook.com/v24.0/MEDIA-1')
+      end
+    end
+
+    context 'when WHATSAPP_CLOUD_API_VERSION is set' do
+      it 'overrides the default for the message path' do
+        with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v25.0' do
+          expect(subject.send(:phone_id_path)).to eq("https://graph.facebook.com/v25.0/#{phone_number_id}")
+        end
+      end
+
+      it 'overrides the default for the media path' do
+        with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v25.0' do
+          expect(subject.media_url('MEDIA-1')).to eq('https://graph.facebook.com/v25.0/MEDIA-1')
+        end
+      end
+    end
+
+    it 'never includes the api_key/access token in the generated URL' do
+      with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v25.0' do
+        expect(subject.send(:phone_id_path)).not_to include(whatsapp_channel.provider_config['api_key'])
+        expect(subject.media_url('MEDIA-1')).not_to include(whatsapp_channel.provider_config['api_key'])
       end
     end
   end

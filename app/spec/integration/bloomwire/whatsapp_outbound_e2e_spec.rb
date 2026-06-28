@@ -7,7 +7,7 @@ require 'rails_helper'
 #     -> SendReplyJob (CHANNEL_SERVICES dispatch, run inline via perform_enqueued_jobs)
 #     -> Whatsapp::SendOnWhatsappService
 #     -> Channel::Whatsapp#send_message -> Whatsapp::Providers::WhatsappCloudService
-#     -> POST graph.facebook.com/v13.0/<phone_number_id>/messages (WebMock-stubbed)
+#     -> POST graph.facebook.com/v24.0/<phone_number_id>/messages (WebMock-stubbed)
 #     -> returned wamid stored in message.source_id
 #
 # Locks already-implemented behavior. All values are fake; the Graph endpoint is stubbed, and
