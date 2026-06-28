@@ -143,6 +143,29 @@ RSpec.describe Bloomwire::CustomerProvisioningService do
     end
   end
 
+  describe 'owner email validation (standard signup rules preserved despite AccountBuilder user:)' do
+    before do
+      allow(GlobalConfigService).to receive(:load).and_call_original
+      allow(GlobalConfigService).to receive(:load).with('BLOCKED_EMAIL_DOMAINS', '').and_return('gmail.com')
+    end
+
+    it 'rejects a blocked-domain owner email with a ProvisioningError' do
+      expect { provision(owner_email: 'owner@gmail.com') }.to raise_error(described_class::ProvisioningError)
+    end
+
+    it 'creates no Account, Channel shell, or setup mapping when the owner email is rejected' do
+      expect { provision(owner_email: 'owner@gmail.com') }.to raise_error(described_class::ProvisioningError)
+      expect(Account.exists?(name: 'Aroma Flora')).to be(false)
+      expect(Channel::Whatsapp.exists?(phone_number: '+15551239999')).to be(false)
+      expect(Bloomwire::WhatsappSetup.exists?(phone_number_id: 'PNID-S3-1')).to be(false)
+    end
+
+    it 'makes no graph.facebook.com call when rejecting the owner email' do
+      expect { provision(owner_email: 'owner@gmail.com') }.to raise_error(described_class::ProvisioningError)
+      expect(a_request(:any, /graph\.facebook\.com/)).not_to have_been_made
+    end
+  end
+
   describe 'validation + uniqueness (fail closed, no partial records)' do
     it 'raises when a required field is missing and creates nothing' do
       expect { described_class.new(base_attrs.merge(account_name: '')).perform }

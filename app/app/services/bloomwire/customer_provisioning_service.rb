@@ -65,8 +65,18 @@ class Bloomwire::CustomerProvisioningService
       'Business Account ID (WABA ID)' => @business_account_id
     }.each { |label, value| raise ProvisioningError, "#{label} is required" if value.blank? }
 
+    validate_owner_email!
     raise ProvisioningError, 'A WhatsApp channel with this phone number already exists' if channel_phone_taken?
     raise ProvisioningError, 'A WhatsApp setup with this Phone Number ID already exists' if phone_number_id_taken?
+  end
+
+  # Runs the standard Chatwoot signup email validation (format + disposable + blocked-domain) on the owner
+  # email. This is normally done inside AccountBuilder, but we pass user: to AccountBuilder (to reuse/confirm
+  # existing users), which skips it — so we run it here, before any record is created.
+  def validate_owner_email!
+    Account::SignUpEmailValidationService.new(@owner_email).perform
+  rescue CustomExceptions::Account::InvalidEmail => e
+    raise ProvisioningError, "Business owner email is invalid: #{e.message}"
   end
 
   def channel_phone_taken?
