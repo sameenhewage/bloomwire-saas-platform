@@ -1,6 +1,6 @@
 <%= form_with model: @setup, url: url, method: method do |form| %>
   <% if @setup.errors.any? %>
-    <div class="bw-error-state" style="margin-bottom: 16px;">
+    <div class="bw-error-state mb-4">
       <ul class="list-disc pl-4">
         <% @setup.errors.full_messages.each do |message| %>
           <li><%= message %></li>
@@ -51,7 +51,7 @@
     <%= form.text_area :status_reason, rows: 3, class: 'bw-input' %>
   </div>
 
-  <p class="bw-help" style="margin-bottom: 20px;">
+  <p class="bw-help mb-5">
     Secrets (API key / webhook verify token) are never entered or stored here &mdash; they live in the
     WhatsApp channel configuration and stay protected by Bloomwire privacy hardening.
   </p>

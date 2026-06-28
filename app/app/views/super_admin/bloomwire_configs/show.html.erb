@@ -22,7 +22,7 @@
   <div class="bw-card">
     <h2 class="bw-card__title">Master switch</h2>
     <p class="bw-card__subtitle">Bootstrap control — reachable even when OFF. AND-gates every sub-feature below.</p>
-    <div class="bw-field" style="max-width: 320px; margin-bottom: 0;">
+    <div class="bw-field bw-field--sm mb-0">
       <%= form.label "bloomwire_config[#{@master_key}]", 'Bloomwire Mode (master)', class: 'bw-label' %>
       <%= form.select "bloomwire_config[#{@master_key}]",
         [['True', true], ['False', false]],
@@ -34,7 +34,7 @@
   <div class="bw-card">
     <h2 class="bw-card__title">Sub-features</h2>
     <% unless @master_enabled %>
-      <div class="bw-blocked" style="margin-bottom: 16px;">
+      <div class="bw-blocked mb-4">
         <div><span class="bw-blocked__title">Bloomwire Mode is OFF.</span> Sub-features are disabled until the master toggle is ON.</div>
       </div>
     <% end %>
@@ -42,7 +42,7 @@
     <fieldset <%= 'disabled' unless @master_enabled %> class="p-0 m-0 border-0">
       <% @sub_features.each do |feature, key| %>
         <% privacy_locked = @privacy_dependent.include?(feature) && !@privacy_enabled %>
-        <div class="bw-field" style="max-width: 420px;">
+        <div class="bw-field bw-field--md">
           <%= form.label "bloomwire_config[#{key}]", key.delete_prefix('BLOOMWIRE_').titleize, class: 'bw-label' %>
           <%= form.select "bloomwire_config[#{key}]",
             [['True', true], ['False', false]],

@@ -14,10 +14,10 @@
 </div>
 
 <% if @provisioning_error.present? %>
-  <div class="bw-error-state" style="margin-bottom: 16px;"><div><%= @provisioning_error %></div></div>
+  <div class="bw-error-state mb-4"><div><%= @provisioning_error %></div></div>
 <% end %>
 
-<div class="bw-card" style="max-width: 640px;">
+<div class="bw-card bw-card--form">
   <h2 class="bw-card__title">Account &amp; owner</h2>
   <p class="bw-card__subtitle">
     Creates an Account + Business Owner (admin) + optional Staff/Agents + a <strong>credential-less</strong>
@@ -43,7 +43,7 @@
       </div>
     <% end %>
 
-    <p class="bw-help" style="margin-bottom: 20px;">
+    <p class="bw-help mb-5">
       No API key / access token field exists here by design &mdash; credentials are entered only on the
       Channel credentials page and stored encrypted at rest.
     </p>

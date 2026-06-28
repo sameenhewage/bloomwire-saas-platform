@@ -461,6 +461,22 @@ body {
   .bw-flash--alert, .bw-flash--error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
   .bw-flash--warning { background: #fffbeb; border-color: #fde68a; color: #b45309; }
   .bw-flash--info { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+
+  /* ----- Layout / token utilities (reusable; replace former inline styles) ----- */
+  .bw-card--flush { padding: 0; overflow: hidden; }
+  .bw-card--form { max-width: 640px; }
+  .bw-card--form-lg { max-width: 680px; }
+  .bw-field--sm { max-width: 320px; }
+  .bw-field--md { max-width: 420px; }
+  .bw-field--lg { max-width: 520px; }
+  .bw-text-secondary { color: var(--bw-text-secondary); }
+  .bw-text-muted { color: var(--bw-text-muted); }
+  .bw-reset-link { color: inherit; text-decoration: none; }
+
+  /* Definition list (masked key/value rows) */
+  .bw-dl__row { display: flex; padding: 10px 0; border-bottom: 1px solid var(--bw-border-soft); }
+  .bw-dl__key { flex-shrink: 0; color: var(--bw-text-muted); }
+  .bw-dl__value { color: var(--bw-text); }
 }
 
 @keyframes bw-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
