@@ -28,12 +28,17 @@ By default, it renders:
 </head>
 <body class="antialiased w-full h-full">
   <%= render "icons" %>
-  <div class="flex w-full h-full">
+  <%# data-bw-accent is the future customer accent hook; defaults to the Modern Blue platform theme. %>
+  <div class="bw-shell" data-bw-accent="blue">
     <%= render "navigation" -%>
-    <main class="w-full overflow-auto" role="main">
-      <%= render "flashes" -%>
-      <%= yield %>
-    </main>
+    <div class="bw-main">
+      <%= render "header" -%>
+      <main class="bw-content" role="main">
+        <%= render "flashes" -%>
+        <%= yield %>
+      </main>
+      <%= render "footer" -%>
+    </div>
   </div>
   <%= render "javascript" %>
 </body>

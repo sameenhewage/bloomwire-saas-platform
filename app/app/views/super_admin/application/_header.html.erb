@@ -1,0 +1,25 @@
+<%#
+# SuperAdmin top header: breadcrumb (left) + status badges, optional help/runbook link, and avatar (right).
+# Pages can set `content_for(:breadcrumb)` (use the bw_crumbs helper) and `content_for(:help_link)`.
+%>
+<header class="bw-header" role="banner">
+  <nav class="bw-breadcrumb" aria-label="Breadcrumb">
+    <% if content_for?(:breadcrumb) %>
+      <%= yield :breadcrumb %>
+    <% else %>
+      <%= bw_crumbs(content_for?(:title) ? content_for(:title).to_s.strip : controller_name.titleize) %>
+    <% end %>
+  </nav>
+
+  <div class="bw-header__right">
+    <%= yield :help_link if content_for?(:help_link) %>
+
+    <span class="bw-badge <%= bw_bloomwire_mode_on? ? 'bw-badge--success' : 'bw-badge--neutral' %>" data-bloomwire-mode="<%= bw_bloomwire_mode_on? ? 'on' : 'off' %>">
+      <span class="bw-badge__dot"></span>Bloomwire Mode: <%= bw_bloomwire_mode_on? ? 'ON' : 'OFF' %>
+    </span>
+
+    <span class="bw-badge bw-badge--neutral" title="Environment"><%= bw_environment_label.titleize %></span>
+
+    <span class="bw-avatar" title="Signed in as SuperAdmin"><%= bw_admin_initials %></span>
+  </div>
+</header>

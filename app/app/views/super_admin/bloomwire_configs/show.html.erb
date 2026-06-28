@@ -1,65 +1,63 @@
 <% content_for(:title) do %>
   Bloomwire / Unecast Features
 <% end %>
+<% content_for(:breadcrumb) do %>
+  <%= bw_crumbs('Bloomwire', 'Features') %>
+<% end %>
 
-<header class="main-content__header" role="banner">
-  <h1 class="main-content__page-title" id="page-title">
-    <%= content_for(:title) %>
-  </h1>
-</header>
+<div class="bw-page-head">
+  <div>
+    <h1 class="bw-page-title">Bloomwire Features</h1>
+    <p class="bw-page-subtitle">
+      Master switch for the Bloomwire/Unecast layer. While OFF, every sub-feature is inert and tenant-facing
+      behavior is stock Chatwoot. This page is always reachable so the layer can be enabled from the UI.
+    </p>
+  </div>
+  <span class="bw-badge <%= @master_enabled ? 'bw-badge--success' : 'bw-badge--neutral' %>">
+    <span class="bw-badge__dot"></span><%= @master_enabled ? 'Mode ON' : 'Mode OFF' %>
+  </span>
+</div>
 
-<section class="main-content__body">
-  <p class="mb-6 text-sm text-slate-500">
-    Master switch for the Bloomwire/Unecast layer. While the master is <strong>OFF</strong>, every sub-feature is inert
-    and tenant-facing behavior is stock Chatwoot. This page is always reachable so the layer can be enabled from the UI
-    (no out-of-band database edits). Sub-feature controls unlock once the master is <strong>ON</strong>.
-  </p>
-
-  <%= form_with url: super_admin_bloomwire_config_url, method: :post do |form| %>
-    <div class="flex mb-8">
-      <div class="field-unit__label">
-        <%= form.label "bloomwire_config[#{@master_key}]", 'Bloomwire Mode (master)' %>
-      </div>
-      <div class="-mt-2 field-unit__field">
-        <%= form.select "bloomwire_config[#{@master_key}]",
-          [['True', true], ['False', false]],
-          { selected: @master_enabled },
-          class: 'mt-2 border border-slate-100 p-1 rounded-md' %>
-        <p class="pt-2 text-xs italic text-slate-400">
-          Bootstrap control — reachable even when OFF. AND-gates every sub-feature below.
-        </p>
-      </div>
+<%= form_with url: super_admin_bloomwire_config_url, method: :post do |form| %>
+  <div class="bw-card">
+    <h2 class="bw-card__title">Master switch</h2>
+    <p class="bw-card__subtitle">Bootstrap control — reachable even when OFF. AND-gates every sub-feature below.</p>
+    <div class="bw-field bw-field--sm mb-0">
+      <%= form.label "bloomwire_config[#{@master_key}]", 'Bloomwire Mode (master)', class: 'bw-label' %>
+      <%= form.select "bloomwire_config[#{@master_key}]",
+        [['True', true], ['False', false]],
+        { selected: @master_enabled },
+        class: 'bw-select' %>
     </div>
+  </div>
+
+  <div class="bw-card">
+    <h2 class="bw-card__title">Sub-features</h2>
+    <% unless @master_enabled %>
+      <div class="bw-blocked mb-4">
+        <div><span class="bw-blocked__title">Bloomwire Mode is OFF.</span> Sub-features are disabled until the master toggle is ON.</div>
+      </div>
+    <% end %>
 
     <fieldset <%= 'disabled' unless @master_enabled %> class="p-0 m-0 border-0">
-      <% unless @master_enabled %>
-        <p class="mb-6 text-xs italic text-slate-400">Sub-features are disabled until the master toggle is ON.</p>
-      <% end %>
-
       <% @sub_features.each do |feature, key| %>
         <% privacy_locked = @privacy_dependent.include?(feature) && !@privacy_enabled %>
-        <div class="flex mb-8">
-          <div class="field-unit__label">
-            <%= form.label "bloomwire_config[#{key}]", key.delete_prefix('BLOOMWIRE_').titleize %>
-          </div>
-          <div class="-mt-2 field-unit__field">
-            <%= form.select "bloomwire_config[#{key}]",
-              [['True', true], ['False', false]],
-              { selected: Bloomwire::Features.raw_enabled?(feature) },
-              class: 'mt-2 border border-slate-100 p-1 rounded-md',
-              disabled: privacy_locked %>
-            <% if @privacy_dependent.include?(feature) %>
-              <p class="pt-2 text-xs italic text-slate-400">
-                Managed-data feature — requires Privacy hardening ON before it can take effect (fail-closed).
-              </p>
-            <% end %>
-          </div>
+        <div class="bw-field bw-field--md">
+          <%= form.label "bloomwire_config[#{key}]", key.delete_prefix('BLOOMWIRE_').titleize, class: 'bw-label' %>
+          <%= form.select "bloomwire_config[#{key}]",
+            [['True', true], ['False', false]],
+            { selected: Bloomwire::Features.raw_enabled?(feature) },
+            class: 'bw-select',
+            disabled: privacy_locked %>
+          <% if @privacy_dependent.include?(feature) %>
+            <p class="bw-help">Managed-data feature — requires Privacy hardening ON before it can take effect (fail-closed).</p>
+          <% end %>
         </div>
       <% end %>
     </fieldset>
+  </div>
 
-    <div class="form-actions">
-      <%= form.submit 'Submit' %>
-    </div>
-  <% end %>
-</section>
+  <div class="mt-4">
+    <%= form.submit 'Save changes', class: 'bw-btn bw-btn--primary' %>
+  </div>
+<% end %>

@@ -1,40 +1,47 @@
 <% content_for(:title) do %>
   WhatsApp Setup Mapping #<%= @setup.id %>
 <% end %>
+<% content_for(:breadcrumb) do %>
+  <%= bw_crumbs('Bloomwire', ['WhatsApp Setups', super_admin_bloomwire_whatsapp_setups_path], "Setup ##{@setup.id}") %>
+<% end %>
 
-<header class="main-content__header" role="banner">
-  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+<% blocked = @readiness[:status] == 'blocked' %>
+
+<div class="bw-page-head">
   <div>
-    <%= link_to 'Real-hop readiness', readiness_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button' %>
+    <h1 class="bw-page-title">WhatsApp Setup #<%= @setup.id %></h1>
+    <p class="bw-page-subtitle">Status: <%= bw_status_badge(@setup.setup_status) %></p>
+  </div>
+  <div class="flex items-center gap-2 shrink-0">
+    <%= link_to 'Real-hop readiness', readiness_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'bw-btn bw-btn--primary' %>
     <% if @setup.channel_whatsapp_id.present? %>
-      <%= link_to 'Channel credentials', credentials_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button button--secondary ml-2' %>
+      <%= link_to 'Channel credentials', credentials_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'bw-btn bw-btn--secondary' %>
     <% end %>
-    <%= link_to 'Edit', edit_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'button button--secondary ml-2' %>
-    <%= link_to 'Back', super_admin_bloomwire_whatsapp_setups_path, class: 'button button--secondary ml-2' %>
+    <%= link_to 'Edit', edit_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'bw-btn bw-btn--secondary' %>
+    <%= link_to 'Back', super_admin_bloomwire_whatsapp_setups_path, class: 'bw-btn bw-btn--ghost' %>
   </div>
-</header>
+</div>
 
-<section class="main-content__body">
-  <% blocked = @readiness[:status] == 'blocked' %>
-  <div class="mb-6 p-4 rounded border <%= blocked ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50' %>">
-    <p class="text-sm">Operational readiness:
-      <span data-readiness="<%= @readiness[:status] %>" class="font-semibold <%= blocked ? 'text-red-700' : 'text-green-700' %>">
-        <%= blocked ? 'Blocked' : 'Ready' %>
-      </span>
-    </p>
-    <p class="text-sm mt-1">Setup request:
-      <span data-request="<%= @request_linked ? 'linked' : 'unlinked' %>" class="font-semibold">
-        <%= @request_linked ? 'Linked' : 'Unlinked' %>
-      </span>
-    </p>
-    <ul class="mt-2 text-xs text-slate-600">
-      <li>Ready for inbound webhook mapping: <strong><%= @readiness[:ready_for_inbound_mapping] ? 'Ready' : 'Blocked' %></strong></li>
-      <li>Ready for GET verification config: <strong><%= @readiness[:ready_for_get_verification_config] ? 'Ready' : 'Blocked' %></strong></li>
-    </ul>
-    <p class="mt-2 text-xs text-slate-500">Full real-hop checklist on the
-      <%= link_to 'readiness page', readiness_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'text-woot-500' %>.</p>
+<div class="bw-card">
+  <h2 class="bw-card__title">Operational readiness</h2>
+  <div class="flex flex-wrap items-center gap-3 mb-3">
+    <span class="bw-badge <%= blocked ? 'bw-badge--danger' : 'bw-badge--success' %>" data-readiness="<%= @readiness[:status] %>">
+      <%= blocked ? 'Blocked' : 'Ready' %>
+    </span>
+    <span class="bw-badge bw-badge--neutral" data-request="<%= @request_linked ? 'linked' : 'unlinked' %>">
+      Request: <%= @request_linked ? 'Linked' : 'Unlinked' %>
+    </span>
   </div>
+  <ul class="text-sm bw-text-secondary">
+    <li>Ready for inbound webhook mapping: <strong><%= @readiness[:ready_for_inbound_mapping] ? 'Ready' : 'Blocked' %></strong></li>
+    <li>Ready for GET verification config: <strong><%= @readiness[:ready_for_get_verification_config] ? 'Ready' : 'Blocked' %></strong></li>
+  </ul>
+  <p class="bw-help">Full real-hop checklist on the
+    <%= link_to 'readiness page', readiness_super_admin_bloomwire_whatsapp_setup_path(@setup), class: 'bw-link' %>.</p>
+</div>
 
+<div class="bw-card">
+  <h2 class="bw-card__title">Details</h2>
   <dl class="text-sm">
     <% {
       'Account ID' => @setup.account_id,
@@ -46,15 +53,14 @@
       'Display Phone Number (masked)' => @readiness[:masked][:display_phone_number],
       'Status Reason / Notes' => @setup.status_reason
     }.each do |label, value| %>
-      <div class="flex py-2 border-b border-slate-50">
-        <dt class="w-56 text-slate-500"><%= label %></dt>
-        <dd><%= value.presence || '—' %></dd>
+      <div class="bw-dl__row">
+        <dt class="bw-dl__key w-56"><%= label %></dt>
+        <dd class="bw-dl__value"><%= value.presence || '—' %></dd>
       </div>
     <% end %>
   </dl>
-
-  <p class="mt-6 text-xs italic text-slate-400">
+  <p class="bw-help mt-4">
     Credentials (API key / webhook verify token) are stored only on the WhatsApp channel and are intentionally
     not displayed on this Ops surface.
   </p>
-</section>
+</div>

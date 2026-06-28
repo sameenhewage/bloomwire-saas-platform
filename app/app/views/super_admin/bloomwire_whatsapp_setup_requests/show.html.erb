@@ -1,25 +1,30 @@
 <% content_for(:title) do %>
   WhatsApp Setup Request #<%= @request.id %>
 <% end %>
+<% content_for(:breadcrumb) do %>
+  <%= bw_crumbs('Bloomwire', ['WhatsApp Requests', super_admin_bloomwire_whatsapp_setup_requests_path], "Request ##{@request.id}") %>
+<% end %>
 
-<header class="main-content__header" role="banner">
-  <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
+<div class="bw-page-head">
   <div>
-    <%= link_to 'Back', super_admin_bloomwire_whatsapp_setup_requests_path, class: 'button button--secondary' %>
+    <h1 class="bw-page-title">Setup Request #<%= @request.id %></h1>
+    <p class="bw-page-subtitle">Status: <%= bw_status_badge(@request.status) %></p>
   </div>
-</header>
+  <%= link_to 'Back', super_admin_bloomwire_whatsapp_setup_requests_path, class: 'bw-btn bw-btn--ghost' %>
+</div>
 
-<section class="main-content__body">
-  <% if @request.errors.any? %>
-    <div class="mb-4 max-w-lg rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      <ul class="list-disc pl-5">
-        <% @request.errors.full_messages.each do |message| %>
-          <li><%= message %></li>
-        <% end %>
-      </ul>
-    </div>
-  <% end %>
+<% if @request.errors.any? %>
+  <div class="bw-error-state mb-4">
+    <ul class="list-disc pl-5">
+      <% @request.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
 
+<div class="bw-card">
+  <h2 class="bw-card__title">Request details</h2>
   <dl class="text-sm">
     <% {
       'Account ID' => @request.account_id,
@@ -30,54 +35,48 @@
       'Last updated' => @request.updated_at.to_fs(:long),
       'Completed at' => @request.completed_at
     }.each do |label, value| %>
-      <div class="flex py-2 border-b border-slate-50">
-        <dt class="w-56 text-slate-500"><%= label %></dt>
-        <dd><%= value.presence || '—' %></dd>
+      <div class="bw-dl__row">
+        <dt class="bw-dl__key w-56"><%= label %></dt>
+        <dd class="bw-dl__value"><%= value.presence || '—' %></dd>
       </div>
     <% end %>
   </dl>
 
-  <div class="mt-6">
-    <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Setup mapping</h2>
-    <% linked_setup_id = @request.bloomwire_whatsapp_setup_id_in_database %>
-    <% if linked_setup_id.present? %>
-      <p class="text-sm">
-        <%= link_to 'Open setup mapping',
-              super_admin_bloomwire_whatsapp_setup_path(linked_setup_id), class: 'text-woot-500' %>
-        &middot;
-        <%= link_to 'Open real-hop readiness',
-              readiness_super_admin_bloomwire_whatsapp_setup_path(linked_setup_id), class: 'text-woot-500' %>
-      </p>
-    <% else %>
-      <p class="text-sm text-slate-400">Setup mapping is still pending — none linked to this request yet.</p>
-    <% end %>
-  </div>
+  <h2 class="bw-card__title mt-6">Setup mapping</h2>
+  <% linked_setup_id = @request.bloomwire_whatsapp_setup_id_in_database %>
+  <% if linked_setup_id.present? %>
+    <p class="text-sm">
+      <%= link_to 'Open setup mapping', super_admin_bloomwire_whatsapp_setup_path(linked_setup_id), class: 'bw-link' %>
+      &middot;
+      <%= link_to 'Open real-hop readiness', readiness_super_admin_bloomwire_whatsapp_setup_path(linked_setup_id), class: 'bw-link' %>
+    </p>
+  <% else %>
+    <p class="text-sm bw-text-muted">Setup mapping is still pending — none linked to this request yet.</p>
+  <% end %>
+</div>
 
-  <div class="mt-8">
-    <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Update request</h2>
-    <%= form_with url: super_admin_bloomwire_whatsapp_setup_request_path(@request), method: :patch, local: true do |f| %>
-      <div class="mb-3">
-        <label class="block text-slate-500 text-xs mb-1">Status</label>
-        <%= select_tag 'bloomwire_whatsapp_setup_request[status]',
-              options_for_select(Bloomwire::WhatsappSetupRequest::STATUSES.map { |s| [s.titleize, s] }, @request.status),
-              class: 'px-2 py-1 border border-slate-200 rounded text-sm' %>
-      </div>
-      <div class="mb-3">
-        <label class="block text-slate-500 text-xs mb-1">Status reason / notes (non-secret)</label>
-        <%= text_area_tag 'bloomwire_whatsapp_setup_request[status_reason]', @request.status_reason,
-              rows: 3, class: 'w-full max-w-lg px-2 py-1 border border-slate-200 rounded text-sm' %>
-      </div>
-      <div class="mb-3">
-        <label class="block text-slate-500 text-xs mb-1">Linked setup mapping ID (optional)</label>
-        <%= text_field_tag 'bloomwire_whatsapp_setup_request[bloomwire_whatsapp_setup_id]', @request.bloomwire_whatsapp_setup_id,
-              class: 'px-2 py-1 border border-slate-200 rounded text-sm' %>
-      </div>
-      <%= f.submit 'Update request', class: 'button' %>
-    <% end %>
-  </div>
+<div class="bw-card">
+  <h2 class="bw-card__title">Update request</h2>
+  <%= form_with url: super_admin_bloomwire_whatsapp_setup_request_path(@request), method: :patch, local: true do |f| %>
+    <div class="bw-field bw-field--sm">
+      <label class="bw-label">Status</label>
+      <%= select_tag 'bloomwire_whatsapp_setup_request[status]',
+            options_for_select(Bloomwire::WhatsappSetupRequest::STATUSES.map { |s| [s.titleize, s] }, @request.status),
+            class: 'bw-select' %>
+    </div>
+    <div class="bw-field bw-field--lg">
+      <label class="bw-label">Status reason / notes (non-secret)</label>
+      <%= text_area_tag 'bloomwire_whatsapp_setup_request[status_reason]', @request.status_reason, rows: 3, class: 'bw-input' %>
+    </div>
+    <div class="bw-field bw-field--sm">
+      <label class="bw-label">Linked setup mapping ID (optional)</label>
+      <%= text_field_tag 'bloomwire_whatsapp_setup_request[bloomwire_whatsapp_setup_id]', @request.bloomwire_whatsapp_setup_id, class: 'bw-input' %>
+    </div>
+    <%= f.submit 'Update request', class: 'bw-btn bw-btn--primary' %>
+  <% end %>
+</div>
 
-  <p class="mt-6 text-xs italic text-slate-400">
-    Real Meta credentials (app secret / verify token / access token / API key) are never part of this request
-    flow and are never displayed here. Real Meta inbound testing remains a separate, externally-gated step.
-  </p>
-</section>
+<p class="bw-help mt-4">
+  Real Meta credentials (app secret / verify token / access token / API key) are never part of this request
+  flow and are never displayed here. Real Meta inbound testing remains a separate, externally-gated step.
+</p>

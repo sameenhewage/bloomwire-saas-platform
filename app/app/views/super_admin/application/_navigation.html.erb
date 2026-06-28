@@ -1,12 +1,8 @@
 <%#
-# Navigation
-
-This partial is used to display the navigation in Administrate.
-By default, the navigation contains navigation links
-for all resources in the admin dashboard,
-as defined by the routes in the `admin/` namespace
+# SuperAdmin sidebar navigation (Bloomwire Modern Blue shell).
+# SUPER ADMIN: Dashboard + the Administrate-managed resources (auto-listed, skip-list preserved).
+# BLOOMWIRE: WhatsApp Setups group + Bloomwire Features (+ future placeholders). Platform tools + Sign out.
 %>
-
 <%= vite_client_tag %>
 <%= vite_javascript_tag 'superadmin_pages' %>
 
@@ -18,47 +14,78 @@ as defined by the routes in the `admin/` namespace
     agent_bots: 'icon-robot-line',
     platform_banners: 'icon-megaphone-line',
   }
+  hidden_resources = %w[account_users access_tokens installation_configs dashboard devise/sessions app_configs
+                        bloomwire_configs bloomwire_whatsapp_setups bloomwire_whatsapp_setup_requests
+                        bloomwire_customer_provisionings instance_statuses settings push_diagnostics]
 %>
 
-<div class="border-slate-100 border-r w-56 flex-shrink-0 justify-between h-full flex flex-col" role="navigation">
-  <div>
-    <div class="flex mx-4 mb-4 border-slate-100 border-b py-6">
-      <%= link_to image_tag('/brand-assets/logo_thumbnail.svg', alt: 'Chatwoot Admin Dashboard', class: 'h-10'), super_admin_root_url %>
-      <div class="flex flex-col ml-3">
-        <div class="text-sm">Chatwoot <%= Chatwoot.config[:version] %></div>
-        <div class="text-xs text-slate-700 mt-0.5">Super Admin Console</div>
-      </div>
-    </div>
+<nav class="bw-sidebar" role="navigation">
+  <div class="bw-sidebar__logo">
+    <%= link_to super_admin_root_url, class: 'flex items-center gap-3 bw-reset-link' do %>
+      <%= image_tag('/brand-assets/logo_thumbnail.svg', alt: 'Bloomwire', class: 'h-7 w-7') %>
+      <span>Bloomwire</span>
+    <% end %>
+  </div>
 
-    <ul class="my-4">
-      <%= render partial: "nav_item", locals: { icon: 'icon-grid-line', url: super_admin_root_url, label: 'Dashboard' } %>
+  <div class="bw-sidebar__scroll">
+    <div class="bw-nav-section">Super Admin</div>
+    <ul class="bw-nav-list">
+      <%= render partial: 'nav_item', locals: { icon: 'icon-grid-line', url: super_admin_root_url, label: 'Dashboard' } %>
       <% Administrate::Namespace.new(namespace).resources.each do |resource| %>
-        <% next if ["account_users", "access_tokens", "installation_configs", "dashboard", "devise/sessions", "app_configs", "bloomwire_configs", "bloomwire_whatsapp_setups", "bloomwire_whatsapp_setup_requests", "bloomwire_customer_provisionings", "instance_statuses", "settings", "push_diagnostics"].include?  resource.resource %>
-        <% next if resource.resource == "platform_banners" && !ChatwootApp.chatwoot_cloud? %>
-        <%= render partial: "nav_item", locals: {
-            icon: sidebar_icons[resource.resource.to_sym],
-            url: resource_index_route(resource),
-            label: display_resource_name(resource),
-          }
-        %>
+        <% next if hidden_resources.include?(resource.resource) %>
+        <% next if resource.resource == 'platform_banners' && !ChatwootApp.chatwoot_cloud? %>
+        <%= render partial: 'nav_item', locals: {
+              icon: sidebar_icons[resource.resource.to_sym],
+              url: resource_index_route(resource),
+              label: display_resource_name(resource),
+            } %>
+      <% end %>
+    </ul>
 
+    <div class="bw-nav-section">Bloomwire</div>
+    <ul class="bw-nav-list">
+      <% if bw_bloomwire_mode_on? %>
+        <li>
+          <details class="bw-nav-group" <%= 'open' if bw_whatsapp_section_open? %>>
+            <summary class="bw-nav-item <%= 'is-active' if bw_whatsapp_section_open? %>">
+              <svg width="16" height="16"><use xlink:href="#icon-whatsapp-line" /></svg>
+              <span>WhatsApp Setups</span>
+              <svg class="bw-nav-group__chevron" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </summary>
+            <ul class="bw-nav-sub">
+              <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setups_url, label: 'All Setups' } %>
+              <%= render partial: 'nav_item', locals: { url: new_super_admin_bloomwire_customer_provisioning_url, label: 'New Provision' } %>
+              <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setup_requests_url, label: 'WhatsApp Requests' } %>
+            </ul>
+          </details>
+        </li>
       <% end %>
-      <%= render partial: "nav_item", locals: { icon: 'icon-flag-line', url: super_admin_bloomwire_config_url, label: 'Bloomwire Features' } %>
-      <% if Bloomwire::Features.master_enabled? %>
-        <%= render partial: "nav_item", locals: { icon: 'icon-add-circle-line', url: new_super_admin_bloomwire_customer_provisioning_url, label: 'Provision Customer' } %>
-        <%= render partial: "nav_item", locals: { icon: 'icon-whatsapp-line', url: super_admin_bloomwire_whatsapp_setups_url, label: 'WhatsApp Setup' } %>
-        <%= render partial: "nav_item", locals: { icon: 'icon-inbox-line', url: super_admin_bloomwire_whatsapp_setup_requests_url, label: 'WhatsApp Requests' } %>
-      <% end %>
+      <%= render partial: 'nav_item', locals: { icon: 'icon-gear', url: super_admin_bloomwire_config_url, label: 'Bloomwire Features' } %>
+      <li class="bw-nav-soon" title="Planned — not yet available">
+        <svg width="16" height="16"><use xlink:href="#icon-paint-brush-line" /></svg>
+        <span>Customer Themes</span><span class="bw-nav-soon__tag">Soon</span>
+      </li>
+      <li class="bw-nav-soon" title="Planned — not yet available">
+        <svg width="16" height="16"><use xlink:href="#icon-book-2-line" /></svg>
+        <span>Audit Logs</span><span class="bw-nav-soon__tag">Soon</span>
+      </li>
       <%= render 'settings_menu', open: settings_open? %>
     </ul>
-  </div>
-  <div>
-    <ul class="my-4">
-      <%= render partial: "nav_item", locals: { icon: 'icon-mist-fill', url: sidekiq_web_url, label: 'Sidekiq Dashboard' } %>
-      <%= render partial: "nav_item", locals: { icon: 'icon-health-book-line', url: super_admin_instance_status_url, label: 'Instance Health' } %>
-      <%= render partial: "nav_item", locals: { icon: 'icon-mail-send-fill', url: super_admin_push_diagnostics_url, label: 'Push Diagnostics' } %>
-      <%= render partial: "nav_item", locals: { icon: 'icon-dashboard-line', url: '/', label: 'Agent Dashboard' } %>
-      <%= render partial: "nav_item", locals: { icon: 'icon-logout-circle-r-line', url: super_admin_logout_url, label: 'Logout' } %>
+
+    <div class="bw-nav-section">Platform</div>
+    <ul class="bw-nav-list">
+      <%= render partial: 'nav_item', locals: { icon: 'icon-health-book-line', url: super_admin_instance_status_url, label: 'Instance Health' } %>
+      <%= render partial: 'nav_item', locals: { icon: 'icon-mist-fill', url: sidekiq_web_url, label: 'Sidekiq' } %>
+      <%= render partial: 'nav_item', locals: { icon: 'icon-mail-send-fill', url: super_admin_push_diagnostics_url, label: 'Push Diagnostics' } %>
+      <%= render partial: 'nav_item', locals: { icon: 'icon-dashboard-line', url: '/', label: 'Agent Dashboard' } %>
     </ul>
   </div>
-</div>
+
+  <div class="bw-sidebar__footer">
+    <ul class="bw-nav-list">
+      <%= render partial: 'nav_item', locals: { icon: 'icon-logout-circle-r-line', url: super_admin_logout_url, label: 'Sign out' } %>
+    </ul>
+  </div>
+</nav>

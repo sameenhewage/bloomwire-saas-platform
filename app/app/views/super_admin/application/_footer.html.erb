@@ -1,0 +1,12 @@
+<%#
+# Small, muted SuperAdmin footer: platform name · environment · build sha (not a secret).
+%>
+<footer class="bw-footer" role="contentinfo">
+  <span>Bloomwire SaaS Platform</span>
+  <span class="bw-footer__dot">&middot;</span>
+  <span><%= bw_environment_label %></span>
+  <% if bw_release_sha %>
+    <span class="bw-footer__dot">&middot;</span>
+    <span><%= bw_release_sha %></span>
+  <% end %>
+</footer>
