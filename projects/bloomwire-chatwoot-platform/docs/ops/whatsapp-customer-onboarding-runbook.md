@@ -108,46 +108,54 @@ Add the customer's agents to the WhatsApp inbox so they can handle conversations
 
 ---
 
-## 5. Readiness gate (must be GREEN before go-live)
+## 5. Readiness gate (staged — final full PASS required before go-live)
 
-Go-live readiness has **two** parts: (5.1) the checks the readiness console **actually verifies**, and (5.2) the
-**manual Ops prerequisites** the console does **not** verify and that Ops must confirm **separately**. Both must
-pass before flipping the mapping to routeable (5.3).
+Readiness follows a deliberate **order**: a pre-route console check (5.1), manual Ops prerequisites (5.2), the
+routeable flip (5.3), then a **final** full-PASS console check (5.4). The console is **not** fully green until
+**after** the flip — that is expected, not a failure.
 
-### 5.1 Console-verified readiness checks
-Open the **SuperAdmin readiness console**: `/super_admin/bloomwire_whatsapp_setups/:id/readiness`
-(`Bloomwire::WhatsappRealHopReadiness` — read-only, secret-free, masked). These are the checks it actually
-covers; all must PASS:
+### 5.1 Pre-route readiness console check (while `setup_status` is still `configured`)
+Run the **SuperAdmin readiness console** (`/super_admin/bloomwire_whatsapp_setups/:id/readiness` —
+`Bloomwire::WhatsappRealHopReadiness`, read-only, secret-free, masked) **before** the routeable flip. At this
+stage expect all checks to PASS **except the two that depend on the flip**, which are **expected blockers here**:
 
-- **Feature toggles:** `BLOOMWIRE_MODE_ENABLED`, `BLOOMWIRE_PRIVACY_HARDENING`,
-  `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` (router is privacy-dependent).
+- **`setup_ready_for_webhook` — expected BLOCKED** (status is still `configured`).
+- **`router_handoff_safe` — expected BLOCKED** (the router resolves **only** `ready_for_webhook` mappings, so it
+  cannot hand off until after the flip).
+
+All **other** checks should PASS now — fix any of these that don't **before** flipping:
+- **Feature toggles:** `BLOOMWIRE_MODE_ENABLED`, `BLOOMWIRE_PRIVACY_HARDENING`, `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER`.
 - **Secrets present (presence only):** `WHATSAPP_APP_SECRET`, `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN`,
   `BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST` / callback URL.
-- **Setup presence + status:** mapping present and `ready_for_webhook`, `phone_number_id` present, and
-  account / inbox / channel all present.
+- **Setup presence:** mapping present, `phone_number_id` present, account / inbox / channel present.
 - **Mapping consistency:** `inbox_belongs_to_account`, `channel_belongs_to_account`, `inbox_matches_channel`.
-- **Channel alignment:** `channel_provider_whatsapp_cloud`, `channel_phone_number_present`, and
-  `channel_provider_config_phone_number_id_matches` (provider_config `phone_number_id` matches).
-- **`router_handoff_safe`** (the global router would resolve to this exact channel/inbox).
+- **Channel alignment:** `channel_provider_whatsapp_cloud`, `channel_phone_number_present`,
+  `channel_provider_config_phone_number_id_matches`.
 
-### 5.2 Manual Ops prerequisites before go-live (NOT verified by the readiness console)
-These are **required**, but are **not** checked by `Bloomwire::WhatsappRealHopReadiness` / the SuperAdmin readiness
-page. **Do not assume the console covers them** — Ops must verify each one **separately** before go-live:
+> Do **not** claim the console is fully green at this stage — `setup_ready_for_webhook` and `router_handoff_safe`
+> are **expected** to be blocked until the flip in 5.3.
+
+### 5.2 Manual Ops prerequisites before the routeable flip (NOT verified by the readiness console)
+Confirm these **by hand** — they are **not** checked by `Bloomwire::WhatsappRealHopReadiness` / the readiness page:
 
 - **Managed restriction toggles ON:** `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP`,
   `BLOOMWIRE_RESTRICT_PROVIDER_SETUP`, `BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN`, `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT`
   (so business users cannot configure the provider or see secrets — see §8).
 - **Encryption configured:** `Chatwoot.encryption_configured? == true`.
-- **`provider_config` encrypted at rest / backfilled** before storing a **real** customer token (ADR-0006). Do not
-  store a real token until this is confirmed.
+- **`provider_config` encrypted at rest / backfilled** before storing a **real** customer token (ADR-0006).
 - **OSS-only confirmation** (if applicable to the env): `DISABLE_ENTERPRISE=true`.
 
 > The readiness console does **not** verify the managed restriction toggles or encryption-at-rest. Treat §5.2 as a
-> separate manual gate that Ops checks by hand before go-live.
+> separate manual gate that Ops checks by hand.
 
-### 5.3 Flip to routeable
-Only when **both** §5.1 (console-verified) and §5.2 (manual Ops prerequisites) pass, set
-`setup_status = ready_for_webhook`. Only then will the router resolve this customer's inbound.
+### 5.3 Flip setup to routeable
+Only after **5.1 passes except the expected `setup_ready_for_webhook` and `router_handoff_safe` blockers**, **and**
+**5.2 manual prerequisites pass**, set `setup_status = ready_for_webhook`.
+
+### 5.4 Final readiness console check (must be FULL PASS)
+Re-run the readiness console. It must now be a **full PASS — including `setup_ready_for_webhook` and
+`router_handoff_safe`**. Only after this full PASS should Ops proceed to the Meta webhook subscription (§4) and
+live verification (§6).
 
 ---
 
@@ -222,14 +230,15 @@ the existing job, which **re-resolves to the same channel/inbox**. Cross-tenant 
 | `Bloomwire::WhatsappSetup` created | configured | `configured` | |
 | inbox/channel/account alignment | valid | `valid` | |
 
-### B1. Console-verified readiness checks (§5.1)
-| Check | Result | PASS/BLOCKED |
-|---|---|---|
-| Feature toggles ON (mode / privacy / global router) | `on` | |
-| Secrets present (app secret / verify token / callback host) | `present` | |
-| Setup present + `ready_for_webhook` + phone_number_id + account/inbox/channel | `pass` | |
-| Mapping consistency + channel alignment + provider_config phone_number_id match | `pass` | |
-| `router_handoff_safe` | `pass` | |
+### B1. Pre-route console check — §5.1 (`setup_status` = `configured`)
+| Check | Expected | Result | PASS/BLOCKED |
+|---|---|---|---|
+| Feature toggles (mode / privacy / global router) | pass | `on` | |
+| Secrets present (app secret / verify token / callback host) | pass | `present` | |
+| Setup presence (mapping / phone_number_id / account / inbox / channel) | pass | `pass` | |
+| Mapping consistency + channel alignment (provider / phone / pnid match) | pass | `pass` | |
+| `setup_ready_for_webhook` | **expected BLOCKED** | `blocked` | (expected) |
+| `router_handoff_safe` | **expected BLOCKED** | `blocked` | (expected) |
 
 ### B2. Manual Ops prerequisites — NOT console-verified (§5.2)
 | Check | Result | PASS/BLOCKED |
@@ -239,11 +248,16 @@ the existing job, which **re-resolves to the same channel/inbox**. Cross-tenant 
 | `provider_config` encrypted at rest / backfilled before real token | `yes` | |
 | OSS-only (`DISABLE_ENTERPRISE=true`) if applicable | `yes/n-a` | |
 
-### B3. Go-live actions
+### B3. Flip to routeable — §5.3
 | Action | Result | PASS/BLOCKED |
 |---|---|---|
-| `setup_status` → `ready_for_webhook` (only after B1 + B2) | `ready` | |
-| Meta webhook → global router URL, `messages` subscribed | `set` | |
+| `setup_status` → `ready_for_webhook` (after B1 non-flip checks + B2) | `ready` | |
+
+### B4. Final console check — FULL PASS — §5.4
+| Check | Expected | Result | PASS/BLOCKED |
+|---|---|---|---|
+| All readiness checks incl. `setup_ready_for_webhook` + `router_handoff_safe` | full pass | `pass` | |
+| Meta webhook → global router URL, `messages` subscribed | set | `set` | |
 
 ### C. Live verification
 | Check | Result (masked) | PASS/BLOCKED |
