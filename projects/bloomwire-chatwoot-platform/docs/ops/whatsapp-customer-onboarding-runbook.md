@@ -110,27 +110,44 @@ Add the customer's agents to the WhatsApp inbox so they can handle conversations
 
 ## 5. Readiness gate (must be GREEN before go-live)
 
+Go-live readiness has **two** parts: (5.1) the checks the readiness console **actually verifies**, and (5.2) the
+**manual Ops prerequisites** the console does **not** verify and that Ops must confirm **separately**. Both must
+pass before flipping the mapping to routeable (5.3).
+
+### 5.1 Console-verified readiness checks
 Open the **SuperAdmin readiness console**: `/super_admin/bloomwire_whatsapp_setups/:id/readiness`
-(`Bloomwire::WhatsappRealHopReadiness` — read-only, secret-free, masked). All checks must PASS:
+(`Bloomwire::WhatsappRealHopReadiness` — read-only, secret-free, masked). These are the checks it actually
+covers; all must PASS:
 
-**Toggles ON** (installation-wide): `BLOOMWIRE_MODE_ENABLED`, `BLOOMWIRE_PRIVACY_HARDENING`,
-`BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` (router is privacy-dependent), and the managed-mode restrictions
-`BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP` / `RESTRICT_PROVIDER_SETUP` / `RESTRICT_ACCOUNT_ADMIN` /
-`RESTRICT_BOT_MANAGEMENT`.
+- **Feature toggles:** `BLOOMWIRE_MODE_ENABLED`, `BLOOMWIRE_PRIVACY_HARDENING`,
+  `BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER` (router is privacy-dependent).
+- **Secrets present (presence only):** `WHATSAPP_APP_SECRET`, `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN`,
+  `BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST` / callback URL.
+- **Setup presence + status:** mapping present and `ready_for_webhook`, `phone_number_id` present, and
+  account / inbox / channel all present.
+- **Mapping consistency:** `inbox_belongs_to_account`, `channel_belongs_to_account`, `inbox_matches_channel`.
+- **Channel alignment:** `channel_provider_whatsapp_cloud`, `channel_phone_number_present`, and
+  `channel_provider_config_phone_number_id_matches` (provider_config `phone_number_id` matches).
+- **`router_handoff_safe`** (the global router would resolve to this exact channel/inbox).
 
-**Secrets present:** `WHATSAPP_APP_SECRET`, `BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN`,
-`BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST` (presence only).
+### 5.2 Manual Ops prerequisites before go-live (NOT verified by the readiness console)
+These are **required**, but are **not** checked by `Bloomwire::WhatsappRealHopReadiness` / the SuperAdmin readiness
+page. **Do not assume the console covers them** — Ops must verify each one **separately** before go-live:
 
-**Encryption / secret-at-rest:** `Chatwoot.encryption_configured? == true` and `provider_config` is **encrypted at
-rest** for this channel (ADR-0006). Do not store a real customer token until encryption is confirmed.
+- **Managed restriction toggles ON:** `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP`,
+  `BLOOMWIRE_RESTRICT_PROVIDER_SETUP`, `BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN`, `BLOOMWIRE_RESTRICT_BOT_MANAGEMENT`
+  (so business users cannot configure the provider or see secrets — see §8).
+- **Encryption configured:** `Chatwoot.encryption_configured? == true`.
+- **`provider_config` encrypted at rest / backfilled** before storing a **real** customer token (ADR-0006). Do not
+  store a real token until this is confirmed.
+- **OSS-only confirmation** (if applicable to the env): `DISABLE_ENTERPRISE=true`.
 
-**Mapping consistency + alignment:** `setup_present`, `setup_phone_number_id_present`, account/inbox/channel present,
-`inbox_belongs_to_account`, `channel_belongs_to_account`, `inbox_matches_channel`,
-`channel_provider_whatsapp_cloud`, `channel_phone_number_present`,
-`channel_provider_config_phone_number_id_matches`, and **`router_handoff_safe`**.
+> The readiness console does **not** verify the managed restriction toggles or encryption-at-rest. Treat §5.2 as a
+> separate manual gate that Ops checks by hand before go-live.
 
-**Flip to routeable:** when all checks pass, set `setup_status = ready_for_webhook`. Only then will the router
-resolve this customer's inbound.
+### 5.3 Flip to routeable
+Only when **both** §5.1 (console-verified) and §5.2 (manual Ops prerequisites) pass, set
+`setup_status = ready_for_webhook`. Only then will the router resolve this customer's inbound.
 
 ---
 
@@ -205,16 +222,28 @@ the existing job, which **re-resolves to the same channel/inbox**. Cross-tenant 
 | `Bloomwire::WhatsappSetup` created | configured | `configured` | |
 | inbox/channel/account alignment | valid | `valid` | |
 
-### B. Readiness gate
+### B1. Console-verified readiness checks (§5.1)
 | Check | Result | PASS/BLOCKED |
 |---|---|---|
-| Toggles ON (mode/privacy/router/restricts) | `on` | |
-| Secrets present (app secret/verify token/host) | `present` | |
-| Encryption configured + provider_config encrypted | `yes` | |
-| Mapping consistency + channel alignment | `pass` | |
+| Feature toggles ON (mode / privacy / global router) | `on` | |
+| Secrets present (app secret / verify token / callback host) | `present` | |
+| Setup present + `ready_for_webhook` + phone_number_id + account/inbox/channel | `pass` | |
+| Mapping consistency + channel alignment + provider_config phone_number_id match | `pass` | |
 | `router_handoff_safe` | `pass` | |
-| `setup_status` → `ready_for_webhook` | `ready` | |
-| Meta webhook → global router URL, `messages` | `set` | |
+
+### B2. Manual Ops prerequisites — NOT console-verified (§5.2)
+| Check | Result | PASS/BLOCKED |
+|---|---|---|
+| Restriction toggles ON (native_whatsapp / provider_setup / account_admin / bot_management) | `on` | |
+| `Chatwoot.encryption_configured? == true` | `yes` | |
+| `provider_config` encrypted at rest / backfilled before real token | `yes` | |
+| OSS-only (`DISABLE_ENTERPRISE=true`) if applicable | `yes/n-a` | |
+
+### B3. Go-live actions
+| Action | Result | PASS/BLOCKED |
+|---|---|---|
+| `setup_status` → `ready_for_webhook` (only after B1 + B2) | `ready` | |
+| Meta webhook → global router URL, `messages` subscribed | `set` | |
 
 ### C. Live verification
 | Check | Result (masked) | PASS/BLOCKED |
