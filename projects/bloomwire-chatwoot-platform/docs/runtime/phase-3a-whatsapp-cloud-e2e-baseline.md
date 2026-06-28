@@ -1,11 +1,20 @@
 # Phase 3A — WhatsApp Cloud API Real E2E Baseline (Evidence Note)
 
-> **STATUS: PARTIAL.**
+> **STATUS: PARTIAL (reconciled in Phase 13B).**
 > - Automated baseline (graphify + flow analysis + Phase 1/2 + native WhatsApp specs + RuboCop): **PASS**.
-> - **Live real-phone E2E (steps 5–10 below): PENDING / BLOCKED** — requires real Meta/WhatsApp Cloud
->   credentials, a Meta Business account + WABA + registered number, a physical test phone, and a public
->   HTTPS tunnel. These cannot be performed by the agent autonomously and must be run by a human operator.
-> - **No PR will be opened until the live E2E rows below are filled with real (masked) evidence.**
+> - **Inbound real-phone E2E: PASS** — performed by a human operator and recorded in
+>   [`phase-10b-dev-deployment-stabilization.md`](./phase-10b-dev-deployment-stabilization.md): Meta GET verify
+>   200, signed inbound POST routed to the correct inbox, negative checks (bad signature 401, unknown
+>   `phone_number_id` fail-closed, wrong verify token 401). Proven on dev `7ade9dc`; the inbound pipeline is
+>   unchanged since, so it carries forward (re-confirm on the current SHA during Phase 13C). The §9 inbound
+>   rows point there.
+> - **Outbound / status / template real-phone E2E: PENDING / BLOCKED — Phase 13C target.** Requires real
+>   Meta/WhatsApp Cloud credentials, a Meta Business account + WABA + registered number, a physical test phone,
+>   and a public HTTPS tunnel. These cannot be performed by the agent; they are the **Phase 13C** human-operated
+>   live-certification targets (runbook: [`phase-12g-live-hop-readiness-package.md`](./phase-12g-live-hop-readiness-package.md)).
+> - **Phase 13B production-hardening is complete (in code, no real Meta):** `provider_config` encrypted at rest
+>   (ADR-0006 Option A), bounded transient-retry on outbound send, and a configurable Graph API version. No
+>   live outbound/status/template PASS is claimed here.
 
 ## 1. Environment
 - App: Chatwoot (this repo, nested Rails root `app/`), local dev (`overmind`/`pnpm dev`), Postgres + Redis + Sidekiq.
@@ -40,8 +49,9 @@
    → `Whatsapp::IncomingMessageWhatsappCloudService` → contact + conversation + message in the inbox.
 5. **Outbound** — outgoing message → `SendReplyJob` → `Whatsapp::SendOnWhatsappService#send_session_message`
    → `Channel::Whatsapp#send_message` → `Whatsapp::Providers::WhatsappCloudService` →
-   `POST graph.facebook.com/v13.0/<phone_number_id>/messages` with `Authorization: Bearer <api_key>`;
-   `message.source_id` set to the returned `wamid`.
+   `POST graph.facebook.com/<api_version>/<phone_number_id>/messages` with `Authorization: Bearer <api_key>`;
+   `message.source_id` set to the returned `wamid`. Since Phase 13B.3 the version is configurable via
+   `WHATSAPP_CLOUD_API_VERSION` (default `v24.0`); a transient `429/5xx` is retried (bounded) per Phase 13B.2.
 6. **Status** — status webhooks flow through the same controller/job → status update path.
 
 ## 5. Phase 1/2 runtime-safety confirmation (investigation item 7)
@@ -86,22 +96,26 @@
    confirm stock behavior.
 9. Confirm no new console/server errors and no unrelated tenant UI regression.
 
-## 9. Live E2E evidence (PENDING — fill with masked values)
+## 9. Live E2E evidence (inbound = Phase 10B PASS; outbound/status/template = Phase 13C targets)
 | Field | Value |
 |---|---|
-| Tunnel/callback URL (masked) | `TODO https://****.<tunnel>/webhooks/whatsapp/+****1234` |
-| WhatsApp inbox id / name | `TODO` |
-| phone_number_id (masked) | `TODO ****` |
-| business WABA number (masked) | `TODO +****1234` |
-| Webhook verification result | `TODO (GET 200 / token match)` |
-| Inbound test timestamp + result | `TODO` |
-| Outbound test timestamp + result | `TODO` |
-| Privacy ON: send/receive OK | `TODO` |
-| Privacy ON: provider_config scrubbed in API | `TODO` |
-| Privacy ON: logs show [FILTERED], no real tokens | `TODO` |
-| New errors / regressions | `TODO` |
+| Webhook verification (GET) | **PASS — Phase 10B** (GET 200 / token match), masked evidence in that doc |
+| Inbound test + routing | **PASS — Phase 10B** (signed inbound POST → correct inbox conversation + message), masked |
+| Inbound negative checks | **PASS — Phase 10B** (bad signature 401, unknown `phone_number_id` fail-closed, wrong verify token 401) |
+| Outbound test timestamp + result | `TODO — Phase 13C live target` |
+| Status delivered/read/failed | `TODO — Phase 13C live target` |
+| Template / out-of-window send | `TODO — Phase 13C live target` |
+| Privacy ON: send/receive OK | `TODO — Phase 13C live target` |
+| Privacy ON: provider_config scrubbed in API | `TODO — Phase 13C live target` |
+| Privacy ON: logs show [FILTERED], no real tokens | `TODO — Phase 13C live target` |
+| New errors / regressions | `TODO — Phase 13C live target` |
+
+> Tunnel/callback URL, inbox id, `phone_number_id`, and WABA number are recorded **masked** by the human
+> operator during Phase 13C (see the live-hop readiness package). Do not paste real values here.
 
 ## 10. Known blockers
-- Live real-phone E2E requires real Meta credentials + a physical phone + a public tunnel + a Meta Business
-  account/WABA. The agent cannot perform these autonomously; a human operator must run §8 and record §9.
-- Until §9 is complete, the Phase 3A PR gate is **not** met and **no PR will be opened**.
+- **Inbound** real-phone E2E is **done** (Phase 10B, masked). The remaining **outbound / status / template**
+  real-phone E2E requires real Meta credentials + a physical phone + a public tunnel + a Meta Business
+  account/WABA, plus the ADR-0006 encryption keys provisioned for storing a real customer token at rest. The
+  agent cannot perform these; a human operator runs §8 and records §9 in **Phase 13C**.
+- Phase 13B (internal hardening) carries no live-E2E gate; its PR ships the code that makes Phase 13C safe.

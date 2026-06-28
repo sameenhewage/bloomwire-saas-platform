@@ -7,7 +7,7 @@ require 'rails_helper'
 #     -> SendReplyJob (CHANNEL_SERVICES dispatch, run inline via perform_enqueued_jobs)
 #     -> Whatsapp::SendOnWhatsappService
 #     -> Channel::Whatsapp#send_message -> Whatsapp::Providers::WhatsappCloudService
-#     -> POST graph.facebook.com/v13.0/<phone_number_id>/messages (WebMock-stubbed)
+#     -> POST graph.facebook.com/v24.0/<phone_number_id>/messages (WebMock-stubbed)
 #     -> returned wamid stored in message.source_id
 #
 # Locks already-implemented behavior. All values are fake; the Graph endpoint is stubbed, and
@@ -82,6 +82,28 @@ RSpec.describe 'Bloomwire WhatsApp outbound E2E', type: :request do
       expect(message.reload.status).to eq('failed')
       expect(message.reload.external_error).to be_present
       expect(message.reload.external_error).to include('Invalid OAuth access token')
+    end
+  end
+
+  context 'when the Graph send fails transiently (Phase 13B.2)' do
+    it 'retries within the bounded policy (3 attempts) then marks the message failed' do
+      stub = stub_request(:post, graph_url).to_return(status: 503, body: '{}',
+                                                      headers: { 'content-type' => 'application/json' })
+      message = create_outgoing
+
+      expect(stub).to have_been_requested.times(3)
+      expect(message.reload.status).to eq('failed')
+      expect(message.reload.external_error).to include('503')
+    end
+
+    it 'recovers when a retry succeeds and stores the returned wamid' do
+      stub_request(:post, graph_url)
+        .to_return({ status: 503, body: '{}', headers: { 'content-type' => 'application/json' } },
+                   { status: 200, body: success_body, headers: { 'content-type' => 'application/json' } })
+      message = create_outgoing
+
+      expect(message.reload.source_id).to eq('wamid.SENT-OUT-1')
+      expect(message.reload.status).not_to eq('failed')
     end
   end
 

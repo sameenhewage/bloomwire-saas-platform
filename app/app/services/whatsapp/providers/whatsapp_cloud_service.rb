@@ -1,4 +1,9 @@
 class Whatsapp::Providers::WhatsappCloudService < Whatsapp::Providers::BaseService
+  # Default Meta Graph API version for the outbound message + media paths. Overridable via
+  # WHATSAPP_CLOUD_API_VERSION so the version can be bumped without a code change (Bloomwire Phase 13B.3).
+  # Standardized on the version already used for attachments to retire the legacy hard-coded v13.0.
+  DEFAULT_API_VERSION = 'v24.0'.freeze
+
   def send_message(phone_number, message)
     @message = message
 
@@ -76,7 +81,7 @@ class Whatsapp::Providers::WhatsappCloudService < Whatsapp::Providers::BaseServi
   end
 
   def media_url(media_id)
-    "#{api_base_path}/v13.0/#{media_id}"
+    "#{api_base_path}/#{api_version}/#{media_id}"
   end
 
   private
@@ -89,8 +94,14 @@ class Whatsapp::Providers::WhatsappCloudService < Whatsapp::Providers::BaseServi
     ENV.fetch('WHATSAPP_CLOUD_BASE_URL', 'https://graph.facebook.com')
   end
 
-  # TODO: See if we can unify the API versions and for both paths and make it consistent with out facebook app API versions
-  def phone_id_path(version = 'v13.0')
+  # Graph API version for the outbound message + media paths. Configurable so the version can be bumped
+  # without a code change; defaults to DEFAULT_API_VERSION. (business_account_path keeps its own version
+  # for the template-management surface, mirrored by Whatsapp::CsatTemplateService.)
+  def api_version
+    ENV.fetch('WHATSAPP_CLOUD_API_VERSION', DEFAULT_API_VERSION)
+  end
+
+  def phone_id_path(version = api_version)
     "#{api_base_path}/#{version}/#{whatsapp_channel.provider_config['phone_number_id']}"
   end
 
@@ -120,7 +131,7 @@ class Whatsapp::Providers::WhatsappCloudService < Whatsapp::Providers::BaseServi
     type = %w[image audio video].include?(attachment.file_type) ? attachment.file_type : 'document'
     type_content = build_attachment_content(type, attachment, message)
     response = HTTParty.post(
-      "#{phone_id_path('v24.0')}/messages",
+      "#{phone_id_path}/messages",
       headers: api_headers,
       body: {
         :messaging_product => 'whatsapp',

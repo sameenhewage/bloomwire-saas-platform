@@ -11,6 +11,10 @@
 class Whatsapp::Providers::BaseService
   pattr_initialize [:whatsapp_channel!]
 
+  # Bloomwire Phase 13B.2: HTTP statuses that indicate a transient provider/network failure worth a bounded
+  # retry (rate limit + common 5xx). Anything else stays a terminal failure handled by handle_error.
+  RETRYABLE_HTTP_STATUSES = [429, 500, 502, 503, 504].freeze
+
   def send_message(_phone_number, _message)
     raise 'Overwrite this method in child class'
   end
@@ -35,10 +39,18 @@ class Whatsapp::Providers::BaseService
     parsed_response = response.parsed_response
     if response.success? && parsed_response['error'].blank?
       parsed_response['messages'].first['id']
+    elsif retryable_response?(response)
+      # Bloomwire Phase 13B.2: let SendReplyJob retry transient failures (don't mark failed yet).
+      raise Whatsapp::Providers::TransientError.new(status: response.code.to_i,
+                                                    message: "WhatsApp Cloud API transient error (HTTP #{response.code})")
     else
       handle_error(response, message)
       nil
     end
+  end
+
+  def retryable_response?(response)
+    RETRYABLE_HTTP_STATUSES.include?(response.code.to_i)
   end
 
   def handle_error(response, message)
