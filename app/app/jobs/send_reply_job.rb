@@ -1,6 +1,13 @@
 class SendReplyJob < ApplicationJob
   queue_as :high
 
+  # Bloomwire Phase 13B.2: bounded retry for transient WhatsApp Cloud send failures (HTTP 429/5xx). Only the
+  # WhatsApp provider raises TransientError, so other channels are unaffected. After the budget is exhausted
+  # the message is marked failed with a status-only error, preserving the terminal-failure contract.
+  retry_on Whatsapp::Providers::TransientError, wait: 3.seconds, attempts: 3 do |job, error|
+    Whatsapp::SendOnWhatsappService.mark_send_failed(job.arguments.first, error)
+  end
+
   CHANNEL_SERVICES = {
     'Channel::TwitterProfile' => ::Twitter::SendOnTwitterService,
     'Channel::TwilioSms' => ::Twilio::SendOnTwilioService,

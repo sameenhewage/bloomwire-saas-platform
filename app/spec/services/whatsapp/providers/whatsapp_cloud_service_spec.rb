@@ -331,6 +331,42 @@ describe Whatsapp::Providers::WhatsappCloudService do
     end
   end
 
+  describe 'transient vs terminal send failures (Bloomwire Phase 13B.2)' do
+    let(:graph_url) { "https://graph.facebook.com/v24.0/#{whatsapp_channel.provider_config['phone_number_id']}/messages" }
+
+    it 'raises a TransientError on HTTP 429 and does not mark the message failed' do
+      stub_request(:post, graph_url).to_return(status: 429, body: '{}', headers: response_headers)
+      expect { service.send_message('+123456789', message) }.to raise_error(Whatsapp::Providers::TransientError)
+      expect(message.reload.status).not_to eq('failed')
+    end
+
+    it 'raises a TransientError on HTTP 503 and does not mark the message failed' do
+      stub_request(:post, graph_url).to_return(status: 503, body: '{}', headers: response_headers)
+      expect { service.send_message('+123456789', message) }.to raise_error(Whatsapp::Providers::TransientError)
+      expect(message.reload.status).not_to eq('failed')
+    end
+
+    it 'marks the message failed (terminal) on a permanent 4xx without raising' do
+      stub_request(:post, graph_url)
+        .to_return(status: 400, body: { error: { message: 'Invalid recipient' } }.to_json, headers: response_headers)
+      expect(service.send_message('+123456789', message)).to be_nil
+      expect(message.reload.status).to eq('failed')
+      expect(message.reload.external_error).to eq('Invalid recipient')
+    end
+
+    it 'keeps the access token out of the transient error message' do
+      stub_request(:post, graph_url).to_return(status: 503, body: '{}', headers: response_headers)
+      error = nil
+      begin
+        service.send_message('+123456789', message)
+      rescue Whatsapp::Providers::TransientError => e
+        error = e
+      end
+      expect(error.message).to include('503')
+      expect(error.message).not_to include(whatsapp_channel.provider_config['api_key'])
+    end
+  end
+
   describe '#handle_error' do
     let(:error_message) { 'Invalid message format' }
     let(:error_response) do

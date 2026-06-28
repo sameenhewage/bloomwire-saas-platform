@@ -1,4 +1,13 @@
 class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
+  # Bloomwire Phase 13B.2: terminal handler invoked by SendReplyJob once the bounded transient-retry budget
+  # is exhausted. error.message is status-only (no secret); uses the canonical status-update service.
+  def self.mark_send_failed(message_id, error)
+    message = Message.find_by(id: message_id)
+    return if message.blank?
+
+    Messages::StatusUpdateService.new(message, 'failed', error.message).perform
+  end
+
   private
 
   def channel_class

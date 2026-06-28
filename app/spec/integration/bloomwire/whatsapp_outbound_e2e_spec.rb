@@ -85,6 +85,28 @@ RSpec.describe 'Bloomwire WhatsApp outbound E2E', type: :request do
     end
   end
 
+  context 'when the Graph send fails transiently (Phase 13B.2)' do
+    it 'retries within the bounded policy (3 attempts) then marks the message failed' do
+      stub = stub_request(:post, graph_url).to_return(status: 503, body: '{}',
+                                                      headers: { 'content-type' => 'application/json' })
+      message = create_outgoing
+
+      expect(stub).to have_been_requested.times(3)
+      expect(message.reload.status).to eq('failed')
+      expect(message.reload.external_error).to include('503')
+    end
+
+    it 'recovers when a retry succeeds and stores the returned wamid' do
+      stub_request(:post, graph_url)
+        .to_return({ status: 503, body: '{}', headers: { 'content-type' => 'application/json' } },
+                   { status: 200, body: success_body, headers: { 'content-type' => 'application/json' } })
+      message = create_outgoing
+
+      expect(message.reload.source_id).to eq('wamid.SENT-OUT-1')
+      expect(message.reload.status).not_to eq('failed')
+    end
+  end
+
   context 'without any real Meta network egress' do
     it 'blocks non-localhost Meta Graph connections unless explicitly stubbed' do
       expect(bw_meta_net_connect_blocked?).to be(true)
