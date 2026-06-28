@@ -22,6 +22,14 @@ class Channel::Whatsapp < ApplicationRecord
   include Reauthorizable
 
   self.table_name = 'channel_whatsapp'
+
+  # Bloomwire ADR-0006 (Phase 13B.1): encrypt provider_config at rest — it holds the Meta Cloud API access
+  # token (api_key) and the auto-generated webhook_verify_token. Mirrors every sibling channel secret and is
+  # gated on Chatwoot.encryption_configured? (OFF == stock plaintext jsonb; support_unencrypted_data reads
+  # legacy rows until re-saved). Non-deterministic is safe: provider_config is never queried at the DB level
+  # (routing keys off the phone_number column + Bloomwire::WhatsappSetup.phone_number_id).
+  encrypts :provider_config if Chatwoot.encryption_configured?
+
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
 
   # default at the moment is 360dialog lets change later.
