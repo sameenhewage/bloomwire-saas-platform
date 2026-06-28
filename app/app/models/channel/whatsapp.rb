@@ -116,9 +116,18 @@ class Channel::Whatsapp < ApplicationRecord
 
   delegate :send_message, to: :provider_service
   delegate :send_template, to: :provider_service
-  delegate :sync_templates, to: :provider_service
   delegate :media_url, to: :provider_service
   delegate :api_headers, to: :provider_service
+
+  # Bloomwire Phase 14 S3: never attempt a template sync without provider credentials. A credential-less
+  # "managed shell" channel (created by Ops customer provisioning before the api_key is entered via the
+  # SuperAdmin credential page) would otherwise make a doomed Meta call on after_create and on the scheduled
+  # TemplatesSyncJob. Channels that have an api_key behave exactly as before (full delegation to the provider).
+  def sync_templates
+    return if provider_config['api_key'].blank?
+
+    provider_service.sync_templates
+  end
 
   def setup_webhooks
     perform_webhook_setup
@@ -150,8 +159,10 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def should_auto_setup_webhooks?
-    # Only auto-setup webhooks for whatsapp_cloud provider with manual setup
-    # Embedded signup calls setup_webhooks explicitly in EmbeddedSignupService
-    provider == 'whatsapp_cloud' && provider_config['source'] != 'embedded_signup'
+    # Only auto-setup webhooks for whatsapp_cloud provider with manual setup.
+    # Embedded signup calls setup_webhooks explicitly in EmbeddedSignupService; Bloomwire-managed shells
+    # (Phase 14 S3) are created without credentials and use the global webhook router, so they must never
+    # register the native per-channel webhook on create.
+    provider == 'whatsapp_cloud' && %w[embedded_signup bloomwire_managed].exclude?(provider_config['source'])
   end
 end

@@ -693,6 +693,10 @@ Rails.application.routes.draw do
         end
       end
       resources :bloomwire_whatsapp_setup_requests, only: [:index, :show, :update]
+      # Bloomwire Phase 14 S3: Ops-only customer provisioning (account + owner + shell channel + setup mapping).
+      # :index is present so the SuperAdmin/Administrate layout can resolve the resource's collection path; it
+      # just redirects to the provisioning form.
+      resources :bloomwire_customer_provisionings, only: [:index, :new, :create]
       resource :push_diagnostics, only: [:show, :create] do
         post :destroy_subscriptions, on: :collection
       end
