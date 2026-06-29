@@ -702,6 +702,7 @@ Rails.application.routes.draw do
         member do
           patch :revoke
           patch :reactivate
+          patch :change_role
         end
       end
       resource :push_diagnostics, only: [:show, :create] do

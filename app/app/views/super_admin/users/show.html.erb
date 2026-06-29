@@ -61,8 +61,26 @@ as well as a link to its edit page.
         <%= mfa_enabled ? 'Enabled' : 'Disabled' %>
       </span>
     </dd>
+
+    <%# Phase 15A.2: show the REAL Bloomwire platform access instead of the raw users.type STI field. %>
+    <% if Bloomwire::Features.master_enabled? %>
+      <dt class="attribute-label" id="platform_access">Platform Access</dt>
+      <dd class="attribute-data attribute-data--string">
+        <%= PlatformAccessField::LABELS.fetch(Bloomwire::PlatformAdmin.access_status_for(page.resource).to_s, 'No platform access') %>
+        <% if Bloomwire::PlatformAdmin.active.exists?(user_id: page.resource.id) %>
+          <span class="bw-help">Platform access is managed from Bloomwire &rarr; Platform Admins.</span>
+        <% end %>
+      </dd>
+    <% end %>
   </dl>
 </section>
+
+<% if Bloomwire::Features.master_enabled? %>
+  <p class="bw-help">
+    This assigns <strong>customer account access</strong> (administrator / agent within an account). It does
+    <strong>not</strong> grant Bloomwire platform admin access &mdash; that is managed from Bloomwire &rarr; Platform Admins.
+  </p>
+<% end %>
 
 <%= render 'super_admin/shared/account_user_form', page: page, namespace: namespace, resource_type: 'user' %>
 

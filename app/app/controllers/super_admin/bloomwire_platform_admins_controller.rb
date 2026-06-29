@@ -33,6 +33,26 @@ class SuperAdmin::BloomwirePlatformAdminsController < SuperAdmin::ApplicationCon
     redirect_to super_admin_bloomwire_platform_admins_path, flash: { notice: I18n.t('bloomwire.platform_admin.reactivated') }
   end
 
+  # Phase 15A.2: owner changes an existing platform admin's role. grant! enforces the last-owner invariant
+  # (cannot demote the only active owner) at the model level.
+  def change_role
+    record = Bloomwire::PlatformAdmin.find(params[:id])
+    if record.user.blank?
+      return redirect_to super_admin_bloomwire_platform_admins_path,
+                         flash: { error: I18n.t('bloomwire.platform_admin.identity_mismatch') }
+    end
+
+    Bloomwire::PlatformAdmin.grant!(
+      user: record.user, approved_by: current_super_admin,
+      role: params[:role], reason: params[:reason].presence || 'Role changed by platform owner'
+    )
+    redirect_to super_admin_bloomwire_platform_admins_path, flash: { notice: I18n.t('bloomwire.platform_admin.role_changed') }
+  rescue Bloomwire::PlatformAdmin::LastOwnerError => e
+    redirect_to super_admin_bloomwire_platform_admins_path, flash: { error: e.message }
+  rescue ArgumentError
+    redirect_to super_admin_bloomwire_platform_admins_path, flash: { error: I18n.t('bloomwire.platform_admin.invalid_role') }
+  end
+
   private
 
   def require_platform_owner!

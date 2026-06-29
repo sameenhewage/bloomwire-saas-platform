@@ -137,17 +137,19 @@ RSpec.describe 'Bloomwire Platform Admin Boundary', type: :request do
       expect(Bloomwire::PlatformAdmin.approved?(user)).to be(false)
     end
 
-    it 'a SuperAdmin minted via the Users page has NO platform access without an approval row' do
+    it 'the Users page cannot mint a SuperAdmin in Bloomwire Mode ON (Phase 15A.2); the created user has no platform access' do
       bloomwire_mode(true)
       sign_in(approved_admin, scope: :super_admin)
+      email = "ops2-#{SecureRandom.hex(4)}@bloomwire.local"
       expect do
         post '/super_admin/users',
-             params: { user: { name: 'Ops Two', email: "ops2-#{SecureRandom.hex(4)}@bloomwire.local",
-                               password: 'Password1!', type: 'SuperAdmin' } }
-      end.to change(SuperAdmin, :count).by(1)
+             params: { user: { name: 'Ops Two', email: email, password: 'Password1!', type: 'SuperAdmin' } }
+      end.not_to change(SuperAdmin, :count)
 
-      minted = SuperAdmin.order(:id).last
-      expect(Bloomwire::PlatformAdmin.approved?(minted)).to be(false)
+      created = User.from_email(email)
+      expect(created).to be_present
+      expect(created.type).to be_nil
+      expect(Bloomwire::PlatformAdmin.approved?(created)).to be(false)
     end
   end
 

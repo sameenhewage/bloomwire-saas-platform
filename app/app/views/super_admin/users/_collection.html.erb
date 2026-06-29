@@ -18,6 +18,14 @@ to display a collection of resources in an HTML table.
 [1]: http://www.rubydoc.info/gems/administrate/Administrate/Page/Collection
 %>
 
+<% if Bloomwire::Features.master_enabled? && controller.action_name == 'index' %>
+  <p class="bw-help">
+    Use this page to create customer/business users and assign them to accounts. Platform admins are managed
+    from <strong>Bloomwire &rarr; Platform Admins</strong>. The <strong>Platform Access</strong> column reflects
+    Bloomwire platform role; it is not editable here.
+  </p>
+<% end %>
+
 <table aria-labelledby="<%= table_title %>">
   <thead>
     <tr>

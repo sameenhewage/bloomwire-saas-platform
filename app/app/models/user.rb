@@ -214,6 +214,12 @@ class User < ApplicationRecord
     super
   end
 
+  # Bloomwire platform-access status for the SuperAdmin Users table (Phase 15A.2). Read-only presenter that
+  # reflects bloomwire_platform_admins (the real platform role), NOT the users.type STI discriminator.
+  def platform_access
+    Bloomwire::PlatformAdmin.access_status_for(self)
+  end
+
   private
 
   def sync_user_sessions

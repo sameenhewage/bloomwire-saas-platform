@@ -142,3 +142,22 @@ The invariant therefore holds even for direct console/service/test calls.
 ### Validation (specs + local; no deploy)
 Setup task makes the owner a SuperAdmin + active owner; owner can access `/super_admin`; revoking/demoting the
 last owner is blocked; unapproved SuperAdmins and business users are blocked; no WhatsApp/S2/S3/Meta change.
+
+## Phase 15A.2 — Users/Platform-Admin flow consistency (UI hardening)
+
+The 15A/15A.1 backend boundary is unchanged; 15A.2 only makes the SuperAdmin UI safe and unambiguous so the
+raw `users.type` STI field can no longer create inconsistent platform-admin state. **Mode OFF == stock.**
+
+- **`users.type` is technical identity, not a role.** In **Mode ON** the SuperAdmin **Users** page no longer
+  exposes/accepts the raw `Type` field: `UserDashboard#form_attributes`/`#show_page_attributes` drop `:type`
+  and `SuperAdmin::UsersController#resource_params` strips `:type` (defense-in-depth). New users are created as
+  normal users (`type = nil`); raw create/update can neither mint a `SuperAdmin` nor change a platform admin's
+  type. The Users index replaces the misleading **Type** column with a computed **Platform Access** column
+  (`PlatformAccessField` ← `Bloomwire::PlatformAdmin.access_status_for`): `Owner/Admin/Support` (active row),
+  `Revoked` (inactive row), `Not approved` (`SuperAdmin`, no active row), `No platform access` (normal user).
+- **Platform Admins is the only management surface.** Owners can now also **change role** (owner/admin/support)
+  via `change_role`; `grant!` still enforces last-owner protection (cannot demote/revoke the only active owner).
+  The table shows **all** rows incl. revoked, and a row whose linked user is missing or no longer a
+  `SuperAdmin` is surfaced as **Needs repair** (`identity_consistent?`) rather than hidden.
+- **Account assignment is unchanged** (`account_users.role = administrator/agent`) with copy clarifying it is
+  customer access, not platform-admin access. No migration, no Enterprise code, no WhatsApp/S2/S3/Meta change.
