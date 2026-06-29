@@ -39,6 +39,12 @@ class Bloomwire::PlatformAdmin < ApplicationRecord
     self.class.active_owners.where.not(id: id).none?
   end
 
+  # True when changing this row to `new_role` would demote the last active owner (owner -> non-owner). Used by
+  # the grant/reactivate primitives so the invariant holds even when called directly (console/services/tests).
+  def demotes_last_active_owner?(new_role)
+    new_role.to_s != 'owner' && last_active_owner?
+  end
+
   # --- Approval predicate (the single seam every guard/route reads) ---
 
   # True when this user is an approved Bloomwire platform admin: an active approval row OR a bootstrap email.
@@ -64,9 +70,12 @@ class Bloomwire::PlatformAdmin < ApplicationRecord
   # controller/service; these enforce the data invariant (never zero active owners). ---
 
   # Create or reactivate an active approval row with the given role. Used by the owner setup service, the
-  # invite/grant service, and seeds. Idempotent per user (one row per user).
+  # invite/grant service, and seeds. Idempotent per user (one row per user). Enforces the last-owner invariant
+  # at the primitive level: changing the only active owner to a non-owner role raises LastOwnerError.
   def self.grant!(user:, approved_by: nil, role: :admin, reason: nil)
     record = find_or_initialize_by(user_id: user.id)
+    raise LastOwnerError, I18n.t('bloomwire.platform_admin.last_owner_protected') if record.demotes_last_active_owner?(role)
+
     record.assign_attributes(
       role: role, enabled: true, revoked_at: nil, reason: reason.presence || record.reason,
       approved_by_id: approved_by&.id, approved_at: Time.current
@@ -91,9 +100,13 @@ class Bloomwire::PlatformAdmin < ApplicationRecord
   end
 
   # Reactivate a previously revoked row (records the new role + reason). Re-grant path for the owner UI.
+  # Also enforces the last-owner invariant: cannot demote the only active owner via reactivation.
   def reactivate!(role: nil, approved_by: nil, reason: nil)
+    new_role = role.presence || self.role
+    raise LastOwnerError, I18n.t('bloomwire.platform_admin.last_owner_protected') if demotes_last_active_owner?(new_role)
+
     update!(
-      role: role.presence || self.role, enabled: true, revoked_at: nil,
+      role: new_role, enabled: true, revoked_at: nil,
       approved_by_id: approved_by&.id, approved_at: Time.current, reason: reason.presence || self.reason
     )
     self

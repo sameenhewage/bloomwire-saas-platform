@@ -6,11 +6,10 @@ namespace :bloomwire do
   desc 'Ensure the primary platform owner (BLOOMWIRE_PLATFORM_OWNER_EMAIL) is a SuperAdmin + active owner'
   task ensure_platform_owner: :environment do
     result = Bloomwire::EnsurePlatformOwnerService.call
-    note = result[:promoted_to_super_admin] ? ' (promoted user to SuperAdmin)' : ''
-    puts "[bloomwire] platform owner ensured: user_id=#{result[:user_id]} role=#{result[:role]} " \
-         "active=#{result[:active]}#{note}"
+    puts "[bloomwire] platform owner ensured: user_id=#{result[:user_id]} role=#{result[:role]} active=#{result[:active]}"
   rescue Bloomwire::EnsurePlatformOwnerService::MissingEmailError,
-         Bloomwire::EnsurePlatformOwnerService::UserNotFoundError => e
+         Bloomwire::EnsurePlatformOwnerService::UserNotFoundError,
+         Bloomwire::EnsurePlatformOwnerService::NotSuperAdminError => e
     warn "[bloomwire] platform owner NOT ensured: #{e.message}"
     exit 1
   end

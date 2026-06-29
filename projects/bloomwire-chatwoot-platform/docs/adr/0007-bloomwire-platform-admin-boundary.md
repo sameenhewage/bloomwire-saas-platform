@@ -110,9 +110,16 @@ is reused); no `users.type` business roles; no WhatsApp/S2/S3/Meta changes.
 - `BLOOMWIRE_PLATFORM_OWNER_EMAIL` (env/config) names the primary owner. **Never hardcode the email in a
   migration.**
 - `Bloomwire::EnsurePlatformOwnerService` (+ rake `bloomwire:ensure_platform_owner`): find user by email →
-  ensure `users.type = 'SuperAdmin'` → ensure an active `bloomwire_platform_admins` row with `role = owner`
-  (`enabled = true`, `revoked_at = nil`). **Idempotent.** **Fail-safe**: raises (no create) if the email is
-  unset or the user does not exist. Output prints `user_id`/`role`/`active` only — **no raw email/secret**.
+  require the user to **already be a dedicated `SuperAdmin`** → ensure an active `bloomwire_platform_admins`
+  row with `role = owner` (`enabled = true`, `revoked_at = nil`). **Idempotent.** It **never promotes** a
+  normal/business/customer user to `SuperAdmin`. **Fail-safe (no writes)**: raises if the email is unset
+  (`MissingEmailError`), no user exists (`UserNotFoundError`), or the user is not a SuperAdmin
+  (`NotSuperAdminError`). Output prints `user_id`/`role`/`active` only — **no raw email/secret**.
+
+### Last-owner protection is enforced in the model primitives
+`grant!` and `reactivate!` (not only the UI/service) raise `LastOwnerError` if they would change the only
+active owner to a non-owner role; `soft_revoke!`/`revoke!` raise if they would revoke the last active owner.
+The invariant therefore holds even for direct console/service/test calls.
 
 ### Ownership invariants (model)
 - `role = owner` is the management role. `last_active_owner?` protects the **only** active owner from

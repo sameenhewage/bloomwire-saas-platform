@@ -143,5 +143,37 @@ RSpec.describe Bloomwire::PlatformAdmin, type: :model do
       record = owner_row
       expect { described_class.revoke!(user: record.user) }.to raise_error(described_class::LastOwnerError)
     end
+
+    # Review blocker 2: last-owner demotion protection must live in the primitives (direct calls too).
+    it 'direct grant!(role: :admin) on the only active owner raises LastOwnerError' do
+      record = owner_row
+      expect { described_class.grant!(user: record.user, role: :admin) }.to raise_error(described_class::LastOwnerError)
+      expect(record.reload.role).to eq('owner')
+    end
+
+    it 'direct grant!(role: :support) on the only active owner raises LastOwnerError' do
+      record = owner_row
+      expect { described_class.grant!(user: record.user, role: :support) }.to raise_error(described_class::LastOwnerError)
+      expect(record.reload.role).to eq('owner')
+    end
+
+    it 'allows demoting one owner via grant! when another active owner exists' do
+      first = owner_row
+      owner_row
+      expect { described_class.grant!(user: first.user, role: :admin) }.not_to raise_error
+      expect(first.reload.role).to eq('admin')
+    end
+
+    it 'direct reactivate!(role: :admin) cannot demote the only active owner' do
+      record = owner_row
+      expect { record.reactivate!(role: :admin) }.to raise_error(described_class::LastOwnerError)
+      expect(record.reload.role).to eq('owner')
+    end
+
+    it 'reactivate! keeping owner role on the only active owner is allowed' do
+      record = owner_row
+      expect { record.reactivate! }.not_to raise_error
+      expect(record.reload.active?).to be(true)
+    end
   end
 end

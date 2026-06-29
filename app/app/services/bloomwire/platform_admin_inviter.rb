@@ -64,17 +64,11 @@ class Bloomwire::PlatformAdminInviter
   end
 
   def grant_existing_super_admin!(user)
-    refuse_demoting_last_owner!(user)
     record = Bloomwire::PlatformAdmin.grant!(user: user, approved_by: @actor, role: @role, reason: @reason)
     { created_user: false, user_id: user.id, role: record.role }
-  end
-
-  # Block changing the role of the last active owner to a non-owner role (would leave zero owners).
-  def refuse_demoting_last_owner!(user)
-    record = Bloomwire::PlatformAdmin.find_by(user_id: user.id)
-    return if record.nil? || @role == 'owner'
-
-    raise Error, I18n.t('bloomwire.platform_admin.last_owner_protected') if record.last_active_owner?
+  rescue Bloomwire::PlatformAdmin::LastOwnerError => e
+    # The model primitive is the single source of truth for last-owner protection; surface it to the UI.
+    raise Error, e.message
   end
 
   # Create a confirmed SuperAdmin with a throwaway password (never displayed). The new admin sets their own

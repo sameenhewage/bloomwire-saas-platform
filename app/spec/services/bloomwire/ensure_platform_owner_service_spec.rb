@@ -1,6 +1,7 @@
 require 'rails_helper'
 
-# Phase 15A.1: env-driven primary platform-owner setup (no hardcoded email, fail-safe).
+# Phase 15A.1: env-driven primary platform-owner setup. Must point to an existing dedicated SuperAdmin and
+# must NEVER promote a normal/business/customer user (review blocker 1). Fail-safe with no writes otherwise.
 RSpec.describe Bloomwire::EnsurePlatformOwnerService do
   it 'raises MissingEmailError when no owner email is configured' do
     with_modified_env BLOOMWIRE_PLATFORM_OWNER_EMAIL: nil do
@@ -14,25 +15,26 @@ RSpec.describe Bloomwire::EnsurePlatformOwnerService do
     end.not_to change(Bloomwire::PlatformAdmin, :count)
   end
 
-  it 'makes an existing SuperAdmin an active owner (no promotion needed)' do
+  context 'when the configured email belongs to a normal business/customer user' do
+    let!(:business_user) { create(:user, email: 'biz@customer.local') }
+
+    it 'is refused (NotSuperAdminError), never promotes type, and creates no approval row' do
+      expect do
+        expect { described_class.call(email: 'biz@customer.local') }.to raise_error(described_class::NotSuperAdminError)
+      end.not_to change(Bloomwire::PlatformAdmin, :count)
+
+      expect(business_user.reload.type).to be_nil
+      expect(Bloomwire::PlatformAdmin.exists?(user_id: business_user.id)).to be(false)
+    end
+  end
+
+  it 'makes an existing dedicated SuperAdmin an active owner' do
     sa = create(:super_admin, :unapproved_platform_admin, email: 'owner@bloomwire.local')
     result = described_class.call(email: 'owner@bloomwire.local')
 
     expect(result[:role]).to eq('owner')
     expect(result[:active]).to be(true)
-    expect(result[:promoted_to_super_admin]).to be(false)
     expect(Bloomwire::PlatformAdmin.active_owners.exists?(user_id: sa.id)).to be(true)
-  end
-
-  it 'promotes a non-SuperAdmin user to SuperAdmin and makes them the owner' do
-    user = create(:user, email: 'newowner@bloomwire.local')
-    expect(user.type).to be_nil
-
-    result = described_class.call(email: 'newowner@bloomwire.local')
-
-    expect(result[:promoted_to_super_admin]).to be(true)
-    expect(user.reload.type).to eq('SuperAdmin')
-    expect(Bloomwire::PlatformAdmin.active_owners.exists?(user_id: user.id)).to be(true)
   end
 
   it 'is idempotent (re-running does not duplicate the row)' do
