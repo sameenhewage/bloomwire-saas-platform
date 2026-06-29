@@ -59,6 +59,7 @@
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
+| 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 
 ---
 
@@ -258,6 +259,18 @@
   selector resolves to 52 files. Live CI/deploy execution happens on the PR / first manual dispatch.
 - **Residual:** `dev`/`staging` GitHub Environments + SSH secrets must be configured before the deploy
   workflow runs (see [`deployment-runbook.md`](./deployment-runbook.md) §3.2).
+
+### Phase 15G.1 — Fix false-success dev deploy — `Fixed (infra/docs only)` — PR _pending_
+- **Bug:** `deploy-remote.sh` is piped to the server via `ssh … bash -s`; `docker compose run --rm rails
+  db:migrate` attached **stdin** and **consumed the rest of the script**, so after `db:migrate` bash hit EOF
+  and exited `0` — silently skipping the recreate (step 4) and smoke (step 5). Result: a green deploy that left
+  the app on the **old** image (caught on the first real `version_1`/`3bf260f` deploy via independent
+  `/app/.git_sha` verification; the migration applied but containers were never swapped).
+- **Fix (one line):** `… run --rm -T rails bundle exec rails db:migrate </dev/null` (`-T` + stdin redirect).
+  Only `compose run` was affected (`up -d` is detached; smoke `exec -T` already safe).
+- **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
+  path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
+- **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
 ---
 

@@ -101,7 +101,7 @@ you add required-reviewer protection for auditable deploys.
 3. **Remote (over SSH):** in `DEPLOY_PATH` — `git fetch --all --prune --tags`, `git checkout <ref>`,
    fast-forward if it's a branch; record `DEPLOY_SHA = git rev-parse HEAD`.
 4. **Build:** `docker compose -p app -f docker-compose.production.yaml -f docker-compose.bloomwire-production.yaml build --build-arg GIT_SHA=<DEPLOY_SHA>` (stamps `/app/.git_sha`).
-5. **Migrations (optional):** `... run --rm rails bundle exec rails db:migrate` when `run_migrations=true`.
+5. **Migrations (optional):** `... run --rm -T rails bundle exec rails db:migrate </dev/null` when `run_migrations=true` (the `-T </dev/null` is required so the SSH-piped script isn't consumed — see §6).
 6. **Recreate app only:** `... up -d --no-deps rails sidekiq` — **postgres/redis are not recreated; their volumes are preserved.**
 7. **Tag for rollback:** best-effort `docker tag <rails image> bloomwire-app:<DEPLOY_SHA>`.
 8. **Smoke (unless `skip_smoke`):** container status → wait for `http://127.0.0.1:3000/health` = 200 →
@@ -155,6 +155,7 @@ Deploys are SHA-addressable, so rollback = redeploy a previous good SHA.
 | SSH host-key failure | Set `SSH_KNOWN_HOSTS`, or confirm the host fingerprint for keyscan. |
 | Health never reaches 200 | `docker compose -p app -f ... logs --tail 80 rails` on the host; Postgres reachable? entrypoint waits for it. |
 | SHA mismatch in smoke | Build didn't pick up new code — confirm `git checkout <ref>` updated the server checkout and the overlay defines the build context. |
+| Deploy reports **success** but the app is still on the OLD SHA (recreate + smoke silently skipped) | The deploy script is piped to the server via `bash -s` over SSH, so a `docker compose run` that attaches stdin (no `-T`) **consumes the rest of the script** — `db:migrate` then ate steps 4–6 and bash exited 0 (false success). Fixed: `db:migrate` runs as `compose run --rm -T rails … </dev/null`. Always verify independently: `docker exec app-rails-1 cat /app/.git_sha` equals the target SHA. |
 | `migration-check` red in CI | Run `bundle exec rake db:migrate` locally and commit the updated `db/schema.rb`. |
 | `docs-governance` red in CI | A required Bloomwire doc is missing, or a forbidden root `docs/product`/`docs/adr` was added. |
 

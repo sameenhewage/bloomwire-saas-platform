@@ -57,7 +57,10 @@ log "Building image (GIT_SHA=${DEPLOY_SHA})"
 # --- 3. Optional migrations (run with the freshly built image) -------------
 if [ "${RUN_MIGRATIONS}" = "true" ]; then
   log "Running database migrations (db:migrate)"
-  "${COMPOSE[@]}" run --rm rails bundle exec rails db:migrate
+  # `-T` + `</dev/null` are REQUIRED: this script is piped to the server via `bash -s` over SSH, so any
+  # command that attaches stdin (docker compose run does by default) would CONSUME the rest of the script.
+  # Without this, db:migrate swallowed steps 4-6 (recreate + smoke) and the deploy exited 0 — a false success.
+  "${COMPOSE[@]}" run --rm -T rails bundle exec rails db:migrate </dev/null
 else
   log "Skipping migrations (run_migrations=false)"
 fi
