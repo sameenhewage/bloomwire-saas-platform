@@ -154,6 +154,7 @@
         <tr><td>15D</td><td>Assigned Agent RCA</td><td>RCA only</td><td><span class="badge done">Not a bug</span></td></tr>
         <tr><td>15E</td><td>Implementation ledger</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
         <tr><td>15E.1</td><td>Documentation Governance guardrail</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
+        <tr><td>15F</td><td>Owner-only Email Settings (DB SMTP + templates)</td><td>#78</td><td><span class="badge done">Implemented</span> <span class="badge warn">encryption parked</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -264,6 +265,17 @@
     <div class="card"><h3>Phase 15E.1 — Documentation Governance guardrail <span class="badge docs">Docs only</span> <span class="pr">PR #77</span></h3>
       <ul><li>Added the <b>Bloomwire Documentation Governance</b> rule to <code>AGENTS.md</code> + <code>CLAUDE.md</code>, the <b>Documentation Governance</b> section (§10) + Definition of Done below, and the Bloomwire change log (<code>docs/bloomwire/change-log.md</code>). Ensures every future Bloomwire-owned change stays documented.</li></ul>
     </div>
+
+    <div class="card"><h3>Phase 15F — Owner-only Email Settings <span class="badge done">Implemented</span> <span class="badge warn">encryption parked</span> <span class="pr">PR #78</span></h3>
+      <ul>
+        <li>Owner-only <b>Bloomwire &rarr; Email Settings</b> console (Administrate shell): tabs <b>Overview / Configuration / Email Templates / Test Email / Email Logs</b>, 4 status cards, owner-only badge.</li>
+        <li><b>DB-backed SMTP config</b> (<code>bloomwire_email_settings</code>) is the source of truth; ENV <code>SMTP_*</code> only seed bootstrap defaults. Password is <b>write-only</b> in the UI (masked, replace-secret, never rendered/logged).</li>
+        <li><b>DB-backed templates</b> (<code>bloomwire_email_templates</code>): 6 seeded system templates with <code>{{variable}}</code> preview + create / edit / duplicate / deactivate / reactivate.</li>
+        <li><b>Test Email</b>: preflight-validated — real send via the DB SMTP settings when complete, honest "blocked" otherwise. <b>Never fakes success</b>; tests never send real mail.</li>
+        <li><b>Access</b>: owner-only (<code>Bloomwire::PlatformAdmin</code> active owners); admin/support + customer/business blocked.</li>
+        <li><b>SECURITY DEBT</b>: <code>smtp_password</code> stored <b>plaintext</b> (AR encryption not configured) — encryption-at-rest is a parked follow-up. No WhatsApp/Meta/provider changes; no Enterprise; Devise/password-reset mailers untouched.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="s4">
@@ -343,6 +355,9 @@
         <tr><td>Inbox-has-no-agents UI warning</td><td><span class="badge optional">Optional</span></td><td>Future UX hint when an inbox has no agents/collaborators.</td></tr>
         <tr><td><code>BusinessOwner</code> role</td><td><span class="badge optional">Optional</span></td><td>Only when billing / ownership-transfer / subscription features exist; must be separately designed.</td></tr>
         <tr><td>Channel expansion</td><td><span class="badge optional">Optional</span></td><td>Instagram / Messenger / Telegram / Signal — future, not now.</td></tr>
+        <tr><td>SMTP password stored plaintext (Phase 15F)</td><td><span class="badge warn">Security debt</span></td><td><code>bloomwire_email_settings.smtp_password</code> is plaintext because AR encryption isn't configured. Never shown/logged/printed. <b>Encryption-at-rest is the priority follow-up.</b></td></tr>
+        <tr><td>Transactional mailer wiring (Phase 15F)</td><td><span class="badge parked">Parked</span></td><td>Invitation/welcome/plan-change/receipt/ticket templates exist + preview but aren't yet wired to send on real events. Password reset stays on Devise + global ENV SMTP.</td></tr>
+        <tr><td>Per-message email delivery logging (Phase 15F)</td><td><span class="badge parked">Parked</span></td><td>The Email Logs tab shows the last test-email result only; full per-message logging is a follow-up.</td></tr>
       </tbody>
     </table>
   </section>

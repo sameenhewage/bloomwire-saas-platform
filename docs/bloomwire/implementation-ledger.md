@@ -56,6 +56,7 @@
 | 15D | Assigned Agent RCA | — (RCA only) | Completed — not a bug (no code change) |
 | 15E | This implementation ledger | #77 | Docs only |
 | 15E.1 | Documentation Governance guardrail | #77 | Docs only |
+| 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
 
 ---
 
@@ -168,6 +169,25 @@
   **Documentation Governance** section (§10) + Definition of Done, and the Bloomwire change log
   (`docs/bloomwire/change-log.md`). Ensures every future Bloomwire-owned change stays documented.
 
+### Phase 15F — Owner-only Email Settings — `Implemented (encryption parked)` — PR #78
+- Owner-only **`Bloomwire → Email Settings`** console (Administrate shell) with tabs **Overview /
+  Configuration / Email Templates / Test Email / Email Logs**, 4 status cards, owner-only badge.
+- **DB-backed SMTP config** (`bloomwire_email_settings`) is the source of truth; ENV `SMTP_*` only seed
+  bootstrap defaults. Password is **write-only** in the UI (masked, replace-secret, never rendered/logged).
+- **DB-backed templates** (`bloomwire_email_templates`): 6 seeded system templates with `{{variable}}`
+  preview (sample data) + create / edit / duplicate / deactivate / reactivate. Variables:
+  `{{recipient_name}}`, `{{business_name}}`, `{{invitation_link}}`, `{{reset_link}}`, `{{expiry_time}}`,
+  `{{support_email}}`.
+- **Test Email**: preflight-validated — real send via the DB SMTP settings when complete; honest
+  "blocked — missing config" otherwise. **Never fakes success.** Tests never send real mail.
+- **Access**: owner-only (`Bloomwire::PlatformAdmin` active owners; `Bloomwire::RequiresPlatformOwner`
+  concern). Platform admin/support + customer/business users blocked.
+- **SECURITY DEBT (documented)**: `smtp_password` is stored **plaintext** (Active Record encryption not
+  configured). Encryption-at-rest is a **parked follow-up** (see §8).
+- **Not changed**: no WhatsApp/Meta/provider credentials, no Enterprise code, no `BusinessOwner`, no
+  `users.type` for business roles, no chat/message tables. Devise/password-reset mailers untouched (they
+  use the global ENV SMTP config; wiring them to the DB-backed config is parked).
+
 ---
 
 ## 4. Permission model reference
@@ -243,6 +263,9 @@
 | Inbox-has-no-agents UI warning | `Optional` | A future UX hint when an inbox has no agents/collaborators. |
 | `BusinessOwner` role | `Optional` | Only when billing / ownership-transfer / subscription features exist; must be separately designed. |
 | Channel expansion | `Optional` | Instagram / Messenger / Telegram / Signal — future, not now. |
+| SMTP password stored plaintext (Phase 15F) | `Security debt` | `bloomwire_email_settings.smtp_password` is plaintext because AR encryption isn't configured. Never shown/logged/printed. **Encryption-at-rest is the priority follow-up.** |
+| Transactional mailer wiring (Phase 15F) | `Parked` | Business-invitation/welcome/plan-change/receipt/ticket templates exist + preview, but are not yet wired to send on real events. Password reset stays on Devise + global ENV SMTP. |
+| Per-message email delivery logging (Phase 15F) | `Parked` | The Email Logs tab shows the last test-email result only; full per-message logging is a follow-up. |
 
 ---
 
