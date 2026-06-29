@@ -42,22 +42,26 @@ class SuperAdmin::BloomwireEmailTemplatesController < SuperAdmin::ApplicationCon
     redirect_to_template(template, notice: I18n.t('bloomwire.email_settings.template_reactivated'))
   end
 
-  # Phase 15F.1: send a REAL email rendered from the selected template + owner-supplied variable values.
-  # Preflight-validated + enabled-gated via SendTestEmailService; never fakes success; password never leaked.
+  # Phase 15F.1: send a REAL HTML email rendered from the selected template + owner-supplied variable values.
+  # Goes through SendTemplateEmailService (preflight + enabled-gate + per-send Email Log); the HTML body uses
+  # the same shared partial as the composer preview, so the delivered email matches the preview. Never fakes
+  # success; the SMTP password is never leaked.
   def send_email
     template = find_template
     vars = compose_vars
-    result = Bloomwire::SendTestEmailService.new(
-      setting: Bloomwire::EmailSetting.current,
+    composition = Bloomwire::SendTemplateEmailService::Composition.new(
+      template: template,
       recipient: compose_field(:recipient),
-      actor: current_super_admin,
       subject: template.render_subject(vars),
-      body: composed_body(template, vars),
-      require_enabled: true,
-      noun: 'Email'
+      body: template.render_body(vars),
+      cta_label: compose_field(:button_label),
+      cta_url: Bloomwire::EmailTemplate.interpolate(compose_field(:button_link), vars)
+    )
+    result = Bloomwire::SendTemplateEmailService.new(
+      setting: Bloomwire::EmailSetting.current, composition: composition, actor: current_super_admin
     ).call
 
-    flash_key = { 'success' => :notice, 'blocked_missing_config' => :warning }.fetch(result.status, :error)
+    flash_key = { 'success' => :notice, 'blocked' => :warning }.fetch(result.status, :error)
     redirect_to_template(template, flash_key => result.message)
   end
 
@@ -74,15 +78,6 @@ class SuperAdmin::BloomwireEmailTemplatesController < SuperAdmin::ApplicationCon
   # Variable values from the composer (string per variable; blank if not supplied).
   def compose_vars
     Bloomwire::EmailTemplate::VARIABLES.index_with { |v| compose_field(v) }
-  end
-
-  # Rendered body + (optional) CTA line built from the composer's button label/link (link may use a {{var}}).
-  def composed_body(template, vars)
-    body = template.render_body(vars)
-    label = compose_field(:button_label)
-    link = Bloomwire::EmailTemplate.interpolate(compose_field(:button_link), vars)
-    body += "\n\n#{label}: #{link}" if label.present? && link.present?
-    body
   end
 
   def redirect_to_template(template, flash_hash)

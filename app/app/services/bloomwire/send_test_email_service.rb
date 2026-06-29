@@ -1,10 +1,11 @@
-# Phase 15F: owner-initiated test-email send with PREFLIGHT validation. Never fakes success.
+# Phase 15F: owner-initiated TEST-email send (generic, plain-text) with PREFLIGHT validation. Never fakes
+# success.
 # - blank recipient / unsaved settings / missing required SMTP fields  => blocked (no send attempted)
 # - otherwise attempts a real delivery via the DB-backed SMTP settings and reports the honest outcome
-# The SMTP password is never included in any returned/recorded message (sanitized + filtered).
+# The SMTP password is never included in any returned/recorded message (filtered via setting.sanitize_secret).
 #
-# Phase 15F.1: also used by the "Send from Template" composer — pass a rendered `subject`/`body`,
-# `require_enabled: true` (a real send must respect the enabled toggle), and `noun:` for the message wording.
+# NOTE: real "Send from Template" sends go through Bloomwire::SendTemplateEmailService (HTML + per-send
+# Email Logs). This service stays focused on the Test Email tab and keeps using `last_test_status`.
 class Bloomwire::SendTestEmailService
   Result = Struct.new(:status, :message, keyword_init: true) do
     def success?
@@ -12,55 +13,37 @@ class Bloomwire::SendTestEmailService
     end
   end
 
-  def initialize(setting:, recipient:, actor: nil, subject: nil, body: nil, require_enabled: false, noun: 'Test email') # rubocop:disable Metrics/ParameterLists
+  def initialize(setting:, recipient:, actor: nil)
     @setting = setting
     @recipient = recipient.to_s.strip
     @actor = actor
-    @subject = subject
-    @body = body
-    @require_enabled = require_enabled
-    @noun = noun
   end
 
   def call
     return Result.new(status: 'blocked_missing_config', message: 'Enter a recipient email address.') if @recipient.blank?
-    return Result.new(status: 'blocked_missing_config', message: 'Save your SMTP settings first.') unless @setting.persisted?
+    return Result.new(status: 'blocked_missing_config', message: 'Save your SMTP settings before sending a test email.') unless @setting.persisted?
 
     missing = @setting.missing_required_fields
     return blocked_missing(missing) if missing.any?
-    return blocked_disabled if @require_enabled && !@setting.enabled?
 
     deliver!
   rescue StandardError => e
-    safe = sanitize_error(e)
+    safe = @setting.sanitize_secret("#{e.class}: #{e.message}", limit: 200)
     @setting.record_test_result!(status: 'failed', error: safe, actor: @actor)
-    Result.new(status: 'failed', message: "#{@noun} failed: #{safe}")
+    Result.new(status: 'failed', message: "Test email failed: #{safe}")
   end
 
   private
 
   def deliver!
-    Bloomwire::EmailTestMailer.test_email(to: @recipient, setting: @setting, subject: @subject, body: @body).deliver_now
+    Bloomwire::EmailTestMailer.test_email(to: @recipient, setting: @setting).deliver_now
     @setting.record_test_result!(status: 'success', actor: @actor)
-    Result.new(status: 'success', message: "#{@noun} sent to #{@recipient}.")
-  end
-
-  def blocked_disabled
-    msg = 'Outbound email is disabled. Enable it in Configuration before sending.'
-    @setting.record_test_result!(status: 'blocked_missing_config', error: msg, actor: @actor)
-    Result.new(status: 'blocked_missing_config', message: msg)
+    Result.new(status: 'success', message: "Test email sent to #{@recipient}.")
   end
 
   def blocked_missing(missing)
     msg = "SMTP is not fully configured (missing: #{missing.join(', ')}). Test email cannot be sent."
     @setting.record_test_result!(status: 'blocked_missing_config', error: msg, actor: @actor)
     Result.new(status: 'blocked_missing_config', message: msg)
-  end
-
-  # Strips the secret from any error text and caps length so the password can never leak via an SMTP error.
-  def sanitize_error(error)
-    msg = "#{error.class}: #{error.message}"
-    msg = msg.gsub(@setting.smtp_password.to_s, '[FILTERED]') if @setting.smtp_password.present?
-    msg.truncate(200)
   end
 end

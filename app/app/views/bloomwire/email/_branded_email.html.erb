@@ -1,0 +1,30 @@
+<%#
+# Phase 15F.1: SHARED branded email body — the SINGLE source of truth rendered BOTH in the composer's final
+# preview AND by Bloomwire::EmailTestMailer#template_email (HTML part). One partial => the delivered email
+# always matches the preview. Inline styles only (email-client safe). No secrets are involved here.
+# locals: body (String, already variable-interpolated), cta_label (String/nil), cta_url (String/nil), year (Integer)
+%>
+<div style="margin:0;padding:0;background:#f4f4f7;">
+  <div style="max-width:600px;margin:0 auto;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+    <div style="text-align:center;padding:8px 0 20px;">
+      <span style="font-size:22px;font-weight:700;color:#7c3aed;letter-spacing:.5px;">Bloomwire</span>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;">
+      <div style="font-size:15px;line-height:1.6;color:#1f2937;">
+        <%= simple_format(body.to_s) %>
+      </div>
+      <% if cta_label.to_s.present? && cta_url.to_s.present? %>
+        <div style="text-align:center;margin:28px 0 4px;">
+          <a href="<%= cta_url %>" target="_blank" rel="nofollow noopener"
+             style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;padding:12px 30px;border-radius:8px;font-size:15px;font-weight:600;">
+            <%= cta_label %>
+          </a>
+        </div>
+      <% end %>
+    </div>
+    <div style="text-align:center;color:#9ca3af;font-size:12px;line-height:1.6;padding:18px 0 4px;">
+      &copy; <%= year %> Bloomwire. All rights reserved.<br>
+      Help Center &middot; Privacy Policy &middot; Terms of Service
+    </div>
+  </div>
+</div>

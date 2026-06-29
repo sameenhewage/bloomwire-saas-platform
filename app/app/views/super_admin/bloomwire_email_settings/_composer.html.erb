@@ -76,21 +76,11 @@
 
       <div class="bw-panel">
         <div class="bw-panel__head"><h2 class="bw-panel__title">Final preview</h2></div>
-        <div class="bw-preview">
-          <div class="bw-preview__email">
-            <div class="bw-preview__brand">
-              <%= image_tag('/brand-assets/logo_thumbnail.svg', alt: 'Bloomwire') %><span>Bloomwire</span>
-            </div>
-            <p style="font-weight:600; margin:0 0 10px;">Subject: <%= @selected_template.render_subject(pv) %></p>
-            <div class="bw-preview__body"><%= @selected_template.render_body(pv) %></div>
-            <% if cta_label.present? && cta_link.present? %>
-              <div style="text-align:center;">
-                <a class="bw-preview__cta" href="<%= cta_link %>" rel="nofollow noopener" target="_blank"><%= cta_label %></a>
-              </div>
-            <% end %>
-            <div class="bw-preview__footer">&copy; <%= Date.current.year %> Bloomwire. All rights reserved.</div>
-          </div>
-        </div>
+        <p class="bw-help" style="margin-top:0;">This is exactly what will be delivered (same branded shell).</p>
+        <p style="font-weight:600; margin:0 0 10px;">Subject: <%= @selected_template.render_subject(pv) %></p>
+        <%# Renders the SAME shared partial the mailer sends, so preview == delivered email. %>
+        <%= render 'bloomwire/email/branded_email', body: @selected_template.render_body(pv),
+                   cta_label: cta_label, cta_url: cta_link, year: Date.current.year %>
         <p class="bw-help">Will send to: <strong><%= @compose[:recipient].presence || '—' %></strong></p>
       </div>
     </div>

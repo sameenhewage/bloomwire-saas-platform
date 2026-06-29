@@ -16,6 +16,7 @@ class SuperAdmin::BloomwireEmailSettingsController < SuperAdmin::ApplicationCont
     @new_template = params[:new].present?
     @sample_vars = Bloomwire::EmailTemplate::SAMPLE_VARS
     @compose = build_compose(@selected_template) # Phase 15F.1: "Send from Template" composer context
+    @delivery_logs = Bloomwire::EmailDeliveryLog.recent.includes(:actor).limit(50) if @active_tab == 'email_logs'
   end
 
   # PATCH: persist SMTP/email configuration. Blank password => keep the existing secret (replace-secret UX).

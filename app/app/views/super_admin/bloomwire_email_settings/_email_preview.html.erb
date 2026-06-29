@@ -14,24 +14,10 @@
       <p class="bw-empty__text">Save the template to see a preview with sample data.</p>
     </div>
   <% else %>
-    <div class="bw-preview">
-      <div class="bw-preview__email">
-        <div class="bw-preview__brand">
-          <%= image_tag('/brand-assets/logo_thumbnail.svg', alt: 'Bloomwire') %>
-          <span>Bloomwire</span>
-        </div>
-        <div class="bw-preview__body"><%= template.render_body(sample_vars) %></div>
-        <% if template.cta? %>
-          <div style="text-align:center;">
-            <a class="bw-preview__cta" href="<%= template.render_cta_url(sample_vars) %>" rel="nofollow noopener" target="_blank"><%= template.cta_label %></a>
-          </div>
-        <% end %>
-        <div class="bw-preview__footer">
-          &copy; <%= Date.current.year %> Bloomwire. All rights reserved.<br>
-          <a href="#">Help Center</a> &middot; <a href="#">Privacy Policy</a> &middot; <a href="#">Terms of Service</a>
-        </div>
-      </div>
-    </div>
+    <p style="font-weight:600; margin:0 0 10px;">Subject: <%= template.render_subject(sample_vars) %></p>
+    <%# Phase 15F.1: render the SAME shared partial the mailer sends, so this preview matches delivered email. %>
+    <%= render 'bloomwire/email/branded_email', body: template.render_body(sample_vars),
+               cta_label: template.cta_label, cta_url: template.render_cta_url(sample_vars), year: Date.current.year %>
 
     <div class="bw-panel__actions">
       <% if template.active? %>

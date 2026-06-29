@@ -24,6 +24,25 @@ class Bloomwire::EmailTestMailer < ActionMailer::Base # rubocop:disable Rails/Ap
     message
   end
 
+  # Phase 15F.1: send a REAL template email as multipart HTML + plain-text. The HTML part renders the SAME
+  # shared partial as the composer preview (app/views/bloomwire/email/_branded_email.html.erb) so the
+  # delivered email matches the preview. `body` is already variable-interpolated; the password is never logged.
+  def template_email(to:, setting:, subject:, body:, cta_label: nil, cta_url: nil) # rubocop:disable Metrics/ParameterLists
+    @body = body
+    @cta_label = cta_label
+    @cta_url = cta_url
+    @year = Date.current.year
+
+    message = mail(
+      to: to,
+      from: email_address_with_name(setting.effective_from_email, setting.effective_from_name),
+      reply_to: setting.reply_to_email.presence,
+      subject: subject.presence || '(no subject)'
+    )
+    message.delivery_method(:smtp, setting.smtp_delivery_settings)
+    message
+  end
+
   private
 
   def default_body(setting)

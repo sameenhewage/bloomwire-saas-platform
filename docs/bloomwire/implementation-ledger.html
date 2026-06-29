@@ -280,15 +280,18 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 15F.1 — Send-from-Template composer <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+    <div class="card"><h3>Phase 15F.1 — Send-from-Template composer (+ HTML email + Email Logs) <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
       <ul>
         <li><b>Discovery first</b>: the prior "Send Test Email" button only <b>linked</b> to the Test Email tab (a fixed sample send) — there was no way to fill a template's variables and send the rendered template. The composer was implemented; no behavior was silently changed.</li>
         <li>Owner-only <b>"Send from Template"</b> composer on the Email Templates tab: 9 fields (recipient, the 6 <code>{{variables}}</code>, button label/link), an <b>"Update preview"</b> round-trip (server-rendered final preview using the entered values), and a <b>"Send Email"</b> action.</li>
-        <li><b>Real send</b> via the existing DB-backed SMTP settings, reusing <code>Bloomwire::SendTestEmailService</code> (extended: <code>subject:</code>/<code>body:</code>/<code>require_enabled:</code>/<code>noun:</code>) and <code>Bloomwire::EmailTestMailer</code>. <code>{{placeholders}}</code> are interpolated before sending.</li>
-        <li><b>Honest + enabled-gated</b>: blocks when the recipient is blank, SMTP is incomplete, or outbound email is disabled; the Send button is disabled until SMTP is ready. <b>Never fakes success</b>. SMTP password never rendered/logged.</li>
-        <li><b>Access</b>: owner-only via the existing <code>Bloomwire::RequiresPlatformOwner</code> gate on both controllers.</li>
-        <li><b>Tests</b>: 62 examples, 0 failures for the Bloomwire email suite (48 prior + 14 new) — owner can send, non-owner blocked, missing recipient blocked, incomplete/disabled SMTP blocked, placeholders replaced, password never in the response, final-preview round-trip. RuboCop clean.</li>
-        <li><b>Residual</b>: composer sends <b>plain text</b> (rendered body + CTA line), not the branded HTML shell shown in the preview; SMTP password still plaintext-at-rest (Phase 15F debt); Office365 SMTP AUTH may still be blocked by tenant Security Defaults (a Microsoft-365 config matter, not code). No WhatsApp/Meta/provider/Enterprise changes; no migrations; no new dependencies.</li>
+        <li><b>Delivered email matches the preview (review fix)</b>: one shared partial <code>app/views/bloomwire/email/_branded_email.html.erb</code> is rendered by BOTH the composer preview and the mailer, so they can't drift. <code>EmailTestMailer#template_email</code> sends <b>multipart HTML + plain-text</b> — HTML with branding + CTA <b>button</b> + footer, text fallback with the same values. <code>{{placeholders}}</code> interpolated before send; no raw <code>{{…}}</code> for supplied values.</li>
+        <li><b>Per-send Email Logs (review fix)</b>: new Bloomwire-owned table <code>bloomwire_email_delivery_logs</code> + <code>Bloomwire::EmailDeliveryLog</code>. Each send writes one row (<b>success / failed / blocked</b>) with recipient, template, status, time, actor, and a <b>sanitized</b> error. The Email Logs tab shows these rows. The table <b>never</b> stores SMTP credentials.</li>
+        <li><b>Ownership</b>: <code>Bloomwire::SendTemplateEmailService</code> owns the real send (preflight + enabled-gate + logging); <code>SendTestEmailService</code> stays Test-Email-only. Preflight + secret-filter centralized on <code>Bloomwire::EmailSetting</code> (<code>block_reason</code>, <code>sanitize_secret</code>).</li>
+        <li><b>Honest + enabled-gated</b>: blocks (and logs <code>blocked</code>) when the recipient is blank, SMTP is incomplete, or outbound email is disabled; Send disabled until ready. <b>Never fakes success</b>. SMTP password never rendered, logged, or stored.</li>
+        <li><b>Access</b>: owner-only via the existing <code>Bloomwire::RequiresPlatformOwner</code> gate on both controllers (send + logs).</li>
+        <li><b>Tests</b>: 71 examples, 0 failures for the Bloomwire email suite — owner can send (success log), non-owner blocked (send + logs), missing/incomplete/disabled → blocked log, failed → failed log with sanitized error, HTML+text contain replaced values + CTA with no raw <code>{{…}}</code>, Email Logs renders rows, password never in logs/response/HTML, final-preview round-trip. RuboCop clean.</li>
+        <li><b>Migration</b>: <code>20260629000003_create_bloomwire_email_delivery_logs</code> (additive). No WhatsApp/Meta/provider/Enterprise changes; no new dependencies.</li>
+        <li><b>Residual</b>: SMTP password still plaintext-at-rest (Phase 15F debt); Office365 SMTP AUTH may still be blocked by tenant Security Defaults (a Microsoft-365 config matter, not code).</li>
       </ul>
     </div>
 
@@ -384,7 +387,7 @@
         <tr><td>Channel expansion</td><td><span class="badge optional">Optional</span></td><td>Instagram / Messenger / Telegram / Signal — future, not now.</td></tr>
         <tr><td>SMTP password stored plaintext (Phase 15F)</td><td><span class="badge warn">Security debt</span></td><td><code>bloomwire_email_settings.smtp_password</code> is plaintext because AR encryption isn't configured. Never shown/logged/printed. <b>Encryption-at-rest is the priority follow-up.</b></td></tr>
         <tr><td>Transactional mailer wiring (Phase 15F)</td><td><span class="badge parked">Parked</span></td><td>Invitation/welcome/plan-change/receipt/ticket templates exist + preview but aren't yet wired to send on real events. Password reset stays on Devise + global ENV SMTP.</td></tr>
-        <tr><td>Per-message email delivery logging (Phase 15F)</td><td><span class="badge parked">Parked</span></td><td>The Email Logs tab shows the last test-email result only; full per-message logging is a follow-up.</td></tr>
+        <tr><td>Per-message email delivery logging</td><td><span class="badge done">Implemented for template sends (15F.1)</span></td><td><code>bloomwire_email_delivery_logs</code> records one row per "Send from Template" send (success/failed/blocked); the Email Logs tab shows them. Event-driven/transactional logging stays tied to the parked transactional wiring above.</td></tr>
       </tbody>
     </table>
   </section>
