@@ -1,0 +1,38 @@
+<%# Phase 15F: Overview tab — a read-only summary of the Bloomwire outbound email configuration. %>
+<div class="bw-card">
+  <h2 class="bw-card__title">Outbound email overview</h2>
+  <p class="bw-card__subtitle">
+    Bloomwire sends transactional email (invitations, password resets, receipts and more) using the SMTP
+    configuration below. Manage the connection in <strong>Configuration</strong> and the message content in
+    <strong>Email Templates</strong>.
+  </p>
+
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">Outbound email</div>
+    <div class="bw-dl__value"><%= @email_setting.enabled? ? 'Enabled' : 'Disabled' %></div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">SMTP host</div>
+    <div class="bw-dl__value"><%= @email_setting.smtp_address.presence || '—' %>:<%= @email_setting.smtp_port %></div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">From address</div>
+    <div class="bw-dl__value"><%= @email_setting.effective_from_name %> &lt;<%= @email_setting.effective_from_email.presence || '—' %>&gt;</div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">SMTP password</div>
+    <div class="bw-dl__value">
+      <%= @email_setting.password_present? ? bw_status_badge('configured', label: 'Configured') : bw_status_badge('pending', label: 'Not configured') %>
+    </div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">Active templates</div>
+    <div class="bw-dl__value"><%= @all_templates.count(&:active?) %> of <%= @all_templates.size %></div>
+  </div>
+
+  <div class="bw-panel__actions">
+    <%= link_to 'Configure SMTP', super_admin_bloomwire_email_settings_path(tab: 'configuration'), class: 'bw-btn bw-btn--secondary' %>
+    <%= link_to 'Manage templates', super_admin_bloomwire_email_settings_path(tab: 'templates'), class: 'bw-btn bw-btn--secondary' %>
+    <%= link_to 'Send a test email', super_admin_bloomwire_email_settings_path(tab: 'test_email'), class: 'bw-btn bw-btn--primary' %>
+  </div>
+</div>

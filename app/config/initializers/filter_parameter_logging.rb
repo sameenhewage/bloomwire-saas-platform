@@ -19,6 +19,12 @@ Rails.application.config.filter_parameters += [:entry]
 # (token + routing ids) from request-parameter logs. Logging-only: controllers still read params[:provider_config].
 Rails.application.config.filter_parameters += [:provider_config]
 
+# Bloomwire Phase 15F: the Email Settings page accepts an SMTP password (DB-backed, plaintext until the
+# encryption-hardening follow-up). The generic `:password` filter already redacts the `smtp_password` key
+# (substring match); this explicit entry documents the intent and is defense-in-depth. The secret must never
+# appear in request-parameter logs.
+Rails.application.config.filter_parameters += [:smtp_password]
+
 # Regex to filter all occurrences of 'token' in keys except for 'website_token'
 filter_regex = /\A(?!.*\bwebsite_token\b).*token/i
 

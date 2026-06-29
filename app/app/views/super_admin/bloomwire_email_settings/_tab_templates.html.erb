@@ -1,0 +1,120 @@
+<%#
+# Phase 15F: Email Templates tab — 3 panels: list (left) / editor (middle) / live preview (right).
+# Server-rendered: selecting a template reloads with ?template_id=; preview uses sample variable data.
+%>
+<%
+  editing = @new_template ? nil : @selected_template
+  cat_icons = {
+    'Onboarding' => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+    'Security' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    'Billing' => '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+    'Support' => '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+    'Notifications' => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'
+  }
+  default_icon = cat_icons['Onboarding']
+%>
+
+<div class="bw-email-grid">
+  <%# ---- Panel 1: template list ---- %>
+  <div class="bw-panel">
+    <div class="bw-panel__head">
+      <h2 class="bw-panel__title">Email Templates</h2>
+      <%= link_to super_admin_bloomwire_email_settings_path(tab: 'templates', new: 1), class: 'bw-btn bw-btn--primary bw-btn--sm' do %>
+        + New Template
+      <% end %>
+    </div>
+
+    <%= form_with url: super_admin_bloomwire_email_settings_path, method: :get, class: 'bw-tpl-toolbar' do %>
+      <%= hidden_field_tag :tab, 'templates' %>
+      <%= text_field_tag :q, params[:q], placeholder: 'Search templates…', class: 'bw-input' %>
+      <%= select_tag :category,
+                     options_for_select([['All Categories', '']] + @categories.map { |c| [c, c] }, params[:category]),
+                     class: 'bw-select' %>
+      <%= submit_tag 'Filter', class: 'bw-btn bw-btn--secondary bw-btn--sm' %>
+    <% end %>
+
+    <div class="bw-tpl-list">
+      <% @templates.each do |t| %>
+        <%= link_to super_admin_bloomwire_email_settings_path(tab: 'templates', template_id: t.id),
+                    class: "bw-tpl-item #{'is-active' if editing&.id == t.id}" do %>
+          <span class="bw-tpl-item__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><%== cat_icons.fetch(t.category, default_icon) %></svg>
+          </span>
+          <span class="bw-tpl-item__body">
+            <span class="bw-tpl-item__name"><%= t.name %></span>
+            <span class="bw-tpl-item__desc"><%= t.subject %></span>
+          </span>
+          <%= bw_status_badge(t.active? ? 'active' : 'inactive', label: t.active? ? 'Active' : 'Inactive') %>
+        <% end %>
+      <% end %>
+      <% if @templates.empty? %>
+        <p class="bw-help">No templates match your search.</p>
+      <% end %>
+    </div>
+    <div class="bw-tpl-list__footer">Showing <%= @templates.size %> of <%= @all_templates.size %> templates</div>
+  </div>
+
+  <%# ---- Panel 2: editor ---- %>
+  <div class="bw-panel">
+    <% if editing.nil? && !@new_template %>
+      <div class="bw-empty"><p class="bw-empty__text">Select a template to edit, or create a new one.</p></div>
+    <% else %>
+      <% form_url = editing ? super_admin_bloomwire_email_template_path(editing) : super_admin_bloomwire_email_templates_path %>
+      <% form_method = editing ? :patch : :post %>
+      <div class="bw-panel__head">
+        <h2 class="bw-panel__title"><%= editing ? editing.name : 'New template' %></h2>
+        <% if editing %><%= bw_status_badge(editing.active? ? 'active' : 'inactive', label: editing.active? ? 'Active' : 'Inactive') %><% end %>
+      </div>
+
+      <%= form_with url: form_url, method: form_method, scope: :bloomwire_email_template do |f| %>
+        <div class="bw-form-grid">
+          <div class="bw-field">
+            <%= f.label :name, 'Template Name', class: 'bw-label' %>
+            <%= f.text_field :name, value: editing&.name, class: 'bw-input', autocomplete: 'off' %>
+          </div>
+          <div class="bw-field">
+            <%= f.label :category, 'Category', class: 'bw-label' %>
+            <%= f.select :category, @categories.map { |c| [c, c] }, { selected: editing&.category, include_blank: 'Uncategorized' }, class: 'bw-select' %>
+          </div>
+        </div>
+
+        <div class="bw-field">
+          <%= f.label :subject, 'Subject', class: 'bw-label' %>
+          <%= f.text_field :subject, value: editing&.subject, class: 'bw-input', autocomplete: 'off' %>
+        </div>
+
+        <div class="bw-field">
+          <%= f.label :body, 'Email Content', class: 'bw-label' %>
+          <div class="bw-editor-toolbar">
+            <span class="bw-editor-toolbar__btn">Plain text</span>
+            <span class="bw-editor-toolbar__sep"></span>
+            <span class="bw-help" style="margin:0;">Use <code>{{variable}}</code> placeholders — see below</span>
+          </div>
+          <%= f.text_area :body, value: editing&.body, class: 'bw-input bw-editor-body' %>
+          <div class="bw-vars">
+            <% Bloomwire::EmailTemplate::VARIABLES.each do |v| %><code>{{<%= v %>}}</code><% end %>
+          </div>
+        </div>
+
+        <div class="bw-form-grid">
+          <div class="bw-field">
+            <%= f.label :cta_label, 'Button label (optional)', class: 'bw-label' %>
+            <%= f.text_field :cta_label, value: editing&.cta_label, class: 'bw-input', autocomplete: 'off' %>
+          </div>
+          <div class="bw-field">
+            <%= f.label :cta_url, 'Button link (optional)', class: 'bw-label' %>
+            <%= f.text_field :cta_url, value: editing&.cta_url, class: 'bw-input', autocomplete: 'off', placeholder: '{{invitation_link}}' %>
+          </div>
+        </div>
+
+        <div class="bw-form-actions">
+          <%= link_to 'Cancel', super_admin_bloomwire_email_settings_path(tab: 'templates', template_id: editing&.id), class: 'bw-btn bw-btn--ghost' %>
+          <%= f.submit(editing ? 'Save Template' : 'Create Template', class: 'bw-btn bw-btn--primary') %>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <%# ---- Panel 3: preview ---- %>
+  <%= render 'email_preview', template: editing, sample_vars: @sample_vars %>
+</div>

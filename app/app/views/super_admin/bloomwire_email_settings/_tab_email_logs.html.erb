@@ -1,0 +1,35 @@
+<%#
+# Phase 15F: Email Logs tab. Full per-message delivery logging is parked as a follow-up (no logs table yet).
+# We honestly show only what we DO track today — the last test-email result — rather than fabricating a log.
+%>
+<div class="bw-card">
+  <h2 class="bw-card__title">Email logs</h2>
+  <p class="bw-card__subtitle">
+    Per-message delivery logging is a planned follow-up. Today, Bloomwire records the outcome of the most
+    recent test email below.
+  </p>
+
+  <table class="bw-table">
+    <thead>
+      <tr><th>Event</th><th>Status</th><th>When</th><th>Detail</th></tr>
+    </thead>
+    <tbody>
+      <% if @email_setting.last_test_status.to_s == 'not_tested' %>
+        <tr><td colspan="4"><div class="bw-empty"><p class="bw-empty__text">No email activity recorded yet. Send a test email to see a result here.</p></div></td></tr>
+      <% else %>
+        <tr>
+          <td>Test email</td>
+          <td>
+            <% case @email_setting.last_test_status
+               when 'success' %><%= bw_status_badge('pass', label: 'Success') %>
+            <% when 'failed' %><%= bw_status_badge('failed', label: 'Failed') %>
+            <% else %><%= bw_status_badge('pending', label: 'Blocked') %>
+            <% end %>
+          </td>
+          <td class="text-xs"><%= @email_setting.last_test_sent_at&.to_fs(:short) || '—' %></td>
+          <td class="text-xs bw-text-secondary"><%= @email_setting.last_test_error.presence || '—' %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

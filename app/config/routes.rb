@@ -705,6 +705,18 @@ Rails.application.routes.draw do
           patch :change_role
         end
       end
+      # Bloomwire Phase 15F: owner-only Email Settings (DB-backed SMTP config + email templates + test email).
+      resource :bloomwire_email_settings, only: [:show], controller: :bloomwire_email_settings do
+        patch :update_settings
+        post :test_email
+      end
+      resources :bloomwire_email_templates, only: [:create, :update], controller: :bloomwire_email_templates do
+        member do
+          post :duplicate
+          patch :deactivate
+          patch :reactivate
+        end
+      end
       resource :push_diagnostics, only: [:show, :create] do
         post :destroy_subscriptions, on: :collection
       end

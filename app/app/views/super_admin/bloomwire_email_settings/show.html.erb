@@ -1,0 +1,33 @@
+<%#
+# Phase 15F: owner-only Bloomwire Email Settings page. Tabs are server-rendered (?tab=) so the page works
+# without a JS framework. The SMTP password is never rendered back (write-only). DB is the source of truth.
+%>
+<% content_for(:title) { 'Email Settings' } %>
+<% content_for(:breadcrumb) { bw_crumbs('Bloomwire', 'Email Settings') } %>
+
+<% tabs = { 'overview' => 'Overview', 'configuration' => 'Configuration', 'templates' => 'Email Templates',
+            'test_email' => 'Test Email', 'email_logs' => 'Email Logs' } %>
+
+<div class="bw-page-head">
+  <div>
+    <h1 class="bw-page-title">Email Settings</h1>
+    <p class="bw-page-subtitle">Configure outbound email settings, templates and test your emails.</p>
+  </div>
+  <span class="bw-owner-pill" title="Bloomwire Platform Owner only">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+    Owner only
+  </span>
+</div>
+
+<nav class="bw-tabs" aria-label="Email settings tabs">
+  <% tabs.each do |key, label| %>
+    <%= link_to label, super_admin_bloomwire_email_settings_path(tab: key),
+                class: "bw-tab #{'is-active' if @active_tab == key}" %>
+  <% end %>
+</nav>
+
+<%= render 'status_cards', email_setting: @email_setting %>
+
+<%= render "tab_#{@active_tab}" %>
+
+<%= render 'security_note' %>
