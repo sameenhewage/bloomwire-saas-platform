@@ -15,6 +15,33 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15G — CI/CD Foundation (PR CI + manual Dev/Staging deploy)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** CI/CD / process (infra-only; no application runtime code)
+- **Summary:** Added repo-root GitHub Actions. `ci.yml` validates PRs targeting `version_1` — RuboCop,
+  ESLint, Vitest, Vite asset build (`assets:precompile`), a curated Bloomwire RSpec suite (52 spec files)
+  on ephemeral Postgres+Redis, a migration/schema-sync check, a docs-governance check, and a
+  self-contained basic secret scan. `deploy-dev.yml` is a manual (`workflow_dispatch`) Dev/Staging deploy
+  over SSH that builds the image with the exact `GIT_SHA`, optionally migrates, recreates only
+  `rails`+`sidekiq` (`--no-deps`, preserving postgres/redis volumes), and runs post-deploy smoke
+  (health 200, in-container SHA match, postgres/redis still Up). Remote logic lives in
+  `.github/scripts/deploy-remote.sh`; full guide in [`deployment-runbook.md`](./deployment-runbook.md).
+- **Why:** Safer, auditable, less-manual dev/staging deploys and consistent PR gating before Phase 16.
+- **Runner:** GitHub-hosted only (Option A). No self-hosted runner this phase.
+- **Not changed:** no application runtime code, no migrations, no Enterprise code, no provider/credentials,
+  no production deploy path, no Docker/compose files, no `.env`. The server-local
+  `docker-compose.bloomwire-production.yaml` overlay is untouched (gitignored).
+- **Security:** CI reads **no** secrets and makes **no** live Meta/WhatsApp calls (specs WebMock-blocked);
+  deploy credentials are per-environment GitHub Environment secrets, never printed; the SSH key is written
+  `600` and removed after the run; Postgres/Redis volumes are never destroyed.
+- **Validation:** YAML parse OK (`ci.yml` 8 jobs, `deploy-dev.yml` 1 job); all embedded shell + the remote
+  script pass `bash -n`; the Bloomwire spec selector resolves to 52 files. Live CI/deploy runs happen on the
+  PR / on first manual dispatch (after secrets are configured).
+- **Residual:** `dev`/`staging` GitHub Environments + SSH secrets must be configured before the deploy
+  workflow can run; `actionlint`/`shellcheck` were not available locally (validated via YAML parse + `bash -n`).
+- **Runtime impact:** None (infra/docs only) · **Deploy required:** No (it enables deploys; it does not perform one).
+
 ### Phase 15F — Owner-only Email Settings (DB-backed SMTP + templates)
 - **PR:** #78
 - **Merge SHA:** _pending merge_
