@@ -52,6 +52,15 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
     redirect_back(fallback_location: super_admin_users_path)
   end
 
+  # Phase 15C (Issue #74): start impersonation. Gated by SuperAdmin auth + the Bloomwire platform-admin
+  # boundary (SuperAdmin::ApplicationController before_actions), so only an approved platform admin reaches it.
+  # The short-lived (5 min), single-use SSO token is generated on demand here (never rendered into a page href).
+  # We emit the SSO handoff via `head` + Location instead of `redirect_to` so the token is not written to the
+  # Rails "Redirected to ..." log line; it is also already filtered from request-parameter logs.
+  def impersonate
+    head :found, location: requested_resource.generate_sso_link_with_impersonation
+  end
+
   def scoped_resource
     resource_class.with_attached_avatar
   end
