@@ -1,0 +1,58 @@
+<%#
+# Phase 15F: the four Email Settings status cards (Email Status / Provider / Last Test / Last Updated).
+# Reads only the DB-backed Bloomwire::EmailSetting. No secret is rendered.
+%>
+<%
+  last_test_labels = { 'success' => 'Success', 'failed' => 'Failed',
+                       'blocked_missing_config' => 'Blocked', 'not_tested' => 'Not tested' }
+  last_test_label = last_test_labels.fetch(email_setting.last_test_status.to_s, 'Not tested')
+%>
+<div class="bw-stat-grid">
+  <div class="bw-stat-card">
+    <span class="bw-stat-card__icon <%= email_setting.enabled? ? 'bw-stat-card__icon--success' : '' %>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+    </span>
+    <div>
+      <p class="bw-stat-card__label">Email Status</p>
+      <p class="bw-stat-card__value"><%= email_setting.enabled? ? 'Enabled' : 'Disabled' %></p>
+      <p class="bw-stat-card__sub"><%= email_setting.enabled? ? 'Outbound system emails are active' : 'Outbound email is turned off' %></p>
+    </div>
+  </div>
+
+  <div class="bw-stat-card">
+    <span class="bw-stat-card__icon bw-stat-card__icon--accent">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    </span>
+    <div>
+      <p class="bw-stat-card__label">Provider</p>
+      <p class="bw-stat-card__value">SMTP</p>
+      <p class="bw-stat-card__sub"><%= email_setting.smtp_address.presence || 'Not configured' %></p>
+    </div>
+  </div>
+
+  <div class="bw-stat-card">
+    <span class="bw-stat-card__icon bw-stat-card__icon--info">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+    </span>
+    <div>
+      <p class="bw-stat-card__label">Last Test</p>
+      <p class="bw-stat-card__value"><%= last_test_label %></p>
+      <p class="bw-stat-card__sub">
+        <%= email_setting.last_test_sent_at.present? ? "#{time_ago_in_words(email_setting.last_test_sent_at)} ago" : 'No test run yet' %>
+      </p>
+    </div>
+  </div>
+
+  <div class="bw-stat-card">
+    <span class="bw-stat-card__icon bw-stat-card__icon--warning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </span>
+    <div>
+      <p class="bw-stat-card__label">Last Updated</p>
+      <p class="bw-stat-card__value"><%= email_setting.updated_at.present? ? email_setting.updated_at.to_fs(:short) : 'Not saved yet' %></p>
+      <p class="bw-stat-card__sub">
+        <%= email_setting.last_updated_by&.name.present? ? "by #{email_setting.last_updated_by.name}" : 'Using bootstrap defaults' %>
+      </p>
+    </div>
+  </div>
+</div>

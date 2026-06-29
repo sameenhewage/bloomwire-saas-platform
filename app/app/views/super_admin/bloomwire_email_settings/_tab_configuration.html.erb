@@ -1,0 +1,97 @@
+<%#
+# Phase 15F: Configuration tab — DB-backed SMTP settings form. The password is WRITE-ONLY: the field is
+# always blank, the saved value is shown only as a "Configured" status, and a blank submission keeps the
+# stored secret (replace-secret UX). The secret is never rendered into the HTML.
+%>
+<div class="bw-card">
+  <h2 class="bw-card__title">SMTP configuration</h2>
+  <p class="bw-card__subtitle">
+    These settings are the source of truth for Bloomwire outbound email. Values are pre-filled from environment
+    defaults the first time; once saved, the database is authoritative.
+  </p>
+
+  <%= form_with url: update_settings_super_admin_bloomwire_email_settings_path, method: :patch, scope: :bloomwire_email_setting do |f| %>
+    <div class="bw-field">
+      <label class="bw-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <%= f.check_box :enabled, checked: @email_setting.enabled? %>
+        Enable outbound email
+      </label>
+      <p class="bw-help">When off, Bloomwire will not send outbound email even if SMTP is configured.</p>
+    </div>
+
+    <div class="bw-form-grid">
+      <div class="bw-field">
+        <%= f.label :smtp_address, 'SMTP host', class: 'bw-label' %>
+        <%= f.text_field :smtp_address, value: @email_setting.smtp_address, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :smtp_port, 'Port', class: 'bw-label' %>
+        <%= f.number_field :smtp_port, value: @email_setting.smtp_port, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :smtp_domain, 'Domain', class: 'bw-label' %>
+        <%= f.text_field :smtp_domain, value: @email_setting.smtp_domain, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :smtp_authentication, 'Authentication', class: 'bw-label' %>
+        <%= f.select :smtp_authentication, Bloomwire::EmailSetting::AUTH_METHODS.map { |m| [m, m] },
+                     { selected: @email_setting.smtp_authentication }, class: 'bw-select' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :smtp_username, 'Username', class: 'bw-label' %>
+        <%= f.text_field :smtp_username, value: @email_setting.smtp_username, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :smtp_password, 'Password', class: 'bw-label' %>
+        <%= f.password_field :smtp_password, value: '', autocomplete: 'new-password', class: 'bw-input',
+                             placeholder: (@email_setting.password_present? ? '•••••••• (saved)' : 'Enter SMTP password') %>
+        <p class="bw-help">
+          <% if @email_setting.password_present? %>
+            <span class="bw-badge bw-badge--success">Configured</span> Leave blank to keep the saved password, or type a new one to replace it.
+          <% else %>
+            <span class="bw-badge bw-badge--neutral">Not configured</span> Required before a test email can be sent.
+          <% end %>
+        </p>
+      </div>
+    </div>
+
+    <div class="bw-field">
+      <label class="bw-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <%= f.check_box :smtp_enable_starttls_auto, checked: @email_setting.smtp_enable_starttls_auto %>
+        Enable STARTTLS auto
+      </label>
+    </div>
+    <div class="bw-form-grid">
+      <div class="bw-field">
+        <label class="bw-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <%= f.check_box :smtp_tls, checked: @email_setting.smtp_tls %> Use TLS
+        </label>
+      </div>
+      <div class="bw-field">
+        <label class="bw-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <%= f.check_box :smtp_ssl, checked: @email_setting.smtp_ssl %> Use SSL
+        </label>
+      </div>
+    </div>
+
+    <h3 style="font-size:14px; font-weight:600; margin:8px 0 12px;">Sender identity</h3>
+    <div class="bw-form-grid">
+      <div class="bw-field">
+        <%= f.label :from_name, 'From name', class: 'bw-label' %>
+        <%= f.text_field :from_name, value: @email_setting.from_name, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :from_email, 'From email', class: 'bw-label' %>
+        <%= f.email_field :from_email, value: @email_setting.from_email, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+      <div class="bw-field">
+        <%= f.label :reply_to_email, 'Reply-to email (optional)', class: 'bw-label' %>
+        <%= f.email_field :reply_to_email, value: @email_setting.reply_to_email, class: 'bw-input', autocomplete: 'off' %>
+      </div>
+    </div>
+
+    <div class="bw-form-actions">
+      <%= f.submit 'Save settings', class: 'bw-btn bw-btn--primary' %>
+    </div>
+  <% end %>
+</div>

@@ -1,0 +1,66 @@
+<%#
+# Phase 15F: Test Email tab. Preflight-validated — when required SMTP fields (incl. password) are missing the
+# send is blocked with an honest message; success/failure is never faked (see SendTestEmailService).
+%>
+<% missing = @email_setting.missing_required_fields %>
+<div class="bw-card bw-card--form-lg">
+  <h2 class="bw-card__title">Send a test email</h2>
+  <p class="bw-card__subtitle">
+    Sends a plain test message using the saved SMTP settings, to confirm outbound email works.
+  </p>
+
+  <% unless @email_setting.persisted? %>
+    <div class="bw-blocked">
+      <div>
+        <p class="bw-blocked__title">Save your settings first</p>
+        <p>Configure and save SMTP settings in the <strong>Configuration</strong> tab before sending a test.</p>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @email_setting.persisted? && missing.any? %>
+    <div class="bw-blocked" style="margin-bottom:16px;">
+      <div>
+        <p class="bw-blocked__title">SMTP is not fully configured</p>
+        <p>Missing required field<%= 's' if missing.size > 1 %>: <strong><%= missing.map { |m| m.to_s.humanize }.join(', ') %></strong>.
+          <% if missing.include?(:smtp_password) %>The SMTP password is not configured, so a test email cannot be sent.<% end %>
+          Add the missing values in <strong>Configuration</strong> first.</p>
+      </div>
+    </div>
+  <% end %>
+
+  <%= form_with url: test_email_super_admin_bloomwire_email_settings_path, method: :post do %>
+    <div class="bw-field bw-field--md">
+      <%= label_tag :recipient, 'Send test to', class: 'bw-label' %>
+      <%= email_field_tag :recipient, current_super_admin&.email, class: 'bw-input', autocomplete: 'off', required: true %>
+    </div>
+    <% can_send = @email_setting.persisted? && missing.empty? %>
+    <%= submit_tag 'Send Test Email', class: "bw-btn bw-btn--primary", disabled: !can_send %>
+    <% unless can_send %><p class="bw-help">The button is disabled until the SMTP settings are complete.</p><% end %>
+  <% end %>
+
+  <h3 style="font-size:14px; font-weight:600; margin:24px 0 8px;">Last test result</h3>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 160px;">Status</div>
+    <div class="bw-dl__value">
+      <% case @email_setting.last_test_status
+         when 'success' %><%= bw_status_badge('pass', label: 'Success') %>
+      <% when 'failed' %><%= bw_status_badge('failed', label: 'Failed') %>
+      <% when 'blocked_missing_config' %><%= bw_status_badge('pending', label: 'Blocked — missing config') %>
+      <% else %><%= bw_status_badge('pending', label: 'Not tested') %>
+      <% end %>
+    </div>
+  </div>
+  <% if @email_setting.last_test_sent_at.present? %>
+    <div class="bw-dl__row">
+      <div class="bw-dl__key" style="width: 160px;">Last sent</div>
+      <div class="bw-dl__value"><%= @email_setting.last_test_sent_at.to_fs(:short) %></div>
+    </div>
+  <% end %>
+  <% if @email_setting.last_test_error.present? %>
+    <div class="bw-dl__row">
+      <div class="bw-dl__key" style="width: 160px;">Detail</div>
+      <div class="bw-dl__value bw-text-secondary"><%= @email_setting.last_test_error %></div>
+    </div>
+  <% end %>
+</div>

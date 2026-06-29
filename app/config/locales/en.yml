@@ -57,6 +57,14 @@ en:
       platform_admin_help_html: 'Bloomwire Platform Admin access is managed separately from <strong>Bloomwire &rarr; Platform Admins</strong>.'
       granted: 'Customer account access granted.'
       removed: 'Customer account access removed.'
+    email_settings:
+      config_saved: 'Email settings saved.'
+      config_error: 'Could not save email settings. Please check the fields and try again.'
+      template_created: 'Email template created.'
+      template_saved: 'Email template saved.'
+      template_duplicated: 'Email template duplicated as a new draft.'
+      template_deactivated: 'Email template deactivated.'
+      template_reactivated: 'Email template reactivated.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'

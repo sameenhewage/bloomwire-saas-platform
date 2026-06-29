@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_28_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_29_000002) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -259,6 +259,47 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_28_000000) do
     t.datetime "updated_at", null: false
     t.boolean "active", default: true, null: false
     t.index ["account_id"], name: "index_automation_rules_on_account_id"
+  end
+
+  create_table "bloomwire_email_settings", force: :cascade do |t|
+    t.string "smtp_address"
+    t.integer "smtp_port", default: 587
+    t.string "smtp_domain"
+    t.string "smtp_username"
+    t.string "smtp_password"
+    t.string "smtp_authentication", default: "login"
+    t.boolean "smtp_enable_starttls_auto", default: true, null: false
+    t.boolean "smtp_tls", default: false, null: false
+    t.boolean "smtp_ssl", default: false, null: false
+    t.string "from_name"
+    t.string "from_email"
+    t.string "reply_to_email"
+    t.boolean "enabled", default: false, null: false
+    t.string "last_test_status", default: "not_tested"
+    t.datetime "last_test_sent_at"
+    t.string "last_test_error"
+    t.bigint "last_updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["last_updated_by_id"], name: "index_bloomwire_email_settings_on_last_updated_by_id"
+  end
+
+  create_table "bloomwire_email_templates", force: :cascade do |t|
+    t.string "key", null: false
+    t.string "name", null: false
+    t.string "category"
+    t.string "subject"
+    t.text "body"
+    t.string "cta_label"
+    t.string "cta_url"
+    t.boolean "active", default: true, null: false
+    t.boolean "system", default: false, null: false
+    t.integer "position", default: 0, null: false
+    t.bigint "last_updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_bloomwire_email_templates_on_key", unique: true
+    t.index ["last_updated_by_id"], name: "index_bloomwire_email_templates_on_last_updated_by_id"
   end
 
   create_table "bloomwire_platform_admins", force: :cascade do |t|

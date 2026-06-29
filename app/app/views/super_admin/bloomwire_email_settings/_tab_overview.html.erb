@@ -1,0 +1,51 @@
+<%# Phase 15F: Overview tab — a read-only summary of the Bloomwire outbound email configuration. %>
+<div class="bw-card">
+  <h2 class="bw-card__title">Outbound email overview</h2>
+  <p class="bw-card__subtitle">
+    This page manages Bloomwire-owned <strong>outbound email settings</strong>, reusable
+    <strong>email templates</strong>, and <strong>test email readiness</strong>. Configure the SMTP
+    connection in <strong>Configuration</strong> and edit the message content in <strong>Email Templates</strong>.
+  </p>
+
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">Outbound email</div>
+    <div class="bw-dl__value"><%= @email_setting.enabled? ? 'Enabled' : 'Disabled' %></div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">SMTP host</div>
+    <div class="bw-dl__value"><%= @email_setting.smtp_address.presence || '—' %>:<%= @email_setting.smtp_port %></div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">From address</div>
+    <div class="bw-dl__value"><%= @email_setting.effective_from_name %> &lt;<%= @email_setting.effective_from_email.presence || '—' %>&gt;</div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">SMTP password</div>
+    <div class="bw-dl__value">
+      <%= @email_setting.password_present? ? bw_status_badge('configured', label: 'Configured') : bw_status_badge('pending', label: 'Not configured') %>
+    </div>
+  </div>
+  <div class="bw-dl__row">
+    <div class="bw-dl__key" style="width: 220px;">Active templates</div>
+    <div class="bw-dl__value"><%= @all_templates.count(&:active?) %> of <%= @all_templates.size %></div>
+  </div>
+
+  <div class="bw-blocked" style="margin-top:16px;">
+    <div>
+      <p class="bw-blocked__title">What is not wired yet (parked for a follow-up)</p>
+      <p>
+        The <strong>Devise / password-reset</strong> mailer is <strong>not changed in this phase</strong> — it
+        still uses the existing environment-based email flow, <strong>not</strong> these DB-backed SMTP
+        settings. Automatic transactional sending for the <strong>business invitation, welcome, plan change,
+        payment receipt, and support ticket</strong> emails is <strong>parked</strong>: their templates and
+        preview live here, but they are not yet wired to send on real events.
+      </p>
+    </div>
+  </div>
+
+  <div class="bw-panel__actions">
+    <%= link_to 'Configure SMTP', super_admin_bloomwire_email_settings_path(tab: 'configuration'), class: 'bw-btn bw-btn--secondary' %>
+    <%= link_to 'Manage templates', super_admin_bloomwire_email_settings_path(tab: 'templates'), class: 'bw-btn bw-btn--secondary' %>
+    <%= link_to 'Send a test email', super_admin_bloomwire_email_settings_path(tab: 'test_email'), class: 'bw-btn bw-btn--primary' %>
+  </div>
+</div>
