@@ -26,13 +26,6 @@ concurrency:
   group: bloomwire-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Disable husky during `pnpm i`. This repo's package.json `prepare` runs
-# `husky install`, but .git lives at the repo root while package.json is in
-# ./app, so husky's `.git can't be found` aborts the install. HUSKY=0 makes the
-# husky install a no-op (it does not skip other lifecycle scripts).
-env:
-  HUSKY: '0'
-
 jobs:
   # ---------------------------------------------------------------------------
   # Ruby lint
@@ -73,8 +66,13 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
+      # --ignore-scripts skips this repo's `prepare` (husky install), which would
+      # otherwise abort with ".git can't be found": .git is at the repo root while
+      # package.json is in ./app. pnpm 10 already blocks dependency build scripts
+      # by default, and esbuild/rollup binaries ship via optionalDependencies, so
+      # skipping scripts is safe for lint/test/build.
       - name: Install pnpm dependencies
-        run: pnpm i --frozen-lockfile
+        run: pnpm i --frozen-lockfile --ignore-scripts
       - name: Run ESLint
         run: pnpm run eslint
 
@@ -99,7 +97,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
       - name: Install pnpm dependencies
-        run: pnpm i --frozen-lockfile
+        run: pnpm i --frozen-lockfile --ignore-scripts
       - name: Run Vitest
         run: pnpm run test
 
@@ -129,7 +127,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
       - name: Install pnpm dependencies
-        run: pnpm i --frozen-lockfile
+        run: pnpm i --frozen-lockfile --ignore-scripts
       - name: Compile assets (Vite)
         run: bundle exec rake assets:precompile
         env:
@@ -190,7 +188,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
       - name: Install pnpm dependencies
-        run: pnpm i --frozen-lockfile
+        run: pnpm i --frozen-lockfile --ignore-scripts
       - name: Create test database
         run: bundle exec rake db:create
       - name: Load schema
