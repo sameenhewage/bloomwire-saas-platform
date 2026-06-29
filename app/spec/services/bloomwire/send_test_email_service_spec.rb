@@ -53,4 +53,34 @@ RSpec.describe Bloomwire::SendTestEmailService do
     expect(result.message).to include('[FILTERED]')
     expect(complete_setting.reload.last_test_error).not_to include('secret-pw')
   end
+
+  # Phase 15F.1: composer-specific behaviour (require_enabled + rendered subject/body pass-through).
+  it 'blocks a real send when outbound email is disabled (require_enabled) and does not deliver' do
+    complete_setting.update!(enabled: false)
+    result = described_class.new(setting: complete_setting, recipient: 'to@example.com', require_enabled: true, noun: 'Email').call
+    expect(result.status).to eq('blocked_missing_config')
+    expect(result.message).to match(/disabled/i)
+    expect(complete_setting.reload.last_test_status).to eq('blocked_missing_config')
+    expect(ActionMailer::Base.deliveries).to be_empty
+  end
+
+  it 'passes the rendered subject/body through to the mailer and uses the given noun' do
+    complete_setting.update!(enabled: true) # required: composer sends are enabled-gated (require_enabled: true)
+    delivery = instance_double(ActionMailer::MessageDelivery, deliver_now: true)
+    captured = nil
+    allow(Bloomwire::EmailTestMailer).to receive(:test_email) do |*args, **kwargs|
+      captured = kwargs.any? ? kwargs : args.first
+      delivery
+    end
+
+    result = described_class.new(
+      setting: complete_setting, recipient: 'to@example.com',
+      subject: 'Welcome Jane', body: 'Hello Jane, join Acme Co.', require_enabled: true, noun: 'Email'
+    ).call
+
+    expect(captured).to include(to: 'to@example.com', subject: 'Welcome Jane', body: 'Hello Jane, join Acme Co.')
+    expect(captured[:setting]).to eq(complete_setting)
+    expect(result.status).to eq('success')
+    expect(result.message).to eq('Email sent to to@example.com.')
+  end
 end

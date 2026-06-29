@@ -155,6 +155,7 @@
         <tr><td>15E</td><td>Implementation ledger</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
         <tr><td>15E.1</td><td>Documentation Governance guardrail</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
         <tr><td>15F</td><td>Owner-only Email Settings (DB SMTP + templates)</td><td>#78</td><td><span class="badge done">Implemented</span> <span class="badge warn">encryption parked</span></td></tr>
+        <tr><td>15F.1</td><td>Send-from-Template composer (owner-only)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
       </tbody>
     </table>
@@ -276,6 +277,18 @@
         <li><b>Access</b>: owner-only (<code>Bloomwire::PlatformAdmin</code> active owners); admin/support + customer/business blocked.</li>
         <li><b>Review hardening (PR #78)</b>: Overview copy is honest (no claim password resets/transactional emails use the DB SMTP — Devise unchanged, transactional sending parked); <b>system-template keys are immutable</b> (<code>:key</code> not permitted on update + model validation; auto-generated on create); CTA URLs restricted to <code>http(s)</code>/<code>{{placeholder}}</code>.</li>
         <li><b>SECURITY DEBT</b>: <code>smtp_password</code> stored <b>plaintext</b> (AR encryption not configured) — encryption-at-rest is a parked follow-up. No WhatsApp/Meta/provider changes; no Enterprise; Devise/password-reset mailers untouched.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15F.1 — Send-from-Template composer <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Discovery first</b>: the prior "Send Test Email" button only <b>linked</b> to the Test Email tab (a fixed sample send) — there was no way to fill a template's variables and send the rendered template. The composer was implemented; no behavior was silently changed.</li>
+        <li>Owner-only <b>"Send from Template"</b> composer on the Email Templates tab: 9 fields (recipient, the 6 <code>{{variables}}</code>, button label/link), an <b>"Update preview"</b> round-trip (server-rendered final preview using the entered values), and a <b>"Send Email"</b> action.</li>
+        <li><b>Real send</b> via the existing DB-backed SMTP settings, reusing <code>Bloomwire::SendTestEmailService</code> (extended: <code>subject:</code>/<code>body:</code>/<code>require_enabled:</code>/<code>noun:</code>) and <code>Bloomwire::EmailTestMailer</code>. <code>{{placeholders}}</code> are interpolated before sending.</li>
+        <li><b>Honest + enabled-gated</b>: blocks when the recipient is blank, SMTP is incomplete, or outbound email is disabled; the Send button is disabled until SMTP is ready. <b>Never fakes success</b>. SMTP password never rendered/logged.</li>
+        <li><b>Access</b>: owner-only via the existing <code>Bloomwire::RequiresPlatformOwner</code> gate on both controllers.</li>
+        <li><b>Tests</b>: 62 examples, 0 failures for the Bloomwire email suite (48 prior + 14 new) — owner can send, non-owner blocked, missing recipient blocked, incomplete/disabled SMTP blocked, placeholders replaced, password never in the response, final-preview round-trip. RuboCop clean.</li>
+        <li><b>Residual</b>: composer sends <b>plain text</b> (rendered body + CTA line), not the branded HTML shell shown in the preview; SMTP password still plaintext-at-rest (Phase 15F debt); Office365 SMTP AUTH may still be blocked by tenant Security Defaults (a Microsoft-365 config matter, not code). No WhatsApp/Meta/provider/Enterprise changes; no migrations; no new dependencies.</li>
       </ul>
     </div>
 

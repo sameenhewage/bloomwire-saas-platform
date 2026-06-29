@@ -57,6 +57,7 @@
 | 15E | This implementation ledger | #77 | Docs only |
 | 15E.1 | Documentation Governance guardrail | #77 | Docs only |
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
+| 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 
 ---
@@ -192,6 +193,30 @@
 - **Not changed**: no WhatsApp/Meta/provider credentials, no Enterprise code, no `BusinessOwner`, no
   `users.type` for business roles, no chat/message tables. Devise/password-reset mailers untouched (they
   use the global ENV SMTP config; wiring them to the DB-backed config is parked).
+
+### Phase 15F.1 — Send-from-Template composer — `Implemented` — PR _pending_
+- **Discovery first:** the prior "Send Test Email" button on the Email Templates tab only **linked** to the
+  Test Email tab (a fixed sample/test send). There was **no** way to fill a template's variables and send the
+  rendered template — so the composer was implemented (no behavior was silently changed).
+- Owner-only **"Send from Template"** composer on the Email Templates tab: 9 fields — recipient, the 6
+  `{{variables}}`, plus button label/link — with an **"Update preview"** round-trip (server-rendered final
+  preview using the entered values) and a **"Send Email"** action.
+- **Real send** through the existing DB-backed SMTP settings, reusing `Bloomwire::SendTestEmailService`
+  (extended: `subject:` / `body:` / `require_enabled:` / `noun:`) and `Bloomwire::EmailTestMailer`.
+  `{{placeholders}}` are interpolated before sending; the CTA becomes a `label: url` line.
+- **Honest + enabled-gated:** blocks when the recipient is blank, SMTP is incomplete, **or outbound email is
+  disabled** (`require_enabled: true`); the Send button is disabled until SMTP is ready. **Never fakes
+  success.** The SMTP password is never rendered or logged (service sanitizes/filters).
+- **Access:** owner-only via the existing `Bloomwire::RequiresPlatformOwner` gate on both controllers.
+- **Tests:** **62 examples, 0 failures** for the Bloomwire email suite (48 prior + 14 new) — owner can send,
+  non-owner blocked, missing recipient blocked, incomplete SMTP blocked, disabled SMTP blocked, placeholders
+  replaced, password never in the response, final-preview round-trip. RuboCop clean on changed Ruby.
+- **Not changed:** no WhatsApp/Meta/provider credentials or code, no Enterprise code, no `BusinessOwner`, no
+  `users.type` for business roles, no chat/message tables, Devise/password-reset mailers untouched, no new
+  dependencies, no migrations.
+- **Residual:** composer sends **plain text** (rendered body + CTA line), not the branded HTML shell shown in
+  the preview; SMTP password remains plaintext-at-rest (Phase 15F debt, §8); Office365 SMTP AUTH may still be
+  blocked by tenant Security Defaults (a Microsoft-365 config matter, not a code issue).
 
 ### Phase 15G — CI/CD foundation — `Implemented (infra/docs only)` — PR _pending_
 - Added repo-root **GitHub Actions** (the first active CI/CD for this repo — prior workflows under

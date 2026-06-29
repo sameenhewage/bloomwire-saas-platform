@@ -43,7 +43,8 @@
       <% end %>
       <%= button_to 'Duplicate', duplicate_super_admin_bloomwire_email_template_path(template), method: :post,
                     class: 'bw-btn bw-btn--secondary' %>
-      <%= link_to 'Send Test Email', super_admin_bloomwire_email_settings_path(tab: 'test_email'), class: 'bw-btn bw-btn--primary' %>
+      <%# Phase 15F.1: jumps to the "Send from Template" composer (real send with owner-filled variables). %>
+      <%= link_to 'Send from Template', '#bw-composer', class: 'bw-btn bw-btn--primary' %>
     </div>
   <% end %>
 </div>

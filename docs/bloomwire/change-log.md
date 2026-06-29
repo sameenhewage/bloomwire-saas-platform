@@ -15,6 +15,39 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.1 — Send-from-Template composer (owner-only)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Feature (SuperAdmin / Bloomwire owner console; builds on Phase 15F)
+- **Summary:** Added an owner-only **"Send from Template"** composer on the Email Templates tab. Discovery
+  confirmed the prior "Send Test Email" button only linked to the Test Email tab (a generic sample send) — there
+  was no way to fill template variables and send the rendered template. The composer exposes 9 fields (recipient,
+  the 6 `{{variables}}`, plus button label/link), an **"Update preview"** round-trip that renders the final email
+  with the entered values, and a **"Send Email"** action that sends the rendered template through the existing
+  DB-backed SMTP settings. Reuses `Bloomwire::SendTestEmailService` (extended with `subject:`/`body:`/
+  `require_enabled:`/`noun:`) and `Bloomwire::EmailTestMailer`; placeholders are interpolated before sending.
+- **Why:** Owners need to send a real, variable-filled email from a chosen template (not just a fixed sample),
+  ahead of Phase 16 onboarding emails.
+- **Honesty / safety:** Preflight + **enabled-gated** (`require_enabled: true`) — blocks honestly when the
+  recipient is blank, SMTP is incomplete, or outbound email is disabled; **never fakes success**; the Send button
+  is disabled until SMTP is ready. The SMTP password is never rendered or logged (service sanitizes/filters it).
+- **Access:** owner-only via the existing `Bloomwire::RequiresPlatformOwner` gate on both controllers; non-owner
+  platform admins and customer/business users are blocked.
+- **Not changed:** no WhatsApp/Meta/provider credentials or code, no Enterprise code, no `BusinessOwner` role, no
+  `users.type` for business roles, no chat/message tables, Devise/password-reset mailers untouched, no new
+  dependencies, no migrations, no production deploy.
+- **Security:** no secrets exposed · no provider-credential mutation · **no** live Meta/WhatsApp calls (mailer
+  stubbed in specs; the suite makes no real SMTP connection) · Enterprise code untouched.
+- **Validation:** RuboCop clean on all changed Ruby; **62 examples, 0 failures** for the Bloomwire email suite
+  (48 prior + 14 new), including: owner can send · non-owner blocked · missing recipient blocked · incomplete
+  SMTP blocked · disabled SMTP blocked · placeholders replaced · password never in the response · final-preview
+  round-trip. New tests fail-first verified (e.g. enabled-gate / placeholder rendering did not exist before).
+- **Residual:** composer sends a **plain-text** email (rendered body + a `label: url` CTA line) — it does not yet
+  send the branded HTML shell shown in the preview; SMTP password remains plaintext-at-rest (documented Phase 15F
+  debt, encryption still parked). Office365 SMTP AUTH may still be blocked by tenant Security Defaults (a Microsoft
+  365 config matter, not a code issue).
+- **Runtime impact:** new owner-only UI action · **Deploy required:** Yes (after review/merge; not done here).
+
 ### Phase 15G — CI/CD Foundation (PR CI + manual Dev/Staging deploy)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_
