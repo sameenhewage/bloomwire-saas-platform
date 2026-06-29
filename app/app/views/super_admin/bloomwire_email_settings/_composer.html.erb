@@ -1,0 +1,88 @@
+<%#
+# Phase 15F.1: "Send from Template" composer. The owner fills variable values, clicks "Update preview" to see
+# the final rendered email, then "Send Email" to send a REAL email via the DB-backed SMTP settings
+# (SendTestEmailService, enabled-gated, never fakes success). Server-rendered; no SMTP secret is involved here.
+# Uses: @selected_template, @compose, @email_setting
+%>
+<% if @selected_template %>
+  <%
+    ready = @email_setting.persisted? && @email_setting.missing_required_fields.empty? && @email_setting.enabled?
+    pv = @compose[:vars]
+    cta_label = @compose[:button_label]
+    cta_link = Bloomwire::EmailTemplate.interpolate(@compose[:button_link].to_s, pv)
+    var_labels = { 'recipient_name' => 'Recipient name', 'business_name' => 'Business name',
+                   'invitation_link' => 'Invitation link', 'reset_link' => 'Reset link',
+                   'expiry_time' => 'Expiry time', 'support_email' => 'Support email' }
+  %>
+  <div class="bw-card" id="bw-composer" style="margin-top:16px;">
+    <h2 class="bw-card__title">Send from Template — <%= @selected_template.name %></h2>
+    <p class="bw-card__subtitle">
+      Fill the variables, update the preview, then send a real email through the saved SMTP settings.
+      <% if @selected_template.used_variables.any? %>
+        This template uses: <strong><%= @selected_template.used_variables.map { |v| "{{#{v}}}" }.join(', ') %></strong>.
+      <% end %>
+    </p>
+
+    <% unless ready %>
+      <div class="bw-blocked" style="margin-bottom:16px;">
+        <div>
+          <p class="bw-blocked__title">Sending is not ready</p>
+          <p>
+            <% if !@email_setting.persisted? || @email_setting.missing_required_fields.any? %>
+              SMTP is not fully configured — complete it in <strong>Configuration</strong> first.
+            <% else %>
+              Outbound email is disabled — enable it in <strong>Configuration</strong> first.
+            <% end %>
+          </p>
+        </div>
+      </div>
+    <% end %>
+
+    <div style="display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start;">
+      <div>
+        <%= form_tag(send_email_super_admin_bloomwire_email_template_path(@selected_template), method: :post) do %>
+          <%= hidden_field_tag 'tab', 'templates' %>
+          <%= hidden_field_tag 'template_id', @selected_template.id %>
+
+          <div class="bw-field">
+            <%= label_tag 'compose_recipient', 'Send to email', class: 'bw-label' %>
+            <%= email_field_tag 'compose[recipient]', @compose[:recipient], id: 'compose_recipient', class: 'bw-input', required: true, autocomplete: 'off' %>
+          </div>
+
+          <div class="bw-form-grid">
+            <% var_labels.each do |var, label| %>
+              <div class="bw-field">
+                <%= label_tag "compose_#{var}", label, class: 'bw-label' %>
+                <%= text_field_tag "compose[#{var}]", @compose[:vars][var], id: "compose_#{var}", class: 'bw-input', autocomplete: 'off' %>
+              </div>
+            <% end %>
+            <div class="bw-field">
+              <%= label_tag 'compose_button_label', 'Button label', class: 'bw-label' %>
+              <%= text_field_tag 'compose[button_label]', @compose[:button_label], id: 'compose_button_label', class: 'bw-input', autocomplete: 'off' %>
+            </div>
+            <div class="bw-field">
+              <%= label_tag 'compose_button_link', 'Button link', class: 'bw-label' %>
+              <%= text_field_tag 'compose[button_link]', @compose[:button_link], id: 'compose_button_link', class: 'bw-input', autocomplete: 'off' %>
+            </div>
+          </div>
+
+          <div class="bw-form-actions">
+            <button type="submit" class="bw-btn bw-btn--secondary" formmethod="get" formaction="<%= super_admin_bloomwire_email_settings_path %>">Update preview</button>
+            <%= submit_tag 'Send Email', class: 'bw-btn bw-btn--primary', disabled: !ready %>
+          </div>
+          <% unless ready %><p class="bw-help">The send button is disabled until SMTP is configured and enabled.</p><% end %>
+        <% end %>
+      </div>
+
+      <div class="bw-panel">
+        <div class="bw-panel__head"><h2 class="bw-panel__title">Final preview</h2></div>
+        <p class="bw-help" style="margin-top:0;">This is exactly what will be delivered (same branded shell).</p>
+        <p style="font-weight:600; margin:0 0 10px;">Subject: <%= @selected_template.render_subject(pv) %></p>
+        <%# Renders the SAME shared partial the mailer sends, so preview == delivered email. %>
+        <%= render 'bloomwire/email/branded_email', body: @selected_template.render_body(pv),
+                   cta_label: cta_label, cta_url: cta_link, year: Date.current.year %>
+        <p class="bw-help">Will send to: <strong><%= @compose[:recipient].presence || '—' %></strong></p>
+      </div>
+    </div>
+  </div>
+<% end %>

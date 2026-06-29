@@ -15,6 +15,51 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.1 — Send-from-Template composer (owner-only)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Feature (SuperAdmin / Bloomwire owner console; builds on Phase 15F)
+- **Summary:** Added an owner-only **"Send from Template"** composer on the Email Templates tab. Discovery
+  confirmed the prior "Send Test Email" button only linked to the Test Email tab (a generic sample send) — there
+  was no way to fill template variables and send the rendered template. The composer exposes 9 fields (recipient,
+  the 6 `{{variables}}`, plus button label/link), an **"Update preview"** round-trip that renders the final
+  branded email with the entered values, and a **"Send Email"** action.
+- **Review fix pass (this PR):**
+  - **Delivered email now matches the preview.** A single shared partial
+    (`app/views/bloomwire/email/_branded_email.html.erb`) is rendered by BOTH the composer preview AND the
+    mailer, so they cannot drift. The mailer's new `template_email` sends **multipart HTML + plain-text** — the
+    HTML carries the branding, CTA **button**, and footer; the text part is a fallback with the same key values.
+    Placeholders are interpolated before sending; no raw `{{...}}` remains for supplied values.
+  - **Per-send Email Logs.** New Bloomwire-owned table `bloomwire_email_delivery_logs` + model; every template
+    send writes one row (**success / failed / blocked**) with recipient, template, status, timestamp, actor, and
+    a **sanitized** error. The Email Logs tab now shows these rows (plus the latest test-email result).
+  - New `Bloomwire::SendTemplateEmailService` owns the template send (preflight + enabled-gate + logging);
+    `SendTestEmailService` was reverted to its original Test-Email-only role. Preflight + secret-filtering are
+    now centralized on `Bloomwire::EmailSetting` (`block_reason` + `sanitize_secret`).
+- **Why:** Owners need to send a real, variable-filled, on-brand email from a chosen template and audit each
+  send — ahead of Phase 16 onboarding emails.
+- **Honesty / safety:** Preflight + **enabled-gated** — blocks honestly (and records a `blocked` log) when the
+  recipient is blank, SMTP is incomplete, or outbound email is disabled; **never fakes success**; the Send button
+  is disabled until SMTP is ready. The SMTP password is never rendered, logged, or stored (errors sanitized).
+- **Access:** owner-only via the existing `Bloomwire::RequiresPlatformOwner` gate on both controllers; non-owner
+  platform admins and customer/business users are blocked (send + Email Logs).
+- **Not changed:** no WhatsApp/Meta/provider credentials or code, no Enterprise code, no `BusinessOwner` role, no
+  `users.type` for business roles, no chat/message tables, Devise/password-reset mailers untouched, no new
+  dependencies, no production deploy.
+- **Security:** no secrets exposed · no provider-credential mutation · **no** live Meta/WhatsApp calls (mailer
+  stubbed on delivery paths; the suite makes no real SMTP connection) · Enterprise code untouched · the new log
+  table never stores credentials and only stores sanitized errors.
+- **Validation:** RuboCop clean on all changed Ruby; **71 examples, 0 failures** for the Bloomwire email suite,
+  including: owner can send (→ success log) · non-owner blocked (send + logs) · missing recipient → blocked log ·
+  incomplete SMTP → blocked log · disabled SMTP → blocked log · failed send → failed log with sanitized error ·
+  HTML **and** text parts contain replaced values + CTA, no raw `{{...}}` · Email Logs renders recipient/template/
+  status · password never in logs/response/HTML · final-preview round-trip uses the shared branded shell.
+- **Residual:** SMTP password remains plaintext-at-rest (documented Phase 15F debt, encryption still parked);
+  Office365 SMTP AUTH may still be blocked by tenant Security Defaults (a Microsoft-365 config matter, not code).
+- **Migration:** `20260629000003_create_bloomwire_email_delivery_logs` (additive; new Bloomwire-owned table).
+- **Runtime impact:** new owner-only UI action + new table · **Deploy required:** Yes — run the migration
+  (after review/merge; not done here).
+
 ### Phase 15G — CI/CD Foundation (PR CI + manual Dev/Staging deploy)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_

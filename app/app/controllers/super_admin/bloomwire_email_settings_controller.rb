@@ -15,6 +15,8 @@ class SuperAdmin::BloomwireEmailSettingsController < SuperAdmin::ApplicationCont
     @selected_template = find_selected_template
     @new_template = params[:new].present?
     @sample_vars = Bloomwire::EmailTemplate::SAMPLE_VARS
+    @compose = build_compose(@selected_template) # Phase 15F.1: "Send from Template" composer context
+    @delivery_logs = Bloomwire::EmailDeliveryLog.recent.includes(:actor).limit(50) if @active_tab == 'email_logs'
   end
 
   # PATCH: persist SMTP/email configuration. Blank password => keep the existing secret (replace-secret UX).
@@ -60,6 +62,31 @@ class SuperAdmin::BloomwireEmailSettingsController < SuperAdmin::ApplicationCont
     return Bloomwire::EmailTemplate.find_by(id: params[:template_id]) if params[:template_id].present?
 
     @templates.first || @all_templates.first
+  end
+
+  # Phase 15F.1: composer context — recipient + variable values + CTA, pre-filled from sample data / the
+  # template's CTA, and overridden by any submitted `compose` params (the "Update preview" round-trip).
+  def build_compose(template)
+    submitted = compose_params
+    vars = compose_vars_with_defaults(submitted)
+    {
+      recipient: submitted[:recipient].presence || current_super_admin&.email,
+      vars: vars,
+      button_label: submitted[:button_label].presence || template&.cta_label,
+      button_link: submitted[:button_link].presence || default_button_link(template, vars)
+    }
+  end
+
+  def compose_params
+    params[:compose].is_a?(ActionController::Parameters) ? params[:compose] : ActionController::Parameters.new
+  end
+
+  def compose_vars_with_defaults(submitted)
+    Bloomwire::EmailTemplate::VARIABLES.index_with { |v| submitted[v].presence || Bloomwire::EmailTemplate::SAMPLE_VARS[v] }
+  end
+
+  def default_button_link(template, vars)
+    template&.cta? ? template.render_cta_url(vars) : nil
   end
 
   def redirect_to_tab(tab, flash_hash)

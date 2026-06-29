@@ -85,6 +85,13 @@ class Bloomwire::EmailTemplate < ApplicationRecord
     cta_label.present?
   end
 
+  # The subset of VARIABLES actually referenced by this template (subject/body/cta_url). Drives the
+  # composer's "this template uses…" hint (Phase 15F.1).
+  def used_variables
+    text = [subject, body, cta_url].join(' ')
+    VARIABLES.select { |v| text.include?("{{#{v}}}") }
+  end
+
   # Duplicates a template into a new, inactive draft with a unique key/name.
   def duplicate!(actor: nil)
     base = key.sub(/_copy(\d+)?\z/, '')

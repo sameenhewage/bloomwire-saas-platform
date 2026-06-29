@@ -1,34 +1,56 @@
 <%#
-# Phase 15F: Email Logs tab. Full per-message delivery logging is parked as a follow-up (no logs table yet).
-# We honestly show only what we DO track today — the last test-email result — rather than fabricating a log.
+# Phase 15F.1: Email Logs — per-send delivery history for "Send from Template" sends (success / failed /
+# blocked), plus the most recent Test Email result. Owner-only page. The SMTP password is NEVER shown:
+# error_message is sanitized before it is stored (Bloomwire::EmailSetting#sanitize_secret). No chat/message data.
 %>
 <div class="bw-card">
   <h2 class="bw-card__title">Email logs</h2>
   <p class="bw-card__subtitle">
-    Per-message delivery logging is a planned follow-up. Today, Bloomwire records the outcome of the most
-    recent test email below.
+    Per-send history of template emails (plus the latest test email). Errors are sanitized — SMTP credentials
+    are never stored or shown.
   </p>
 
   <table class="bw-table">
     <thead>
-      <tr><th>Event</th><th>Status</th><th>When</th><th>Detail</th></tr>
+      <tr><th>When</th><th>Template</th><th>Recipient</th><th>Status</th><th>By</th><th>Detail</th></tr>
     </thead>
     <tbody>
-      <% if @email_setting.last_test_status.to_s == 'not_tested' %>
-        <tr><td colspan="4"><div class="bw-empty"><p class="bw-empty__text">No email activity recorded yet. Send a test email to see a result here.</p></div></td></tr>
+      <% if @delivery_logs.blank? && @email_setting.last_test_status.to_s == 'not_tested' %>
+        <tr><td colspan="6"><div class="bw-empty"><p class="bw-empty__text">No email activity recorded yet. Send a template email or a test email to see results here.</p></div></td></tr>
       <% else %>
-        <tr>
-          <td>Test email</td>
-          <td>
-            <% case @email_setting.last_test_status
-               when 'success' %><%= bw_status_badge('pass', label: 'Success') %>
-            <% when 'failed' %><%= bw_status_badge('failed', label: 'Failed') %>
-            <% else %><%= bw_status_badge('pending', label: 'Blocked') %>
-            <% end %>
-          </td>
-          <td class="text-xs"><%= @email_setting.last_test_sent_at&.to_fs(:short) || '—' %></td>
-          <td class="text-xs bw-text-secondary"><%= @email_setting.last_test_error.presence || '—' %></td>
-        </tr>
+        <% @delivery_logs&.each do |log| %>
+          <tr>
+            <td class="text-xs"><%= log.created_at&.to_fs(:short) %></td>
+            <td><%= log.template_name.presence || log.template_key.presence || '—' %></td>
+            <td class="text-xs"><%= log.recipient_email.presence || '—' %></td>
+            <td>
+              <% case log.status
+                 when 'success' %><%= bw_status_badge('pass', label: 'Success') %>
+              <% when 'failed' %><%= bw_status_badge('failed', label: 'Failed') %>
+              <% else %><%= bw_status_badge('pending', label: 'Blocked') %>
+              <% end %>
+            </td>
+            <td class="text-xs"><%= log.actor&.name.presence || log.actor&.email.presence || '—' %></td>
+            <td class="text-xs bw-text-secondary"><%= log.error_message.presence || '—' %></td>
+          </tr>
+        <% end %>
+
+        <% if @email_setting.last_test_status.to_s != 'not_tested' %>
+          <tr>
+            <td class="text-xs"><%= @email_setting.last_test_sent_at&.to_fs(:short) || '—' %></td>
+            <td>Test email</td>
+            <td class="text-xs">—</td>
+            <td>
+              <% case @email_setting.last_test_status
+                 when 'success' %><%= bw_status_badge('pass', label: 'Success') %>
+              <% when 'failed' %><%= bw_status_badge('failed', label: 'Failed') %>
+              <% else %><%= bw_status_badge('pending', label: 'Blocked') %>
+              <% end %>
+            </td>
+            <td class="text-xs">—</td>
+            <td class="text-xs bw-text-secondary"><%= @email_setting.last_test_error.presence || '—' %></td>
+          </tr>
+        <% end %>
       <% end %>
     </tbody>
   </table>

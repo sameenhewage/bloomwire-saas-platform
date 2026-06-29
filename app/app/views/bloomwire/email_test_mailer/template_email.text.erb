@@ -1,0 +1,8 @@
+<%# Phase 15F.1: plain-text fallback part. Same key values as the HTML part (body is already interpolated). %>
+<%= @body %>
+<% if @cta_label.to_s.present? && @cta_url.to_s.present? -%>
+
+<%= @cta_label %>: <%= @cta_url %>
+<% end -%>
+
+© <%= @year %> Bloomwire. All rights reserved.

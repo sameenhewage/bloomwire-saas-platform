@@ -715,6 +715,7 @@ Rails.application.routes.draw do
           post :duplicate
           patch :deactivate
           patch :reactivate
+          post :send_email # Phase 15F.1: send a real email rendered from this template + owner-filled variables
         end
       end
       resource :push_diagnostics, only: [:show, :create] do

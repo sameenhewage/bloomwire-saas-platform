@@ -94,6 +94,25 @@ class Bloomwire::EmailSetting < ApplicationRecord
     missing_required_fields.empty?
   end
 
+  # Phase 15F.1: single source of truth for "can we send to this recipient right now?". Returns a reason
+  # symbol (:missing_recipient / :incomplete_smtp / :smtp_disabled) or nil when the send may proceed.
+  # `require_enabled: true` is used for real sends (template composer); the plain Test Email does not require it.
+  def block_reason(recipient:, require_enabled: false)
+    return :missing_recipient if recipient.to_s.strip.blank?
+    return :incomplete_smtp unless persisted? && missing_required_fields.empty?
+    return :smtp_disabled if require_enabled && !enabled?
+
+    nil
+  end
+
+  # Phase 15F.1: strips the SMTP password from any text (error messages, logs) and caps the length so the
+  # secret can never leak into a returned message, a flash, or the delivery log.
+  def sanitize_secret(text, limit: 240)
+    msg = text.to_s
+    msg = msg.gsub(smtp_password.to_s, '[FILTERED]') if smtp_password.present?
+    msg.truncate(limit)
+  end
+
   def effective_from_email
     from_email.presence || smtp_username
   end

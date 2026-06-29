@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_29_000002) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_29_000003) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -259,6 +259,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_29_000002) do
     t.datetime "updated_at", null: false
     t.boolean "active", default: true, null: false
     t.index ["account_id"], name: "index_automation_rules_on_account_id"
+  end
+
+  create_table "bloomwire_email_delivery_logs", force: :cascade do |t|
+    t.bigint "email_template_id"
+    t.string "template_key"
+    t.string "template_name"
+    t.string "recipient_email"
+    t.string "subject"
+    t.string "status", null: false
+    t.text "error_message"
+    t.bigint "actor_id"
+    t.datetime "sent_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_bloomwire_email_delivery_logs_on_created_at"
+    t.index ["email_template_id"], name: "index_bloomwire_email_delivery_logs_on_email_template_id"
+    t.index ["status"], name: "index_bloomwire_email_delivery_logs_on_status"
   end
 
   create_table "bloomwire_email_settings", force: :cascade do |t|

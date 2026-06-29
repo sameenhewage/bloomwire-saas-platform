@@ -118,3 +118,8 @@
   <%# ---- Panel 3: preview ---- %>
   <%= render 'email_preview', template: editing, sample_vars: @sample_vars %>
 </div>
+
+<%# ---- Phase 15F.1: "Send from Template" composer (real send, owner-filled variables) ---- %>
+<% if editing %>
+  <%= render 'composer' %>
+<% end %>

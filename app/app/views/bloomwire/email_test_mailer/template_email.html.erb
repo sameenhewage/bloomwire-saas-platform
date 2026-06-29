@@ -1,0 +1,14 @@
+<%#
+# Phase 15F.1: HTML part of a template send. Wraps the SHARED branded-email partial (the exact same partial
+# the composer preview renders) in a minimal HTML document so the delivered email matches the preview.
+%>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body style="margin:0;padding:0;background:#f4f4f7;">
+    <%= render 'bloomwire/email/branded_email', body: @body, cta_label: @cta_label, cta_url: @cta_url, year: @year %>
+  </body>
+</html>
