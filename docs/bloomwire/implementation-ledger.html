@@ -114,6 +114,7 @@
       <li><a href="#s7">Intentionally NOT changed</a></li>
       <li><a href="#s8">Parked / residual items</a></li>
       <li><a href="#s9">Operational rules</a></li>
+      <li><a href="#s10">Documentation Governance</a></li>
     </ol>
   </nav>
 
@@ -151,7 +152,8 @@
         <tr><td>15B</td><td>Business account-user flow clarity</td><td>#75</td><td><span class="badge done">Completed</span></td></tr>
         <tr><td>15C</td><td>SuperAdmin impersonation token hardening</td><td>#76</td><td><span class="badge done">Completed</span> <span class="badge done">Issue #74 closed</span></td></tr>
         <tr><td>15D</td><td>Assigned Agent RCA</td><td>RCA only</td><td><span class="badge done">Not a bug</span></td></tr>
-        <tr><td>15E</td><td>This implementation ledger</td><td>this PR</td><td><span class="badge docs">Docs only</span></td></tr>
+        <tr><td>15E</td><td>Implementation ledger</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
+        <tr><td>15E.1</td><td>Documentation Governance guardrail</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -254,6 +256,14 @@
         <li><b>Correct no-code fix:</b> add the agent as an <b>inbox collaborator/member</b>. Future onboarding must ensure selected agents are attached to the WhatsApp inbox (the provisioning service already does this).</li>
       </ul>
     </div>
+
+    <div class="card"><h3>Phase 15E — Implementation ledger <span class="badge docs">Docs only</span> <span class="pr">PR #77</span></h3>
+      <ul><li>Added this ledger (<code>docs/bloomwire/implementation-ledger.md</code> + <code>.html</code>). No app code, no migrations.</li></ul>
+    </div>
+
+    <div class="card"><h3>Phase 15E.1 — Documentation Governance guardrail <span class="badge docs">Docs only</span> <span class="pr">PR #77</span></h3>
+      <ul><li>Added the <b>Bloomwire Documentation Governance</b> rule to <code>AGENTS.md</code> + <code>CLAUDE.md</code>, the <b>Documentation Governance</b> section (§10) + Definition of Done below, and the Bloomwire change log (<code>docs/bloomwire/change-log.md</code>). Ensures every future Bloomwire-owned change stays documented.</li></ul>
+    </div>
   </section>
 
   <section id="s4">
@@ -350,6 +360,34 @@
       <li>Do <b>not</b> duplicate chat/message storage.</li>
       <li><b>Test Bloomwire Mode ON</b>; test stock-compatible behavior (Mode OFF) when touching Chatwoot flows.</li>
     </ul>
+  </section>
+
+  <section id="s10">
+    <h2><a class="anchor" href="#s10"><span class="num">10.</span>Documentation Governance</a></h2>
+    <p style="color:var(--muted)">Introduced in <b>Phase 15E.1</b>. Canonical rule: <code>AGENTS.md</code> &rarr; "Bloomwire Documentation Governance".</p>
+    <div class="card">
+      <p>Every Bloomwire-owned change must be <b>transparent and documented</b> — no hidden or undocumented changes. Any PR that changes <b>behavior, permissions, security, onboarding, WhatsApp flow, APIs, UI flows, the data model, an operational process, or customer-facing behavior</b> must update, <b>in the same PR</b>:</p>
+      <ul>
+        <li><code>docs/bloomwire/implementation-ledger.md</code> and <code>docs/bloomwire/implementation-ledger.html</code></li>
+        <li>the Bloomwire change log (<code>docs/bloomwire/change-log.md</code>)</li>
+        <li>the related <b>ADR/runbook</b> if architecture or operations are affected</li>
+      </ul>
+      <p><b>A PR that changes Bloomwire behavior without updating docs/changelog is not approval-ready.</b> Docs-only PRs need no runtime deploy.</p>
+      <p>Each entry records: <b>phase · PR number · merge SHA · what changed · why · what was intentionally NOT changed · validation evidence · residual risks / parked items.</b> Security/permission/WhatsApp entries must also state: <b>no secrets exposed · no provider-credential mutation unless authorized · whether any live Meta/WhatsApp calls were made · whether Enterprise code was touched.</b></p>
+      <p>Preserve the invariants: no <code>users.type</code> for business roles · no <code>BusinessOwner</code> without separate design · no duplicate chat/message source of truth · no Enterprise dependency · WhatsApp-first scope.</p>
+    </div>
+    <div class="box">
+      <h3>Definition of Done (Bloomwire change)</h3>
+      <ul style="list-style:none; padding-left:4px">
+        <li>&#9744; code implemented</li>
+        <li>&#9744; tests passed</li>
+        <li>&#9744; runtime/browser proof when applicable</li>
+        <li>&#9744; <b>docs updated</b> (implementation ledger <code>.md</code> + <code>.html</code>)</li>
+        <li>&#9744; <b>changelog updated</b> (<code>docs/bloomwire/change-log.md</code>)</li>
+        <li>&#9744; residual risks recorded</li>
+        <li>&#9744; <b>exact merge SHA recorded after merge</b></li>
+      </ul>
+    </div>
   </section>
 
   <footer>

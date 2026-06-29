@@ -235,6 +235,46 @@ project.** Keep at most a one-line illustrative example in the global files.
 
 ---
 
+## Bloomwire Documentation Governance (mandatory)
+
+Every Bloomwire-owned change must be **transparent and documented**. Future agents must not make
+hidden or undocumented changes. _(Introduced in Phase 15E.1.)_
+
+**When docs MUST be updated.** Any PR that changes **behavior, permissions, security, onboarding,
+WhatsApp flow, APIs, UI flows, the data model, an operational process, or customer-facing behavior**
+must update the relevant docs **in the same PR**:
+
+- `docs/bloomwire/implementation-ledger.md`
+- `docs/bloomwire/implementation-ledger.html`
+- the Bloomwire change log (`docs/bloomwire/change-log.md`)
+- the related **ADR / runbook** if the change affects architecture or operations (Bloomwire ADRs
+  live under `projects/bloomwire-chatwoot-platform/docs/adr/`).
+
+**A PR is NOT ready for approval if it changes Bloomwire behavior but does not update the
+docs/changelog.** Docs-only PRs do not require a runtime deploy.
+
+**Every ledger/changelog entry must include:** phase name · PR number · merge SHA (once known) ·
+what changed · why it changed · what was intentionally **not** changed · validation evidence ·
+residual risks / parked items.
+
+**Security / permission / WhatsApp changes must explicitly state:** no secrets exposed · no
+provider-credential mutation unless explicitly authorized · whether any WhatsApp/Meta **live** calls
+were made · whether Enterprise code was touched.
+
+**Invariants future agents must preserve** (do not break without a separate, approved design):
+
+- do **not** use `users.type` for business/customer roles;
+- do **not** add a `BusinessOwner` role without separate design;
+- do **not** duplicate the chat/message source of truth;
+- do **not** introduce an Enterprise dependency;
+- keep the **WhatsApp-first** scope unless explicitly expanded.
+
+**Definition of Done (Bloomwire change):** code implemented · tests passed · runtime/browser proof
+when applicable · **docs updated** · **changelog updated** · residual risks recorded · **exact merge
+SHA recorded after merge**.
+
+---
+
 ## Strict QA gate (mandatory)
 
 **No task, slice, phase, or PR is `PASS` / complete / merge-ready until an

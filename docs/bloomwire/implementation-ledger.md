@@ -54,7 +54,8 @@
 | 15B | Business account-user flow clarity | #75 | Completed |
 | 15C | SuperAdmin impersonation token hardening | #76 | Completed (Issue #74 closed) |
 | 15D | Assigned Agent RCA | — (RCA only) | Completed — not a bug (no code change) |
-| 15E | This implementation ledger | (this PR) | Docs only |
+| 15E | This implementation ledger | #77 | Docs only |
+| 15E.1 | Documentation Governance guardrail | #77 | Docs only |
 
 ---
 
@@ -159,6 +160,14 @@
   inbox** — note the provisioning service already does this (`attach_agents_to_inbox`); manually-created
   inboxes can miss it.
 
+### Phase 15E — Implementation ledger — `Docs only` — PR #77
+- Added this ledger (`docs/bloomwire/implementation-ledger.md` + `.html`). No app code, no migrations.
+
+### Phase 15E.1 — Documentation Governance guardrail — `Docs only` — PR #77
+- Added the **Bloomwire Documentation Governance** rule to `AGENTS.md` + `CLAUDE.md`, this
+  **Documentation Governance** section (§10) + Definition of Done, and the Bloomwire change log
+  (`docs/bloomwire/change-log.md`). Ensures every future Bloomwire-owned change stays documented.
+
 ---
 
 ## 4. Permission model reference
@@ -249,6 +258,42 @@
 - **Do not duplicate** chat/message storage.
 - **Test Bloomwire Mode ON.**
 - **Test stock-compatible behavior** (Mode OFF) when touching Chatwoot flows.
+
+---
+
+## 10. Documentation Governance
+
+_Introduced in **Phase 15E.1**. Canonical rule: `AGENTS.md` → "Bloomwire Documentation Governance"._
+
+Every Bloomwire-owned change must be **transparent and documented** — no hidden or undocumented
+changes. Any PR that changes **behavior, permissions, security, onboarding, WhatsApp flow, APIs, UI
+flows, the data model, an operational process, or customer-facing behavior** must update, **in the
+same PR**:
+
+- `docs/bloomwire/implementation-ledger.md` and `docs/bloomwire/implementation-ledger.html`
+- the Bloomwire change log (`docs/bloomwire/change-log.md`)
+- the related **ADR/runbook** if architecture or operations are affected
+
+**A PR that changes Bloomwire behavior without updating docs/changelog is not approval-ready.**
+Docs-only PRs need no runtime deploy.
+
+Each entry records: **phase · PR number · merge SHA · what changed · why · what was intentionally NOT
+changed · validation evidence · residual risks / parked items.** Security/permission/WhatsApp entries
+must also state: **no secrets exposed · no provider-credential mutation unless authorized · whether
+any live Meta/WhatsApp calls were made · whether Enterprise code was touched.**
+
+Preserve the invariants: no `users.type` for business roles · no `BusinessOwner` without separate
+design · no duplicate chat/message source of truth · no Enterprise dependency · WhatsApp-first scope.
+
+### Definition of Done (Bloomwire change)
+
+- [ ] code implemented
+- [ ] tests passed
+- [ ] runtime/browser proof when applicable
+- [ ] **docs updated** (implementation ledger `.md` + `.html`)
+- [ ] **changelog updated** (`docs/bloomwire/change-log.md`)
+- [ ] residual risks recorded
+- [ ] **exact merge SHA recorded after merge**
 
 ---
 
