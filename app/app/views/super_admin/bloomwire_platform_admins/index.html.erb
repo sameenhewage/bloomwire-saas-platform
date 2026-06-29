@@ -62,17 +62,26 @@
           </td>
           <td>
             <%= bw_status_badge(pa.active? ? 'active' : 'revoked', label: pa.active? ? 'Active' : 'Revoked') %>
+            <% unless pa.identity_consistent? %>
+              <span class="bw-badge bw-badge--danger" title="Linked user is missing or is not a SuperAdmin">Needs repair</span>
+            <% end %>
           </td>
           <td class="text-xs"><%= pa.updated_at&.to_fs(:short) %></td>
           <td class="whitespace-nowrap">
-            <% if pa.active? && pa.last_active_owner? %>
-              <span class="bw-help">Protected (last owner)</span>
-            <% elsif pa.active? %>
-              <%= button_to 'Revoke', revoke_super_admin_bloomwire_platform_admin_path(pa), method: :patch,
-                            class: 'bw-btn bw-btn--ghost', form: { data: { turbo_confirm: 'Revoke this platform admin?' } } %>
-            <% else %>
+            <% if !pa.active? %>
               <%= button_to 'Reactivate', reactivate_super_admin_bloomwire_platform_admin_path(pa), method: :patch,
                             class: 'bw-btn bw-btn--secondary' %>
+            <% elsif pa.last_active_owner? %>
+              <span class="bw-help">Protected (last owner)</span>
+            <% else %>
+              <div class="flex items-center gap-2">
+                <%= form_with url: change_role_super_admin_bloomwire_platform_admin_path(pa), method: :patch, class: 'flex items-center gap-2' do |f| %>
+                  <%= f.select :role, @roles.map { |r| [r.titleize, r] }, { selected: pa.role }, class: 'bw-select' %>
+                  <%= f.submit 'Update role', class: 'bw-btn bw-btn--ghost' %>
+                <% end %>
+                <%= button_to 'Revoke', revoke_super_admin_bloomwire_platform_admin_path(pa), method: :patch,
+                              class: 'bw-btn bw-btn--ghost', form: { data: { turbo_confirm: 'Revoke this platform admin?' } } %>
+              </div>
             <% end %>
           </td>
         </tr>

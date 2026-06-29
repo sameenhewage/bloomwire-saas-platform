@@ -47,6 +47,8 @@ en:
       granted: 'Platform admin saved. If a new account was created, a password-setup email was sent.'
       revoked: 'Platform admin access revoked.'
       reactivated: 'Platform admin reactivated.'
+      role_changed: 'Platform admin role updated.'
+      identity_mismatch: 'This platform admin row needs repair (the linked user is missing or is not a SuperAdmin).'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'

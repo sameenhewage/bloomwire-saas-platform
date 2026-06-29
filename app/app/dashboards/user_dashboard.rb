@@ -36,6 +36,8 @@ class UserDashboard < Administrate::BaseDashboard
     updated_at: Field::DateTime,
     pubsub_token: Field::String,
     type: Field::Select.with_options(collection: [nil, 'SuperAdmin']),
+    # Phase 15A.2: shows the REAL Bloomwire platform role (bloomwire_platform_admins), not the users.type STI.
+    platform_access: PlatformAccessField,
     accounts: CountField,
     access_token: Field::HasOne
   }.freeze
@@ -106,5 +108,34 @@ class UserDashboard < Administrate::BaseDashboard
   #
   def display_resource(user)
     "##{user.id} #{user.name}"
+  end
+
+  # Phase 15A.2: in Bloomwire Mode ON, the raw users.type STI field is misleading + unsafe on the Users page.
+  # The index shows the real "Platform Access" instead of "Type"; the show/form surfaces drop the raw Type
+  # field (platform admins are managed only from Bloomwire -> Platform Admins). Mode OFF == stock Chatwoot.
+  def collection_attributes
+    return super unless bloomwire_mode_on?
+
+    super.map { |attribute| attribute == :type ? :platform_access : attribute }
+  end
+
+  def show_page_attributes
+    return super unless bloomwire_mode_on?
+
+    super - [:type]
+  end
+
+  def form_attributes(action = nil)
+    return super unless bloomwire_mode_on?
+
+    super - [:type]
+  end
+
+  private
+
+  def bloomwire_mode_on?
+    Bloomwire::Features.master_enabled?
+  rescue StandardError
+    false
   end
 end

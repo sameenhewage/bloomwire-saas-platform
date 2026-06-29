@@ -176,4 +176,43 @@ RSpec.describe Bloomwire::PlatformAdmin, type: :model do
       expect(record.reload.active?).to be(true)
     end
   end
+
+  # --- Phase 15A.2: Users-table platform access + identity consistency ---
+
+  describe '.access_status_for' do
+    it 'is :no_access for nil' do
+      expect(described_class.access_status_for(nil)).to eq(:no_access)
+    end
+
+    it 'is :no_access for a normal user (no row, type nil)' do
+      expect(described_class.access_status_for(create(:user))).to eq(:no_access)
+    end
+
+    it 'is :not_approved for a SuperAdmin with no approval row' do
+      expect(described_class.access_status_for(create(:super_admin, :unapproved_platform_admin))).to eq(:not_approved)
+    end
+
+    it 'is the role for an active row' do
+      user = create(:user)
+      described_class.create!(user: user, role: :owner, enabled: true)
+      expect(described_class.access_status_for(user)).to eq(:owner)
+    end
+
+    it 'is :revoked for an inactive row' do
+      user = create(:user)
+      described_class.create!(user: user, role: :admin, enabled: false, revoked_at: Time.current)
+      expect(described_class.access_status_for(user)).to eq(:revoked)
+    end
+  end
+
+  describe '#identity_consistent?' do
+    it 'is true when the linked user is a SuperAdmin' do
+      sa = create(:super_admin, :unapproved_platform_admin)
+      expect(described_class.create!(user: sa, role: :admin).identity_consistent?).to be(true)
+    end
+
+    it 'is false when the linked user is not a SuperAdmin (type edited away)' do
+      expect(described_class.create!(user: create(:user), role: :admin).identity_consistent?).to be(false)
+    end
+  end
 end

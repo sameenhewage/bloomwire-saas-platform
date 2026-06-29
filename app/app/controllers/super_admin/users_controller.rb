@@ -59,6 +59,10 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
   def resource_params
     permitted_params = super
     permitted_params.delete(:password) if permitted_params[:password].blank?
+    # Phase 15A.2: never let the raw Users page set/change users.type when Bloomwire Mode is ON — platform-admin
+    # identity is managed only via Bloomwire -> Platform Admins. (Defense-in-depth: the UserDashboard already
+    # drops :type from form/permitted attributes in Mode ON.)
+    permitted_params.delete(:type) if Bloomwire::Features.master_enabled?
     permitted_params
   end
 

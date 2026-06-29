@@ -100,4 +100,61 @@ RSpec.describe 'SuperAdmin Bloomwire Platform Admins', type: :request do
       expect(row.reload.active?).to be(true)
     end
   end
+
+  # Phase 15A.2: index rendering — role-change control for active non-last-owner rows + visible identity status.
+  describe 'GET index (Phase 15A.2 controls)' do
+    it 'renders a role-change select for an active non-owner and flags an inconsistent row as Needs repair' do
+      admin = create(:super_admin) # active admin row via factory
+      mismatched = create(:user)   # type nil -> identity inconsistent
+      Bloomwire::PlatformAdmin.create!(user: mismatched, role: :support, enabled: true)
+      sign_in(owner, scope: :super_admin)
+
+      get '/super_admin/bloomwire_platform_admins'
+
+      expect(response).to have_http_status(:success)
+      admin_row = Bloomwire::PlatformAdmin.find_by(user_id: admin.id)
+      expect(response.body).to include("bloomwire_platform_admins/#{admin_row.id}/change_role")
+      expect(response.body).to include('Update role')
+      expect(response.body).to include('Needs repair')
+    end
+  end
+
+  # Phase 15A.2: owner-only role change.
+  describe 'PATCH change_role' do
+    it 'lets the owner change an admin to support' do
+      target = create(:super_admin) # factory grants an active admin row
+      row = Bloomwire::PlatformAdmin.find_by(user_id: target.id)
+      sign_in(owner, scope: :super_admin)
+
+      patch "/super_admin/bloomwire_platform_admins/#{row.id}/change_role", params: { role: 'support' }
+      expect(row.reload.role).to eq('support')
+    end
+
+    it 'lets the owner promote an admin to owner' do
+      target = create(:super_admin)
+      row = Bloomwire::PlatformAdmin.find_by(user_id: target.id)
+      sign_in(owner, scope: :super_admin)
+
+      patch "/super_admin/bloomwire_platform_admins/#{row.id}/change_role", params: { role: 'owner' }
+      expect(row.reload.role).to eq('owner')
+    end
+
+    it 'blocks demoting the last active owner' do
+      owner_row = Bloomwire::PlatformAdmin.find_by(user_id: owner.id)
+      sign_in(owner, scope: :super_admin)
+
+      patch "/super_admin/bloomwire_platform_admins/#{owner_row.id}/change_role", params: { role: 'admin' }
+      expect(owner_row.reload.role).to eq('owner')
+    end
+
+    it 'bounces a non-owner platform admin' do
+      target = create(:super_admin)
+      row = Bloomwire::PlatformAdmin.find_by(user_id: target.id)
+      sign_in(non_owner_admin, scope: :super_admin)
+
+      patch "/super_admin/bloomwire_platform_admins/#{row.id}/change_role", params: { role: 'support' }
+      expect(response).to have_http_status(:redirect)
+      expect(row.reload.role).to eq('admin')
+    end
+  end
 end

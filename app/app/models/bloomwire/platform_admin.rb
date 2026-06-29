@@ -45,6 +45,13 @@ class Bloomwire::PlatformAdmin < ApplicationRecord
     new_role.to_s != 'owner' && last_active_owner?
   end
 
+  # Phase 15A.2: a row actually grants /super_admin access only if its user is a SuperAdmin (the 15A boundary).
+  # A row whose user is missing or no longer a SuperAdmin (e.g., users.type edited away) is INCONSISTENT — the
+  # owner UI surfaces it as "Needs repair" rather than hiding it.
+  def identity_consistent?
+    user.present? && user.type == 'SuperAdmin'
+  end
+
   # --- Approval predicate (the single seam every guard/route reads) ---
 
   # True when this user is an approved Bloomwire platform admin: an active approval row OR a bootstrap email.
@@ -64,6 +71,19 @@ class Bloomwire::PlatformAdmin < ApplicationRecord
     return false if email.blank?
 
     bootstrap_emails.include?(email.to_s.strip.downcase)
+  end
+
+  # Phase 15A.2: read-only platform-access status for a user, for the SuperAdmin Users table. Reflects the REAL
+  # platform role (this table), NOT the users.type STI discriminator. Returns a symbol:
+  # :owner / :admin / :support (active row) · :revoked (inactive row) · :not_approved (SuperAdmin, no row) ·
+  # :no_access (normal/business user).
+  def self.access_status_for(user)
+    return :no_access if user.blank?
+
+    row = find_by(user_id: user.id)
+    return (user.type == 'SuperAdmin' ? :not_approved : :no_access) if row.nil?
+
+    row.active? ? row.role.to_sym : :revoked
   end
 
   # --- Grant / revoke primitives. The owner-only UI authorization (who may call these) lives in the
