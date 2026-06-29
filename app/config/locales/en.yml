@@ -37,6 +37,16 @@ en:
     provider_setup_restricted: 'Provider and channel setup is managed by Bloomwire Ops. Please contact support.'
     bot_management_restricted: 'Bot management is managed by Bloomwire Ops. Please contact support.'
     platform_admin_required: 'This account is not authorized for the Bloomwire platform console. Please contact support.'
+    platform_admin:
+      owner_only: 'Only the platform owner can manage platform admins.'
+      last_owner_protected: 'You cannot revoke or demote the last active platform owner.'
+      business_email_refused: 'This email already belongs to a customer/business user. Use a separate Bloomwire internal admin email.'
+      fields_required: 'Name, email, role and reason are all required.'
+      invalid_role: 'Select a valid platform role.'
+      invalid_email: 'Enter a valid email address.'
+      granted: 'Platform admin saved. If a new account was created, a password-setup email was sent.'
+      revoked: 'Platform admin access revoked.'
+      reactivated: 'Platform admin reactivated.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'
