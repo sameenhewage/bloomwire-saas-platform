@@ -127,6 +127,27 @@ it here — read it there. In short:
 
 ---
 
+## Bloomwire Documentation Governance (mandatory)
+
+**`AGENTS.md` → "Bloomwire Documentation Governance" is canonical.** Do not fork it here — read it
+there. In short: every Bloomwire-owned PR that changes **behavior / permissions / security /
+onboarding / WhatsApp flow / APIs / UI flows / data model / ops process / customer-facing behavior**
+**must update docs in the same PR** — `docs/bloomwire/implementation-ledger.md` + `.html`, the
+Bloomwire change log (`docs/bloomwire/change-log.md`), and any affected ADR/runbook. A PR that
+changes Bloomwire behavior **without** updating docs/changelog is **not approval-ready**; docs-only
+PRs need no deploy.
+
+- Each ledger/changelog entry records: phase · PR · merge SHA · what/why · what was **not** changed ·
+  validation · residual risks.
+- Security/WhatsApp entries must state: **no secrets exposed**, **no provider-credential mutation
+  unless authorized**, whether **live Meta/WhatsApp calls** were made, whether **Enterprise** was touched.
+- Preserve invariants: no `users.type` for business roles · no `BusinessOwner` without separate design ·
+  no duplicate chat/message source of truth · no Enterprise dependency · WhatsApp-first scope.
+- **Definition of Done:** code · tests · runtime proof (when applicable) · **docs updated** ·
+  **changelog updated** · residual risks recorded · exact merge SHA recorded after merge. _(Phase 15E.1.)_
+
+---
+
 ## How to respond
 
 - Be concise and practical. Lead with the action or answer.

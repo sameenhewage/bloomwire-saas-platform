@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bloomwire Implementation Ledger</title>
+<!-- Docs only — no runtime behavior. Self-contained: no external CDN, no JavaScript. -->
+<style>
+  :root{
+    --bg:#0f1419; --panel:#171d26; --panel2:#1d2430; --border:#2a3340;
+    --text:#e6edf3; --muted:#9fb0c0; --faint:#6f7f8f;
+    --accent:#4aa8ff; --accent2:#6cc0ff;
+    --green:#2ea043; --green-bg:#10331c; --green-bd:#1f6f33;
+    --amber:#caa22a; --amber-bg:#332b10; --amber-bd:#6f5c1f;
+    --orange:#d97a2b; --orange-bg:#33240f; --orange-bd:#7a4d1f;
+    --gray:#7d8aa0; --gray-bg:#222a36; --gray-bd:#3a4554;
+    --blue:#4aa8ff; --blue-bg:#10263a; --blue-bd:#27557f;
+    --code-bg:#0b0f14;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:32px 22px 80px}
+  header.page{
+    border:1px solid var(--border); border-radius:14px; background:linear-gradient(180deg,var(--panel),var(--bg));
+    padding:26px 26px 22px; margin-bottom:26px;
+  }
+  header.page h1{margin:0 0 6px; font-size:26px; letter-spacing:.2px}
+  .sub{color:var(--muted); margin:0 0 14px}
+  .meta{display:flex; flex-wrap:wrap; gap:10px 18px; font-size:13px; color:var(--muted)}
+  .meta b{color:var(--text); font-weight:600}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.92em;
+    background:var(--code-bg); border:1px solid var(--border); border-radius:5px; padding:1px 6px; color:var(--accent2)}
+  .sha{word-break:break-all}
+  .note{
+    display:inline-flex; align-items:center; gap:8px; margin-top:14px; font-size:12.5px; color:var(--faint);
+    background:var(--panel2); border:1px dashed var(--border); border-radius:8px; padding:7px 11px;
+  }
+  .note .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+
+  nav.toc{border:1px solid var(--border); border-radius:12px; background:var(--panel); padding:16px 18px; margin-bottom:26px}
+  nav.toc h2{margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.12em; color:var(--faint)}
+  nav.toc ol{margin:0; padding-left:20px; columns:2; column-gap:32px}
+  @media(max-width:640px){nav.toc ol{columns:1}}
+  nav.toc li{margin:4px 0}
+  nav.toc a{color:var(--accent); text-decoration:none}
+  nav.toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 30px}
+  section h2{font-size:19px; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid var(--border)}
+  section h2 .num{color:var(--faint); font-weight:600; margin-right:8px}
+  h3{font-size:15.5px; margin:18px 0 8px}
+  p{margin:8px 0}
+  ul{margin:8px 0; padding-left:22px} li{margin:4px 0}
+  a.anchor{color:inherit; text-decoration:none}
+
+  .card{border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px;
+    background:var(--panel); padding:14px 16px; margin:14px 0}
+  .card.green{border-left-color:var(--green)}
+  .card.amber{border-left-color:var(--amber)}
+  .card.gray{border-left-color:var(--gray)}
+  .card h3{margin:0 0 4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    border-radius:999px; padding:2px 9px; border:1px solid var(--gray-bd); color:var(--gray); background:var(--gray-bg)}
+  .badge.done{color:#7ee29a; background:var(--green-bg); border-color:var(--green-bd)}
+  .badge.parked{color:#e7cf72; background:var(--amber-bg); border-color:var(--amber-bd)}
+  .badge.warn{color:#f0a868; background:var(--orange-bg); border-color:var(--orange-bd)}
+  .badge.optional{color:var(--blue); background:var(--blue-bg); border-color:var(--blue-bd)}
+  .badge.docs{color:var(--muted); background:var(--panel2); border-color:var(--border)}
+  .pr{font-size:11px; color:var(--faint); font-weight:600}
+
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px}
+  th,td{border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); color:var(--text); font-weight:600}
+  tr:nth-child(even) td{background:#141a23}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:680px){.grid2{grid-template-columns:1fr}}
+  .box{border:1px solid var(--border); border-radius:10px; background:var(--panel); padding:14px 16px}
+  .box h3{margin-top:0}
+  footer{margin-top:40px; padding-top:16px; border-top:1px solid var(--border); color:var(--faint); font-size:12.5px}
+  .top{font-size:12px}
+  .top a{color:var(--faint); text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page">
+    <h1>Bloomwire Implementation Ledger</h1>
+    <p class="sub">Internal implementation reference &amp; change log — what Bloomwire changed on top of the OSS base, what stays stock, and what must stay protected.</p>
+    <div class="meta">
+      <span><b>Generated:</b> 2026-06-29</span>
+      <span><b>Stable baseline:</b> <code class="sha">4084a23eb4a83b1ee41e298811a91d52d6fb6044</code> (after Phase 15C)</span>
+      <span><b>Branch:</b> <code>version_1</code></span>
+    </div>
+    <div class="note"><span class="dot"></span> Docs only — no runtime behavior. Changes no app code, no migrations, no configuration.</div>
+  </header>
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">Ownership statement</a></li>
+      <li><a href="#s2">Current stable baseline</a></li>
+      <li><a href="#s3">Phase-by-phase log</a></li>
+      <li><a href="#s4">Permission model</a></li>
+      <li><a href="#s5">WhatsApp architecture</a></li>
+      <li><a href="#s6">OSS / Enterprise statement</a></li>
+      <li><a href="#s7">Intentionally NOT changed</a></li>
+      <li><a href="#s8">Parked / residual items</a></li>
+      <li><a href="#s9">Operational rules</a></li>
+      <li><a href="#s10">Documentation Governance</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <h2><a class="anchor" href="#s1"><span class="num">1.</span>Ownership statement</a></h2>
+    <ul>
+      <li><b>Bloomwire</b> is a <b>WhatsApp-first SaaS product</b> built on the WhatsWay / Chatwoot-derived <b>OSS base</b>.</li>
+      <li><b>Bloomwire customizations are Bloomwire-owned</b>, layered on top of the OSS code path.</li>
+      <li><b>Chatwoot Enterprise code/features are not used.</b> Bloomwire runs with <code>DISABLE_ENTERPRISE=true</code>.</li>
+      <li><b>Current channel scope is WhatsApp only.</b> Future channels may be added later; the current implementation is intentionally WhatsApp-first and must not be over-built for multi-channel now.</li>
+      <li>Bloomwire behavior is gated behind <b>Bloomwire Mode</b> (<code>BLOOMWIRE_MODE_ENABLED</code>); with Mode <b>OFF</b>, behavior is intended to stay stock-compatible.</li>
+    </ul>
+  </section>
+
+  <section id="s2">
+    <h2><a class="anchor" href="#s2"><span class="num">2.</span>Current stable baseline</a></h2>
+    <ul>
+      <li><b>Stable SHA after Phase 15C:</b> <code class="sha">4084a23eb4a83b1ee41e298811a91d52d6fb6044</code></li>
+      <li>Includes all completed permission/security hardening through <b>Phase 15C</b>, plus the <b>Phase 15D</b> Assigned-Agent RCA (no code change).</li>
+      <li><b>Phase 16 (customer onboarding) should start from this stable reference.</b></li>
+      <li>Baseline dev toggles: <code>BLOOMWIRE_MODE_ENABLED=ON</code>, <code>BLOOMWIRE_PRIVACY_HARDENING=ON</code>, <code>BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER=ON</code>.</li>
+    </ul>
+    <table>
+      <thead><tr><th>Phase</th><th>What</th><th>PR</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>13B</td><td>WhatsApp production hardening</td><td>13x</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>13C</td><td>Live Meta certification (dev)</td><td>13x</td><td><span class="badge done">Completed</span> <span class="badge parked">templates parked</span></td></tr>
+        <tr><td>13D</td><td>Webhook PII log hardening</td><td>13x</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>13E</td><td>Template / out-of-window parking</td><td>13x</td><td><span class="badge parked">Parked</span></td></tr>
+        <tr><td>14 (S2)</td><td>Ops credential capture</td><td>#68</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>14 (S3)</td><td>Customer provisioning orchestration</td><td>#69</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>15A</td><td>Platform-admin boundary</td><td>#71</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>15A.1</td><td>Owner-only Platform Admin management</td><td>#72</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>15A.2</td><td>Users vs Platform Admin flow consistency</td><td>#73</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>15B</td><td>Business account-user flow clarity</td><td>#75</td><td><span class="badge done">Completed</span></td></tr>
+        <tr><td>15C</td><td>SuperAdmin impersonation token hardening</td><td>#76</td><td><span class="badge done">Completed</span> <span class="badge done">Issue #74 closed</span></td></tr>
+        <tr><td>15D</td><td>Assigned Agent RCA</td><td>RCA only</td><td><span class="badge done">Not a bug</span></td></tr>
+        <tr><td>15E</td><td>Implementation ledger</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
+        <tr><td>15E.1</td><td>Documentation Governance guardrail</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s3">
+    <h2><a class="anchor" href="#s3"><span class="num">3.</span>Phase-by-phase implementation log</a></h2>
+
+    <div class="card green"><h3>Phase 13B — WhatsApp production hardening <span class="badge done">Completed</span></h3>
+      <ul>
+        <li>Encrypt the WhatsApp <b>provider config</b> at rest <b>when AR encryption keys are configured</b> (target: no plaintext token-at-rest; degrades safely if keys absent).</li>
+        <li>Outbound <b>retry</b> for transient send failures.</li>
+        <li><b>Configurable Graph API version</b> (no hard-coded Meta API version).</li>
+        <li><b>No Enterprise dependency.</b></li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 13C — Live Meta certification (dev) <span class="badge done">Completed</span> <span class="badge parked">templates parked</span></h3>
+      <ul>
+        <li>Validated on the live <b>dev</b> environment; <b>webhook callback verified</b>.</li>
+        <li><b>Inbound/outbound WhatsApp session chat verified</b>; <b>status lifecycle verified</b> (sent/delivered/read).</li>
+        <li><b>Templates parked</b> — no approved WABA template available to certify the template path.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 13D — Webhook PII log hardening <span class="badge done">Completed</span></h3>
+      <ul>
+        <li>Disabled risky <b>job-args logging</b> for WhatsApp-related jobs.</li>
+        <li>Deep-<b>filtered webhook <code>entry</code> payloads</b> from request-param logs.</li>
+        <li>Prevents <b>phone / profile / <code>wa_id</code> / secrets</b> from leaking into logs (via <code>config.filter_parameters</code> + log-level adjustments; logging-only).</li>
+      </ul>
+    </div>
+
+    <div class="card amber"><h3>Phase 13E — Template / out-of-window parking <span class="badge parked">Parked</span></h3>
+      <ul>
+        <li><b>Template send parked</b> until an <b>approved WABA template</b> exists.</li>
+        <li>Session chat works; the template path waits on Meta/WABA readiness.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 14 — Customer provisioning foundation <span class="badge done">Completed</span> <span class="pr">PR #68 · #69</span></h3>
+      <ul>
+        <li><b>Onboarding runbook</b> authored.</li>
+        <li><b>Secure Ops credential capture</b> — provider credentials handled under a filtered <code>provider_config</code> key; never echoed.</li>
+        <li><b>Customer provisioning orchestration</b> (<code>Bloomwire::CustomerProvisioningService</code>): account &rarr; owner &rarr; agents &rarr; WhatsApp channel &rarr; inbox, and <b>attaches provisioned agents to the WhatsApp inbox</b> (<code>attach_agents_to_inbox</code>).</li>
+        <li><b>No Meta live registration</b> unless explicitly authorized.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 15A — Platform-admin boundary <span class="badge done">Completed</span> <span class="pr">PR #71</span></h3>
+      <ul>
+        <li><code>/super_admin</code> is the <b>Bloomwire internal / platform console</b>.</li>
+        <li><code>users.type = 'SuperAdmin'</code> is a <b>Rails/Devise STI identity only</b> — not a business role.</li>
+        <li>Platform access is controlled by <b><code>bloomwire_platform_admins</code></b> (ADR-0007); only approved platform admins can access <code>/super_admin</code>.</li>
+        <li><b>Customer/business users are blocked</b> from <code>/super_admin</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 15A.1 — Owner-only Platform Admin management <span class="badge done">Completed</span> <span class="pr">PR #72</span></h3>
+      <ul>
+        <li>Added the <b>Platform Admins</b> page; roles <b>owner / admin / support</b>.</li>
+        <li>Owner can <b>create / grant / revoke (soft) / reactivate</b> platform admins.</li>
+        <li><b>Last-owner guard</b> (the only active owner cannot be demoted/revoked).</li>
+        <li><b>No accidental promotion</b> of normal users.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 15A.2 — Users vs Platform Admin flow consistency <span class="badge done">Completed</span> <span class="pr">PR #73</span></h3>
+      <ul>
+        <li>Users page preserved for normal/customer user creation.</li>
+        <li>Raw <code>Type</code> field <b>hidden on forms and stripped server-side</b> in Bloomwire Mode.</li>
+        <li>Users table shows computed <b>Platform Access</b> instead of raw <code>Type</code>.</li>
+        <li>Business users are <b>normal users with account membership</b>, not <code>users.type</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 15B — Business account-user flow clarity <span class="badge done">Completed</span> <span class="pr">PR #75</span></h3>
+      <ul>
+        <li><code>account_users.role = administrator</code> displayed as <b>Business Admin</b>; <code>agent</code> displayed as <b>Agent</b>.</li>
+        <li><b>No <code>BusinessOwner</code> role added</b>; <b>DB values remain <code>administrator</code> / <code>agent</code></b> (display/UX clarity only).</li>
+        <li>Business/customer account access does <b>not</b> grant platform access.</li>
+      </ul>
+    </div>
+
+    <div class="card green"><h3>Phase 15C — SuperAdmin impersonation token hardening <span class="badge done">Completed</span> <span class="badge done">Issue #74 closed</span> <span class="pr">PR #76</span></h3>
+      <ul>
+        <li><b>Issue #74</b>: the old user-show page rendered an <code>sso_auth_token</code> in the link href.</li>
+        <li>Impersonation changed to <b>POST</b>: token generated <b>only on click</b>, server-side; <b>no token in rendered HTML/href</b>; <b>final browser URL has no token</b>.</li>
+        <li>Handoff uses <code>head</code> + <code>Location</code> (not <code>redirect_to</code>) &rarr; token <b>not in the Rails "Redirected to" log</b>; also <code>[FILTERED]</code> from param logs. Token stays <b>short-lived (5 min) + single-use</b>.</li>
+        <li><b>Residual:</b> the intermediate <code>/app/login?…sso_auth_token=…</code> handoff URL still exists briefly; full removal needs a separate frontend/auth handoff redesign.</li>
+      </ul>
+    </div>
+
+    <div class="card gray"><h3>Phase 15D — Assigned Agent RCA <span class="badge done">Not a bug</span> <span class="badge docs">RCA only</span></h3>
+      <ul>
+        <li><b>Classification: A (not a bug) + B (setup).</b> Stock Chatwoot behavior — <b>no code change</b>.</li>
+        <li><b>Rule:</b> assignable agents = <b>inbox members + account administrators</b>.</li>
+        <li>Settings &rarr; Agents shows account-level users; the conversation <b>Assigned Agent</b> dropdown uses the <b>inbox-scoped</b> assignable-agents endpoint.</li>
+        <li>The account Agent was not an inbox member &rarr; excluded; the administrator appeared because admins are always included.</li>
+        <li><b>Not</b> caused by Bloomwire Mode or 15A/15B permission changes.</li>
+        <li><b>Correct no-code fix:</b> add the agent as an <b>inbox collaborator/member</b>. Future onboarding must ensure selected agents are attached to the WhatsApp inbox (the provisioning service already does this).</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15E — Implementation ledger <span class="badge docs">Docs only</span> <span class="pr">PR #77</span></h3>
+      <ul><li>Added this ledger (<code>docs/bloomwire/implementation-ledger.md</code> + <code>.html</code>). No app code, no migrations.</li></ul>
+    </div>
+
+    <div class="card"><h3>Phase 15E.1 — Documentation Governance guardrail <span class="badge docs">Docs only</span> <span class="pr">PR #77</span></h3>
+      <ul><li>Added the <b>Bloomwire Documentation Governance</b> rule to <code>AGENTS.md</code> + <code>CLAUDE.md</code>, the <b>Documentation Governance</b> section (§10) + Definition of Done below, and the Bloomwire change log (<code>docs/bloomwire/change-log.md</code>). Ensures every future Bloomwire-owned change stays documented.</li></ul>
+    </div>
+  </section>
+
+  <section id="s4">
+    <h2><a class="anchor" href="#s4"><span class="num">4.</span>Permission model reference</a></h2>
+    <div class="grid2">
+      <div class="box"><h3>Platform side (Bloomwire internal)</h3>
+        <ul>
+          <li>Surface: <code>/super_admin</code></li>
+          <li><code>users.type = 'SuperAdmin'</code> = technical Devise/STI identity</li>
+          <li>Platform access controlled by <code>bloomwire_platform_admins</code></li>
+          <li>Platform roles: <code>owner</code>, <code>admin</code>, <code>support</code></li>
+          <li>Platform users are Bloomwire internal users</li>
+        </ul>
+      </div>
+      <div class="box"><h3>Business / customer side</h3>
+        <ul>
+          <li>Surface: <code>/app/accounts/:id</code></li>
+          <li>Account membership controlled by <code>account_users</code></li>
+          <li>Roles (DB): <code>administrator</code>, <code>agent</code></li>
+          <li>UI labels: <b>Business Admin</b>, <b>Agent</b></li>
+          <li>Do <b>not</b> add <code>BusinessOwner</code> yet; do <b>not</b> use <code>users.type</code> for business roles</li>
+        </ul>
+      </div>
+    </div>
+    <div class="box" style="margin-top:14px"><h3>Conversation assignment</h3>
+      <ul>
+        <li>Assignable agents = <b>inbox members + account administrators</b></li>
+        <li>An account Agent must <b>also be an inbox collaborator/member</b> to appear in the Assigned Agent dropdown</li>
+        <li><b>Team</b> assignment is separate from agent assignment; <b>Priority</b> is separate from both</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="s5">
+    <h2><a class="anchor" href="#s5"><span class="num">5.</span>WhatsApp architecture reference</a></h2>
+    <ul>
+      <li><b>Current scope is WhatsApp only.</b></li>
+      <li><b>Global webhook/router</b> direction: one shared webhook entry resolving to the correct mapped channel/inbox. <b>No per-customer random webhook strategy.</b></li>
+      <li><b>Provider credentials must not be exposed</b> (filtered in logs; never in business-facing responses; scrubbed via privacy hardening).</li>
+      <li><b>No WhatsApp/Meta live calls</b> unless explicitly authorized (tests stay WebMock-blocked).</li>
+      <li><b>No duplicate conversation/message source of truth</b> — existing Chatwoot/Bloomwire data remains the single source of truth.</li>
+      <li><b>Future channels should not be over-built now.</b></li>
+    </ul>
+  </section>
+
+  <section id="s6">
+    <h2><a class="anchor" href="#s6"><span class="num">6.</span>OSS / Enterprise statement</a></h2>
+    <ul>
+      <li>Bloomwire uses the <b>OSS-compatible code path only</b> (<code>DISABLE_ENTERPRISE=true</code>).</li>
+      <li><b>Enterprise code/features are not part of the Bloomwire implementation</b> and must not be relied upon.</li>
+      <li><b>No Enterprise dependency</b> should be introduced.</li>
+      <li>Any future Enterprise-like feature must be implemented in <b>Bloomwire-owned code</b>, or evaluated legally/technically before any use of Enterprise-licensed code.</li>
+    </ul>
+  </section>
+
+  <section id="s7">
+    <h2><a class="anchor" href="#s7"><span class="num">7.</span>What we intentionally did NOT change</a></h2>
+    <ul>
+      <li>No <code>BusinessOwner</code> role yet (account roles remain <code>administrator</code> / <code>agent</code>).</li>
+      <li>No new customer message/conversation tables (no duplicate chat storage).</li>
+      <li>No Enterprise WhatsApp code usage.</li>
+      <li>No multi-channel support yet (WhatsApp-first).</li>
+      <li>No billing/subscription system yet.</li>
+      <li>No Meta template send until an approved template exists.</li>
+      <li>No full replacement of the Chatwoot assignment system — stock account/inbox assignment semantics preserved (Bloomwire onboarding should respect them).</li>
+    </ul>
+  </section>
+
+  <section id="s8">
+    <h2><a class="anchor" href="#s8"><span class="num">8.</span>Parked / residual items</a></h2>
+    <table>
+      <thead><tr><th>Item</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Approved WABA template required</td><td><span class="badge parked">Parked</span></td><td>Out-of-window/template send waits on an approved Meta template.</td></tr>
+        <tr><td>Intermediate SSO token handoff URL</td><td><span class="badge warn">Residual</span></td><td>From Phase 15C — brief <code>/app/login?…sso_auth_token=…</code> handoff; full removal needs a frontend/auth handoff redesign. Mitigated (short-lived, single-use, on-click only).</td></tr>
+        <tr><td>Manual inboxes can miss collaborators</td><td><span class="badge warn">Warning</span></td><td>Onboarding should attach agents to the inbox; manual inboxes may have zero members &rarr; only admins assignable (Phase 15D).</td></tr>
+        <tr><td>Inbox-has-no-agents UI warning</td><td><span class="badge optional">Optional</span></td><td>Future UX hint when an inbox has no agents/collaborators.</td></tr>
+        <tr><td><code>BusinessOwner</code> role</td><td><span class="badge optional">Optional</span></td><td>Only when billing / ownership-transfer / subscription features exist; must be separately designed.</td></tr>
+        <tr><td>Channel expansion</td><td><span class="badge optional">Optional</span></td><td>Instagram / Messenger / Telegram / Signal — future, not now.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s9">
+    <h2><a class="anchor" href="#s9"><span class="num">9.</span>Operational rules for future agents</a></h2>
+    <ul>
+      <li><b>Evidence first</b> — no assumptions; prove the root cause before changing anything.</li>
+      <li><b>Do not merge/deploy without approval.</b></li>
+      <li><b>Exact-SHA review gate</b> — only merge the explicitly approved head SHA; abort if it changed.</li>
+      <li><b>No WhatsApp/Meta/provider credential mutation</b> unless explicitly authorized.</li>
+      <li><b>Mask</b> secrets, tokens, phone numbers, and emails where practical.</li>
+      <li>Do <b>not</b> use <code>users.type</code> for customer/business roles.</li>
+      <li>Do <b>not</b> add <code>BusinessOwner</code> unless separately designed.</li>
+      <li>Do <b>not</b> duplicate chat/message storage.</li>
+      <li><b>Test Bloomwire Mode ON</b>; test stock-compatible behavior (Mode OFF) when touching Chatwoot flows.</li>
+    </ul>
+  </section>
+
+  <section id="s10">
+    <h2><a class="anchor" href="#s10"><span class="num">10.</span>Documentation Governance</a></h2>
+    <p style="color:var(--muted)">Introduced in <b>Phase 15E.1</b>. Canonical rule: <code>AGENTS.md</code> &rarr; "Bloomwire Documentation Governance".</p>
+    <div class="card">
+      <p>Every Bloomwire-owned change must be <b>transparent and documented</b> — no hidden or undocumented changes. Any PR that changes <b>behavior, permissions, security, onboarding, WhatsApp flow, APIs, UI flows, the data model, an operational process, or customer-facing behavior</b> must update, <b>in the same PR</b>:</p>
+      <ul>
+        <li><code>docs/bloomwire/implementation-ledger.md</code> and <code>docs/bloomwire/implementation-ledger.html</code></li>
+        <li>the Bloomwire change log (<code>docs/bloomwire/change-log.md</code>)</li>
+        <li>the related <b>ADR/runbook</b> if architecture or operations are affected</li>
+      </ul>
+      <p><b>A PR that changes Bloomwire behavior without updating docs/changelog is not approval-ready.</b> Docs-only PRs need no runtime deploy.</p>
+      <p>Each entry records: <b>phase · PR number · merge SHA · what changed · why · what was intentionally NOT changed · validation evidence · residual risks / parked items.</b> Security/permission/WhatsApp entries must also state: <b>no secrets exposed · no provider-credential mutation unless authorized · whether any live Meta/WhatsApp calls were made · whether Enterprise code was touched.</b></p>
+      <p>Preserve the invariants: no <code>users.type</code> for business roles · no <code>BusinessOwner</code> without separate design · no duplicate chat/message source of truth · no Enterprise dependency · WhatsApp-first scope.</p>
+    </div>
+    <div class="box">
+      <h3>Definition of Done (Bloomwire change)</h3>
+      <ul style="list-style:none; padding-left:4px">
+        <li>&#9744; code implemented</li>
+        <li>&#9744; tests passed</li>
+        <li>&#9744; runtime/browser proof when applicable</li>
+        <li>&#9744; <b>docs updated</b> (implementation ledger <code>.md</code> + <code>.html</code>)</li>
+        <li>&#9744; <b>changelog updated</b> (<code>docs/bloomwire/change-log.md</code>)</li>
+        <li>&#9744; residual risks recorded</li>
+        <li>&#9744; <b>exact merge SHA recorded after merge</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Bloomwire Implementation Ledger · generated 2026-06-29 · baseline <code class="sha">4084a23eb4a83b1ee41e298811a91d52d6fb6044</code> · <b>docs only — no runtime behavior</b>.
+    <div class="top" style="margin-top:8px"><a href="#">&uarr; Back to top</a></div>
+  </footer>
+
+</div>
+</body>
+</html>
