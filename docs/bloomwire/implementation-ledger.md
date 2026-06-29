@@ -182,6 +182,10 @@
   "blocked — missing config" otherwise. **Never fakes success.** Tests never send real mail.
 - **Access**: owner-only (`Bloomwire::PlatformAdmin` active owners; `Bloomwire::RequiresPlatformOwner`
   concern). Platform admin/support + customer/business users blocked.
+- **Review hardening (PR #78)**: the Overview copy is **honest** (no claim that password resets/transactional
+  emails use the DB SMTP — Devise unchanged, transactional sending parked); **system-template keys are
+  immutable** (`:key` not permitted on update + model validation; auto-generated on create); **CTA URLs** are
+  restricted to `http(s)`/`{{placeholder}}`.
 - **SECURITY DEBT (documented)**: `smtp_password` is stored **plaintext** (Active Record encryption not
   configured). Encryption-at-rest is a **parked follow-up** (see §8).
 - **Not changed**: no WhatsApp/Meta/provider credentials, no Enterprise code, no `BusinessOwner`, no

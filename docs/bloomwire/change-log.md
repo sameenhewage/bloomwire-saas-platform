@@ -31,8 +31,14 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   business users blocked; `/super_admin` boundary unchanged.
 - **Not changed:** no WhatsApp/Meta/provider credentials, no Enterprise code, no `BusinessOwner` role, no
   `users.type` for business roles, no chat/message tables, Devise/password-reset mailers untouched.
-- **Validation:** model + service + mailer + request specs (37 examples, 0 failures); RuboCop clean;
-  existing SuperAdmin specs regression-green (29/0); browser QA on dev.
+- **Validation:** model + service + mailer + request specs (52 examples, 0 failures); RuboCop clean;
+  existing SuperAdmin specs regression-green (39/0). Browser QA on dev pending (post-approval).
+- **Review fixes (post-#78 review):** (1) Overview tab copy made honest — it no longer implies password
+  resets/transactional emails already use the DB-backed SMTP; it states Devise/password-reset is unchanged
+  and transactional sending is parked. (2) System-template **keys are immutable** — `:key` is not permitted
+  on update and a model validation blocks changing a system template's key (future routing depends on stable
+  keys); keys are auto-generated on create. (3) CTA URL scheme validation (http/https or `{{placeholder}}`
+  only) — closes the previously-flagged non-blocking CTA href concern.
 - **Security:** SMTP password is **write-only** in the UI (masked, never rendered/logged/printed). No live
   Meta/WhatsApp calls (tests never send real mail). No provider-credential mutation. No Enterprise touched.
 - **Residual / SECURITY DEBT:** `smtp_password` is stored **plaintext** in DB because Active Record

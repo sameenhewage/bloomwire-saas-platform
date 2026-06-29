@@ -61,4 +61,42 @@ RSpec.describe Bloomwire::EmailTemplate do
       expect(template.reload.active).to be(true)
     end
   end
+
+  describe 'system template key immutability' do
+    it 'prevents changing the key of a system template' do
+      template = described_class.create!(key: 'sys_one', name: 'N', subject: 's', body: 'b', system: true)
+      expect(template.update(key: 'hacked')).to be(false)
+      expect(template.errors.attribute_names).to include(:key)
+      expect(template.reload.key).to eq('sys_one')
+    end
+
+    it 'still allows changing safe fields on a system template' do
+      template = described_class.create!(key: 'sys_two', name: 'N', subject: 's', body: 'b', system: true)
+      expect(template.update(subject: 'New subject', name: 'New name', active: false)).to be(true)
+      expect(template.reload.subject).to eq('New subject')
+      expect(template.active).to be(false)
+    end
+
+    it 'keeps seeded system keys stable across re-seeding' do
+      described_class.seed_defaults!
+      described_class.find_by(key: 'welcome_email').update!(subject: 'Owner edited')
+      described_class.seed_defaults! # idempotent re-run must not reset or duplicate
+      expect(described_class.where(key: 'welcome_email').count).to eq(1)
+      expect(described_class.find_by(key: 'welcome_email').subject).to eq('Owner edited')
+    end
+  end
+
+  describe 'cta_url scheme validation' do
+    it 'allows http(s) URLs, {{variable}} placeholders, and blank' do
+      expect(described_class.new(key: 'a', name: 'n', subject: 's', body: 'b', cta_url: 'https://x.com')).to be_valid
+      expect(described_class.new(key: 'b', name: 'n', subject: 's', body: 'b', cta_url: '{{invitation_link}}')).to be_valid
+      expect(described_class.new(key: 'c', name: 'n', subject: 's', body: 'b', cta_url: '')).to be_valid
+    end
+
+    it 'rejects javascript: and other unsafe schemes' do
+      template = described_class.new(key: 'd', name: 'n', subject: 's', body: 'b', cta_url: 'javascript:alert(1)')
+      expect(template).not_to be_valid
+      expect(template.errors.attribute_names).to include(:cta_url)
+    end
+  end
 end

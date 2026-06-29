@@ -158,4 +158,84 @@ RSpec.describe 'SuperAdmin Bloomwire Email Settings', type: :request do
       expect(ActionMailer::Base.deliveries).to be_empty
     end
   end
+
+  describe 'Overview tab is honest about parked wiring (blocker 1)' do
+    before { sign_in(owner, scope: :super_admin) }
+
+    it 'states password-reset is unchanged and transactional sending is parked' do
+      get '/super_admin/bloomwire_email_settings?tab=overview'
+      expect(response.body).to match(/parked/i)
+      expect(response.body).to match(/password-reset|password reset/i)
+      expect(response.body).to match(/not changed in this phase/i)
+    end
+
+    it 'does not claim password resets already use the DB-backed SMTP settings' do
+      get '/super_admin/bloomwire_email_settings?tab=overview'
+      expect(response.body).not_to match(/password resets? (now )?uses? (the |these )?DB-backed SMTP/i)
+    end
+  end
+
+  describe 'system template key immutability via direct PATCH (blocker 2)' do
+    before { sign_in(owner, scope: :super_admin) }
+
+    it 'ignores a posted key for a system template but still updates safe fields' do
+      template = Bloomwire::EmailTemplate.find_by(key: 'password_reset')
+      patch "/super_admin/bloomwire_email_templates/#{template.id}",
+            params: { bloomwire_email_template: { key: 'hacked_key', subject: 'New subject' } }
+      expect(template.reload.key).to eq('password_reset')
+      expect(template.subject).to eq('New subject')
+    end
+
+    it 'a duplicate gets a safe unique key and does not overwrite the system key' do
+      original = Bloomwire::EmailTemplate.find_by(key: 'welcome_email')
+      post "/super_admin/bloomwire_email_templates/#{original.id}/duplicate"
+      copy = Bloomwire::EmailTemplate.order(:id).last
+      expect(copy.key).not_to eq('welcome_email')
+      expect(copy.system).to be(false)
+      expect(Bloomwire::EmailTemplate.where(key: 'welcome_email').count).to eq(1)
+    end
+  end
+
+  describe 'non-owner cannot perform any write action via direct requests' do
+    before { sign_in(non_owner_admin, scope: :super_admin) }
+
+    let(:template) { Bloomwire::EmailTemplate.find_by(key: 'welcome_email') }
+
+    it 'blocks update_settings' do
+      patch '/super_admin/bloomwire_email_settings/update_settings',
+            params: { bloomwire_email_setting: { smtp_address: 'evil.smtp.example' } }
+      expect(response).to have_http_status(:redirect)
+      expect(Bloomwire::EmailSetting.where(smtp_address: 'evil.smtp.example')).not_to exist
+    end
+
+    it 'blocks test_email' do
+      post '/super_admin/bloomwire_email_settings/test_email', params: { recipient: 'x@example.com' }
+      expect(response).to have_http_status(:redirect)
+      expect(ActionMailer::Base.deliveries).to be_empty
+    end
+
+    it 'blocks template update' do
+      patch "/super_admin/bloomwire_email_templates/#{template.id}",
+            params: { bloomwire_email_template: { subject: 'hacked' } }
+      expect(response).to have_http_status(:redirect)
+      expect(template.reload.subject).not_to eq('hacked')
+    end
+
+    it 'blocks duplicate' do
+      expect do
+        post "/super_admin/bloomwire_email_templates/#{template.id}/duplicate"
+      end.not_to change(Bloomwire::EmailTemplate, :count)
+    end
+
+    it 'blocks deactivate' do
+      patch "/super_admin/bloomwire_email_templates/#{template.id}/deactivate"
+      expect(template.reload.active).to be(true)
+    end
+
+    it 'blocks reactivate' do
+      template.update!(active: false)
+      patch "/super_admin/bloomwire_email_templates/#{template.id}/reactivate"
+      expect(template.reload.active).to be(false)
+    end
+  end
 end

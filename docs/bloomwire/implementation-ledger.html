@@ -273,6 +273,7 @@
         <li><b>DB-backed templates</b> (<code>bloomwire_email_templates</code>): 6 seeded system templates with <code>{{variable}}</code> preview + create / edit / duplicate / deactivate / reactivate.</li>
         <li><b>Test Email</b>: preflight-validated — real send via the DB SMTP settings when complete, honest "blocked" otherwise. <b>Never fakes success</b>; tests never send real mail.</li>
         <li><b>Access</b>: owner-only (<code>Bloomwire::PlatformAdmin</code> active owners); admin/support + customer/business blocked.</li>
+        <li><b>Review hardening (PR #78)</b>: Overview copy is honest (no claim password resets/transactional emails use the DB SMTP — Devise unchanged, transactional sending parked); <b>system-template keys are immutable</b> (<code>:key</code> not permitted on update + model validation; auto-generated on create); CTA URLs restricted to <code>http(s)</code>/<code>{{placeholder}}</code>.</li>
         <li><b>SECURITY DEBT</b>: <code>smtp_password</code> stored <b>plaintext</b> (AR encryption not configured) — encryption-at-rest is a parked follow-up. No WhatsApp/Meta/provider changes; no Enterprise; Devise/password-reset mailers untouched.</li>
       </ul>
     </div>

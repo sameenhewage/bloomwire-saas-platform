@@ -52,8 +52,10 @@ class SuperAdmin::BloomwireEmailTemplatesController < SuperAdmin::ApplicationCon
     redirect_to super_admin_bloomwire_email_settings_path(tab: 'templates', template_id: template&.id), flash: flash_hash
   end
 
+  # NOTE: `:key` is intentionally NOT permitted. Keys are auto-generated on create and are immutable
+  # afterwards (system templates depend on stable keys for future routing). See Bloomwire::EmailTemplate.
   def template_params
-    params.require(:bloomwire_email_template).permit(:name, :category, :subject, :body, :cta_label, :cta_url, :key)
+    params.require(:bloomwire_email_template).permit(:name, :category, :subject, :body, :cta_label, :cta_url)
   end
 
   def unique_key_for(name)

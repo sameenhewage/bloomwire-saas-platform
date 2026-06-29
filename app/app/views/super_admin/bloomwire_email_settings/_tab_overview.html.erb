@@ -2,9 +2,9 @@
 <div class="bw-card">
   <h2 class="bw-card__title">Outbound email overview</h2>
   <p class="bw-card__subtitle">
-    Bloomwire sends transactional email (invitations, password resets, receipts and more) using the SMTP
-    configuration below. Manage the connection in <strong>Configuration</strong> and the message content in
-    <strong>Email Templates</strong>.
+    This page manages Bloomwire-owned <strong>outbound email settings</strong>, reusable
+    <strong>email templates</strong>, and <strong>test email readiness</strong>. Configure the SMTP
+    connection in <strong>Configuration</strong> and edit the message content in <strong>Email Templates</strong>.
   </p>
 
   <div class="bw-dl__row">
@@ -28,6 +28,19 @@
   <div class="bw-dl__row">
     <div class="bw-dl__key" style="width: 220px;">Active templates</div>
     <div class="bw-dl__value"><%= @all_templates.count(&:active?) %> of <%= @all_templates.size %></div>
+  </div>
+
+  <div class="bw-blocked" style="margin-top:16px;">
+    <div>
+      <p class="bw-blocked__title">What is not wired yet (parked for a follow-up)</p>
+      <p>
+        The <strong>Devise / password-reset</strong> mailer is <strong>not changed in this phase</strong> — it
+        still uses the existing environment-based email flow, <strong>not</strong> these DB-backed SMTP
+        settings. Automatic transactional sending for the <strong>business invitation, welcome, plan change,
+        payment receipt, and support ticket</strong> emails is <strong>parked</strong>: their templates and
+        preview live here, but they are not yet wired to send on real events.
+      </p>
+    </div>
   </div>
 
   <div class="bw-panel__actions">

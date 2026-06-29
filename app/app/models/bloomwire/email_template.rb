@@ -50,6 +50,12 @@ class Bloomwire::EmailTemplate < ApplicationRecord
   validates :name, presence: true
   validates :subject, presence: true
   validates :body, presence: true
+  # A system template's key is immutable (future template routing depends on stable keys). Defense-in-depth
+  # on top of the controller not permitting :key — holds for direct/console/service updates too.
+  validate :system_key_immutable, on: :update
+  # CTA URL must be a safe scheme: an http(s) URL or a {{variable}} placeholder (resolved at send/preview).
+  # Blocks javascript:/data: and similar from ever reaching a rendered href.
+  validate :cta_url_safe_scheme
 
   scope :ordered, -> { order(:position, :id) }
   scope :active, -> { where(active: true) }
@@ -164,5 +170,23 @@ class Bloomwire::EmailTemplate < ApplicationRecord
 
       create!(attrs.merge(system: true, active: true))
     end
+  end
+
+  private
+
+  def system_key_immutable
+    return unless system? && key_changed?
+
+    errors.add(:key, 'of a system template cannot be changed')
+  end
+
+  def cta_url_safe_scheme
+    return if cta_url.blank?
+
+    stripped = cta_url.strip
+    return if stripped.start_with?('{{') # a {{variable}} placeholder, resolved to a real URL at send/preview
+    return if stripped.match?(%r{\Ahttps?://}i)
+
+    errors.add(:cta_url, 'must be an http(s) URL or a {{variable}} placeholder')
   end
 end
