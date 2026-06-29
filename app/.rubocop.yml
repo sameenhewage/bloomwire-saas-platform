@@ -350,3 +350,30 @@ FactoryBot/RedundantFactoryOption:
 
 FactoryBot/FactoryAssociationWithStrategy:
   Enabled: false
+
+# --- Operator / non-Rails-runtime files (Phase 15G) ---------------------------
+# The files below run OUTSIDE the Rails request runtime and intentionally write
+# to stdout/stderr, so Rails/Output ("use the logger") does not apply:
+#   - docker/entrypoints/helpers/pg_database_url.rb : Docker entrypoint helper
+#       (plain Ruby; prints the composed DATABASE_URL for the container to use).
+#   - script/{bulk_reindex_messages,monitor_reindex,reindex_single_account}.rb :
+#       operator CLI / maintenance scripts where console output IS the purpose.
+#   - spec/rails_helper.rb, spec/support/opensearch_check.rb : test bootstrap
+#       that reports OpenSearch availability before the suite runs.
+# RuboCop stays strict for app/ runtime code (controllers, models, services,
+# jobs, mailers, policies, routes) and normal specs.
+Rails/Output:
+  Exclude:
+    - 'docker/entrypoints/helpers/pg_database_url.rb'
+    - 'script/bulk_reindex_messages.rb'
+    - 'script/monitor_reindex.rb'
+    - 'script/reindex_single_account.rb'
+    - 'spec/rails_helper.rb'
+    - 'spec/support/opensearch_check.rb'
+
+# spec/rails_helper.rb intentionally calls `exit` to fail-fast the test boot when
+# the required OpenSearch service is unavailable. This is test bootstrap, not app
+# code, so only this one file is excepted from Rails/Exit.
+Rails/Exit:
+  Exclude:
+    - 'spec/rails_helper.rb'
