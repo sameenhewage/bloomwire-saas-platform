@@ -200,18 +200,19 @@
   GitHub-hosted runner, `permissions: contents: read`, **reads no secrets**. Jobs: `rubocop`, `eslint`,
   `frontend-tests` (Vitest), `assets-build` (`rake assets:precompile`, the Vite build), `bloomwire-rspec`
   (curated Bloomwire scope — every `bloomwire/` spec + WhatsApp webhook job specs, **52 files**, on
-  ephemeral Postgres pgvector-pg16 + Redis), `migration-check` (`db:schema:load` + `db:migrate` +
-  `git diff db/schema.rb`), `docs-governance` (forbids root `docs/product`/`docs/adr`, requires the
-  Bloomwire docs), and a self-contained `secret-scan` of PR-added content.
+  ephemeral Postgres pgvector-pg16 + Redis), `migration-check` (`db:schema:load` +
+  `db:abort_if_pending_migrations`), `docs-governance` (forbids root `docs/product`/`docs/adr`, requires
+  the Bloomwire docs), and a self-contained `secret-scan` of PR-added content.
 - **`.github/workflows/deploy-dev.yml`** + **`.github/scripts/deploy-remote.sh`** — manual
   (`workflow_dispatch`) deploy to **dev/staging only** (production hard-blocked) over SSH. Builds the
   image with the exact `GIT_SHA` (stamps `/app/.git_sha`), optional `db:migrate`, recreates **only**
   `rails`+`sidekiq` (`--no-deps`, **postgres/redis volumes preserved**), tags `bloomwire-app:<sha>` for
   rollback, then smoke-checks (health 200, in-container SHA match, postgres/redis `Up`). Conservative
   optional cleanup (stopped containers / dangling images / build cache — **never volumes**).
-- **Runtime fidelity:** CI runs the documented QA command `bundle exec rspec <paths>` as-is (enterprise
-  tree present, not stripped, no `DISABLE_ENTERPRISE`) so it matches how Bloomwire specs are verified; the
-  real `DISABLE_ENTERPRISE=true` production runtime is validated by the deploy **smoke** instead.
+- **Runtime fidelity:** the `bloomwire-rspec` job runs with **`DISABLE_ENTERPRISE=true`** — the documented
+  Bloomwire runtime (locally supplied via `.env`). The curated specs assume the OSS path (e.g. they stub
+  `Account#usage_limits`, which the enterprise prepend `Enterprise::Account::PlanUsageAndLimits` would
+  otherwise own). The enterprise tree stays present but disabled, exactly as in the deployed artifact.
 - **Security:** no secrets in CI; no live Meta/WhatsApp calls (specs WebMock-blocked); deploy credentials
   are per-environment GitHub Environment secrets, never printed; SSH key written `600` and removed after.
 - **Not changed:** no application runtime code, no migrations, no Enterprise code, no Docker/compose files,

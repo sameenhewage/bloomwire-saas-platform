@@ -47,8 +47,8 @@ Jobs (all independent, run in parallel):
 | `eslint` | `pnpm run eslint` (Node 24, pnpm 10.2.0). |
 | `frontend-tests` | `pnpm run test` (Vitest). |
 | `assets-build` | `bundle exec rake assets:precompile` with `SECRET_KEY_BASE=precompile_placeholder` (mirrors the production Docker asset build; no DB/secrets). |
-| `bloomwire-rspec` | Curated Bloomwire RSpec scope against ephemeral Postgres (pgvector pg16) + Redis. Specs stay WebMock-blocked — **no live Meta calls.** |
-| `migration-check` | `db:schema:load` then `db:migrate`; fails if `db/schema.rb` is out of sync with the migrations. |
+| `bloomwire-rspec` | Curated Bloomwire RSpec scope against ephemeral Postgres (pgvector pg16) + Redis, with `DISABLE_ENTERPRISE=true` (the OSS path Bloomwire runs). Specs stay WebMock-blocked — **no live Meta calls.** |
+| `migration-check` | `db:schema:load` then `db:abort_if_pending_migrations`; fails if a migration isn't reflected in the committed `db/schema.rb`. |
 | `docs-governance` | Fails if root `docs/product` or `docs/adr` exist, or if a required Bloomwire doc is missing. |
 | `secret-scan` | Self-contained high-signal scan of PR-added content; blocks committed real `.env` files and obvious keys/tokens. Never prints full values. |
 
@@ -57,9 +57,10 @@ mailers, integration, requests, and the `super_admin/*bloomwire*` specs) **plus*
 job specs (`spec/jobs/webhooks/whatsapp_events_job*`). The list is computed dynamically, so new
 Bloomwire specs are picked up automatically.
 
-> Enterprise code is intentionally **not stripped** in CI: the deployed Docker artifact ships the full
-> tree and the Bloomwire specs are authored against it. CI mirrors the artifact; Enterprise features stay
-> OFF by toggle/licence and are never exercised.
+> Enterprise code is **not stripped** but is **disabled** in `bloomwire-rspec` via `DISABLE_ENTERPRISE=true`
+> — the documented Bloomwire runtime (locally supplied via `.env`). The enterprise tree ships in the
+> deployed artifact but is disabled at runtime; CI mirrors that. The curated specs assume the OSS path
+> (e.g. stubbing `Account#usage_limits`, which the enterprise prepend would otherwise own).
 
 ---
 

@@ -147,6 +147,11 @@ jobs:
         working-directory: app
     env:
       RAILS_ENV: test
+      # Bloomwire runs the OSS code path (DISABLE_ENTERPRISE=true) — locally this
+      # comes from .env. The curated specs assume it (e.g. stubbing Account
+      # #usage_limits, which the enterprise prepend would otherwise own). CI must
+      # match the Bloomwire runtime, so set it here too.
+      DISABLE_ENTERPRISE: 'true'
       POSTGRES_HOST: localhost
       POSTGRES_PORT: '5432'
       POSTGRES_USERNAME: postgres

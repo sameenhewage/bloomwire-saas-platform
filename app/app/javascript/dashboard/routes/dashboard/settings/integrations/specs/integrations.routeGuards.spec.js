@@ -44,7 +44,9 @@ describe('redirectIfIntegrationsManaged (Bloomwire 11B.7E route guard)', () => {
     const next = vi.fn();
     await redirectIfIntegrationsManaged(to, {}, next);
 
-    expect(store.dispatch).toHaveBeenCalledWith('accounts/get', { silent: true });
+    expect(store.dispatch).toHaveBeenCalledWith('accounts/get', {
+      silent: true,
+    });
     expect(next.mock.calls[0][0]).toContain('accounts/7/dashboard');
   });
 
