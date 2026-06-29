@@ -155,6 +155,7 @@
         <tr><td>15E</td><td>Implementation ledger</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
         <tr><td>15E.1</td><td>Documentation Governance guardrail</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
         <tr><td>15F</td><td>Owner-only Email Settings (DB SMTP + templates)</td><td>#78</td><td><span class="badge done">Implemented</span> <span class="badge warn">encryption parked</span></td></tr>
+        <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -275,6 +276,18 @@
         <li><b>Access</b>: owner-only (<code>Bloomwire::PlatformAdmin</code> active owners); admin/support + customer/business blocked.</li>
         <li><b>Review hardening (PR #78)</b>: Overview copy is honest (no claim password resets/transactional emails use the DB SMTP — Devise unchanged, transactional sending parked); <b>system-template keys are immutable</b> (<code>:key</code> not permitted on update + model validation; auto-generated on create); CTA URLs restricted to <code>http(s)</code>/<code>{{placeholder}}</code>.</li>
         <li><b>SECURITY DEBT</b>: <code>smtp_password</code> stored <b>plaintext</b> (AR encryption not configured) — encryption-at-rest is a parked follow-up. No WhatsApp/Meta/provider changes; no Enterprise; Devise/password-reset mailers untouched.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15G — CI/CD foundation <span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li>First active repo-root <b>GitHub Actions</b> (prior <code>app/.github/workflows/</code> are the inert upstream CE ones).</li>
+        <li><b><code>.github/workflows/ci.yml</code></b> — PRs targeting <code>version_1</code> (+ manual), GitHub-hosted, <code>permissions: contents: read</code>, <b>reads no secrets</b>. Jobs: <code>rubocop</code>, <code>eslint</code>, <code>frontend-tests</code> (Vitest), <code>assets-build</code> (<code>rake assets:precompile</code> = Vite build), <code>bloomwire-rspec</code> (curated scope, <b>52 spec files</b>, ephemeral Postgres pgvector-pg16 + Redis, <code>DISABLE_ENTERPRISE=true</code>), <code>migration-check</code> (<code>db:schema:load</code> + <code>db:abort_if_pending_migrations</code>), <code>docs-governance</code>, and a self-contained <code>secret-scan</code>.</li>
+        <li><b><code>.github/workflows/deploy-dev.yml</code></b> + <b><code>.github/scripts/deploy-remote.sh</code></b> — manual deploy to <b>dev/staging only</b> (production hard-blocked) over SSH: builds with exact <code>GIT_SHA</code>, optional <code>db:migrate</code>, recreates <b>only</b> <code>rails</code>+<code>sidekiq</code> (<code>--no-deps</code>, <b>postgres/redis volumes preserved</b>), tags <code>bloomwire-app:&lt;sha&gt;</code>, smoke-checks (health 200, in-container SHA match, postgres/redis Up). <code>run_migrations</code> defaults to <b>true</b> (uncheck for rollbacks). Conservative cleanup removes only build cache older than 7 days and never touches volumes.</li>
+        <li><b>Runtime fidelity</b>: the <code>bloomwire-rspec</code> job runs with <code>DISABLE_ENTERPRISE=true</code> — the documented Bloomwire runtime (locally via <code>.env</code>). The curated specs assume the OSS path (e.g. stubbing <code>Account#usage_limits</code>, which the enterprise prepend would otherwise own). The enterprise tree stays present but disabled, as in the deployed artifact.</li>
+        <li><b>Security</b>: no secrets in CI; no live Meta/WhatsApp calls (WebMock-blocked); deploy creds are per-environment GitHub Environment secrets, never printed; SSH key written <code>600</code> and removed after.</li>
+        <li><b>Not changed</b>: no app runtime code, no migrations, no Enterprise, no Docker/compose files, no <code>.env</code>, no production deploy path. Server-local <code>docker-compose.bloomwire-production.yaml</code> overlay untouched (gitignored).</li>
+        <li><b>Validation</b>: YAML parse OK; embedded shell + <code>deploy-remote.sh</code> pass <code>bash -n</code>; spec selector resolves to 52 files. <b>Residual</b>: <code>dev</code>/<code>staging</code> environments + SSH secrets must be configured before deploy (runbook §3.2).</li>
       </ul>
     </div>
   </section>

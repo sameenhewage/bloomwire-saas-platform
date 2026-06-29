@@ -57,6 +57,7 @@
 | 15E | This implementation ledger | #77 | Docs only |
 | 15E.1 | Documentation Governance guardrail | #77 | Docs only |
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
+| 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 
 ---
 
@@ -191,6 +192,37 @@
 - **Not changed**: no WhatsApp/Meta/provider credentials, no Enterprise code, no `BusinessOwner`, no
   `users.type` for business roles, no chat/message tables. Devise/password-reset mailers untouched (they
   use the global ENV SMTP config; wiring them to the DB-backed config is parked).
+
+### Phase 15G — CI/CD foundation — `Implemented (infra/docs only)` — PR _pending_
+- Added repo-root **GitHub Actions** (the first active CI/CD for this repo — prior workflows under
+  `app/.github/workflows/` are the inert upstream CE ones).
+- **`.github/workflows/ci.yml`** — runs on PRs targeting `version_1` (and manual dispatch),
+  GitHub-hosted runner, `permissions: contents: read`, **reads no secrets**. Jobs: `rubocop`, `eslint`,
+  `frontend-tests` (Vitest), `assets-build` (`rake assets:precompile`, the Vite build), `bloomwire-rspec`
+  (curated Bloomwire scope — every `bloomwire/` spec + WhatsApp webhook job specs, **52 files**, on
+  ephemeral Postgres pgvector-pg16 + Redis), `migration-check` (`db:schema:load` +
+  `db:abort_if_pending_migrations`), `docs-governance` (forbids root `docs/product`/`docs/adr`, requires
+  the Bloomwire docs), and a self-contained `secret-scan` of PR-added content.
+- **`.github/workflows/deploy-dev.yml`** + **`.github/scripts/deploy-remote.sh`** — manual
+  (`workflow_dispatch`) deploy to **dev/staging only** (production hard-blocked) over SSH. Builds the
+  image with the exact `GIT_SHA` (stamps `/app/.git_sha`), optional `db:migrate`, recreates **only**
+  `rails`+`sidekiq` (`--no-deps`, **postgres/redis volumes preserved**), tags `bloomwire-app:<sha>` for
+  rollback, then smoke-checks (health 200, in-container SHA match, postgres/redis `Up`). `run_migrations`
+  defaults to **true** (uncheck for rollbacks). Conservative optional cleanup (stopped containers /
+  dangling images / build cache **older than 7 days** — **never volumes**).
+- **Runtime fidelity:** the `bloomwire-rspec` job runs with **`DISABLE_ENTERPRISE=true`** — the documented
+  Bloomwire runtime (locally supplied via `.env`). The curated specs assume the OSS path (e.g. they stub
+  `Account#usage_limits`, which the enterprise prepend `Enterprise::Account::PlanUsageAndLimits` would
+  otherwise own). The enterprise tree stays present but disabled, exactly as in the deployed artifact.
+- **Security:** no secrets in CI; no live Meta/WhatsApp calls (specs WebMock-blocked); deploy credentials
+  are per-environment GitHub Environment secrets, never printed; SSH key written `600` and removed after.
+- **Not changed:** no application runtime code, no migrations, no Enterprise code, no Docker/compose files,
+  no `.env`, no production deploy path. The server-local `docker-compose.bloomwire-production.yaml` overlay
+  is untouched (gitignored).
+- **Validation:** YAML parse OK; all embedded shell + `deploy-remote.sh` pass `bash -n`; Bloomwire spec
+  selector resolves to 52 files. Live CI/deploy execution happens on the PR / first manual dispatch.
+- **Residual:** `dev`/`staging` GitHub Environments + SSH secrets must be configured before the deploy
+  workflow runs (see [`deployment-runbook.md`](./deployment-runbook.md) §3.2).
 
 ---
 

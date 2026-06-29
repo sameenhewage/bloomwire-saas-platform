@@ -1,0 +1,156 @@
+# Bloomwire — Manual Dev/Staging deploy over SSH (Phase 15G).
+#
+# Guardrails:
+#   - Manual trigger only (workflow_dispatch). Never runs automatically.
+#   - Targets dev or staging ONLY. Production is not selectable and is hard-blocked.
+#   - GitHub-hosted runner connects to the server over SSH and runs the documented
+#     docker-compose deploy. It recreates only rails + sidekiq, preserving the
+#     postgres/redis volumes. No `down -v`, no volume prune.
+#   - No secrets are printed. SSH credentials and deploy paths come from
+#     per-environment GitHub Environment secrets.
+#
+# Required per-environment secrets (configure under Settings > Environments >
+# dev / staging):
+#   SSH_HOST         server hostname/IP (e.g. dev.unecast.com)
+#   SSH_USER         SSH login user
+#   SSH_KEY          private key with deploy access (PEM)
+#   DEPLOY_PATH      repo root on the server (contains .git and app/)
+#   SSH_PORT         (optional) SSH port, default 22
+#   SSH_KNOWN_HOSTS  (optional) pinned known_hosts entry; falls back to ssh-keyscan
+#   HEALTH_URL       (optional) public health URL, e.g. https://dev.unecast.com/health
+name: Deploy Dev/Staging (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment (dev or staging only)
+        type: choice
+        options:
+          - dev
+          - staging
+        default: dev
+      ref:
+        description: Branch or commit SHA to deploy
+        type: string
+        default: version_1
+      run_migrations:
+        description: Run db:migrate during deploy (default true; uncheck to skip explicitly)
+        type: boolean
+        default: true
+      skip_smoke:
+        description: Skip post-deploy verification (not recommended)
+        type: boolean
+        default: false
+      prune:
+        description: Prune stopped containers/dangling images/build cache (never volumes)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Serialize deploys per environment; never cancel an in-flight deploy.
+concurrency:
+  group: bloomwire-deploy-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    timeout-minutes: 45
+    steps:
+      - name: Guard — refuse anything but dev/staging
+        run: |
+          set -euo pipefail
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          case "$ENVIRONMENT" in
+            dev|staging)
+              echo "Target environment: $ENVIRONMENT" ;;
+            *)
+              echo "::error::Refusing to deploy to '$ENVIRONMENT'. This workflow only targets dev/staging."
+              exit 1 ;;
+          esac
+
+      - name: Validate ref input
+        run: |
+          set -euo pipefail
+          REF="${{ github.event.inputs.ref }}"
+          if ! printf '%s' "$REF" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::Invalid ref '$REF'. Allowed characters: A-Z a-z 0-9 . _ / -"
+            exit 1
+          fi
+          echo "Ref OK: $REF"
+
+      - name: Checkout (for deploy script)
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_KEY:-}" ] || [ -z "${SSH_HOST:-}" ]; then
+            echo "::error::Missing SSH_KEY or SSH_HOST secret for environment '${{ github.event.inputs.environment }}'."
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          PORT="${SSH_PORT:-22}"
+          if [ -n "${SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "SSH_KNOWN_HOSTS not set; falling back to ssh-keyscan (TOFU)."
+            ssh-keyscan -p "$PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          HEALTH_URL: ${{ secrets.HEALTH_URL }}
+          REF: ${{ github.event.inputs.ref }}
+          RUN_MIGRATIONS: ${{ github.event.inputs.run_migrations }}
+          SKIP_SMOKE: ${{ github.event.inputs.skip_smoke }}
+          PRUNE: ${{ github.event.inputs.prune }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_USER:-}" ] || [ -z "${DEPLOY_PATH:-}" ]; then
+            echo "::error::Missing SSH_USER or DEPLOY_PATH secret for environment '${{ github.event.inputs.environment }}'."
+            exit 1
+          fi
+          PORT="${SSH_PORT:-22}"
+          ssh -i ~/.ssh/deploy_key -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "${SSH_USER}@${SSH_HOST}" \
+            bash -s -- "$REF" "$RUN_MIGRATIONS" "$SKIP_SMOKE" "$PRUNE" "$DEPLOY_PATH" "${HEALTH_URL:-}" \
+            < .github/scripts/deploy-remote.sh
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          {
+            echo "## Deploy — ${{ github.event.inputs.environment }}"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Requested ref | \`${{ github.event.inputs.ref }}\` |"
+            echo "| Run migrations | \`${{ github.event.inputs.run_migrations }}\` |"
+            echo "| Skip smoke | \`${{ github.event.inputs.skip_smoke }}\` |"
+            echo "| Prune | \`${{ github.event.inputs.prune }}\` |"
+            echo "| Result | **${{ job.status }}** |"
+          } >> "$GITHUB_STEP_SUMMARY"

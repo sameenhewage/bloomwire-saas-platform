@@ -1,0 +1,385 @@
+# Bloomwire CI — PR validation for pull requests targeting version_1.
+#
+# Scope & guardrails (Phase 15G):
+#   - Runs on GitHub-hosted runners only (no self-hosted runner in this phase).
+#   - NEVER deploys, NEVER reads repository/deploy secrets, NEVER makes live
+#     Meta/WhatsApp Graph calls. Specs stay WebMock-blocked.
+#   - The Rails app lives in ./app; most jobs set working-directory: app.
+#   - Enterprise code is intentionally NOT stripped: the deployed Docker artifact
+#     includes the full tree and Bloomwire specs are authored against it. CI must
+#     mirror the artifact, so we run with enterprise present (features stay OFF by
+#     toggle/licence, never exercised here).
+name: Bloomwire CI
+
+on:
+  pull_request:
+    branches:
+      - version_1
+  workflow_dispatch:
+
+# Least privilege: read-only token, no deploy/write scopes.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save runner minutes.
+concurrency:
+  group: bloomwire-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Ruby lint
+  # ---------------------------------------------------------------------------
+  rubocop:
+    name: RuboCop (Ruby lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: app
+          bundler-cache: true
+      - name: Run RuboCop
+        run: bundle exec rubocop --parallel
+
+  # ---------------------------------------------------------------------------
+  # Frontend lint
+  # ---------------------------------------------------------------------------
+  eslint:
+    name: ESLint (JS/Vue lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      # --ignore-scripts skips this repo's `prepare` (husky install), which would
+      # otherwise abort with ".git can't be found": .git is at the repo root while
+      # package.json is in ./app. pnpm 10 already blocks dependency build scripts
+      # by default, and esbuild/rollup binaries ship via optionalDependencies, so
+      # skipping scripts is safe for lint/test/build.
+      - name: Install pnpm dependencies
+        run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: Run ESLint
+        run: pnpm run eslint
+
+  # ---------------------------------------------------------------------------
+  # Frontend unit tests (Vitest)
+  # ---------------------------------------------------------------------------
+  frontend-tests:
+    name: Vitest (frontend tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - name: Install pnpm dependencies
+        run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: Run Vitest
+        run: pnpm run test
+
+  # ---------------------------------------------------------------------------
+  # Asset / Vite build (via vite_ruby -> rake assets:precompile)
+  # Mirrors the production Docker build step; no DB or secrets required.
+  # ---------------------------------------------------------------------------
+  assets-build:
+    name: Vite build (assets:precompile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: app
+          bundler-cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - name: Install pnpm dependencies
+        run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: Compile assets (Vite)
+        run: bundle exec rake assets:precompile
+        env:
+          RAILS_ENV: production
+          SECRET_KEY_BASE: precompile_placeholder
+          RAILS_LOG_TO_STDOUT: enabled
+
+  # ---------------------------------------------------------------------------
+  # Bloomwire-focused RSpec suite (curated scope, not the full CE suite)
+  # ---------------------------------------------------------------------------
+  bloomwire-rspec:
+    name: RSpec (Bloomwire scope)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    env:
+      RAILS_ENV: test
+      # Bloomwire runs the OSS code path (DISABLE_ENTERPRISE=true) — locally this
+      # comes from .env. The curated specs assume it (e.g. stubbing Account
+      # #usage_limits, which the enterprise prepend would otherwise own). CI must
+      # match the Bloomwire runtime, so set it here too.
+      DISABLE_ENTERPRISE: 'true'
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: ''
+      REDIS_URL: redis://localhost:6379
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ''
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --mount type=tmpfs,destination=/var/lib/postgresql/data
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: app
+          bundler-cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - name: Install pnpm dependencies
+        run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: Create test database
+        run: bundle exec rake db:create
+      - name: Load schema
+        run: bundle exec rake db:schema:load
+      - name: Run Bloomwire RSpec suite
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: |
+          set -euo pipefail
+          # Curated Bloomwire scope: every spec under a bloomwire/ path (covers
+          # services, controllers, lib, models, mailers, integration, requests,
+          # and the super_admin bloomwire_* specs), plus the WhatsApp webhook
+          # job specs that back the managed routing/PII-logging behaviour.
+          mapfile -t SPECS < <(find spec -type f -name '*_spec.rb' \
+            \( -path '*bloomwire*' -o -path '*webhooks/whatsapp_events_job*' \) \
+            | sort)
+          if [ "${#SPECS[@]}" -eq 0 ]; then
+            echo "::error::No Bloomwire specs matched the curated scope."
+            exit 1
+          fi
+          echo "Running ${#SPECS[@]} Bloomwire spec file(s):"
+          printf '  %s\n' "${SPECS[@]}"
+          bundle exec rspec --format progress "${SPECS[@]}"
+
+  # ---------------------------------------------------------------------------
+  # Migration / schema consistency check
+  # Fails if a migration is not reflected in the committed db/schema.rb.
+  # ---------------------------------------------------------------------------
+  migration-check:
+    name: Migration & schema check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    env:
+      RAILS_ENV: test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: ''
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ''
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --mount type=tmpfs,destination=/var/lib/postgresql/data
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: app
+          bundler-cache: true
+      - name: Prepare database from committed schema
+        run: |
+          bundle exec rake db:create
+          bundle exec rake db:schema:load
+      - name: Fail if migrations are not reflected in committed schema.rb
+        run: |
+          set -euo pipefail
+          # db:schema:load marks every migration version <= the schema version as
+          # applied. Any migration file newer than the committed schema is then
+          # "pending" -> the dev added a migration without committing the schema.
+          # This avoids the schema-dump formatting false positives of a git diff.
+          if ! bundle exec rake db:abort_if_pending_migrations; then
+            echo "::error::Pending migrations are not reflected in db/schema.rb. Run 'bundle exec rake db:migrate' and commit the updated db/schema.rb."
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Docs governance — enforces the repo's documentation-layout invariants.
+  # Runs at the repository root (not ./app).
+  # ---------------------------------------------------------------------------
+  docs-governance:
+    name: Docs governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check documentation layout invariants
+        run: |
+          set -euo pipefail
+          FAIL=0
+
+          # 1) No product/architecture docs at the repo root (AGENTS.md rule).
+          for forbidden in docs/product docs/adr; do
+            if [ -d "$forbidden" ]; then
+              echo "::error::Forbidden root docs directory present: $forbidden (project docs/ADRs belong under projects/<name>/)."
+              FAIL=1
+            fi
+          done
+
+          # 2) Required Bloomwire governance docs must exist.
+          for required in \
+            docs/bloomwire/change-log.md \
+            docs/bloomwire/implementation-ledger.md \
+            docs/bloomwire/implementation-ledger.html \
+            docs/bloomwire/deployment-runbook.md; do
+            if [ ! -f "$required" ]; then
+              echo "::error::Required governance doc missing: $required"
+              FAIL=1
+            fi
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "Docs governance check failed."
+            exit 1
+          fi
+          echo "Docs governance check passed."
+
+  # ---------------------------------------------------------------------------
+  # Basic secret scan — high-signal patterns on PR-added content only.
+  # Self-contained (no third-party action); never prints full secret values.
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    name: Basic secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan PR diff for secrets
+        run: |
+          set -euo pipefail
+
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASE" ]; then
+            git fetch origin version_1 --depth=1 --quiet
+            BASE="$(git rev-parse origin/version_1)"
+          fi
+          echo "Scanning added content between $BASE and HEAD"
+
+          FAIL=0
+
+          # 1) Block committed real env files (allow .example/.sample/.template).
+          ENV_FILES="$(git diff --name-only --diff-filter=ACM "$BASE"...HEAD \
+            | grep -E '(^|/)\.env($|\.)' \
+            | grep -vE '\.(example|sample|template)$' || true)"
+          if [ -n "$ENV_FILES" ]; then
+            echo "::error::Real .env file(s) staged in this PR:"
+            echo "$ENV_FILES"
+            FAIL=1
+          fi
+
+          # 2) High-signal secret regexes (near-zero false positives). Written
+          #    via printf (no heredoc) so this YAML block scalar stays valid and
+          #    the workflow text itself never self-matches.
+          printf '%s\n' \
+            '-----BEGIN [A-Z ]*PRIVATE KEY-----' \
+            'AKIA[0-9A-Z]{16}' \
+            'AIza[0-9A-Za-z_-]{35}' \
+            'xox[baprs]-[0-9A-Za-z-]{10,}' \
+            'EAA[0-9A-Za-z]{30,}' \
+            'ghp_[0-9A-Za-z]{36}' \
+            > /tmp/secret_patterns.txt
+
+          # Scan added lines of changed files, skipping fixtures/lockfiles/docs
+          # and the workflow dir (legitimate fake tokens / pattern definitions).
+          CHANGED="$(git diff --name-only --diff-filter=ACM "$BASE"...HEAD \
+            | grep -vE '(\.(example|sample|template|lock)$|(^|/)spec/|^docs/|pnpm-lock\.yaml$|Gemfile\.lock$|(^|/)\.github/)' || true)"
+
+          for f in $CHANGED; do
+            [ -f "$f" ] || continue
+            HITS="$(git diff "$BASE"...HEAD -- "$f" \
+              | grep -E '^\+' | grep -vE '^\+\+\+' \
+              | grep -Enf /tmp/secret_patterns.txt || true)"
+            if [ -n "$HITS" ]; then
+              echo "::error::Potential secret detected in $f"
+              echo "$HITS" | sed -E 's/(.{12}).*/\1********(redacted)/'
+              FAIL=1
+            fi
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "Secret scan failed. Remove the secret, rotate it, and use environment variables instead."
+            exit 1
+          fi
+          echo "Secret scan passed."
