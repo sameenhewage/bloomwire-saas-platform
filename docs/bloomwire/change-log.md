@@ -15,6 +15,30 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15G.1 — Fix false-success dev deploy (stdin-consumed deploy script)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** CI/CD bugfix (infra-only; no application runtime code)
+- **Summary:** The manual Dev/Staging deploy could report **success while leaving the app on the OLD build**.
+  `deploy-remote.sh` is piped to the server via `ssh … bash -s`, and `docker compose run --rm rails db:migrate`
+  attached **stdin** — so it **consumed the rest of the piped script**. After `db:migrate`, bash hit EOF and
+  exited `0`, silently skipping **step 4 (recreate rails+sidekiq)**, **step 5 (smoke: health + SHA verify)**, and
+  step 6. The migration applied, but the running containers were never swapped and the smoke checks never ran.
+- **Fix (one line):** `… run --rm -T rails bundle exec rails db:migrate </dev/null` — `-T` disables stdin/TTY
+  attach and `</dev/null` guarantees the command cannot read the piped script. (`up -d` is detached and the
+  smoke `exec -T` was already safe; this was the only `compose run`.)
+- **Why it matters:** prevents a false-positive deploy where dev silently runs stale code; smoke now actually
+  gates success (health 200 + in-container `/app/.git_sha` == target SHA).
+- **Observed once on dev:** deploy of `version_1` (`3bf260f`) created the `bloomwire_email_delivery_logs` table
+  but left `app-rails-1` on `fdf94d8`; caught by independent `/app/.git_sha` verification. A corrected re-deploy
+  is required to actually run `3bf260f` (migration is idempotent; no rollback needed — additive table).
+- **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
+  path. Postgres/redis volumes untouched.
+- **Security:** no secrets read or printed; no live Meta/WhatsApp calls; Enterprise untouched.
+- **Validation:** `bash -n .github/scripts/deploy-remote.sh` OK; PR CI green (see PR). Runtime re-deploy is
+  gated on review/merge (not performed in this PR).
+- **Deploy required:** Yes — after merge, re-run Deploy Dev/Staging (`dev`, `version_1`, `run_migrations=true`).
+
 ### Phase 15F.1 — Send-from-Template composer (owner-only)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_
