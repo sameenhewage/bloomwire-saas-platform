@@ -49,6 +49,9 @@ en:
       reactivated: 'Platform admin reactivated.'
       role_changed: 'Platform admin role updated.'
       identity_mismatch: 'This platform admin row needs repair (the linked user is missing or is not a SuperAdmin).'
+    account_access:
+      granted: 'Customer account access granted.'
+      removed: 'Customer account access removed.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'

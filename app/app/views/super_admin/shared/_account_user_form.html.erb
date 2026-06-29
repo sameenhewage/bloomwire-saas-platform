@@ -12,6 +12,14 @@ Used by both account and user show pages.
 %>
 
 <section class="main-content__body">
+  <% bw_mode = Bloomwire::Features.master_enabled? %>
+  <% if bw_mode %>
+    <h2 class="bw-card__title">Assign customer account access</h2>
+    <p class="bw-help">
+      This gives the user access to a customer/business account. It does <strong>not</strong> grant Bloomwire
+      Platform Admin access &mdash; that is managed from <strong>Bloomwire &rarr; Platform Admins</strong>.
+    </p>
+  <% end %>
   <% account_user_page = Administrate::Page::Form.new(AccountUserDashboard.new, AccountUser.new) %>
   <%= form_for([namespace, account_user_page.resource], html: { class: "form" }) do |f| %>
     <% if account_user_page.resource.errors.any? %>
@@ -43,6 +51,13 @@ Used by both account and user show pages.
           <div class="field-unit field-unit--<%= attribute.html_class %> field-unit--<%= requireness(attribute) %>">
             <%= render_field attribute, f: f %>
           </div>
+          <% if bw_mode && attribute.name == 'role' %>
+            <div class="bw-help">
+              <p><strong>Business Admin</strong> can manage the selected customer account based on Chatwoot account permissions.</p>
+              <p><strong>Agent</strong> can handle conversations inside the selected customer account.</p>
+              <p>Bloomwire Platform Admin access is managed separately from <strong>Bloomwire &rarr; Platform Admins</strong>.</p>
+            </div>
+          <% end %>
         <% end %>
       <% end %>
     <% end -%>

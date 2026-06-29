@@ -13,17 +13,26 @@ class SuperAdmin::AccountUsersController < SuperAdmin::ApplicationController
     resource = resource_class.new(resource_params)
     authorize_resource(resource)
 
-    notice =  resource.save ? translate_with_resource('create.success') : resource.errors.full_messages.first
+    notice = resource.save ? account_access_notice(:granted, 'create.success') : resource.errors.full_messages.first
     redirect_back(fallback_location: [namespace, resource.account], notice: notice)
   end
 
   def destroy
     if requested_resource.destroy
-      flash[:notice] = translate_with_resource('destroy.success')
+      flash[:notice] = account_access_notice(:removed, 'destroy.success')
     else
       flash[:error] = requested_resource.errors.full_messages.join('<br/>')
     end
     redirect_back(fallback_location: [namespace, requested_resource.account])
+  end
+
+  private
+
+  # Phase 15B: clearer customer-account wording when Bloomwire Mode is ON; stock Administrate copy when OFF.
+  def account_access_notice(bloomwire_key, administrate_key)
+    return I18n.t("bloomwire.account_access.#{bloomwire_key}") if Bloomwire::Features.master_enabled?
+
+    translate_with_resource(administrate_key)
   end
 
   # Override this method to specify custom lookup behavior.
