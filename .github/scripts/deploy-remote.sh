@@ -122,10 +122,11 @@ fi
 
 # --- 6. Optional, conservative cleanup (NEVER volumes/running containers) ---
 if [ "${PRUNE}" = "true" ]; then
-  log "Cleanup: stopped containers, dangling images, build cache (volumes NOT touched)"
+  log "Cleanup: stopped containers, dangling images, build cache >7d (volumes NOT touched)"
   docker container prune -f
   docker image prune -f
-  docker builder prune -f
+  # Only remove build cache older than 7 days (168h); never aggressively wipe all cache.
+  docker builder prune -f --filter "until=168h"
 fi
 
 log "Deploy complete — SHA ${DEPLOY_SHA}"

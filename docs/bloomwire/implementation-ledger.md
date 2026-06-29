@@ -207,8 +207,9 @@
   (`workflow_dispatch`) deploy to **dev/staging only** (production hard-blocked) over SSH. Builds the
   image with the exact `GIT_SHA` (stamps `/app/.git_sha`), optional `db:migrate`, recreates **only**
   `rails`+`sidekiq` (`--no-deps`, **postgres/redis volumes preserved**), tags `bloomwire-app:<sha>` for
-  rollback, then smoke-checks (health 200, in-container SHA match, postgres/redis `Up`). Conservative
-  optional cleanup (stopped containers / dangling images / build cache — **never volumes**).
+  rollback, then smoke-checks (health 200, in-container SHA match, postgres/redis `Up`). `run_migrations`
+  defaults to **true** (uncheck for rollbacks). Conservative optional cleanup (stopped containers /
+  dangling images / build cache **older than 7 days** — **never volumes**).
 - **Runtime fidelity:** the `bloomwire-rspec` job runs with **`DISABLE_ENTERPRISE=true`** — the documented
   Bloomwire runtime (locally supplied via `.env`). The curated specs assume the OSS path (e.g. they stub
   `Account#usage_limits`, which the enterprise prepend `Enterprise::Account::PlanUsageAndLimits` would

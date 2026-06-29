@@ -35,9 +35,9 @@ on:
         type: string
         default: version_1
       run_migrations:
-        description: Run db:migrate during deploy
+        description: Run db:migrate during deploy (default true; uncheck to skip explicitly)
         type: boolean
-        default: false
+        default: true
       skip_smoke:
         description: Skip post-deploy verification (not recommended)
         type: boolean

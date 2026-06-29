@@ -75,7 +75,7 @@ Bloomwire specs are picked up automatically.
 | --- | --- | --- |
 | `environment` | `dev` | `dev` or `staging` (choice only). |
 | `ref` | `version_1` | Branch or commit SHA to deploy (validated: `A-Z a-z 0-9 . _ / -`). |
-| `run_migrations` | `false` | Run `db:migrate` during deploy. |
+| `run_migrations` | `true` | Run `db:migrate` during deploy. Uncheck to skip migrations explicitly (e.g. rollback). |
 | `skip_smoke` | `false` | Skip post-deploy verification (not recommended). |
 | `prune` | `false` | Prune stopped containers / dangling images / build cache (**never volumes**). |
 
@@ -107,7 +107,7 @@ you add required-reviewer protection for auditable deploys.
 8. **Smoke (unless `skip_smoke`):** container status → wait for `http://127.0.0.1:3000/health` = 200 →
    verify container `/app/.git_sha` == `DEPLOY_SHA` → optional public `HEALTH_URL` = 200 → confirm
    postgres + redis still `Up`.
-9. **Cleanup (optional):** `docker container prune -f`, `docker image prune -f`, `docker builder prune -f`.
+9. **Cleanup (optional):** `docker container prune -f`, `docker image prune -f`, `docker builder prune -f --filter "until=168h"` (build cache older than 7 days only).
 10. **Summary:** written to the job summary (ref, migrations, smoke, prune, result). **No secrets.**
 
 ### 3.4 How to deploy (typical)
@@ -126,9 +126,9 @@ Deploys are SHA-addressable, so rollback = redeploy a previous good SHA.
 
 1. Identify the last-good SHA (previous green deploy, or `git log` on `version_1`).
 2. Run *Deploy Dev/Staging (manual)* with `ref=<previous-good-sha>`.
-3. **Migrations:** rolling **back** a migration is **not** automatic. Only set `run_migrations=true`
-   on a rollback if you have a verified down-path; otherwise leave it `false` and handle schema
-   changes deliberately. Prefer expand/contract migrations so old code runs against the new schema.
+3. **Migrations:** rolling **back** a migration is **not** automatic. `run_migrations` defaults to
+   **true**, so on a rollback **uncheck it** unless you have a verified down-path; handle schema changes
+   deliberately. Prefer expand/contract migrations so old code runs against the new schema.
 4. Fast manual path (image already built/tagged on the host):
    `docker tag bloomwire-app:<previous-sha> <rails-image-name> && docker compose -p app -f ... up -d --no-deps rails sidekiq`.
 
@@ -138,7 +138,8 @@ Deploys are SHA-addressable, so rollback = redeploy a previous good SHA.
 
 - Do **not** deploy to production from these workflows (dev/staging only, hard-blocked).
 - Do **not** run `docker compose down -v`, `docker volume prune`, or `docker system prune --volumes`
-  (destroys Postgres/Redis data). Cleanup is limited to stopped containers, dangling images, build cache.
+  (destroys Postgres/Redis data). Cleanup is limited to stopped containers, dangling images, and build
+  cache **older than 7 days** (`docker builder prune -f --filter "until=168h"`).
 - Do **not** print/echo `.env`, SSH keys, DB passwords, Meta app secret, access tokens, or verify tokens.
 - Do **not** commit `.env` or `docker-compose.bloomwire-production.yaml` (both gitignored, server-local).
 - Do **not** make live Meta/WhatsApp Graph calls from CI.
