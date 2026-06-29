@@ -716,6 +716,8 @@ Rails.application.routes.draw do
       end
       resources :users, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         delete :avatar, on: :member, action: :destroy_avatar
+        # Phase 15C (Issue #74): impersonation is initiated via POST so the SSO token is never rendered in a href.
+        post :impersonate, on: :member
       end
 
       resources :access_tokens, only: [:index, :show]
