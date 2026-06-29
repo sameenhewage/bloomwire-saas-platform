@@ -75,13 +75,7 @@ as well as a link to its edit page.
   </dl>
 </section>
 
-<% if Bloomwire::Features.master_enabled? %>
-  <p class="bw-help">
-    This assigns <strong>customer account access</strong> (administrator / agent within an account). It does
-    <strong>not</strong> grant Bloomwire platform admin access &mdash; that is managed from Bloomwire &rarr; Platform Admins.
-  </p>
-<% end %>
-
+<%# Phase 15B: the account-assignment heading, intro and role helper copy now live in the shared partial. %>
 <%= render 'super_admin/shared/account_user_form', page: page, namespace: namespace, resource_type: 'user' %>
 
 <%= render partial: "impersonate", locals: {page: page} %>

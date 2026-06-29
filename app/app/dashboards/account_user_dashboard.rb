@@ -12,7 +12,9 @@ class AccountUserDashboard < Administrate::BaseDashboard
     user: Field::BelongsToSearch.with_options(class_name: 'User', searchable: true, searchable_field: [:name, :email, :id], order: 'id DESC'),
     inviter: Field::BelongsToSearch.with_options(class_name: 'User', searchable: true, searchable_field: [:name, :email, :id], order: 'id DESC'),
     id: Field::Number,
-    role: Field::Select.with_options(collection: AccountUser.roles.keys),
+    # Phase 15B: in Bloomwire Mode ON the role <select> shows business-friendly labels (Business Admin / Agent)
+    # while submitting the unchanged DB values (administrator / agent). Mode OFF == stock Chatwoot.
+    role: Field::Select.with_options(collection: -> { AccountUserDashboard.bloomwire_role_collection }),
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -67,5 +69,14 @@ class AccountUserDashboard < Administrate::BaseDashboard
   #
   def display_resource(account_user)
     "AccountUser ##{account_user.id}"
+  end
+
+  # Phase 15B: business-friendly role options for the account-assignment <select>. Returns [label, value] pairs
+  # in Bloomwire Mode ON (values are the unchanged DB enum keys) and the stock keys when OFF. Evaluated at
+  # render time via a callable collection, so it reflects the live toggle.
+  def self.bloomwire_role_collection
+    return AccountUser.roles.keys unless Bloomwire::Features.master_enabled?
+
+    [['Business Admin', 'administrator'], ['Agent', 'agent']]
   end
 end

@@ -49,6 +49,14 @@ en:
       reactivated: 'Platform admin reactivated.'
       role_changed: 'Platform admin role updated.'
       identity_mismatch: 'This platform admin row needs repair (the linked user is missing or is not a SuperAdmin).'
+    account_access:
+      heading: 'Assign customer account access'
+      intro_html: 'This gives the user access to a customer/business account. It does <strong>not</strong> grant Bloomwire Platform Admin access &mdash; that is managed from <strong>Bloomwire &rarr; Platform Admins</strong>.'
+      business_admin_help_html: '<strong>Business Admin</strong> can manage the selected customer account based on Chatwoot account permissions.'
+      agent_help_html: '<strong>Agent</strong> can handle conversations inside the selected customer account.'
+      platform_admin_help_html: 'Bloomwire Platform Admin access is managed separately from <strong>Bloomwire &rarr; Platform Admins</strong>.'
+      granted: 'Customer account access granted.'
+      removed: 'Customer account access removed.'
   inbox:
     reauthorization:
       success: 'Channel reauthorized successfully'
