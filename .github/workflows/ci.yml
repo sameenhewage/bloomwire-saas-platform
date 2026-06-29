@@ -26,6 +26,13 @@ concurrency:
   group: bloomwire-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Disable husky during `pnpm i`. This repo's package.json `prepare` runs
+# `husky install`, but .git lives at the repo root while package.json is in
+# ./app, so husky's `.git can't be found` aborts the install. HUSKY=0 makes the
+# husky install a no-op (it does not skip other lifecycle scripts).
+env:
+  HUSKY: '0'
+
 jobs:
   # ---------------------------------------------------------------------------
   # Ruby lint
