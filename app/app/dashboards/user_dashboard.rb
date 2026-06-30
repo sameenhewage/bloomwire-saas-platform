@@ -125,10 +125,16 @@ class UserDashboard < Administrate::BaseDashboard
     super - [:type]
   end
 
+  # Phase 15G.2 (Auth Integrity Hardening): the generic User EDIT form must never render auth-sensitive fields.
+  # Dropping :password removes the silent password-overwrite vector (incl. a browser autofilling the password
+  # input while an admin edits the user for another reason); :confirmed_at is likewise not editable here.
+  # NEW-user create still sets an initial password (see SuperAdmin::UsersController). :type stays managed only
+  # via Bloomwire -> Platform Admins when Mode is ON. Password changes go only through the Devise reset flow.
   def form_attributes(action = nil)
-    return super unless bloomwire_mode_on?
-
-    super - [:type]
+    attrs = super
+    attrs -= %i[password confirmed_at] if action.to_s == 'edit'
+    attrs -= [:type] if bloomwire_mode_on?
+    attrs
   end
 
   private
