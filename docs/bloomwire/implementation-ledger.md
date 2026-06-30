@@ -56,13 +56,19 @@
 | 15D | Assigned Agent RCA | — (RCA only) | Completed — not a bug (no code change) |
 | 15E | This implementation ledger | #77 | Docs only |
 | 15E.1 | Documentation Governance guardrail | #77 | Docs only |
-| 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
+| 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | DEV PASS (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
-| 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | _pending_ | Implemented |
+| 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | #84 | 100% DEV PASS |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
-| 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
-| 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened |
+| 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
+| 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
+
+> **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
+> PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
+> dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched.
+> **Phase 16 is READY to start.** Non-blocking follow-ups: **15F.3** (POST-based preview / query-string
+> hardening), **15G.4** (optional auth-audit polish).
 
 ---
 
@@ -275,7 +281,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 15F.2 — Email Template UX Completion — `Implemented` — PR _pending_
+### Phase 15F.2 — Email Template UX Completion — `100% DEV PASS` — PR #84 (merged `ea3487b`)
 - **Trigger:** dev runtime QA on `ba76e21` passed core flows but found Email Templates incomplete: composer had
   only 6 fixed variable inputs; the live preview used SAMPLE data for blank variables while the real send sent
   blank (preview ≠ delivered); invalid emails were only caught by SMTP; Email Logs showed template name, not the

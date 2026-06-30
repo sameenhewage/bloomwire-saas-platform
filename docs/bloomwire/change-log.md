@@ -15,9 +15,29 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Dev QA Sign-off — 2026-06-30 (owner-confirmed)
+Independent dev-server runtime QA on `version_1` @ `ea3487b624d896601247fd0baf2c574e4f11820b`. Owner confirmed
+receipt of both dev QA emails: **"You're invited to join QA Biz Ltd on Bloomwire"** and **"Hello there"** (CTA
+"Open Globex"). Sign-off:
+
+| Area | Status |
+|---|---|
+| Auth Integrity (Phase 15G.2) | **DEV PASS** |
+| Auth Go-Live Guardrails (Phase 15G.3 — admin-edit audit + auth smoke) | **DEV PASS** |
+| Email Settings / SMTP (Phase 15F) | **DEV PASS** |
+| Email Templates UX Completion (Phase 15F.2) | **100% DEV PASS** |
+
+- **No production deploy** was performed; **audit rows were not purged**; **no WhatsApp/Meta/provider
+  credentials** were touched.
+- **Phase 16 is READY to start** (all auth + email flows are DEV PASS and the email receipts are confirmed).
+- **Non-blocking follow-ups:** Phase **15F.3** (POST-based composer preview / query-string hardening) and Phase
+  **15G.4** (optional auth-audit polish: record `type` in `blocked_fields`, trim `changed_fields` noise).
+
 ### Phase 15F.2 — Email Template UX Completion + QA Findings Polish
-- **PR:** _pending_
-- **Merge SHA:** _pending merge_
+- **PR:** #84
+- **Merge SHA:** `ea3487b624d896601247fd0baf2c574e4f11820b` (fast-forwarded into `version_1`)
+- **Dev status:** **100% DEV PASS** — deployed to dev (`ea3487b`), runtime QA passed, owner confirmed receipt of
+  both dev QA emails on 2026-06-30 (see "Dev QA Sign-off" below).
 - **Type:** Owner-only SuperAdmin UX/correctness (Email Templates composer + send + logs). **No DB migration.**
 - **Why:** Dev QA passed core flows on `ba76e21`, but Email Templates was **not 100% done** — the composer
   only generated 6 fixed inputs, the preview silently used SAMPLE data for blank variables while the real send
