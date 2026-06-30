@@ -5,7 +5,7 @@
 >
 > **Read order for a fresh session:**
 > 1. `AGENTS.md` + `CLAUDE.md` (root) and `app/AGENTS.md` + `app/CLAUDE.md` — operating rules.
-> 2. **`docs/bloomwire/PROJECT-CONTEXT.md`** — what the project **is** (WhatsApp-first product on the Chatwoot engine) + durable identity/data/ops rules.
+> 2. **`docs/bloomwire/PROJECT-CONTEXT.md`** — what the project **is** (managed business messaging SaaS on the Chatwoot engine; WhatsApp-first to market) + durable identity/data/ops rules.
 > 3. The **graphify** code graph (`app/graphify-out/graph.json`) — graph-first, auto-refreshed by git hooks.
 > 4. **This file** — §A Current State, §B How we work, §C Session journal.
 > 5. `docs/bloomwire/implementation-ledger.md` (+ `.html`) and `change-log.md` — full per-phase history.
@@ -72,15 +72,27 @@
 
 ## C. Session journal  *(newest first — prepend new entries)*
 
+### 2026-06-30 — Product framing correction (docs-only)
+- Corrected the misleading "WhatsApp-first SaaS product" wording across the durable docs to the canonical
+  framing: **Bloomwire is a managed business messaging SaaS platform built additively on the Chatwoot engine;
+  WhatsApp is the first go-to-market managed channel / current priority, NOT the permanent product boundary;
+  future channels (SMS, Microsoft, Instagram, Telegram, …) may be added later without replacing the Chatwoot
+  foundation.** Chatwoot stays the engine + source of truth; WhatsWay/WhatsAway = inspiration/benchmark only.
+- Touched: `PROJECT-CONTEXT.md`, `SESSION-LOG.md`, `AGENTS.md`, `CLAUDE.md`, `implementation-ledger.md` + `.html`,
+  `change-log.md`. Preserved invariants (Chatwoot Accounts/Users, business owner = AccountUser administrator,
+  staff = agent, no `BusinessOwner`, no duplicate conversations/messages/contacts, no overbuilding multi-channel).
+- Docs/process-only — no code, no runtime behavior, no deploy.
+
 ### 2026-06-30 — Added durable PROJECT-CONTEXT + corrected base framing
 - Added `docs/bloomwire/PROJECT-CONTEXT.md` (what the project is + durable identity/data/ops rules) and
   wired it into the read-order (`AGENTS.md` + `CLAUDE.md`, ahead of this file).
 - **Framing correction (evidence-based):** a request to record the base as "WhatsWay/WhatsAway-derived,
   not Chatwoot" was checked against the repo and **does not match** — `app/` is `@chatwoot/chatwoot`
   (~15.6k refs; ADR 0001 = "build additively on Chatwoot"); WhatsWay appears only in docs as
-  reference-only. Owner-confirmed wording adopted: **Bloomwire = WhatsApp-first SaaS product built
-  additively on the Chatwoot engine; Chatwoot = code engine + source of truth; WhatsWay/WhatsAway =
-  product inspiration/benchmark only (do not copy their code).**
+  reference-only. Owner-confirmed wording adopted: **Bloomwire = managed business messaging SaaS platform
+  built additively on the Chatwoot engine; Chatwoot = code engine + source of truth; WhatsWay/WhatsAway =
+  product inspiration/benchmark only (do not copy their code).** _(Product framing refined later the same day —
+  see the newer entry above; WhatsApp = first GTM channel, not the permanent boundary.)_
 - Docs/process-only — no code, no deploy.
 
 ### 2026-06-30 — Established this continuity journal

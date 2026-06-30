@@ -10,20 +10,27 @@
 
 ## 1. What Bloomwire is  *(foundational framing — do not re-frame)*
 
-**Bloomwire is a WhatsApp-first SaaS product built additively on the Chatwoot engine.**
+**Bloomwire is a managed business messaging SaaS platform built additively on the Chatwoot engine.**
 - **Chatwoot is the current technical / code engine and source-of-truth platform base** (the `app/`
   codebase is literally `@chatwoot/chatwoot`; see ADR `projects/bloomwire-chatwoot-platform/docs/adr/0001-technical-baseline.md`).
-- **Bloomwire is our product layer** on top of that engine: the platform console, workflows, branding,
-  access controls, operational rules, and the WhatsApp-first SaaS direction.
+  It owns accounts, users, account_users, inboxes, contacts, conversations, and messages.
+- **Bloomwire is our product layer** on top of that engine: managed channel **setup / binding / control-plane**
+  (not a duplicate account/user/message system), the platform console, workflows, branding, access controls,
+  and operational rules.
+- **WhatsApp is the first go-to-market managed channel** (the initial target market heavily uses WhatsApp
+  Business) and the **current implementation priority** — it is **not** the permanent product boundary (see §2).
 - **WhatsWay / WhatsAway are product inspiration / reference / benchmark ONLY — not the current
   codebase base.** Do **not** copy WhatsWay/WhatsAway code or architecture.
 - **Do not** frame this as "a generic Chatwoot project," and **do not** contradict the ADR/code
-  evidence (the engine is Chatwoot; the product is Bloomwire/WhatsApp-first).
+  evidence (the engine is Chatwoot; the product is Bloomwire — managed business messaging, WhatsApp-first to market).
 
 ## 2. Product priority & scope
-- **WhatsApp-first is the current priority and product direction.**
-- **Future channels come later — do NOT overbuild for them now.** Build the smallest correct thing
-  for the WhatsApp-first slice in front of you.
+- **WhatsApp is the first go-to-market managed channel and the current implementation priority** — the
+  initial target market heavily uses WhatsApp Business. **WhatsApp is not the permanent product boundary.**
+- **Future channels (SMS, Microsoft channels, Instagram, Telegram, …) may be added later — without
+  replacing the Chatwoot foundation.**
+- **Do NOT overbuild for future channels now.** Build the smallest correct thing for the WhatsApp slice in
+  front of you (current channel scope = WhatsApp).
 
 ## 3. Identity, access & roles  *(auth model — verify against code before changing)*
 - **`/super_admin`** is the **internal Bloomwire / platform console** (not a tenant surface).

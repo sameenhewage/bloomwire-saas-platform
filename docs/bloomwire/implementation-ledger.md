@@ -17,7 +17,11 @@
 
 ## 1. Ownership statement
 
-- **Bloomwire** is a **WhatsApp-first SaaS product** built on the WhatsWay / Chatwoot-derived **OSS base**.
+- **Bloomwire** is a **managed business messaging SaaS platform** built additively on the **Chatwoot engine**
+  (the OSS base under `app/`, i.e. `@chatwoot/chatwoot`). **WhatsApp is the first go-to-market managed channel /
+  current implementation priority — not the permanent product boundary;** future channels may be added later
+  without replacing the Chatwoot foundation. **WhatsWay/WhatsAway are product inspiration/benchmark only, not the
+  codebase base.**
 - **Bloomwire customizations are Bloomwire-owned.** They live in clearly attributed code (controllers,
   models, services, views, and feature toggles) and are layered on top of the OSS code path.
 - **Chatwoot Enterprise code/features are not used.** Bloomwire runs with `DISABLE_ENTERPRISE=true`.
