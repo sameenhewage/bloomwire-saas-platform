@@ -99,4 +99,51 @@ RSpec.describe Bloomwire::EmailTemplate do
       expect(template.errors.attribute_names).to include(:cta_url)
     end
   end
+
+  describe '#used_variables (Phase 15F.2 dynamic parsing)' do
+    it 'extracts variables from subject, body AND cta link, de-duplicated and in first-seen order' do
+      template = described_class.new(
+        subject: 'Order {{custom_order_id}} for {{recipient_name}}',
+        body: 'Hi {{recipient_name}}, your order {{custom_order_id}} ships to {{business_name}}.',
+        cta_url: '{{tracking_link}}'
+      )
+      expect(template.used_variables).to eq(%w[custom_order_id recipient_name business_name tracking_link])
+    end
+
+    it 'detects CUSTOM variables, not only the known VARIABLES list' do
+      template = described_class.new(subject: 's', body: 'Ref {{custom_order_id}}')
+      expect(template.used_variables).to include('custom_order_id')
+      expect(described_class::VARIABLES).not_to include('custom_order_id')
+    end
+
+    it 'returns nothing for a template with no placeholders' do
+      expect(described_class.new(subject: 'Hello', body: 'No variables here').used_variables).to eq([])
+    end
+  end
+
+  describe '#composition_for (Phase 15F.2 — single resolver for preview AND send)' do
+    let(:template) do
+      described_class.new(subject: 'Hi {{recipient_name}}', body: 'Join {{business_name}} now', cta_label: 'Go',
+                          cta_url: '{{invitation_link}}')
+    end
+
+    it 'renders fully and reports no missing variables when every value is supplied' do
+      out = template.composition_for('recipient_name' => 'Rita', 'business_name' => 'Globex',
+                                     'invitation_link' => 'https://x.test/i')
+      expect(out[:subject]).to eq('Hi Rita')
+      expect(out[:body]).to eq('Join Globex now')
+      expect(out[:cta_url]).to eq('https://x.test/i')
+      expect(out[:body]).not_to match(/\{\{.*?\}\}/)
+      expect(out[:missing_variables]).to eq([])
+    end
+
+    it 'leaves a blank variable as a visible {{placeholder}} and NEVER substitutes sample data' do
+      out = template.composition_for('recipient_name' => 'Rita', 'business_name' => '',
+                                     'invitation_link' => 'https://x.test/i')
+      expect(out[:subject]).to eq('Hi Rita')
+      expect(out[:body]).to eq('Join {{business_name}} now')        # raw placeholder, not the SAMPLE value
+      expect(out[:body]).not_to include('Bloomwire (Pvt) Ltd')      # SAMPLE_VARS['business_name'] must not leak
+      expect(out[:missing_variables]).to eq(['business_name'])
+    end
+  end
 end

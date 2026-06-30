@@ -48,14 +48,14 @@ class SuperAdmin::BloomwireEmailTemplatesController < SuperAdmin::ApplicationCon
   # success; the SMTP password is never leaked.
   def send_email
     template = find_template
-    vars = compose_vars
+    # Phase 15F.2: render via the template's SINGLE composition resolver — the exact same one the live "Final
+    # preview" uses — so the delivered email matches the preview. Blank/unfilled variables stay as
+    # {{placeholders}} and are blocked by SendTemplateEmailService preflight (never half-rendered).
+    rendered = template.composition_for(compose_params)
     composition = Bloomwire::SendTemplateEmailService::Composition.new(
-      template: template,
-      recipient: compose_field(:recipient),
-      subject: template.render_subject(vars),
-      body: template.render_body(vars),
-      cta_label: compose_field(:button_label),
-      cta_url: Bloomwire::EmailTemplate.interpolate(compose_field(:button_link), vars)
+      template: template, recipient: compose_field(:recipient),
+      subject: rendered[:subject], body: rendered[:body],
+      cta_label: rendered[:cta_label], cta_url: rendered[:cta_url]
     )
     result = Bloomwire::SendTemplateEmailService.new(
       setting: Bloomwire::EmailSetting.current, composition: composition, actor: current_super_admin
@@ -75,9 +75,10 @@ class SuperAdmin::BloomwireEmailTemplatesController < SuperAdmin::ApplicationCon
     params.dig(:compose, name).to_s
   end
 
-  # Variable values from the composer (string per variable; blank if not supplied).
-  def compose_vars
-    Bloomwire::EmailTemplate::VARIABLES.index_with { |v| compose_field(v) }
+  # The raw submitted composer params (variable values + recipient + button overrides). Passed to the
+  # template's composition resolver so preview and send resolve identically (Phase 15F.2).
+  def compose_params
+    params[:compose].is_a?(ActionController::Parameters) ? params[:compose] : ActionController::Parameters.new
   end
 
   def redirect_to_template(template, flash_hash)

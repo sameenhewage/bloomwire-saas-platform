@@ -15,6 +15,40 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.2 — Email Template UX Completion + QA Findings Polish
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Owner-only SuperAdmin UX/correctness (Email Templates composer + send + logs). **No DB migration.**
+- **Why:** Dev QA passed core flows on `ba76e21`, but Email Templates was **not 100% done** — the composer
+  only generated 6 fixed inputs, the preview silently used SAMPLE data for blank variables while the real send
+  sent blank (preview ≠ delivered), invalid emails were only caught by SMTP, and Email Logs showed the template
+  name but not the literal sent subject. This PR closes those gaps to make Email Templates production-usable
+  before Phase 16.
+- **What changed:**
+  - **Dynamic composer variables:** `Bloomwire::EmailTemplate#used_variables` now parses **every** `{{variable}}`
+    in subject + body + CTA link (de-duplicated, custom variables supported), and the composer generates one
+    input per detected variable with a humanized label (`recipient_name → Recipient name`,
+    `custom_order_id → Custom order id`).
+  - **One resolver for preview + send:** new `EmailTemplate#composition_for` / `#resolved_variables` /
+    `#missing_variables` are the SINGLE source both the live "Final preview" and the real send use, so the
+    preview equals the delivered email. Blank variables are **never** silently filled with SAMPLE data — they
+    stay as visible `{{placeholders}}` and the send is blocked.
+  - **Validation (pre-send):** `SendTemplateEmailService` now blocks an **invalid recipient email** and **any
+    leftover `{{placeholder}}`** before opening SMTP (in addition to missing recipient / SMTP not ready), with
+    a blocked Email Log + clear message. The composer shows an inline "fill these in" warning and disables Send.
+  - **Email Logs:** the tab now shows the **literal sent subject** (already stored per-send) alongside
+    template, recipient, status, actor, timestamp.
+  - **Sample preview** (editor Panel 3) relabeled "Sample preview / Sample data only — not the send preview".
+- **Template CRUD:** create / edit / duplicate / deactivate(archive) / reactivate behavior preserved; a new
+  custom-variable template now flows create → save → generated input → preview → send → log.
+- **Not changed:** no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no Auth-Integrity
+  (15G.2) or admin-audit (15G.3) behavior. Existing successful send/log behavior preserved (now requires all
+  variables filled). The optional auth-audit polish (record `type` in `blocked_fields`, trim `changed_fields`
+  noise) is **deferred to a separate Phase 15G.4 PR** to keep this PR focused.
+- **Validation:** model (8) + service (7) + send request (16) specs, full Bloomwire email + 15G.2 + 15G.3 suite
+  **101 examples, 0 failures**; RuboCop clean. No secrets in code/logs/specs (fake values only).
+- **Phase 16 remains BLOCKED** until this PR is merged, deployed to dev, and runtime QA passes.
+
 ### Phase 15G.3 — Auth Go-Live Guardrails (audit + smoke + runbook)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_

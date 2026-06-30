@@ -5,8 +5,8 @@
 %>
 <div class="bw-panel">
   <div class="bw-panel__head">
-    <h2 class="bw-panel__title">Email Preview</h2>
-    <span class="bw-btn bw-btn--secondary bw-btn--sm" style="cursor:default;">Preview with Sample Data</span>
+    <h2 class="bw-panel__title">Sample preview</h2>
+    <span class="bw-btn bw-btn--secondary bw-btn--sm" style="cursor:default;">Sample data only</span>
   </div>
 
   <% if template.nil? %>
@@ -14,6 +14,7 @@
       <p class="bw-empty__text">Save the template to see a preview with sample data.</p>
     </div>
   <% else %>
+    <p class="bw-help" style="margin-top:0;">Illustrative sample values only — this is <strong>not</strong> the send preview. Use the <strong>Send from Template</strong> composer below for the exact email that will be delivered.</p>
     <p style="font-weight:600; margin:0 0 10px;">Subject: <%= template.render_subject(sample_vars) %></p>
     <%# Phase 15F.1: render the SAME shared partial the mailer sends, so this preview matches delivered email. %>
     <%= render 'bloomwire/email/branded_email', body: template.render_body(sample_vars),

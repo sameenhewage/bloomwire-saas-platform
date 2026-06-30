@@ -58,6 +58,7 @@
 | 15E.1 | Documentation Governance guardrail | #77 | Docs only |
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
+| 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | _pending_ | Implemented |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
@@ -273,6 +274,26 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 15F.2 — Email Template UX Completion — `Implemented` — PR _pending_
+- **Trigger:** dev runtime QA on `ba76e21` passed core flows but found Email Templates incomplete: composer had
+  only 6 fixed variable inputs; the live preview used SAMPLE data for blank variables while the real send sent
+  blank (preview ≠ delivered); invalid emails were only caught by SMTP; Email Logs showed template name, not the
+  literal subject.
+- **Dynamic variables:** `EmailTemplate#used_variables` parses every `{{variable}}` in subject + body + CTA
+  (deduped, custom variables supported, shared `VARIABLE_PATTERN`); composer generates one humanized input per
+  variable (`humanize_variable`, `keep_id_suffix: true`).
+- **Preview == send:** new `EmailTemplate#composition_for` / `#resolved_variables` / `#missing_variables` is the
+  SINGLE resolver used by both the "Final preview" and the send. Blank variables are never silently sampled —
+  they remain visible `{{placeholders}}`.
+- **Validation:** `SendTemplateEmailService` blocks invalid recipient email + any leftover `{{placeholder}}`
+  before SMTP (blocked Email Log + clear message); composer shows inline "fill these in" + disables Send.
+- **Email Logs:** literal sent subject column added (data already stored per send). Sample preview relabeled.
+- **Not changed:** no DB migration; no SMTP secret/credential change; no WhatsApp/Meta; no 15G.2/15G.3 auth
+  behavior. CRUD (create/edit/duplicate/deactivate/reactivate) preserved. Optional auth-audit polish deferred to
+  **15G.4**.
+- **Validation:** model+service+request specs; full email + 15G.2 + 15G.3 suite **101 examples, 0 failures**;
+  RuboCop clean; no secrets (fake values only). **Phase 16 blocked** until merged + deployed + runtime QA passes.
 
 ### Phase 15G.2 — Auth Integrity Hardening — `Hardened` — PR _pending_
 - **Trigger:** forensic RCA of an owner login failure. Proven that the deploy, the platform-admin/permissions

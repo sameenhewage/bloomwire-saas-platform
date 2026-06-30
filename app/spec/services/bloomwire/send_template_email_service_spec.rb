@@ -88,4 +88,24 @@ RSpec.describe Bloomwire::SendTemplateEmailService do
     expect(log.error_message).to match(/disabled/i)
     expect(ActionMailer::Base.deliveries).to be_empty
   end
+
+  it 'blocks an invalid recipient email BEFORE opening SMTP (Phase 15F.2)' do
+    expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+    result = described_class.new(setting: complete_setting, composition: composition(recipient: 'not-an-email')).call
+    expect(result.status).to eq('blocked')
+    expect(Bloomwire::EmailDeliveryLog.last.error_message).to match(/valid/i)
+    expect(ActionMailer::Base.deliveries).to be_empty
+  end
+
+  it 'blocks when the rendered email still contains an unfilled {{placeholder}} (Phase 15F.2)' do
+    expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+    comp = described_class::Composition.new(
+      template: template, recipient: 'to@example.com', subject: 'Hi {{recipient_name}}',
+      body: 'Hello {{recipient_name}} at Acme', cta_label: 'Go', cta_url: 'https://x.test'
+    )
+    result = described_class.new(setting: complete_setting, composition: comp).call
+    expect(result.status).to eq('blocked')
+    expect(Bloomwire::EmailDeliveryLog.last.error_message).to match(/variable|placeholder/i)
+    expect(ActionMailer::Base.deliveries).to be_empty
+  end
 end

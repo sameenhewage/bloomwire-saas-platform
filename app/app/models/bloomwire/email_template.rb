@@ -33,8 +33,14 @@ class Bloomwire::EmailTemplate < ApplicationRecord
   # Allowed template categories (display/grouping only).
   CATEGORIES = %w[Onboarding Security Billing Support Notifications].freeze
 
-  # Supported placeholder variables (UI "Variables" helper + preview sample data).
+  # Supported placeholder variables (UI "Variables" helper + preview sample data). NOTE: templates may use
+  # OTHER (custom) variables too — `used_variables` parses whatever the template actually references.
   VARIABLES = %w[recipient_name business_name invitation_link reset_link expiry_time support_email].freeze
+
+  # Single source of truth for what a `{{variable}}` looks like — used by BOTH parsing (`used_variables`) and
+  # interpolation, so a variable that is detected is always also interpolated (Phase 15F.2). Lowercase start,
+  # then letters/digits/underscores (e.g. recipient_name, custom_order_id, order_id_2).
+  VARIABLE_PATTERN = /\{\{\s*([a-z][a-z0-9_]*)\s*\}\}/
 
   # Sample values used to render the "Preview with Sample Data" panel. Non-secret, illustrative only.
   SAMPLE_VARS = {
@@ -63,10 +69,16 @@ class Bloomwire::EmailTemplate < ApplicationRecord
   # Interpolates `{{ variable }}` placeholders. Unknown variables are left intact so the author can see
   # they are unresolved (rather than silently blanking them).
   def self.interpolate(text, vars = SAMPLE_VARS)
-    text.to_s.gsub(/\{\{\s*([a-z_]+)\s*\}\}/) do
+    text.to_s.gsub(VARIABLE_PATTERN) do
       key = Regexp.last_match(1)
       vars.key?(key) ? vars[key].to_s : "{{#{key}}}"
     end
+  end
+
+  # Human label for a variable input, e.g. recipient_name -> "Recipient name", custom_order_id -> "Custom order id".
+  # keep_id_suffix: true so trailing "_id" is NOT dropped (ActiveSupport's humanize strips it by default).
+  def self.humanize_variable(var)
+    var.to_s.humanize(keep_id_suffix: true)
   end
 
   def render_subject(vars = SAMPLE_VARS)
@@ -85,11 +97,39 @@ class Bloomwire::EmailTemplate < ApplicationRecord
     cta_label.present?
   end
 
-  # The subset of VARIABLES actually referenced by this template (subject/body/cta_url). Drives the
-  # composer's "this template uses…" hint (Phase 15F.1).
+  # Every `{{variable}}` actually referenced by this template across subject + body + CTA link, in first-seen
+  # order and de-duplicated. Phase 15F.2: parses ANY variable name (incl. custom ones), not just the known
+  # VARIABLES, so the composer can generate an input for each. Drives composer inputs + send/preview validation.
   def used_variables
-    text = [subject, body, cta_url].join(' ')
-    VARIABLES.select { |v| text.include?("{{#{v}}}") }
+    [subject, body, cta_url].join("\n").scan(VARIABLE_PATTERN).flatten.uniq
+  end
+
+  # Resolve owner-submitted composer values for THIS template. Phase 15F.2: only NON-BLANK values are applied,
+  # so any blank/unfilled variable stays as a visible {{placeholder}} — the preview shows it and the send is
+  # blocked. `submitted` is a Hash or ActionController::Parameters keyed by variable name.
+  def resolved_variables(submitted)
+    used_variables.each_with_object({}) do |v, acc|
+      value = composer_value(submitted, v)
+      acc[v] = value if value.present?
+    end
+  end
+
+  # Variables this template needs that the owner left blank (drives the inline "fill these in" warning + block).
+  def missing_variables(submitted)
+    used_variables.reject { |v| composer_value(submitted, v).present? }
+  end
+
+  # The fully-rendered composition (subject/body/CTA) for the submitted composer values. SINGLE source used by
+  # BOTH the live "Final preview" and the real send, so the preview equals the delivered email (Phase 15F.2).
+  def composition_for(submitted)
+    vars = resolved_variables(submitted)
+    {
+      subject: render_subject(vars),
+      body: render_body(vars),
+      cta_label: composer_value(submitted, :button_label).presence || cta_label,
+      cta_url: self.class.interpolate((composer_value(submitted, :button_link).presence || cta_url).to_s, vars),
+      missing_variables: missing_variables(submitted)
+    }
   end
 
   # Duplicates a template into a new, inactive draft with a unique key/name.
@@ -180,6 +220,13 @@ class Bloomwire::EmailTemplate < ApplicationRecord
   end
 
   private
+
+  # Reads a submitted composer value by string or symbol key from a Hash / ActionController::Parameters.
+  def composer_value(submitted, key)
+    return '' if submitted.nil?
+
+    (submitted[key.to_s] || submitted[key.to_sym]).to_s
+  end
 
   def system_key_immutable
     return unless system? && key_changed?

@@ -156,6 +156,7 @@
         <tr><td>15E.1</td><td>Documentation Governance guardrail</td><td>#77</td><td><span class="badge docs">Docs only</span></td></tr>
         <tr><td>15F</td><td>Owner-only Email Settings (DB SMTP + templates)</td><td>#78</td><td><span class="badge done">Implemented</span> <span class="badge warn">encryption parked</span></td></tr>
         <tr><td>15F.1</td><td>Send-from-Template composer (owner-only)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
+        <tr><td>15F.2</td><td>Email Template UX Completion (dynamic vars + preview==send + validation + logs subject)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span></td></tr>
@@ -316,6 +317,18 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15F.2 — Email Template UX Completion <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Trigger</b>: dev QA on <code>ba76e21</code> found Email Templates incomplete — fixed 6-variable composer; preview used SAMPLE data for blanks while send sent blank (preview ≠ delivered); invalid email only caught by SMTP; Email Logs showed template name, not subject.</li>
+        <li><b>Dynamic variables</b>: <code>used_variables</code> parses every <code>{{variable}}</code> in subject + body + CTA (deduped, custom vars supported, shared <code>VARIABLE_PATTERN</code>); composer generates one humanized input per variable (<code>keep_id_suffix: true</code>).</li>
+        <li><b>Preview == send</b>: new <code>composition_for</code> / <code>resolved_variables</code> / <code>missing_variables</code> is the SINGLE resolver for the "Final preview" AND the send. Blank variables are never silently sampled — they stay as visible <code>{{placeholders}}</code>.</li>
+        <li><b>Validation</b>: <code>SendTemplateEmailService</code> blocks invalid recipient email + any leftover <code>{{placeholder}}</code> before SMTP (blocked Email Log + message); composer shows inline "fill these in" + disables Send.</li>
+        <li><b>Email Logs</b>: literal sent subject surfaced; sample preview relabeled "Sample data only — not the send preview".</li>
+        <li><b>Not changed</b>: no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no 15G.2/15G.3 auth behavior; CRUD preserved. Optional auth-audit polish deferred to <b>15G.4</b>.</li>
+        <li><b>Validation</b>: full email + 15G.2 + 15G.3 suite <b>101 examples, 0 failures</b>; RuboCop clean; no secrets. <b>Phase 16 blocked</b> until merged + deployed + runtime QA passes.</li>
       </ul>
     </div>
 

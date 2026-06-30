@@ -27,6 +27,13 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
     "/super_admin/bloomwire_email_templates/#{tpl.id}/send_email"
   end
 
+  # Phase 15F.2: every variable the new_business_invitation template uses must be filled, otherwise the send is
+  # blocked (no half-rendered emails). Used by the success/placeholder/failure paths.
+  def full_invitation_vars
+    { recipient_name: 'Jane Doe', business_name: 'Acme Co',
+      invitation_link: 'https://app.bloomwire.lk/i/abc', expiry_time: '7 days' }
+  end
+
   before do
     config = InstallationConfig.where(name: 'BLOOMWIRE_MODE_ENABLED').first_or_initialize
     config.value = true
@@ -45,10 +52,7 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
       allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
 
       expect do
-        post send_path, params: { compose: {
-          recipient: 'jane@example.com', recipient_name: 'Jane Doe', business_name: 'Acme Co',
-          invitation_link: 'https://app.bloomwire.lk/i/abc'
-        } }
+        post send_path, params: { compose: { recipient: 'jane@example.com', **full_invitation_vars } }
       end.to change(Bloomwire::EmailDeliveryLog, :count).by(1)
 
       expect(delivery).to have_received(:deliver_now)
@@ -69,8 +73,7 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
       end
 
       post send_path, params: { compose: {
-        recipient: 'jane@example.com', recipient_name: 'Jane Doe', business_name: 'Acme Co',
-        invitation_link: 'https://app.bloomwire.lk/i/abc', button_label: 'Accept', button_link: '{{invitation_link}}'
+        recipient: 'jane@example.com', **full_invitation_vars, button_label: 'Accept', button_link: '{{invitation_link}}'
       } }
 
       expect(sent[:body]).to include('Jane Doe')
@@ -87,7 +90,7 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
       allow(Bloomwire::EmailTestMailer).to receive(:template_email)
         .and_raise(StandardError.new("auth failed for #{smtp_password}"))
 
-      post send_path, params: { compose: { recipient: 'jane@example.com', recipient_name: 'Jane' } }
+      post send_path, params: { compose: { recipient: 'jane@example.com', **full_invitation_vars } }
 
       log = Bloomwire::EmailDeliveryLog.last
       expect(log.status).to eq('failed')
@@ -159,6 +162,80 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
       expect(response.body).to include('Globex LLC')         # entered {{business_name}}
       expect(response.body).to include('rita@example.com')   # pre-filled recipient + "Will send to"
       expect(response.body).to include('All rights reserved') # shared branded shell (same partial the mailer uses)
+    end
+  end
+
+  describe 'Phase 15F.2 — dynamic variables, validation, and preview/send consistency' do
+    before { sign_in(owner, scope: :super_admin) }
+
+    it 'blocks the send when a required variable is left blank — never half-renders' do
+      configure_smtp!
+      expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+      expect do
+        post send_path, params: { compose: {
+          recipient: 'jane@example.com', recipient_name: 'Jane', business_name: 'Acme',
+          invitation_link: 'https://x.test/i' # expiry_time intentionally omitted
+        } }
+      end.to change { Bloomwire::EmailDeliveryLog.where(status: 'blocked').count }.by(1)
+      expect(Bloomwire::EmailDeliveryLog.last.error_message).to match(/variable|placeholder/i)
+      expect(ActionMailer::Base.deliveries).to be_empty
+    end
+
+    it 'blocks an invalid recipient email before any SMTP send' do
+      configure_smtp!
+      expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+      post send_path, params: { compose: { recipient: 'not-an-email', **full_invitation_vars } }
+      log = Bloomwire::EmailDeliveryLog.last
+      expect(log.status).to eq('blocked')
+      expect(log.error_message).to match(/valid/i)
+      expect(ActionMailer::Base.deliveries).to be_empty
+    end
+
+    it 'delivers EXACTLY what composition_for renders (preview and send share one resolver)' do
+      configure_smtp!
+      sent = nil
+      allow(Bloomwire::EmailTestMailer).to receive(:template_email) do |**kwargs|
+        sent = kwargs
+        delivery
+      end
+      submitted = { recipient: 'jane@example.com', **full_invitation_vars }
+      post send_path, params: { compose: submitted }
+
+      expected = template.composition_for(ActionController::Parameters.new(submitted).permit!)
+      expect(sent[:subject]).to eq(expected[:subject])
+      expect(sent[:body]).to eq(expected[:body])
+      expect(sent[:cta_url]).to eq(expected[:cta_url])
+      expect(sent[:body]).not_to match(/\{\{.*?\}\}/)
+    end
+
+    it 'generates a composer input for a CUSTOM variable, then previews and sends it' do
+      configure_smtp!
+      custom = Bloomwire::EmailTemplate.create!(
+        key: 'qa_custom', name: 'QA Custom', subject: 'Order {{custom_order_id}}',
+        body: 'Hi {{recipient_name}}, order {{custom_order_id}} is ready.', cta_label: 'View', cta_url: 'https://x.test/o'
+      )
+      get "/super_admin/bloomwire_email_settings?tab=templates&template_id=#{custom.id}"
+      expect(response.body).to include('compose[custom_order_id]') # generated input field
+      expect(response.body).to include('Custom order id')          # humanized label
+
+      allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
+      expect do
+        post send_path(custom), params: { compose: {
+          recipient: 'cory@example.com', recipient_name: 'Cory', custom_order_id: 'ORD-42'
+        } }
+      end.to change { Bloomwire::EmailDeliveryLog.where(status: 'success').count }.by(1)
+      expect(Bloomwire::EmailDeliveryLog.last.subject).to eq('Order ORD-42') # custom var resolved
+    end
+
+    it 'shows the literal sent subject in the Email Logs tab' do
+      configure_smtp!
+      Bloomwire::EmailDeliveryLog.create!(
+        email_template: template, template_key: template.key, template_name: template.name,
+        recipient_email: 'logged@example.com', subject: 'Welcome ORD-99', status: 'success',
+        actor_id: owner.id, sent_at: Time.current
+      )
+      get '/super_admin/bloomwire_email_settings?tab=email_logs'
+      expect(response.body).to include('Welcome ORD-99')
     end
   end
 

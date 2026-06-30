@@ -64,29 +64,41 @@ class SuperAdmin::BloomwireEmailSettingsController < SuperAdmin::ApplicationCont
     @templates.first || @all_templates.first
   end
 
-  # Phase 15F.1: composer context — recipient + variable values + CTA, pre-filled from sample data / the
-  # template's CTA, and overridden by any submitted `compose` params (the "Update preview" round-trip).
+  # Phase 15F.2: composer context for the selected template. Generates an input for EVERY variable the template
+  # actually uses (incl. custom ones), and renders the "Final preview" through the template's SINGLE composition
+  # resolver — the same one the send uses — so the preview equals the delivered email. Blank variables render as
+  # visible {{placeholders}} and are reported in :missing for the inline "fill these in" warning + send block.
   def build_compose(template)
+    return {} unless template
+
     submitted = compose_params
-    vars = compose_vars_with_defaults(submitted)
+    fields = compose_field_values(template, submitted)
+    recipient = submitted[:recipient].presence || current_super_admin&.email
+    effective = fields.merge(
+      'recipient' => recipient,
+      'button_label' => (submitted[:button_label].presence || template.cta_label),
+      'button_link' => (submitted[:button_link].presence || template.cta_url)
+    )
+    rendered = template.composition_for(effective)
     {
-      recipient: submitted[:recipient].presence || current_super_admin&.email,
-      vars: vars,
-      button_label: submitted[:button_label].presence || template&.cta_label,
-      button_link: submitted[:button_link].presence || default_button_link(template, vars)
+      recipient: recipient, fields: fields,
+      button_label: effective['button_label'], button_link: effective['button_link'],
+      subject: rendered[:subject], body: rendered[:body], cta_label: rendered[:cta_label],
+      cta_url: rendered[:cta_url], missing: rendered[:missing_variables]
     }
+  end
+
+  # Input field values for the composer: exactly what the owner submitted; on FIRST load (no submission yet)
+  # pre-filled with sample data for known variables as a convenience. After any submission, used verbatim.
+  def compose_field_values(template, submitted)
+    first_load = submitted.blank?
+    template.used_variables.index_with do |v|
+      first_load ? Bloomwire::EmailTemplate::SAMPLE_VARS[v].to_s : submitted[v].to_s
+    end
   end
 
   def compose_params
     params[:compose].is_a?(ActionController::Parameters) ? params[:compose] : ActionController::Parameters.new
-  end
-
-  def compose_vars_with_defaults(submitted)
-    Bloomwire::EmailTemplate::VARIABLES.index_with { |v| submitted[v].presence || Bloomwire::EmailTemplate::SAMPLE_VARS[v] }
-  end
-
-  def default_button_link(template, vars)
-    template&.cta? ? template.render_cta_url(vars) : nil
   end
 
   def redirect_to_tab(tab, flash_hash)

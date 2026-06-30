@@ -14,9 +14,14 @@ class Bloomwire::SendTemplateEmailService
 
   BLOCK_MESSAGES = {
     missing_recipient: 'Enter a recipient email address.',
+    invalid_email: 'Enter a valid recipient email address.',
+    unfilled_variables: 'Some {{variables}} are not filled in. Fill every variable before sending.',
     incomplete_smtp: 'SMTP is not fully configured. Complete it in Configuration first.',
     smtp_disabled: 'Outbound email is disabled. Enable it in Configuration first.'
   }.freeze
+
+  # Lightweight RFC-5321-ish recipient check — blocks obviously invalid addresses BEFORE opening SMTP.
+  EMAIL_FORMAT = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
 
   def initialize(setting:, composition:, actor: nil)
     @setting = setting
@@ -25,7 +30,7 @@ class Bloomwire::SendTemplateEmailService
   end
 
   def call
-    reason = @setting.block_reason(recipient: @c.recipient, require_enabled: true)
+    reason = @setting.block_reason(recipient: @c.recipient, require_enabled: true) || composition_block_reason
     return blocked(reason) if reason
 
     deliver!
@@ -34,6 +39,24 @@ class Bloomwire::SendTemplateEmailService
   end
 
   private
+
+  # Phase 15F.2: composition-level preflight (runs only after SMTP/recipient-presence checks pass).
+  # Blocks an invalid recipient and any unfilled {{placeholder}} so we never send a half-rendered email.
+  def composition_block_reason
+    recipient = @c.recipient.to_s.strip
+    return :invalid_email if recipient.present? && !recipient.match?(EMAIL_FORMAT)
+    return :unfilled_variables if unresolved_placeholders?
+
+    nil
+  end
+
+  # Any leftover `{{ ... }}` in the rendered output means a variable was not filled (or is malformed) — block,
+  # so we never deliver an email containing raw placeholders.
+  LEFTOVER_PLACEHOLDER = /\{\{.*?\}\}/m
+
+  def unresolved_placeholders?
+    [@c.subject, @c.body, @c.cta_url].any? { |t| t.to_s.match?(LEFTOVER_PLACEHOLDER) }
+  end
 
   def deliver!
     Bloomwire::EmailTestMailer.template_email(

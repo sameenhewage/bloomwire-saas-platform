@@ -12,16 +12,17 @@
 
   <table class="bw-table">
     <thead>
-      <tr><th>When</th><th>Template</th><th>Recipient</th><th>Status</th><th>By</th><th>Detail</th></tr>
+      <tr><th>When</th><th>Template</th><th>Subject</th><th>Recipient</th><th>Status</th><th>By</th><th>Detail</th></tr>
     </thead>
     <tbody>
       <% if @delivery_logs.blank? && @email_setting.last_test_status.to_s == 'not_tested' %>
-        <tr><td colspan="6"><div class="bw-empty"><p class="bw-empty__text">No email activity recorded yet. Send a template email or a test email to see results here.</p></div></td></tr>
+        <tr><td colspan="7"><div class="bw-empty"><p class="bw-empty__text">No email activity recorded yet. Send a template email or a test email to see results here.</p></div></td></tr>
       <% else %>
         <% @delivery_logs&.each do |log| %>
           <tr>
             <td class="text-xs"><%= log.created_at&.to_fs(:short) %></td>
             <td><%= log.template_name.presence || log.template_key.presence || '—' %></td>
+            <td class="text-xs"><%= log.subject.presence || '—' %></td>
             <td class="text-xs"><%= log.recipient_email.presence || '—' %></td>
             <td>
               <% case log.status
@@ -39,6 +40,7 @@
           <tr>
             <td class="text-xs"><%= @email_setting.last_test_sent_at&.to_fs(:short) || '—' %></td>
             <td>Test email</td>
+            <td class="text-xs">—</td>
             <td class="text-xs">—</td>
             <td>
               <% case @email_setting.last_test_status
