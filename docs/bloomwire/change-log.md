@@ -15,6 +15,23 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Docs — Product framing correction
+- **PR:** _pending_ · **Type:** docs-only (no code, no runtime behavior, no deploy).
+- **What:** corrected the misleading "WhatsApp-first SaaS product" wording to the canonical framing —
+  **Bloomwire is a managed business messaging SaaS platform built additively on the Chatwoot engine.**
+  Chatwoot remains the technical engine + source of truth (accounts, users, account_users, inboxes, contacts,
+  conversations, messages). **WhatsApp is the first go-to-market managed channel / current implementation
+  priority — not the permanent product boundary;** future channels (SMS, Microsoft, Instagram, Telegram, …) may
+  be added later without replacing the Chatwoot foundation. WhatsWay/WhatsAway = inspiration/benchmark only.
+  Also corrected the ledger §1 "WhatsWay / Chatwoot-derived OSS base" wording to "built additively on the
+  Chatwoot engine."
+- **Files:** `docs/bloomwire/PROJECT-CONTEXT.md`, `docs/bloomwire/SESSION-LOG.md`, `AGENTS.md`, `CLAUDE.md`,
+  `docs/bloomwire/implementation-ledger.md` + `.html`, `docs/bloomwire/change-log.md`.
+- **Preserved invariants:** Chatwoot Accounts/Users; business owner/admin = `account_users.role administrator`;
+  staff/agent = `account_users.role agent`; Bloomwire adds managed channel setup/binding/control-plane (not a
+  duplicate account/user system); no global `BusinessOwner`; no duplicate conversations/messages/contacts; no
+  overbuilding multi-channel now. **No code, no migration, no deploy, no secrets.**
+
 ### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade
 - **PR:** #90
 - **Merge SHA:** `88e07010ddd7cea743cf1f02a91b5851ee8e43ac` (merged into `version_1`)
