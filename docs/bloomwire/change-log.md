@@ -15,6 +15,45 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.4 — Email Deliverability + Domain Authentication (investigation, report-only)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** **Investigation / documentation only.** No code · no DB migration · **no DNS change** · **no SMTP
+  credential change** · **no production deploy** · **no WhatsApp/Meta/provider credentials touched**.
+- **Why:** Email send + template UX are DEV PASS and mail is actually delivered, but messages to the owner's
+  `bloomwire.lk` mailbox land in **junk/spam** instead of the inbox. This entry documents the current dev sending
+  behavior, why it can be junked, and the recommended production setup. (Formalises the deliverability follow-up
+  noted under Phase 15F.3; tracked separately so 15F.3 stays scoped to the Send Feedback UX.)
+- **Current dev SMTP behavior (read-only, masked):** `smtp.gmail.com:587`, `login` auth + STARTTLS; SMTP username
+  **and** `from_email` are both `@gmail.com` (**personal Gmail**, not Google Workspace for `bloomwire.lk`); From
+  display-name is `"Bloomwire"`; no Reply-To and no Return-Path override (envelope sender = the gmail.com username).
+  Password present (length only) — never printed.
+- **Why it can land in junk (diagnosis):** This is **not** an SPF/DKIM/DMARC *failure*. Sending *as* `gmail.com`
+  through Gmail's own authenticated servers means SPF passes, DKIM is signed `d=gmail.com`, and DMARC is aligned for
+  `gmail.com` → auth passes. The spam-foldering is a **brand-identity / reputation / content** problem:
+  (1) brand display-name `"Bloomwire"` on a **free `@gmail.com`** address (display-name impersonation heuristic);
+  (2) branded content whose CTA/invite links point to **dev.unecast.com** (sender domain ≠ link domain; a
+  low-reputation dev host) — a classic phishing signal; (3) **no sending reputation** for the `bloomwire.lk` brand
+  because the brand domain is not the actual sender. _(Pending owner confirmation from the junked message's
+  `Authentication-Results` / `Received-SPF` / DKIM `d=` / `From` / `Return-Path` headers.)_
+- **Recommended production setup (NOT applied — requires owner DNS/provider action):**
+  - **Dedicated sending subdomain:** `mail.bloomwire.lk` or `notify.bloomwire.lk`.
+  - **Transactional provider:** Postmark / Resend / AWS SES / Mailgun / SendGrid / Brevo.
+  - **SPF (do not replace existing):** put SPF on the **subdomain only** — `v=spf1 include:<provider> -all`; leave
+    the root `bloomwire.lk` SPF untouched.
+  - **DKIM:** publish the provider's DKIM selector CNAME/TXT on the subdomain.
+  - **DMARC:** start `_dmarc.bloomwire.lk` `v=DMARC1; p=none; rua=mailto:dmarc@bloomwire.lk` (monitor), then tighten
+    to `quarantine` → `reject` after alignment is confirmed.
+  - **From == authenticated domain:** e.g. `noreply@mail.bloomwire.lk` (From domain == DKIM domain → alignment +
+    brand match); set a real **Reply-To** if replies are wanted.
+  - **Links:** production CTA/links use the real brand/app domain (not `dev.unecast.com`).
+  - **Bounce/complaint handling:** enable provider webhooks → record into the Email Logs.
+- **App send flow:** unchanged and still **PASS** — this is a deliverability/DNS/provider matter, not an app bug.
+- **Impact:** **Does NOT block Phase 16 dev work** (dev mail is delivered). **Blocks production / client email
+  readiness** until the DNS/provider setup above is completed.
+- **Validation:** read-only SMTP-config inspection on dev (masked, no secrets printed); no code/tests changed;
+  docs-only.
+
 ### Dev QA Sign-off — 2026-06-30 (owner-confirmed)
 Independent dev-server runtime QA on `version_1` @ `ea3487b624d896601247fd0baf2c574e4f11820b`. Owner confirmed
 receipt of both dev QA emails: **"You're invited to join QA Biz Ltd on Bloomwire"** and **"Hello there"** (CTA
