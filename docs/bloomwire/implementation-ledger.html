@@ -165,6 +165,7 @@
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
         <tr><td>15G.3</td><td>Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
+        <tr><td>16C</td><td>Business-owner activation (Ops "send activation email" &rarr; Devise set-password to account admins)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -322,6 +323,17 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 16C — Business-owner activation (set-password after provisioning) <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Trigger</b>: provisioning creates the owner <b>confirmed with a throwaway password and no email</b> &rarr; a provisioned owner couldn't log in.</li>
+        <li><b>What</b>: a <b>"Send activation email"</b> action on the WhatsApp setup detail page sends Devise <b>set-password (reset)</b> instructions to the account's <b>administrator(s) only</b> (native <code>Account#administrators</code>; never agents) via new <code>Bloomwire::BusinessOwnerActivator</code> (mirrors <code>PlatformAdminInviter#send_password_setup</code>, best-effort/rescued). Owner sets a password &rarr; native Chatwoot WhatsApp inbox.</li>
+        <li><b>Not changed</b>: no migration; creates <b>no new</b> accounts/users/account_users/inboxes/conversations/messages; no role change; no <code>PlatformAdmin</code> grant; no global <code>BusinessOwner</code>; reuses Devise <code>recoverable</code> + native models (no data duplication). No Meta/WhatsApp calls; no SMTP credential change.</li>
+        <li><b>Only intended mutation</b>: Devise's recoverable/reset-password fields (<code>reset_password_token</code> digest + <code>reset_password_sent_at</code>) on the targeted administrator user(s) — required to send the set-password email; reset token/password/link never exposed in UI/logs/audit.</li>
+        <li><b>Security</b>: <code>/super_admin</code> platform-admin + master-mode gate; reset token/password/link never shown in UI/logs/audit; safe audit via <code>AdminUserAudit</code> (field-names only); SMTP failure rescued (no 500).</li>
+        <li><b>Validation</b>: service + request specs (admin-only targeting, authorization, master-OFF, no-platform-grant, no-new-records / no-role-change, safe audit, no-secret, SMTP-failure) — <b>15 examples, 0 failures</b>; setups/readiness/provisioning/credentials regression green; RuboCop clean.</li>
       </ul>
     </div>
 

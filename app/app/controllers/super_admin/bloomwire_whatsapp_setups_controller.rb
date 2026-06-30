@@ -1,6 +1,7 @@
 class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationController
   before_action :ensure_bloomwire_mode_enabled
-  before_action :set_setup, only: [:show, :edit, :update, :readiness, :credentials, :update_credentials]
+  before_action :set_setup, only: [:show, :edit, :update, :readiness, :credentials, :update_credentials,
+                                   :send_owner_activation]
   before_action :set_credential_channel, only: [:credentials, :update_credentials]
 
   def index
@@ -35,6 +36,17 @@ class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationCon
     Rails.logger.error("[BLOOMWIRE CREDENTIALS] update failed: #{e.class}")
     @credential_error = 'Could not update credentials. Please check the values and try again.'
     render :credentials, status: :unprocessable_entity
+  end
+
+  # Phase 16C: Ops-only business-owner activation. Sends Devise set-password (reset) instructions to the setup
+  # account's administrator(s) so a provisioned owner can sign in. Creates no new accounts/users/account_users/
+  # inboxes/conversations/messages, changes no roles, and grants no platform admin; the only mutation is Devise's
+  # recoverable/reset-password fields on the targeted admin user(s). Never exposes the token. SMTP failure is
+  # rescued inside the service so this never 500s.
+  def send_owner_activation
+    result = Bloomwire::BusinessOwnerActivator.call(account: @setup.account)
+    audit_owner_activation
+    redirect_to super_admin_bloomwire_whatsapp_setup_path(@setup), flash: owner_activation_flash(result)
   end
 
   def new
@@ -105,6 +117,30 @@ class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationCon
 
   def updated_flash
     { notice: 'WhatsApp setup mapping updated.' }
+  end
+
+  # Phase 16C: safe audit (field NAMES only via AdminUserAudit; its denylist blocks any auth-sensitive name).
+  # Records the account's administrator as target when present; never records a token/password.
+  def audit_owner_activation
+    Bloomwire::AdminUserAudit.record_update!(
+      actor: current_super_admin,
+      target: @setup.account&.administrators&.first,
+      changed_fields: [],
+      blocked_fields: [],
+      controller: 'super_admin/bloomwire_whatsapp_setups',
+      action: 'send_owner_activation'
+    )
+  end
+
+  def owner_activation_flash(result)
+    case result.error
+    when :no_admin
+      { error: 'This account has no business administrator to activate.' }
+    when :send_failed
+      { error: 'Could not send the activation email. Check Email Settings (SMTP) and try again.' }
+    else
+      { notice: "Activation email sent to the business administrator#{'s' if result.sent_count > 1}." }
+    end
   end
 
   def credentials_updated_flash

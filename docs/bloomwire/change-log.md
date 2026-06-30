@@ -15,6 +15,30 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 16C — Business-owner activation (set-password after provisioning)
+- **PR:** _pending_ · **Type:** owner-only SuperAdmin/Ops action. **No DB migration.**
+- **Why:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and no
+  email**, so a provisioned owner had no way to log in. This adds the missing activation step.
+- **What:** a **"Send activation email"** action on the WhatsApp **setup detail** page
+  (`POST .../bloomwire_whatsapp_setups/:id/send_owner_activation`). It sends Devise **set-password (reset)
+  instructions** to the setup account's **administrator(s) only** (never agents) via the new
+  `Bloomwire::BusinessOwnerActivator` (mirrors `PlatformAdminInviter#send_password_setup`, best-effort/rescued).
+  Owner then sets a password and signs in to the **native** Chatwoot WhatsApp inbox.
+- **Reuse, not duplication:** uses native `Account#administrators` + Devise `recoverable`. Creates **no new**
+  accounts/users/account_users/inboxes/conversations/messages; changes **no roles**; creates **no** `PlatformAdmin`
+  grant; **no** global `BusinessOwner`; does not duplicate data. **The only intended mutation** is Devise's
+  recoverable/reset-password fields (`reset_password_token` digest + `reset_password_sent_at`) on the targeted
+  administrator user(s), needed to send the set-password instructions.
+- **Security:** gated by the existing `/super_admin` platform-admin boundary + master-mode (`ensure_bloomwire_mode_enabled`);
+  **never** exposes the reset token/password/link in UI, logs, or audit; safe audit via `AdminUserAudit`
+  (field-names only); SMTP failure is rescued (no 500).
+- **Validation:** service spec + request spec (admin-only targeting, authorization, master-OFF unavailable,
+  no-platform-grant, no-new-records / no-role-change, safe audit, no-secret, SMTP-failure) — **15 examples, 0 failures** on the
+  new specs; setups/readiness/provisioning/credentials regression green; RuboCop clean. No deploy; no Meta/WhatsApp
+  calls; no secrets.
+- **Files:** `app/services/bloomwire/business_owner_activator.rb` (new) · `super_admin/bloomwire_whatsapp_setups_controller.rb`
+  · `config/routes.rb` · `views/super_admin/bloomwire_whatsapp_setups/show.html.erb` · specs · docs.
+
 ### Docs — Product framing correction
 - **PR:** _pending_ · **Type:** docs-only (no code, no runtime behavior, no deploy).
 - **What:** corrected the misleading "WhatsApp-first SaaS product" wording to the canonical framing —

@@ -71,6 +71,7 @@
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
 | 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
+| 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | _pending_ | Implemented |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -290,6 +291,27 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 16C — Business-owner activation (set-password after provisioning) — `Implemented` — PR _pending_
+- **Trigger:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and
+  no email** → a provisioned owner could not log in (the one gap blocking a usable managed customer).
+- **Owner (behavior):** new `Bloomwire::BusinessOwnerActivator` + a member action `send_owner_activation` on
+  `Super_admin::BloomwireWhatsappSetupsController`, surfaced as a **"Send activation email"** button on the setup
+  detail page.
+- **What it does:** sends Devise **set-password (reset) instructions** to the setup account's **administrator(s)
+  only** (native `Account#administrators`; never agents), mirroring `PlatformAdminInviter#send_password_setup`
+  (best-effort, rescued). Owner sets a password and signs in to the **native** Chatwoot WhatsApp inbox.
+- **Not changed:** no DB migration; creates **no new** accounts/users/account_users/inboxes/conversations/
+  messages; **no** role change; **no** `PlatformAdmin` grant; **no** global `BusinessOwner`; reuses Devise
+  `recoverable` + native models (no data duplication). No Meta/WhatsApp calls; no SMTP credential change.
+- **Only intended mutation:** Devise's recoverable/reset-password fields (`reset_password_token` digest +
+  `reset_password_sent_at`) on the targeted administrator user(s) — required to send the set-password email; the
+  reset token/password/link are never exposed in UI/logs/audit.
+- **Security:** `/super_admin` platform-admin boundary + master-mode gate; reset token/password/link **never**
+  shown in UI/logs/audit; safe audit via `AdminUserAudit` (field-names only); SMTP failure rescued (no 500).
+- **Validation:** service + request specs (admin-only targeting · authorization · master-OFF unavailable ·
+  no-platform-grant · no-new-records / no-role-change · safe audit · no-secret · SMTP-failure) — **15 examples, 0 failures**;
+  setups/readiness/provisioning/credentials regression green; RuboCop clean.
 
 ### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade — `DEV PASS` — PR #90 (merged `88e0701`)
 - **Trigger:** the Email Templates page worked but felt cramped/dense, panels competed, the Send-from-Template
