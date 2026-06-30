@@ -3,10 +3,10 @@
 # (Bloomwire::EmailTemplate::SAMPLE_VARS) inside a branded email shell. Read-only; no secrets involved.
 # locals: template (Bloomwire::EmailTemplate or nil), sample_vars (Hash)
 %>
-<div class="bw-panel">
+<div class="bw-panel bw-preview-panel">
   <div class="bw-panel__head">
     <h2 class="bw-panel__title">Sample preview</h2>
-    <span class="bw-btn bw-btn--secondary bw-btn--sm" style="cursor:default;">Sample data only</span>
+    <span class="bw-badge bw-badge--neutral">Sample data</span>
   </div>
 
   <% if template.nil? %>
@@ -16,9 +16,18 @@
   <% else %>
     <p class="bw-help" style="margin-top:0;">Illustrative sample values only — this is <strong>not</strong> the send preview. Use the <strong>Send from Template</strong> composer below for the exact email that will be delivered.</p>
     <p style="font-weight:600; margin:0 0 10px;">Subject: <%= template.render_subject(sample_vars) %></p>
-    <%# Phase 15F.1: render the SAME shared partial the mailer sends, so this preview matches delivered email. %>
-    <%= render 'bloomwire/email/branded_email', body: template.render_body(sample_vars),
-               cta_label: template.cta_label, cta_url: template.render_cta_url(sample_vars), year: Date.current.year %>
+    <%# Phase 15F.1: render the SAME shared partial the mailer sends, so this preview matches delivered email.
+        Phase 15F.UI: wrapped in an email-client "window" frame so it reads as a product preview. %>
+    <div class="bw-preview-frame">
+      <div class="bw-preview-frame__bar" aria-hidden="true">
+        <span class="bw-preview-frame__dot"></span><span class="bw-preview-frame__dot"></span><span class="bw-preview-frame__dot"></span>
+        <span class="bw-preview-frame__label">Sample preview · sample data</span>
+      </div>
+      <div class="bw-preview-frame__body">
+        <%= render 'bloomwire/email/branded_email', body: template.render_body(sample_vars),
+                   cta_label: template.cta_label, cta_url: template.render_cta_url(sample_vars), year: Date.current.year %>
+      </div>
+    </div>
 
     <div class="bw-panel__actions">
       <% if template.active? %>

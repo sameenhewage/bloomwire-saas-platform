@@ -159,7 +159,8 @@
         <tr><td>15F.2</td><td>Email Template UX Completion (dynamic vars + preview==send + validation + logs subject)</td><td>#84</td><td><span class="badge done">100% DEV PASS</span></td></tr>
         <tr><td>15F.3</td><td>Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard)</td><td>#86</td><td><span class="badge done">DEV PASS</span></td></tr>
         <tr><td>15F.4</td><td>Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan)</td><td><i>pending</i></td><td><span class="badge docs">Investigation (report-only)</span></td></tr>
-        <tr><td>15F.6</td><td>Email CTA Button Rendering Fix (validate resolved CTA URL is absolute + email-safe button)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
+        <tr><td>15F.6</td><td>Email CTA Button Rendering Fix (validate resolved CTA URL is absolute + email-safe button)</td><td>#89</td><td><span class="badge done">DEV PASS</span></td></tr>
+        <tr><td>15F.UI</td><td>Email Templates UI Polish & Responsive Upgrade (3&rarr;2&rarr;1 grid, toolbar, preview frame, prominent composer)</td><td>#90</td><td><span class="badge docs">pending review/deploy</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
@@ -324,7 +325,20 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 15F.6 — Email CTA Button Rendering Fix <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+    <div class="card"><h3>Phase 15F.UI — Email Templates UI Polish &amp; Responsive Upgrade <span class="badge docs">pending review/deploy</span> <span class="pr">PR #90</span></h3>
+      <ul>
+        <li><b>Trigger</b>: the page worked but felt cramped/dense, panels competed, the Send composer was too low + under-emphasised, the toolbar was cramped, the preview read like a debug area, and the grid jumped 3&rarr;1 columns at 1200px.</li>
+        <li><b>CSS + view-wrapper only</b> — no controller/model/route/DB change. Files: <code>super_admin/index.scss</code>, <code>_tab_templates.html.erb</code>, <code>_composer.html.erb</code>, <code>_email_preview.html.erb</code>.</li>
+        <li><b>Responsive grid</b>: <code>bw-email-grid</code> = library | editor | sample-preview (desktop) &rarr; library | editor with preview reflowing full-width (≤1280px) &rarr; stacked (≤880px).</li>
+        <li><b>Toolbar</b> wraps (search row, then category + Filter); <b>list</b> is scrollable with an active accent bar + hover lift.</li>
+        <li><b>Polished preview</b>: email-client "window" frame (<code>bw-preview-frame</code>) around both Sample + Final previews (same shared branded partial &rarr; preview still equals delivered).</li>
+        <li><b>Prominent Send</b>: separated "Send a real email" section header above an accent-topped composer card (<code>bw-card--composer</code>) with a responsive <code>bw-composer-grid</code> (2-col &rarr; 1-col ≤980px).</li>
+        <li><b>Preserved</b>: owner-only gate, every form/link/id (<code>#bw-composer</code>, <code>#bw-send-result</code>, compose fields, CRUD forms), validation, send-feedback banner, button states.</li>
+        <li><b>Validation</b>: render request specs green; SCSS compiles; before/after + responsive runtime QA on dev pending deploy.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15F.6 — Email CTA Button Rendering Fix <span class="badge done">DEV PASS</span> <span class="pr">PR #89 · merged 53e3e7b</span></h3>
       <ul>
         <li><b>Trigger</b>: delivered invitation email showed the CTA as plain text <code>[www.google.com]Accept Invitation</code> — the purple button was missing (body/card/footer rendered fine).</li>
         <li><b>Root cause</b>: template <code>cta_url</code> is <code>{{invitation_link}}</code> (passes template-level scheme validation as a placeholder), but the <b>resolved</b> CTA URL was never validated. A scheme-less <code>www.google.com</code> reached the mailer → relative <code>&lt;a href="www.google.com"&gt;</code> → email clients neutralize a relative href → button collapses to text and the URL leaks.</li>

@@ -15,9 +15,41 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 15F.6 — Email CTA Button Rendering Fix
-- **PR:** _pending_
+### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade
+- **PR:** #90 — _pending review/deploy_
 - **Merge SHA:** _pending merge_
+- **Type:** Owner-only SuperAdmin **UI/UX + responsive** polish for Email Settings → Email Templates.
+  **CSS + view-wrapper only — no behavior, controller, model, route, or DB change.**
+- **Why:** the flow worked but felt cramped/dense, the panels competed, the Send-from-Template composer sat too
+  low and under-emphasised, the toolbar was cramped, the preview read like a debug area, and the 3-panel grid
+  jumped straight from 3 columns to 1 at 1200px (no graceful medium/tablet reflow).
+- **What changed (all in `super_admin/index.scss` + 3 ERB partials; every form/link/id/validation/button-state
+  preserved):**
+  - **Responsive 3 → 2 → 1 grid:** `bw-email-grid` is `library | editor | sample-preview` on desktop; at
+    ≤1280px it becomes `library | editor` with the sample preview reflowing full-width below; at ≤880px it stacks.
+  - **Toolbar:** search takes its own row, then category + Filter wrap below — never crowded in the narrow column.
+  - **Template list:** scrollable list, hover lift, and an accent left-bar on the active row.
+  - **Polished preview:** both the Sample preview and the composer's Final preview render inside an email-client
+    "window" frame (`bw-preview-frame`) so they read as product previews, not a debug dump. (Same shared
+    branded-email partial — preview still equals delivered email.)
+  - **Prominent Send section:** a clearly separated section header ("Send a real email from this template") above
+    an **accent-topped** composer card (`bw-card--composer`); the composer's form/preview split is now a
+    responsive `bw-composer-grid` (2-col → 1-col ≤980px).
+  - **Spacing/hierarchy:** larger panel padding + grid gaps for breathing room.
+- **Not changed:** no SMTP credential/provider change; no DNS; no WhatsApp/Meta; no DB migration; no controller/
+  model/route change; owner-only gate intact; CTA-label interpolation + send-feedback banner + button states
+  unchanged.
+- **Validation:** Bloomwire email request specs (render the templates tab + composer + previews) green
+  (**53 examples, 0 failures** on the render specs); SCSS compiles (Vite build CI). Runtime QA + before/after on
+  dev pending deploy.
+- **Scope note:** Templates tab + shared page shell/status cards only; other Email Settings tabs untouched.
+
+### Phase 15F.6 — Email CTA Button Rendering Fix
+- **PR:** #89
+- **Merge SHA:** `53e3e7bffacbede7f0515ed82cffbd04c9693fca` (fast-forwarded into `version_1`)
+- **Dev status:** **DEV PASS** — deployed to dev (`53e3e7b`), runtime QA passed 2026-06-30: scheme-less CTA URL
+  blocked before SMTP; valid `https://` renders the email-safe purple button (absolute href); delivered HTML has
+  no `[www.google.com]Accept Invitation`; text fallback `Accept Invitation: https://…`; preview == delivered.
 - **Type:** Owner-only SuperAdmin email-rendering + validation bugfix (Send from Template CTA). **No DB migration.**
 - **Root cause:** the template's stored `cta_url` (`{{invitation_link}}`) passed the template-level
   `cta_url_safe_scheme` validation (placeholder is allowed), but the **RESOLVED** CTA URL (after the owner fills a

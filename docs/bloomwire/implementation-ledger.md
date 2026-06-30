@@ -61,7 +61,8 @@
 | 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | #84 | 100% DEV PASS |
 | 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | #86 | DEV PASS |
 | 15F.4 | Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan) | _pending_ | Investigation (report-only) |
-| 15F.6 | Email CTA Button Rendering Fix (validate resolved CTA URL is absolute + email-safe button) | _pending_ | Implemented |
+| 15F.6 | Email CTA Button Rendering Fix (validate resolved CTA URL is absolute + email-safe button) | #89 | DEV PASS |
+| 15F.UI | Email Templates UI Polish & Responsive Upgrade (3→2→1 grid, toolbar, preview frame, prominent composer) | #90 | pending review/deploy |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
@@ -286,7 +287,24 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 15F.6 — Email CTA Button Rendering Fix — `Implemented` — PR _pending_
+### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade — `pending review/deploy` — PR #90
+- **Trigger:** the Email Templates page worked but felt cramped/dense, panels competed, the Send-from-Template
+  composer was too low + under-emphasised, the toolbar was cramped, the preview read like a debug area, and the
+  3-panel grid jumped 3→1 columns at 1200px (no graceful medium/tablet reflow).
+- **Owner (behavior):** none changed — this is **CSS + view-wrapper only**. Files: `super_admin/index.scss`,
+  `_tab_templates.html.erb`, `_composer.html.erb`, `_email_preview.html.erb`.
+- **What changed:** responsive `bw-email-grid` (library | editor | preview → 2-col with preview reflow ≤1280px →
+  stacked ≤880px); wrapping toolbar (search row + category/Filter below); scrollable list with active accent bar +
+  hover lift; email-client "window" frame (`bw-preview-frame`) around BOTH sample + final previews (same shared
+  branded partial, so preview still equals delivered); a separated "Send a real email" section header above an
+  accent-topped composer card (`bw-card--composer`) with a responsive `bw-composer-grid`; more padding/gaps.
+- **Not changed:** no controller/model/route/DB change; no SMTP credential/provider/DNS/WhatsApp-Meta change;
+  owner-only gate intact; every form/link/id (`#bw-composer`, `#bw-send-result`, compose fields, CRUD forms),
+  validation, send-feedback banner, and button states preserved.
+- **Validation:** render request specs (templates tab + composer + previews) green; SCSS compiles; before/after
+  + responsive runtime QA on dev pending deploy.
+
+### Phase 15F.6 — Email CTA Button Rendering Fix — `DEV PASS` — PR #89 (merged `53e3e7b`)
 - **Trigger:** a delivered invitation email showed the CTA as plain text `[www.google.com]Accept Invitation` —
   the purple button was missing (body/card/footer rendered fine).
 - **Root cause:** the template `cta_url` is `{{invitation_link}}` (passes the template-level `cta_url_safe_scheme`

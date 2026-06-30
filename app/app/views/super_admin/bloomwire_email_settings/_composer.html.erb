@@ -19,7 +19,7 @@
     cta_url_invalid = cta_url_str.present? && !cta_url_str.match?(/\{\{.*?\}\}/) && !Bloomwire::EmailTemplate.absolute_cta_url?(cta_url_str)
     can_send = smtp_ready && missing.empty? && !has_placeholders && !cta_url_invalid
   %>
-  <div class="bw-card" id="bw-composer" style="margin-top:16px;">
+  <div class="bw-card bw-card--composer" id="bw-composer" style="margin-top:12px;">
     <h2 class="bw-card__title">Send from Template — <%= @selected_template.name %></h2>
     <p class="bw-card__subtitle">
       Fill in a value for every variable, update the preview, then send a real email through the saved SMTP settings.
@@ -95,7 +95,7 @@
       </div>
     <% end %>
 
-    <div style="display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start;">
+    <div class="bw-composer-grid">
       <div>
         <%= form_tag(send_email_super_admin_bloomwire_email_template_path(@selected_template), method: :post) do %>
           <%= hidden_field_tag 'tab', 'templates' %>
@@ -156,9 +156,18 @@
         <div class="bw-panel__head"><h2 class="bw-panel__title">Final preview</h2></div>
         <p class="bw-help" style="margin-top:0;">This is exactly what will be delivered (same branded shell, same values as the send).</p>
         <p style="font-weight:600; margin:0 0 10px;">Subject: <%= @compose[:subject] %></p>
-        <%# Renders the SAME shared partial the mailer sends, with the SAME values — so preview == delivered email. %>
-        <%= render 'bloomwire/email/branded_email', body: @compose[:body],
-                   cta_label: @compose[:cta_label], cta_url: @compose[:cta_url], year: Date.current.year %>
+        <%# Renders the SAME shared partial the mailer sends, with the SAME values — so preview == delivered email.
+            Phase 15F.UI: wrapped in the email-client frame (matches the Sample preview styling). %>
+        <div class="bw-preview-frame bw-preview-frame--lg">
+          <div class="bw-preview-frame__bar" aria-hidden="true">
+            <span class="bw-preview-frame__dot"></span><span class="bw-preview-frame__dot"></span><span class="bw-preview-frame__dot"></span>
+            <span class="bw-preview-frame__label">Final preview · exactly what will be delivered</span>
+          </div>
+          <div class="bw-preview-frame__body">
+            <%= render 'bloomwire/email/branded_email', body: @compose[:body],
+                       cta_label: @compose[:cta_label], cta_url: @compose[:cta_url], year: Date.current.year %>
+          </div>
+        </div>
         <p class="bw-help">Will send to: <strong><%= @compose[:recipient].presence || '—' %></strong></p>
       </div>
     </div>
