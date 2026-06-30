@@ -16,7 +16,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 16C — Business-owner activation (set-password after provisioning)
-- **PR:** _pending_ · **Type:** owner-only SuperAdmin/Ops action. **No DB migration.**
+- **PR:** #95 · **merge SHA** `9b09f9e` · **Type:** owner-only SuperAdmin/Ops action. **No DB migration.**
 - **Why:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and no
   email**, so a provisioned owner had no way to log in. This adds the missing activation step.
 - **What:** a **"Send activation email"** action on the WhatsApp **setup detail** page
@@ -38,6 +38,20 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   calls; no secrets.
 - **Files:** `app/services/bloomwire/business_owner_activator.rb` (new) · `super_admin/bloomwire_whatsapp_setups_controller.rb`
   · `config/routes.rb` · `views/super_admin/bloomwire_whatsapp_setups/show.html.erb` · specs · docs.
+- **DEV runtime (2026-06-30) — `PASS-BUT-BLOCKED`:** deployed `version_1 @ 9b09f9e` to dev (deploy run
+  `28461253274`; rails+sidekiq `/app/.git_sha` match · health 200 local+public · 0×5xx · postgres/redis volumes
+  preserved · no pending migrations). **Action runtime-verified** on dev: the setup-detail **"Business owner
+  access"** card renders, **"Send activation email"** returns a success flash, the **administrator's**
+  `reset_password_sent_at` updates while the **agent's** does **not** (admin-only targeting), **0** new
+  accounts/users/account_users/inboxes/conversations/messages, **no** `PlatformAdmin` grant, roles unchanged,
+  a safe audit row is written (field-names only: `changed_fields=[]`, `blocked_fields=[]`), and **no
+  token/password/reset-link** appears in UI or audit. **Blocked (owner email + login not exercised):** (1) the
+  only existing setup's administrator is the **real owner** (not a disposable target — not clicked), and (2) dev's
+  **global Devise mailer uses `sendmail` with no working MTA → `Errno::EPIPE`**, so the reset/activation email
+  does not deliver. (Note: the per-account Bloomwire *Email Settings* SMTP path is separate from the global Devise
+  mailer.) **No production deploy · no Meta/WhatsApp calls · no SMTP/mail-config or credential changes · no roles
+  changed · no real owner/user touched.** Devise tokens appear in Sidekiq job-arg logs for **all** Devise emails
+  (pre-existing Chatwoot/Sidekiq behavior, not introduced by 16C); Phase 16C's own UI/flash/audit expose none.
 
 ### Docs — Product framing correction
 - **PR:** _pending_ · **Type:** docs-only (no code, no runtime behavior, no deploy).

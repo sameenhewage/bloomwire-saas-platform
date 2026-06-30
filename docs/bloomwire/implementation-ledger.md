@@ -71,7 +71,7 @@
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
 | 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
-| 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | _pending_ | Implemented |
+| 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | PASS-BUT-BLOCKED · DEV: action verified · owner email/login blocked |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -292,7 +292,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 16C — Business-owner activation (set-password after provisioning) — `Implemented` — PR _pending_
+### Phase 16C — Business-owner activation (set-password after provisioning) — `PASS-BUT-BLOCKED` — PR #95 (merged `9b09f9e`)
 - **Trigger:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and
   no email** → a provisioned owner could not log in (the one gap blocking a usable managed customer).
 - **Owner (behavior):** new `Bloomwire::BusinessOwnerActivator` + a member action `send_owner_activation` on
@@ -312,6 +312,23 @@
 - **Validation:** service + request specs (admin-only targeting · authorization · master-OFF unavailable ·
   no-platform-grant · no-new-records / no-role-change · safe audit · no-secret · SMTP-failure) — **15 examples, 0 failures**;
   setups/readiness/provisioning/credentials regression green; RuboCop clean.
+- **DEV runtime (2026-06-30) — `PASS-BUT-BLOCKED`:** deployed `version_1 @ 9b09f9e` to dev (run `28461253274`):
+  rails+sidekiq `/app/.git_sha` match · health 200 local+public · 0×5xx · postgres/redis volumes preserved · no
+  pending migrations. **Action runtime-verified:** "Business owner access" card renders, "Send activation email"
+  returns a success flash, the **administrator's** `reset_password_sent_at` updates and the **agent's** does not,
+  **0** new accounts/users/account_users/inboxes/conversations/messages, **no** `PlatformAdmin` grant, roles
+  unchanged, safe audit row (field-names only; `changed_fields=[]`/`blocked_fields=[]`), **no token/password/link**
+  in UI or audit.
+- **Blocked (owner email + login not exercised):** (1) the only existing setup's admin is the **real owner**
+  (`account #1` admin = real `User #2`; `sameen.android@gmail.com` is an **agent**, not a valid target) — button
+  **not clicked** on the real owner; (2) dev's **global Devise mailer = `sendmail` with no working MTA
+  (`Errno::EPIPE`)** → reset/activation email does not deliver (the per-account *Email Settings* SMTP path is
+  separate). No production deploy · no Meta/WhatsApp calls · no SMTP/mail-config/credential changes · no roles
+  changed · no real owner/user touched; earlier temp QA artifacts removed and the audit row preserved.
+- **Residual risk / next step:** the activation feature depends on the **global Devise mailer**, which on dev is
+  broken (`sendmail` EPIPE). Switching the dev/prod global ActionMailer to **SMTP** (the `SMTP_*` env is already
+  present) is the unblocker for an end-to-end email→set-password→login test. Devise tokens appear in **Sidekiq
+  job-arg logs** for all Devise emails (pre-existing platform behavior, not 16C).
 
 ### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade — `DEV PASS` — PR #90 (merged `88e0701`)
 - **Trigger:** the Email Templates page worked but felt cramped/dense, panels competed, the Send-from-Template
