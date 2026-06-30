@@ -163,7 +163,7 @@
         <tr><td>15G.3</td><td>Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
       </tbody>
     </table>
-    <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Non-blocking follow-ups: <b>15F.3</b> (POST-based preview / query-string hardening), <b>15G.4</b> (optional auth-audit polish).</p>
+    <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
   </section>
 
   <section id="s3">
@@ -330,7 +330,7 @@
         <li><b>CTA button label (review fix)</b>: CTA <b>label</b> included in variable detection, interpolation, and the leftover-<code>{{placeholder}}</code> block — a variable used only in the button label generates a composer input, renders identically in preview + delivered email, and blocks the send if unfilled (completes the "no raw <code>{{placeholder}}</code> delivered" guarantee).</li>
         <li><b>Validation</b>: <code>SendTemplateEmailService</code> blocks invalid recipient email + any leftover <code>{{placeholder}}</code> (subject/body/CTA label/CTA URL) before SMTP (blocked Email Log + message); composer shows inline "fill these in" + disables Send.</li>
         <li><b>Email Logs</b>: literal sent subject surfaced; sample preview relabeled "Sample data only — not the send preview".</li>
-        <li><b>Deferred</b>: composer "Update preview" GET round-trip puts values in the URL query string &rarr; <b>Phase 15F.3</b> UX hardening; optional auth-audit polish &rarr; <b>15G.4</b>.</li>
+        <li><b>Deferred</b>: composer "Update preview" GET round-trip puts values in the URL query string &rarr; <b>Phase 15F.5</b> (POST-based preview / query-string hardening); optional auth-audit polish &rarr; <b>15G.4</b>.</li>
         <li><b>Not changed</b>: no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no 15G.2/15G.3 auth behavior; CRUD preserved. Optional auth-audit polish deferred to <b>15G.4</b>.</li>
         <li><b>Validation</b>: full email + 15G.2 + 15G.3 suite <b>109 examples, 0 failures</b>; RuboCop clean; no secrets. <b>Phase 16 blocked</b> until merged + deployed + runtime QA passes.</li>
       </ul>
