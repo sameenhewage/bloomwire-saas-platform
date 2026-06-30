@@ -64,3 +64,25 @@
     not displayed on this Ops surface.
   </p>
 </div>
+
+<%# Phase 16C: Ops-triggered business-owner activation. Sends Devise set-password (reset) instructions to the
+    account's administrator(s) so a provisioned owner can sign in. No password/link is shown here. %>
+<div class="bw-card">
+  <h2 class="bw-card__title">Business owner access</h2>
+  <% admins = @setup.account&.administrators.to_a %>
+  <% if admins.any? %>
+    <p class="bw-help" style="margin-top:0;">Send the business owner / administrator a secure set-password
+      (activation) email so they can sign in and use the inbox. No password or reset link is shown here.</p>
+    <ul class="text-sm bw-text-secondary">
+      <% admins.each do |admin| %><li><%= admin.email %></li><% end %>
+    </ul>
+    <div class="bw-panel__actions">
+      <%= button_to 'Send activation email',
+                    send_owner_activation_super_admin_bloomwire_whatsapp_setup_path(@setup),
+                    method: :post, class: 'bw-btn bw-btn--primary',
+                    form: { data: { turbo_confirm: 'Send a set-password (activation) email to the business administrator(s)?' } } %>
+    </div>
+  <% else %>
+    <p class="bw-help" style="margin-top:0;">This account has no business administrator (administrator role) to activate.</p>
+  <% end %>
+</div>

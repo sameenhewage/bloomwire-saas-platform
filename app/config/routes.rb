@@ -690,6 +690,9 @@ Rails.application.routes.draw do
           # Bloomwire Phase 14 S2a: Ops-only credential-capture surface for the linked channel's provider_config.
           get :credentials
           patch :update_credentials
+          # Bloomwire Phase 16C: Ops-only "send activation email" — Devise set-password instructions to the
+          # setup account's business administrator(s). No record mutation, no platform-admin grant, no secrets.
+          post :send_owner_activation
         end
       end
       resources :bloomwire_whatsapp_setup_requests, only: [:index, :show, :update]
