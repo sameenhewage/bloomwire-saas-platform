@@ -286,13 +286,16 @@
 - **Preview == send:** new `EmailTemplate#composition_for` / `#resolved_variables` / `#missing_variables` is the
   SINGLE resolver used by both the "Final preview" and the send. Blank variables are never silently sampled —
   they remain visible `{{placeholders}}`.
+- **Blank-on-first-load (review fix):** composer variable inputs open **empty**; `SAMPLE_VARS` are placeholder/
+  helper text + the separate "Sample preview" only — never prefilled as real values. Send stays disabled until
+  every variable is intentionally filled, so sample data can't be accidentally sent.
 - **Validation:** `SendTemplateEmailService` blocks invalid recipient email + any leftover `{{placeholder}}`
   before SMTP (blocked Email Log + clear message); composer shows inline "fill these in" + disables Send.
 - **Email Logs:** literal sent subject column added (data already stored per send). Sample preview relabeled.
 - **Not changed:** no DB migration; no SMTP secret/credential change; no WhatsApp/Meta; no 15G.2/15G.3 auth
   behavior. CRUD (create/edit/duplicate/deactivate/reactivate) preserved. Optional auth-audit polish deferred to
   **15G.4**.
-- **Validation:** model+service+request specs; full email + 15G.2 + 15G.3 suite **101 examples, 0 failures**;
+- **Validation:** model+service+request specs; full email + 15G.2 + 15G.3 suite **104 examples, 0 failures**;
   RuboCop clean; no secrets (fake values only). **Phase 16 blocked** until merged + deployed + runtime QA passes.
 
 ### Phase 15G.2 — Auth Integrity Hardening — `Hardened` — PR _pending_

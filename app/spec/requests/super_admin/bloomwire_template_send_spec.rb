@@ -237,6 +237,33 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
       get '/super_admin/bloomwire_email_settings?tab=email_logs'
       expect(response.body).to include('Welcome ORD-99')
     end
+
+    it 'opens the composer with BLANK variable inputs on first load — sample data is placeholder-only' do
+      configure_smtp!
+      get "/super_admin/bloomwire_email_settings?tab=templates&template_id=#{template.id}"
+      expect(response).to have_http_status(:success)
+      # SAMPLE_VARS appear only as placeholder hints, NEVER as actual prefilled input values
+      expect(response.body).to include('placeholder="Sameen Hewage"')   # SAMPLE_VARS['recipient_name'] as hint
+      expect(response.body).not_to include('value="Sameen Hewage"')     # not prefilled as a real value
+      expect(response.body).not_to include('value="Bloomwire (Pvt) Ltd"')
+    end
+
+    it 'keeps Send disabled on first load when the template has required variables' do
+      configure_smtp!
+      get "/super_admin/bloomwire_email_settings?tab=templates&template_id=#{template.id}"
+      expect(response.body).to include('Fill in all variables before sending')         # inline missing-var warning
+      expect(response.body).to include('The send button is disabled until every variable is filled')
+      # the submit button is rendered in a disabled state (no intentional fill yet)
+      expect(response.body).to match(/<input[^>]*value="Send Email"[^>]*disabled|<input[^>]*disabled[^>]*value="Send Email"/)
+    end
+
+    it 'blocks a first-load send (all variables blank) — never sends sample data' do
+      configure_smtp!
+      expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+      post send_path, params: { compose: { recipient: 'jane@example.com' } } # no variable values at all
+      expect(Bloomwire::EmailDeliveryLog.last.status).to eq('blocked')
+      expect(ActionMailer::Base.deliveries).to be_empty
+    end
   end
 
   describe 'access control + secret safety' do

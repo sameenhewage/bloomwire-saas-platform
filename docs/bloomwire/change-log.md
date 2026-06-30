@@ -33,6 +33,10 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
     `#missing_variables` are the SINGLE source both the live "Final preview" and the real send use, so the
     preview equals the delivered email. Blank variables are **never** silently filled with SAMPLE data — they
     stay as visible `{{placeholders}}` and the send is blocked.
+  - **Blank-on-first-load (review fix):** the composer opens with **empty** variable inputs — `SAMPLE_VARS` are
+    shown only as **placeholder/helper text** (and in the separate "Sample preview"), never prefilled as real
+    values. The Send button stays disabled until the owner intentionally fills every required variable, so
+    sample data can never be accidentally sent.
   - **Validation (pre-send):** `SendTemplateEmailService` now blocks an **invalid recipient email** and **any
     leftover `{{placeholder}}`** before opening SMTP (in addition to missing recipient / SMTP not ready), with
     a blocked Email Log + clear message. The composer shows an inline "fill these in" warning and disables Send.
@@ -46,7 +50,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   variables filled). The optional auth-audit polish (record `type` in `blocked_fields`, trim `changed_fields`
   noise) is **deferred to a separate Phase 15G.4 PR** to keep this PR focused.
 - **Validation:** model (8) + service (7) + send request (16) specs, full Bloomwire email + 15G.2 + 15G.3 suite
-  **101 examples, 0 failures**; RuboCop clean. No secrets in code/logs/specs (fake values only).
+  **104 examples, 0 failures**; RuboCop clean. No secrets in code/logs/specs (fake values only).
 - **Phase 16 remains BLOCKED** until this PR is merged, deployed to dev, and runtime QA passes.
 
 ### Phase 15G.3 — Auth Go-Live Guardrails (audit + smoke + runbook)

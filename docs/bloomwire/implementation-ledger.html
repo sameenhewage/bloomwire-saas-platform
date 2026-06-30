@@ -325,10 +325,11 @@
         <li><b>Trigger</b>: dev QA on <code>ba76e21</code> found Email Templates incomplete — fixed 6-variable composer; preview used SAMPLE data for blanks while send sent blank (preview ≠ delivered); invalid email only caught by SMTP; Email Logs showed template name, not subject.</li>
         <li><b>Dynamic variables</b>: <code>used_variables</code> parses every <code>{{variable}}</code> in subject + body + CTA (deduped, custom vars supported, shared <code>VARIABLE_PATTERN</code>); composer generates one humanized input per variable (<code>keep_id_suffix: true</code>).</li>
         <li><b>Preview == send</b>: new <code>composition_for</code> / <code>resolved_variables</code> / <code>missing_variables</code> is the SINGLE resolver for the "Final preview" AND the send. Blank variables are never silently sampled — they stay as visible <code>{{placeholders}}</code>.</li>
+        <li><b>Blank-on-first-load (review fix)</b>: composer variable inputs open <b>empty</b>; <code>SAMPLE_VARS</code> are placeholder/helper text + the separate "Sample preview" only — never prefilled as real values. Send stays disabled until every variable is intentionally filled, so sample data can't be accidentally sent.</li>
         <li><b>Validation</b>: <code>SendTemplateEmailService</code> blocks invalid recipient email + any leftover <code>{{placeholder}}</code> before SMTP (blocked Email Log + message); composer shows inline "fill these in" + disables Send.</li>
         <li><b>Email Logs</b>: literal sent subject surfaced; sample preview relabeled "Sample data only — not the send preview".</li>
         <li><b>Not changed</b>: no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no 15G.2/15G.3 auth behavior; CRUD preserved. Optional auth-audit polish deferred to <b>15G.4</b>.</li>
-        <li><b>Validation</b>: full email + 15G.2 + 15G.3 suite <b>101 examples, 0 failures</b>; RuboCop clean; no secrets. <b>Phase 16 blocked</b> until merged + deployed + runtime QA passes.</li>
+        <li><b>Validation</b>: full email + 15G.2 + 15G.3 suite <b>104 examples, 0 failures</b>; RuboCop clean; no secrets. <b>Phase 16 blocked</b> until merged + deployed + runtime QA passes.</li>
       </ul>
     </div>
 

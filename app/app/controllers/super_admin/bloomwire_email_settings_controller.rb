@@ -88,13 +88,12 @@ class SuperAdmin::BloomwireEmailSettingsController < SuperAdmin::ApplicationCont
     }
   end
 
-  # Input field values for the composer: exactly what the owner submitted; on FIRST load (no submission yet)
-  # pre-filled with sample data for known variables as a convenience. After any submission, used verbatim.
+  # Input field values for the composer = EXACTLY what the owner submitted (blank until they fill them in).
+  # Phase 15F.2 (review): SAMPLE_VARS are NEVER used as actual input values — only as placeholder/helper text in
+  # the view and in the separate "Sample preview" panel. This keeps sample data out of the real send flow, so a
+  # fresh composer opens with empty variables and the Send button stays disabled until every variable is filled.
   def compose_field_values(template, submitted)
-    first_load = submitted.blank?
-    template.used_variables.index_with do |v|
-      first_load ? Bloomwire::EmailTemplate::SAMPLE_VARS[v].to_s : submitted[v].to_s
-    end
+    template.used_variables.index_with { |v| submitted[v].to_s }
   end
 
   def compose_params
