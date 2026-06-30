@@ -16,8 +16,12 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade
-- **PR:** #90 — _pending review/deploy_
-- **Merge SHA:** _pending merge_
+- **PR:** #90
+- **Merge SHA:** `88e07010ddd7cea743cf1f02a91b5851ee8e43ac` (merged into `version_1`)
+- **Dev status:** **DEV PASS** — deployed to dev (`88e0701`), runtime QA passed 2026-06-30: responsive CSS rules
+  live — **1440 = 3 columns** (library | editor | sample preview); **1280/1024 = 2 columns + sample preview
+  full-width below**; **768 = stacked**. Owner-only gate intact; no migration; SMTP unchanged; no
+  DNS/SMTP/WhatsApp/Meta changes; no secrets.
 - **Type:** Owner-only SuperAdmin **UI/UX + responsive** polish for Email Settings → Email Templates.
   **CSS + view-wrapper only — no behavior, controller, model, route, or DB change.**
 - **Why:** the flow worked but felt cramped/dense, the panels competed, the Send-from-Template composer sat too
@@ -40,8 +44,9 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   model/route change; owner-only gate intact; CTA-label interpolation + send-feedback banner + button states
   unchanged.
 - **Validation:** Bloomwire email request specs (render the templates tab + composer + previews) green
-  (**53 examples, 0 failures** on the render specs); SCSS compiles (Vite build CI). Runtime QA + before/after on
-  dev pending deploy.
+  (**53 examples, 0 failures** on the render specs); SCSS compiles (Vite build CI); **dev runtime QA passed**
+  on `88e0701` (responsive grid rules live at 1440/1280/1024/768, owner-only gate intact). Before/after
+  screenshots = owner-assisted (MCP browser had no authenticated owner session).
 - **Scope note:** Templates tab + shared page shell/status cards only; other Email Settings tabs untouched.
 
 ### Phase 15F.6 — Email CTA Button Rendering Fix
