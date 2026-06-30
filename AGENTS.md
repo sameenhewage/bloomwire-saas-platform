@@ -68,10 +68,11 @@ re-read this file before acting.
 
 2. **Read context first**
    - Read `AGENTS.md` (this file) and `CLAUDE.md`.
-   - **For Bloomwire work, read `docs/bloomwire/SESSION-LOG.md` first** — the living continuity
-     journal (current state · how-we-work conventions · recent sessions), so context is never lost
-     across chats. **Update its "Current State" and prepend a journal entry when you finish a
-     slice/phase.**
+   - **For Bloomwire work, read `docs/bloomwire/PROJECT-CONTEXT.md` first** (what the project is —
+     WhatsApp-first product on the Chatwoot engine — plus the durable identity/data/ops rules), then
+     **`docs/bloomwire/SESSION-LOG.md`** (live current state · how-we-work conventions · recent
+     sessions), so context is never lost across chats. **Update SESSION-LOG's "Current State" and
+     prepend a journal entry when you finish a slice/phase.**
    - Read the relevant task brief, issue, or PRD.
    - **When the work touches a project under `projects/<name>/`, read that
      project's `CONTEXT.md` first** — it carries project-specific contracts that
