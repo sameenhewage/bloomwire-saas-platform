@@ -15,7 +15,10 @@ repository.
    The graph **auto-refreshes** via git hooks (post-commit + post-checkout), so
    you do **not** run `graphify update` by hand. This is `AGENTS.md` → "What
    every agent MUST do" step 1; follow it without exception.
-2. **Read `AGENTS.md`.** Follow it without exception.
+2. **Read `AGENTS.md`.** Follow it without exception. **For Bloomwire work, also read
+   `docs/bloomwire/SESSION-LOG.md`** — the living continuity journal (current state · how-we-work
+   conventions · recent sessions) — and **update it (Current State + a new journal entry) when you
+   finish a slice/phase.**
 3. **Understand the current task.** Find the issue, task brief, or PRD that
    authorizes the work. If there is none, stop and ask.
 4. **Inspect the affected code** before editing. Know what exists and why.
