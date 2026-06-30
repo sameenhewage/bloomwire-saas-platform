@@ -61,6 +61,7 @@
 | 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | #84 | 100% DEV PASS |
 | 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | #86 | DEV PASS |
 | 15F.4 | Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan) | _pending_ | Investigation (report-only) |
+| 15F.6 | Email CTA Button Rendering Fix (validate resolved CTA URL is absolute + email-safe button) | _pending_ | Implemented |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
@@ -284,6 +285,27 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 15F.6 — Email CTA Button Rendering Fix — `Implemented` — PR _pending_
+- **Trigger:** a delivered invitation email showed the CTA as plain text `[www.google.com]Accept Invitation` —
+  the purple button was missing (body/card/footer rendered fine).
+- **Root cause:** the template `cta_url` is `{{invitation_link}}` (passes the template-level `cta_url_safe_scheme`
+  validation because a `{{placeholder}}` is allowed), but the **RESOLVED** CTA URL (after the owner fills the
+  variable) was never validated. A scheme-less value `www.google.com` reached the mailer → relative
+  `<a href="www.google.com">` → email clients neutralize a relative href in HTML mail → button degrades to text
+  and the URL leaks.
+- **Owner (behavior):** `Bloomwire::SendTemplateEmailService` (send validation) + `Bloomwire::EmailTemplate`
+  (resolved-URL validity) + `bloomwire/email/_branded_email.html.erb` (button render) +
+  `super_admin/bloomwire_email_settings/_composer.html.erb` (preview block-state).
+- **What changed:** `EmailTemplate.absolute_cta_url?` (requires `http(s)://`); service blocks `invalid_cta_url`
+  before SMTP with *"Enter a full URL starting with https:// …"*; branded partial renders an email-safe
+  **table + `td bgcolor`** button (inline styles, escaped label+href) ONLY for an absolute URL; composer disables
+  Send + shows a *"Button link must be a full URL"* block and the Final preview hides the button — preview ==
+  delivered. Text fallback stays `Label: https://…` (never `[url]label`). Also blocks `javascript:`/`data:`.
+- **Not changed:** no DB migration; no SMTP secret/credential change; no DNS; no WhatsApp/Meta; no auth/audit;
+  CTA-label interpolation (15F.2) + send-feedback UX (15F.3) preserved.
+- **Validation:** model + service + mailer + request specs (incl. RED-first: scheme-less URL was delivered before
+  the fix); full email + 15G.2 + 15G.3 suite **123 examples, 0 failures**; RuboCop clean; no secret in body/logs.
 
 ### Phase 15F.3 — Email Send Feedback UX Polish — `DEV PASS` — PR #86 (merged `bf6aa15`)
 - **Trigger:** Phase 15F.2 was deployed + DEV PASS, but the owner found the send feedback unclear — after a

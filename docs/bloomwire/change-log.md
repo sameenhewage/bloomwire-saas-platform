@@ -15,6 +15,35 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.6 — Email CTA Button Rendering Fix
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Owner-only SuperAdmin email-rendering + validation bugfix (Send from Template CTA). **No DB migration.**
+- **Root cause:** the template's stored `cta_url` (`{{invitation_link}}`) passed the template-level
+  `cta_url_safe_scheme` validation (placeholder is allowed), but the **RESOLVED** CTA URL (after the owner fills a
+  variable) was **never validated**. A scheme-less value like `www.google.com` flowed through `SendTemplateEmailService`
+  to the mailer, producing a **relative `<a href="www.google.com">`**. Email clients (e.g. Gmail) neutralize a
+  relative/scheme-less href in HTML email, so the styled button collapsed to raw text and the URL leaked —
+  delivered as `[www.google.com]Accept Invitation` instead of a purple button.
+- **What changed:**
+  - **Resolved-URL validation:** new `Bloomwire::EmailTemplate.absolute_cta_url?` (requires absolute
+    `http(s)://`). `SendTemplateEmailService` now **blocks before SMTP** with `invalid_cta_url` when a CTA link is
+    present but not absolute — message: *"Enter a full URL starting with https:// for the button link
+    (e.g. https://example.com)."* (Also blocks `javascript:`/`data:` injected via a variable value.)
+  - **Email-safe button:** the shared `_branded_email.html.erb` now renders the CTA as a **table + `td bgcolor`**
+    button (robust across Outlook/Gmail/Apple Mail), inline styles only, label + href HTML-escaped, and only when
+    the URL is absolute — so a broken/relative button is never emitted.
+  - **Preview == delivered:** the composer disables Send + shows a *"Button link must be a full URL"* block when
+    the resolved link is not absolute, and the Final preview (same shared partial) hides the button — matching the
+    blocked send (no fake working button).
+  - **Text fallback** unchanged and correct: `Accept Invitation: https://…` (never `[url]label`).
+- **Not changed:** no DB migration; no SMTP secret/credential change; no DNS; no WhatsApp/Meta; no auth/audit
+  (15G.2/15G.3) behavior; CTA label interpolation (15F.2) and send-feedback UX (15F.3) preserved.
+- **Validation:** model unit (`absolute_cta_url?`), service (scheme-less blocks pre-SMTP, absolute sends, no-CTA
+  sends), mailer (table button + absolute href + no `[url]label`; defense-in-depth skip for non-absolute), request
+  (composer block + message, valid send, preview block-state). Full Bloomwire email + 15G.2 + 15G.3 suite
+  **123 examples, 0 failures**; RuboCop clean. No SMTP secret in body/logs.
+
 ### Phase 15F.3 — Email Send Feedback UX Polish
 - **PR:** #86
 - **Merge SHA:** `bf6aa15d8816a2276365ca6e0451e16e6023ba0c` (fast-forwarded into `version_1`)
