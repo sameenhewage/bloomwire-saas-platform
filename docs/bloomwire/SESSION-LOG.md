@@ -5,10 +5,11 @@
 >
 > **Read order for a fresh session:**
 > 1. `AGENTS.md` + `CLAUDE.md` (root) and `app/AGENTS.md` + `app/CLAUDE.md` — operating rules.
-> 2. The **graphify** code graph (`app/graphify-out/graph.json`) — graph-first, auto-refreshed by git hooks.
-> 3. **This file** — §A Current State, §B How we work, §C Session journal.
-> 4. `docs/bloomwire/implementation-ledger.md` (+ `.html`) and `change-log.md` — full per-phase history.
-> 5. `docs/bloomwire/deployment-runbook.md` — deploy/ops detail. `projects/bloomwire-chatwoot-platform/CONTEXT.md` — project contracts.
+> 2. **`docs/bloomwire/PROJECT-CONTEXT.md`** — what the project **is** (WhatsApp-first product on the Chatwoot engine) + durable identity/data/ops rules.
+> 3. The **graphify** code graph (`app/graphify-out/graph.json`) — graph-first, auto-refreshed by git hooks.
+> 4. **This file** — §A Current State, §B How we work, §C Session journal.
+> 5. `docs/bloomwire/implementation-ledger.md` (+ `.html`) and `change-log.md` — full per-phase history.
+> 6. `docs/bloomwire/deployment-runbook.md` — deploy/ops detail. `projects/bloomwire-chatwoot-platform/CONTEXT.md` — project contracts.
 >
 > **Maintenance rule (every agent):** when you finish a slice/phase, **update §A Current State** and
 > **prepend a §C journal entry**. Keep §B stable. Don't paste secrets. This is the single living
@@ -70,6 +71,17 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-06-30 — Added durable PROJECT-CONTEXT + corrected base framing
+- Added `docs/bloomwire/PROJECT-CONTEXT.md` (what the project is + durable identity/data/ops rules) and
+  wired it into the read-order (`AGENTS.md` + `CLAUDE.md`, ahead of this file).
+- **Framing correction (evidence-based):** a request to record the base as "WhatsWay/WhatsAway-derived,
+  not Chatwoot" was checked against the repo and **does not match** — `app/` is `@chatwoot/chatwoot`
+  (~15.6k refs; ADR 0001 = "build additively on Chatwoot"); WhatsWay appears only in docs as
+  reference-only. Owner-confirmed wording adopted: **Bloomwire = WhatsApp-first SaaS product built
+  additively on the Chatwoot engine; Chatwoot = code engine + source of truth; WhatsWay/WhatsAway =
+  product inspiration/benchmark only (do not copy their code).**
+- Docs/process-only — no code, no deploy.
 
 ### 2026-06-30 — Established this continuity journal
 - Added `docs/bloomwire/SESSION-LOG.md` (this file) as the single living catch-up for new chats, and
