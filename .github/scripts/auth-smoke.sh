@@ -7,28 +7,54 @@
 # HARD RULES:
 #   - NEVER use the real owner (sameen@bloomwire.lk) — use a dedicated, disposable dev/staging test admin.
 #   - NEVER hardcode credentials. Pass them via env (a dev/staging secret), never on the command line.
-#   - dev/staging only — refuses anything that looks like production.
+#   - HOST ALLOWLIST (default-deny): only known dev/staging hosts are allowed; production + any unknown host
+#     are refused. Default allowlist is `dev.unecast.com` (extend with SMOKE_ALLOWED_HOSTS when staging exists).
 #   - The password is read from a file/env and url-encoded from a file, so it never appears in argv/`ps`.
 #   - No secret is ever printed.
 #
 # Required env:
-#   SMOKE_BASE_URL   e.g. https://dev.unecast.com
+#   SMOKE_BASE_URL   e.g. https://dev.unecast.com (host must be in the allowlist)
 #   SMOKE_EMAIL      dedicated test SuperAdmin email (NOT the owner)
 #   SMOKE_PASSWORD   that test admin's password (dev/staging secret)
 # Optional:
-#   EXPECTED_SHA     deployed git SHA to assert
-#   SMOKE_SSH        ssh target (e.g. contabo-dev) used to read /app/.git_sha for the SHA assertion
+#   SMOKE_ALLOWED_HOSTS  extra allowed hosts (space/comma-separated), e.g. a staging host once configured
+#   SMOKE_VALIDATE_ONLY  if set, run only the safety guards (allowlist + owner refusal) and exit (no login)
+#   EXPECTED_SHA         deployed git SHA to assert
+#   SMOKE_SSH            ssh target (e.g. contabo-dev) used to read /app/.git_sha for the SHA assertion
 set -euo pipefail
 
 : "${SMOKE_BASE_URL:?set SMOKE_BASE_URL (dev/staging base URL)}"
 : "${SMOKE_EMAIL:?set SMOKE_EMAIL (dedicated test admin, NOT the owner)}"
 : "${SMOKE_PASSWORD:?set SMOKE_PASSWORD (dev/staging secret)}"
 
-case "$SMOKE_BASE_URL" in
-  *prod*|*production*) echo "REFUSING: auth smoke is dev/staging only."; exit 2 ;;
-esac
+# Allowlist (DEFAULT-DENY): only known non-production dev/staging hosts may be smoked. Production and any
+# unknown host are refused. The default allowlist is `dev.unecast.com`; add a staging host when one exists via
+# SMOKE_ALLOWED_HOSTS (space/comma-separated). This is intentionally an allowlist, not a production denylist.
+SMOKE_HOST="${SMOKE_BASE_URL#*://}"   # strip scheme
+SMOKE_HOST="${SMOKE_HOST%%/*}"        # strip path
+SMOKE_HOST="${SMOKE_HOST%%:*}"        # strip port
+ALLOWED_HOSTS="dev.unecast.com ${SMOKE_ALLOWED_HOSTS:-}"
+ALLOWED_HOSTS="${ALLOWED_HOSTS//,/ }"
+host_ok=0
+for h in $ALLOWED_HOSTS; do
+  if [ "$SMOKE_HOST" = "$h" ]; then host_ok=1; break; fi
+done
+if [ "$host_ok" -ne 1 ]; then
+  echo "REFUSING: host '$SMOKE_HOST' is not in the dev/staging allowlist (allowed: $ALLOWED_HOSTS)."
+  exit 2
+fi
+
+# Never smoke with the real owner account — use a dedicated, disposable test admin.
 if [ "$SMOKE_EMAIL" = "sameen@bloomwire.lk" ]; then
-  echo "REFUSING: do not smoke with the real owner account; use a dedicated test admin."; exit 2
+  echo "REFUSING: do not smoke with the real owner account; use a dedicated test admin."
+  exit 2
+fi
+
+# Validation-only mode: run just the safety guards (allowlist + owner refusal) with no login/network.
+# Used by the guard test and for safe dry-runs. Never performs a login or reads the network.
+if [ -n "${SMOKE_VALIDATE_ONLY:-}" ]; then
+  echo "VALIDATION_OK: host '$SMOKE_HOST' is allowed and the account is not the owner."
+  exit 0
 fi
 
 CJ="$(mktemp)"; PAGE="$(mktemp)"; TF="$(mktemp)"; PF="$(mktemp)"

@@ -302,8 +302,11 @@
   breaks the request (rescued).
 - **Never stored:** `password`, `password_confirmation`, `encrypted_password`, reset tokens, secrets, raw hashes.
 - **Auth smoke (`.github/scripts/auth-smoke.sh`):** optional operator-run dev/staging login smoke with a
-  **dedicated disposable test admin** — refuses the owner account + production URLs, reads the password from a
-  file (never argv/`ps`), verifies sign-in success + deployed `/app/.git_sha`. Not auto-wired (no CI secret).
+  **dedicated disposable test admin**. Enforces a **host allowlist (default-deny)** — only `dev.unecast.com`
+  (+ `SMOKE_ALLOWED_HOSTS` for a future staging host); every unknown host incl. production is refused. Also
+  refuses the owner account; password read from a file (never argv/`ps`); `SMOKE_VALIDATE_ONLY=1` runs just the
+  guards; verifies sign-in + deployed `/app/.git_sha`. Not auto-wired (no CI secret); guard contract tested by
+  `spec/scripts/bloomwire_auth_smoke_spec.rb`.
 - **Runbook §7:** password changes only via the Devise reset flow (never the generic Users edit); audit fields +
   exclusions; the auth-smoke procedure.
 - **Dev runtime verification (task 1):** deployed SHA `f140717…`; owner login-ready (SuperAdmin/confirmed/owner

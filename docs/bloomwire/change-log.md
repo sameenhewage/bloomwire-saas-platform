@@ -28,9 +28,11 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
     `controller`, `action`, `changed_fields` (columns changed), `blocked_fields` (auth-sensitive params that were
     submitted but stripped by 15G.2). **Field NAMES only — never values.** Auditing never breaks the request.
   - **Auth smoke:** `.github/scripts/auth-smoke.sh` — optional, operator-run dev/staging login smoke using a
-    **dedicated disposable test admin** (refuses the owner account + production URLs; password read from a file,
-    never argv/`ps`; verifies sign-in success + deployed `/app/.git_sha`). Not auto-wired (no test-admin secret
-    in CI).
+    **dedicated disposable test admin**. Enforces a **host allowlist (default-deny)** — only `dev.unecast.com`
+    (+ `SMOKE_ALLOWED_HOSTS` for a future staging host) is allowed; every unknown host, incl. production, is
+    refused. Also refuses the owner account; password read from a file (never argv/`ps`); `SMOKE_VALIDATE_ONLY=1`
+    runs just the guards; verifies sign-in + deployed `/app/.git_sha`. Not auto-wired (no test-admin secret in
+    CI). Guard contract is covered by `spec/scripts/bloomwire_auth_smoke_spec.rb`.
   - **Runbook §7:** password changes only via Devise reset (never the generic Users edit), the audit
     fields/exclusions, and the auth-smoke procedure.
 - **Auth fields never stored in the audit:** `password`, `password_confirmation`, `encrypted_password`,

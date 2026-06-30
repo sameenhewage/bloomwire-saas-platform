@@ -191,10 +191,12 @@ EXPECTED_SHA=<deployed sha> SMOKE_SSH=contabo-dev \
 bash .github/scripts/auth-smoke.sh
 ```
 It verifies the sign-in route accepts the test admin (`SMOKE_OK`) and, when `EXPECTED_SHA`+`SMOKE_SSH` are set,
-that the in-container `/app/.git_sha` matches (`SHA_OK`). The script **refuses** production URLs and the owner
-account, reads the password from a file (never argv/`ps`), and prints no secret. It is **not** wired into the
-auto-deploy, so no test-admin secret has to live in CI; run it manually post-deploy (the deploy already does
-the health + SHA smoke automatically).
+that the in-container `/app/.git_sha` matches (`SHA_OK`). The script enforces a **host allowlist (default-deny)**
+— only `dev.unecast.com` (plus any host listed in `SMOKE_ALLOWED_HOSTS`, e.g. a staging host once one exists)
+is permitted; **every unknown host, including production, is refused.** It also **refuses the owner account**,
+reads the password from a file (never argv/`ps`), prints no secret, and supports `SMOKE_VALIDATE_ONLY=1` to run
+just the guards (no login/network). It is **not** wired into the auto-deploy, so no test-admin secret has to
+live in CI; run it manually post-deploy (the deploy already does the health + SHA smoke automatically).
 
 ---
 
