@@ -56,14 +56,23 @@
 | 15D | Assigned Agent RCA | — (RCA only) | Completed — not a bug (no code change) |
 | 15E | This implementation ledger | #77 | Docs only |
 | 15E.1 | Documentation Governance guardrail | #77 | Docs only |
-| 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
+| 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | DEV PASS (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
-| 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | _pending_ | Implemented |
+| 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | #84 | 100% DEV PASS |
 | 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | _pending_ | Implemented |
+| 15F.4 | Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan) | _pending_ | Investigation (report-only) |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
-| 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
-| 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened |
+| 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
+| 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
+
+> **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
+> PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
+> dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched.
+> **Phase 16 is READY to start.** Roadmap (authoritative): **15F.3** = Email Send Feedback UX Polish (PR #86,
+> pending review/deploy); **15F.4** = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only);
+> **15F.5** = POST-based composer preview / query-string hardening (future); **15G.4** = optional auth-audit polish
+> (future). The POST-based preview hardening is **15F.5**, not 15F.3.
 
 ---
 
@@ -301,12 +310,36 @@
 - **Validation:** new send request specs (visible result near composer for success/blocked/invalid email; composer
   anchor in redirect; template stays selected; Email Log row written; no SMTP secret in body); full Bloomwire
   email + 15G.2 + 15G.3 suite **113 examples, 0 failures**; RuboCop clean.
-- **Residual / deferred:** (a) composer "Update preview" still uses a **GET** round-trip (values in query string) —
-  POST-based preview hardening still open; (b) **email deliverability / domain authentication** (spam-folder
-  landing from personal Gmail SMTP) — separate investigation, no DNS/credential change applied; (c) **15G.4**
-  auth-audit polish.
+- **Residual / deferred:** (a) composer "Update preview" still uses a **GET** round-trip (values in query string)
+  → **Phase 15F.5** (POST-based preview / query-string hardening); (b) **email deliverability / domain
+  authentication** → **Phase 15F.4** (PR #87, report-only); (c) optional auth-audit polish → **Phase 15G.4**.
 
-### Phase 15F.2 — Email Template UX Completion — `Implemented` — PR _pending_
+### Phase 15F.4 — Email Deliverability + Domain Authentication — `Investigation (report-only)` — PR _pending_
+- **Trigger:** email send + template UX are DEV PASS and mail is delivered, but messages to the owner's
+  `bloomwire.lk` mailbox land in **junk/spam**. Report-only investigation; tracked separately from the 15F.3 Send
+  Feedback UX so the two concerns don't mix.
+- **Scope guardrails:** no code · no DB migration · **no DNS change** · **no SMTP credential change** ·
+  **no production deploy** · **no WhatsApp/Meta/provider credentials touched** · no secrets printed.
+- **Current dev SMTP behavior (read-only, masked):** `smtp.gmail.com:587`, `login` + STARTTLS; SMTP username and
+  `from_email` both `@gmail.com` (**personal Gmail**, not Workspace for `bloomwire.lk`); From display-name
+  `"Bloomwire"`; no Reply-To / no Return-Path override (envelope = the gmail.com username). Password length only.
+- **Diagnosis — not an auth failure:** sending *as* `gmail.com` via Gmail's authenticated servers → SPF pass,
+  DKIM `d=gmail.com`, DMARC aligned for `gmail.com`. The junking is **brand-identity / reputation / content**:
+  (1) brand display-name on a free `@gmail.com` address; (2) branded content linking to **dev.unecast.com**
+  (sender domain ≠ link domain, low-reputation dev host); (3) no `bloomwire.lk` sending reputation.
+  Owner header evidence (`Authentication-Results`, `Received-SPF`, DKIM `d=`, `From`, `Return-Path`) will confirm.
+- **Recommended production setup (NOT applied; owner DNS/provider action required):** dedicated sending subdomain
+  (`mail.bloomwire.lk` / `notify.bloomwire.lk`) · transactional provider (Postmark / Resend / AWS SES / Mailgun /
+  SendGrid / Brevo) · SPF on the subdomain only (`v=spf1 include:<provider> -all`, leave root SPF untouched) ·
+  provider DKIM selector on the subdomain · DMARC `p=none` + `rua` first, then tighten · From == authenticated
+  domain (`noreply@mail.bloomwire.lk`) + real Reply-To · production links on the real brand/app domain ·
+  bounce/complaint webhooks into Email Logs.
+- **App send flow:** unchanged and still **PASS** (deliverability/DNS/provider, not an app bug).
+- **Impact:** does **not** block Phase 16 dev work (dev mail is delivered); **blocks production / client email
+  readiness** until the DNS/provider setup is completed.
+- **Validation:** read-only dev SMTP-config inspection (masked); docs-only; no code/tests changed.
+
+### Phase 15F.2 — Email Template UX Completion — `100% DEV PASS` — PR #84 (merged `ea3487b`)
 - **Trigger:** dev runtime QA on `ba76e21` passed core flows but found Email Templates incomplete: composer had
   only 6 fixed variable inputs; the live preview used SAMPLE data for blank variables while the real send sent
   blank (preview ≠ delivered); invalid emails were only caught by SMTP; Email Logs showed template name, not the
@@ -328,8 +361,8 @@
   (subject/body/CTA label/CTA URL) before SMTP (blocked Email Log + clear message); composer shows inline "fill
   these in" + disables Send.
 - **Email Logs:** literal sent subject column added (data already stored per send). Sample preview relabeled.
-- **Deferred:** composer "Update preview" GET round-trip puts values in the URL query string → **Phase 15F.3**
-  UX hardening (POST-based preview); optional auth-audit polish → **15G.4**.
+- **Deferred:** composer "Update preview" GET round-trip puts values in the URL query string → **Phase 15F.5**
+  (POST-based preview / query-string hardening); optional auth-audit polish → **15G.4**.
 - **Not changed:** no DB migration; no SMTP secret/credential change; no WhatsApp/Meta; no 15G.2/15G.3 auth
   behavior. CRUD (create/edit/duplicate/deactivate/reactivate) preserved. Optional auth-audit polish deferred to
   **15G.4**.

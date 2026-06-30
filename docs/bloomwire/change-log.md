@@ -38,16 +38,86 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
     banner. No SMTP secret or raw exception secret is ever shown (errors stay sanitized).
 - **Not changed:** no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no auth/audit (15G.2/15G.3)
   behavior; existing successful send/log behavior preserved (all three outcomes still write an Email Log row).
-- **Deferred follow-ups:** (a) **composer "Update preview" GET query-string hardening** (POST-based preview) —
-  still open; (b) **Email deliverability / domain authentication** (emails land in spam from personal Gmail SMTP —
-  investigation + DNS/provider recommendations, no DNS/credential changes applied); (c) **15G.4** auth-audit polish.
+- **Deferred follow-ups:** (a) **composer "Update preview" GET query-string hardening** (POST-based preview) →
+  **Phase 15F.5** (future); (b) **Email deliverability / domain authentication** → **Phase 15F.4** (PR #87,
+  report-only / docs-only); (c) optional **auth-audit polish** → **Phase 15G.4** (future).
 - **Validation:** send request specs (incl. visible-result-near-composer for success/blocked/invalid, composer
   anchor, template stays selected, Email Log row, no-secret); full Bloomwire email + 15G.2 + 15G.3 suite
   **113 examples, 0 failures**; RuboCop clean.
 
-### Phase 15F.2 — Email Template UX Completion + QA Findings Polish
+### Phase 15F.4 — Email Deliverability + Domain Authentication (investigation, report-only)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_
+- **Type:** **Investigation / documentation only.** No code · no DB migration · **no DNS change** · **no SMTP
+  credential change** · **no production deploy** · **no WhatsApp/Meta/provider credentials touched**.
+- **Why:** Email send + template UX are DEV PASS and mail is actually delivered, but messages to the owner's
+  `bloomwire.lk` mailbox land in **junk/spam** instead of the inbox. This entry documents the current dev sending
+  behavior, why it can be junked, and the recommended production setup. (Formalises the deliverability follow-up
+  noted under Phase 15F.3; tracked separately so 15F.3 stays scoped to the Send Feedback UX.)
+- **Current dev SMTP behavior (read-only, masked):** `smtp.gmail.com:587`, `login` auth + STARTTLS; SMTP username
+  **and** `from_email` are both `@gmail.com` (**personal Gmail**, not Google Workspace for `bloomwire.lk`); From
+  display-name is `"Bloomwire"`; no Reply-To and no Return-Path override (envelope sender = the gmail.com username).
+  Password present (length only) — never printed.
+- **Why it can land in junk (diagnosis):** This is **not** an SPF/DKIM/DMARC *failure*. Sending *as* `gmail.com`
+  through Gmail's own authenticated servers means SPF passes, DKIM is signed `d=gmail.com`, and DMARC is aligned for
+  `gmail.com` → auth passes. The spam-foldering is a **brand-identity / reputation / content** problem:
+  (1) brand display-name `"Bloomwire"` on a **free `@gmail.com`** address (display-name impersonation heuristic);
+  (2) branded content whose CTA/invite links point to **dev.unecast.com** (sender domain ≠ link domain; a
+  low-reputation dev host) — a classic phishing signal; (3) **no sending reputation** for the `bloomwire.lk` brand
+  because the brand domain is not the actual sender. _(Pending owner confirmation from the junked message's
+  `Authentication-Results` / `Received-SPF` / DKIM `d=` / `From` / `Return-Path` headers.)_
+- **Recommended production setup (NOT applied — requires owner DNS/provider action):**
+  - **Dedicated sending subdomain:** `mail.bloomwire.lk` or `notify.bloomwire.lk`.
+  - **Transactional provider:** Postmark / Resend / AWS SES / Mailgun / SendGrid / Brevo.
+  - **SPF (do not replace existing):** put SPF on the **subdomain only** — `v=spf1 include:<provider> -all`; leave
+    the root `bloomwire.lk` SPF untouched.
+  - **DKIM:** publish the provider's DKIM selector CNAME/TXT on the subdomain.
+  - **DMARC:** start `_dmarc.bloomwire.lk` `v=DMARC1; p=none; rua=mailto:dmarc@bloomwire.lk` (monitor), then tighten
+    to `quarantine` → `reject` after alignment is confirmed.
+  - **From == authenticated domain:** e.g. `noreply@mail.bloomwire.lk` (From domain == DKIM domain → alignment +
+    brand match); set a real **Reply-To** if replies are wanted.
+  - **Links:** production CTA/links use the real brand/app domain (not `dev.unecast.com`).
+  - **Bounce/complaint handling:** enable provider webhooks → record into the Email Logs.
+- **App send flow:** unchanged and still **PASS** — this is a deliverability/DNS/provider matter, not an app bug.
+- **Impact:** **Does NOT block Phase 16 dev work** (dev mail is delivered). **Blocks production / client email
+  readiness** until the DNS/provider setup above is completed.
+- **Validation:** read-only SMTP-config inspection on dev (masked, no secrets printed); no code/tests changed;
+  docs-only.
+
+### Dev QA Sign-off — 2026-06-30 (owner-confirmed)
+Independent dev-server runtime QA on `version_1` @ `ea3487b624d896601247fd0baf2c574e4f11820b`. Owner confirmed
+receipt of both dev QA emails: **"You're invited to join QA Biz Ltd on Bloomwire"** and **"Hello there"** (CTA
+"Open Globex"). Sign-off:
+
+| Area | Status |
+|---|---|
+| Auth Integrity (Phase 15G.2) | **DEV PASS** |
+| Auth Go-Live Guardrails (Phase 15G.3 — admin-edit audit + auth smoke) | **DEV PASS** |
+| Email Settings / SMTP (Phase 15F) | **DEV PASS** |
+| Email Templates UX Completion (Phase 15F.2) | **100% DEV PASS** |
+
+- **No production deploy** was performed; **audit rows were not purged**; **no WhatsApp/Meta/provider
+  credentials** were touched.
+- **Phase 16 is READY to start** (all auth + email flows are DEV PASS and the email receipts are confirmed).
+
+**Phase roadmap / numbering (authoritative):**
+
+| Phase | Scope | Status |
+|---|---|---|
+| **15F.2** | Email Template UX Completion | **100% DEV PASS** (PR #84, merged `ea3487b`) |
+| **15F.3** | Email **Send Feedback UX Polish** | PR #86 — **pending review/deploy** (held for review) |
+| **15F.4** | Email **Deliverability + Domain Authentication** | PR #87 — **report-only / docs-only** |
+| **15F.5** | **POST-based composer preview / query-string hardening** | **future follow-up** (not yet started) |
+| **15G.4** | Optional **auth-audit polish** (record `type` in `blocked_fields`, trim `changed_fields` noise) | **future follow-up** |
+
+> Note: the POST-based composer preview / query-string hardening is **Phase 15F.5** — it is **not** 15F.3
+> (15F.3 is the Send Feedback UX Polish). Earlier drafts that called it "15F.3" have been corrected.
+
+### Phase 15F.2 — Email Template UX Completion + QA Findings Polish
+- **PR:** #84
+- **Merge SHA:** `ea3487b624d896601247fd0baf2c574e4f11820b` (fast-forwarded into `version_1`)
+- **Dev status:** **100% DEV PASS** — deployed to dev (`ea3487b`), runtime QA passed, owner confirmed receipt of
+  both dev QA emails on 2026-06-30 (see "Dev QA Sign-off" below).
 - **Type:** Owner-only SuperAdmin UX/correctness (Email Templates composer + send + logs). **No DB migration.**
 - **Why:** Dev QA passed core flows on `ba76e21`, but Email Templates was **not 100% done** — the composer
   only generated 6 fixed inputs, the preview silently used SAMPLE data for blank variables while the real send
@@ -85,7 +155,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   (15G.2) or admin-audit (15G.3) behavior. Existing successful send/log behavior preserved (now requires all
   variables filled).
 - **Deferred follow-ups:** (a) the composer's "Update preview" uses a GET round-trip, so composer values appear
-  in the preview URL query string — tracked as **Phase 15F.3 / UX hardening** (e.g. a POST-based preview); not
+  in the preview URL query string — tracked as **Phase 15F.5** (POST-based preview / query-string hardening); not
   fixed here (out of scope, not risk-free). (b) optional auth-audit polish (record `type` in `blocked_fields`,
   trim `changed_fields` noise) → **Phase 15G.4**.
 - **Validation:** model + service + send-request specs (incl. dynamic vars, custom vars, CTA-label vars,
