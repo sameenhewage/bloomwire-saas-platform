@@ -523,27 +523,44 @@ body {
   .bw-stat-card__value { font-size: 18px; font-weight: 700; color: var(--bw-text); margin: 2px 0; line-height: 1.2; }
   .bw-stat-card__sub { font-size: 12px; color: var(--bw-text-muted); margin: 0; }
 
-  /* Templates 3-panel layout */
-  .bw-email-grid { display: grid; grid-template-columns: 320px minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-  @media (max-width: 1200px) { .bw-email-grid { grid-template-columns: 1fr; } }
+  /* Templates 3-panel layout (Phase 15F.UI: responsive 3 -> 2 -> 1 columns).
+     Large: library | editor | sample preview. Medium laptop/tablet: library | editor, with the
+     sample preview reflowing full-width below. Narrow: everything stacks. */
+  .bw-email-grid { display: grid; grid-template-columns: 300px minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 1280px) {
+    .bw-email-grid { grid-template-columns: 280px minmax(0, 1fr); }
+    .bw-email-grid > .bw-preview-panel { grid-column: 1 / -1; }
+  }
+  @media (max-width: 880px) {
+    .bw-email-grid { grid-template-columns: 1fr; gap: 16px; }
+    .bw-email-grid > .bw-preview-panel { grid-column: auto; }
+  }
   .bw-panel {
-    background: var(--bw-card); border: 1px solid var(--bw-border); border-radius: 16px; padding: 18px;
+    background: var(--bw-card); border: 1px solid var(--bw-border); border-radius: 16px; padding: 20px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
   }
-  .bw-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+  .bw-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
   .bw-panel__title { font-size: 15px; font-weight: 600; color: var(--bw-text); margin: 0; }
+  .bw-panel__hint { font-size: 12px; color: var(--bw-text-muted); margin: -6px 0 14px; }
 
-  /* Template list */
-  .bw-tpl-toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
-  .bw-tpl-toolbar .bw-input, .bw-tpl-toolbar .bw-select { height: 38px; }
-  .bw-tpl-list { display: flex; flex-direction: column; gap: 8px; }
+  /* Template list toolbar (Phase 15F.UI: search gets its own row, then category + filter wrap below
+     so the controls never crowd inside the narrow library column). */
+  .bw-tpl-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .bw-tpl-toolbar .bw-input { flex: 1 1 100%; height: 40px; }
+  .bw-tpl-toolbar .bw-select { flex: 1 1 140px; height: 40px; }
+  .bw-tpl-toolbar .bw-btn { flex: 0 0 auto; }
+  .bw-tpl-list { display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow-y: auto; padding-right: 2px; }
   .bw-tpl-item {
-    display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 12px;
+    position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 12px 12px 12px 14px; border-radius: 12px;
     border: 1px solid var(--bw-border); background: var(--bw-card); text-decoration: none; cursor: pointer;
-    transition: border-color 0.12s ease, background 0.12s ease;
+    transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
   }
-  .bw-tpl-item:hover { background: var(--bw-subtle); }
+  .bw-tpl-item:hover { background: var(--bw-subtle); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07); }
   .bw-tpl-item.is-active { border-color: var(--bw-accent); background: var(--bw-accent-soft); }
+  .bw-tpl-item.is-active::before {
+    content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px;
+    border-radius: 0 3px 3px 0; background: var(--bw-accent);
+  }
   .bw-tpl-item__icon {
     display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
     width: 34px; height: 34px; border-radius: 9px; background: var(--bw-subtle); color: var(--bw-text-muted);
@@ -581,6 +598,31 @@ body {
   }
   .bw-preview__footer { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--bw-border); font-size: 12px; color: var(--bw-text-muted); text-align: center; }
   .bw-preview__footer a { color: var(--bw-accent); }
+
+  /* Phase 15F.UI: polished email-client "window" frame around a rendered preview, so the preview reads as a
+     product preview rather than a debug dump. Wraps the shared branded-email partial unchanged. */
+  .bw-preview-frame { border: 1px solid var(--bw-border); border-radius: 14px; overflow: hidden; background: var(--bw-subtle); }
+  .bw-preview-frame__bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; background: #fff; border-bottom: 1px solid var(--bw-border); }
+  .bw-preview-frame__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bw-border); }
+  .bw-preview-frame__label { margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--bw-text-muted); }
+  .bw-preview-frame__body { padding: 14px; max-height: 560px; overflow-y: auto; }
+  .bw-preview-frame--lg .bw-preview-frame__body { max-height: none; }
+
+  /* Phase 15F.UI: section heading that separates "manage templates" from the prominent "send" action. */
+  .bw-section-head { display: flex; align-items: center; gap: 10px; margin: 28px 0 4px; }
+  .bw-section-head__num {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 26px; height: 26px; border-radius: 8px; background: var(--bw-accent-soft); color: var(--bw-accent-hover);
+    font-size: 13px; font-weight: 700;
+  }
+  .bw-section-head__title { font-size: 16px; font-weight: 700; color: var(--bw-text); margin: 0; }
+  .bw-section-head__sub { font-size: 13px; color: var(--bw-text-muted); margin: 2px 0 0; }
+
+  /* Phase 15F.UI: the Send-from-Template composer as a prominent, clearly separated action section. */
+  .bw-card--composer { border-top: 3px solid var(--bw-accent); }
+  .bw-composer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .bw-composer-grid { grid-template-columns: 1fr; } }
+
   .bw-panel__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   .bw-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
   .bw-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

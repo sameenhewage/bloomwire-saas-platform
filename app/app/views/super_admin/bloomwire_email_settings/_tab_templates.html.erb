@@ -119,7 +119,16 @@
   <%= render 'email_preview', template: editing, sample_vars: @sample_vars %>
 </div>
 
-<%# ---- Phase 15F.1: "Send from Template" composer (real send, owner-filled variables) ---- %>
+<%# ---- "Send from Template" — prominent, separated action section (Phase 15F.1 send; 15F.UI prominence) ---- %>
 <% if editing %>
+  <div class="bw-section-head">
+    <span class="bw-section-head__num" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+    </span>
+    <div>
+      <h2 class="bw-section-head__title">Send a real email from this template</h2>
+      <p class="bw-section-head__sub">Fill in the variables, review the final preview, then deliver through your saved SMTP settings.</p>
+    </div>
+  </div>
   <%= render 'composer' %>
 <% end %>

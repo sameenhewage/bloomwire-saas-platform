@@ -159,6 +159,7 @@
         <tr><td>15F.2</td><td>Email Template UX Completion (dynamic vars + preview==send + validation + logs subject)</td><td>#84</td><td><span class="badge done">100% DEV PASS</span></td></tr>
         <tr><td>15F.3</td><td>Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard)</td><td>#86</td><td><span class="badge done">DEV PASS</span></td></tr>
         <tr><td>15F.4</td><td>Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan)</td><td><i>pending</i></td><td><span class="badge docs">Investigation (report-only)</span></td></tr>
+        <tr><td>15F.UI</td><td>Email Templates UI Polish & Responsive Upgrade (3&rarr;2&rarr;1 grid, toolbar, preview frame, prominent composer)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">CSS/views only</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
@@ -320,6 +321,19 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15F.UI — Email Templates UI Polish &amp; Responsive Upgrade <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Trigger</b>: the page worked but felt cramped/dense, panels competed, the Send composer was too low + under-emphasised, the toolbar was cramped, the preview read like a debug area, and the grid jumped 3&rarr;1 columns at 1200px.</li>
+        <li><b>CSS + view-wrapper only</b> — no controller/model/route/DB change. Files: <code>super_admin/index.scss</code>, <code>_tab_templates.html.erb</code>, <code>_composer.html.erb</code>, <code>_email_preview.html.erb</code>.</li>
+        <li><b>Responsive grid</b>: <code>bw-email-grid</code> = library | editor | sample-preview (desktop) &rarr; library | editor with preview reflowing full-width (≤1280px) &rarr; stacked (≤880px).</li>
+        <li><b>Toolbar</b> wraps (search row, then category + Filter); <b>list</b> is scrollable with an active accent bar + hover lift.</li>
+        <li><b>Polished preview</b>: email-client "window" frame (<code>bw-preview-frame</code>) around both Sample + Final previews (same shared branded partial &rarr; preview still equals delivered).</li>
+        <li><b>Prominent Send</b>: separated "Send a real email" section header above an accent-topped composer card (<code>bw-card--composer</code>) with a responsive <code>bw-composer-grid</code> (2-col &rarr; 1-col ≤980px).</li>
+        <li><b>Preserved</b>: owner-only gate, every form/link/id (<code>#bw-composer</code>, <code>#bw-send-result</code>, compose fields, CRUD forms), validation, send-feedback banner, button states.</li>
+        <li><b>Validation</b>: render request specs green; SCSS compiles; before/after + responsive runtime QA on dev pending deploy.</li>
       </ul>
     </div>
 

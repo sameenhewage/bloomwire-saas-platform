@@ -15,6 +15,35 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Owner-only SuperAdmin **UI/UX + responsive** polish for Email Settings → Email Templates.
+  **CSS + view-wrapper only — no behavior, controller, model, route, or DB change.**
+- **Why:** the flow worked but felt cramped/dense, the panels competed, the Send-from-Template composer sat too
+  low and under-emphasised, the toolbar was cramped, the preview read like a debug area, and the 3-panel grid
+  jumped straight from 3 columns to 1 at 1200px (no graceful medium/tablet reflow).
+- **What changed (all in `super_admin/index.scss` + 3 ERB partials; every form/link/id/validation/button-state
+  preserved):**
+  - **Responsive 3 → 2 → 1 grid:** `bw-email-grid` is `library | editor | sample-preview` on desktop; at
+    ≤1280px it becomes `library | editor` with the sample preview reflowing full-width below; at ≤880px it stacks.
+  - **Toolbar:** search takes its own row, then category + Filter wrap below — never crowded in the narrow column.
+  - **Template list:** scrollable list, hover lift, and an accent left-bar on the active row.
+  - **Polished preview:** both the Sample preview and the composer's Final preview render inside an email-client
+    "window" frame (`bw-preview-frame`) so they read as product previews, not a debug dump. (Same shared
+    branded-email partial — preview still equals delivered email.)
+  - **Prominent Send section:** a clearly separated section header ("Send a real email from this template") above
+    an **accent-topped** composer card (`bw-card--composer`); the composer's form/preview split is now a
+    responsive `bw-composer-grid` (2-col → 1-col ≤980px).
+  - **Spacing/hierarchy:** larger panel padding + grid gaps for breathing room.
+- **Not changed:** no SMTP credential/provider change; no DNS; no WhatsApp/Meta; no DB migration; no controller/
+  model/route change; owner-only gate intact; CTA-label interpolation + send-feedback banner + button states
+  unchanged.
+- **Validation:** Bloomwire email request specs (render the templates tab + composer + previews) green
+  (**53 examples, 0 failures** on the render specs); SCSS compiles (Vite build CI). Runtime QA + before/after on
+  dev pending deploy.
+- **Scope note:** Templates tab + shared page shell/status cards only; other Email Settings tabs untouched.
+
 ### Phase 15F.3 — Email Send Feedback UX Polish
 - **PR:** #86
 - **Merge SHA:** `bf6aa15d8816a2276365ca6e0451e16e6023ba0c` (fast-forwarded into `version_1`)
