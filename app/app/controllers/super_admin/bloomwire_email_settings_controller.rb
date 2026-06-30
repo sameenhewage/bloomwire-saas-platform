@@ -16,6 +16,10 @@ class SuperAdmin::BloomwireEmailSettingsController < SuperAdmin::ApplicationCont
     @new_template = params[:new].present?
     @sample_vars = Bloomwire::EmailTemplate::SAMPLE_VARS
     @compose = build_compose(@selected_template) # Phase 15F.1: "Send from Template" composer context
+    # Phase 15F.3: latest per-template send result, shown in the composer-local feedback banner after a send.
+    if @active_tab == 'templates' && @selected_template
+      @composer_last_log = Bloomwire::EmailDeliveryLog.where(email_template_id: @selected_template.id).recent.first
+    end
     @delivery_logs = Bloomwire::EmailDeliveryLog.recent.includes(:actor).limit(50) if @active_tab == 'email_logs'
   end
 

@@ -59,6 +59,7 @@
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
 | 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | _pending_ | Implemented |
+| 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | _pending_ | Implemented |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
@@ -274,6 +275,36 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 15F.3 — Email Send Feedback UX Polish — `Implemented` — PR _pending_
+- **Trigger:** Phase 15F.2 was deployed + DEV PASS, but the owner found the send feedback unclear — after a
+  template send the only signal was a flash at the **top** of the page; the page appeared to refresh, so it was
+  unclear whether the email was sent, blocked, or failed.
+- **Owner (behavior):** `SuperAdmin::BloomwireEmailTemplatesController#send_email` (redirect target) +
+  `super_admin/bloomwire_email_settings/_composer.html.erb` (feedback rendering) +
+  `SuperAdmin::BloomwireEmailSettingsController#show` (latest-log context) + `Bloomwire::SendTemplateEmailService`
+  (result message shape).
+- **What changed:**
+  - **Composer-local result banner** (`#bw-send-result`, `role="status"`/`aria-live`): success →
+    "Email sent successfully to <recipient>"; blocked/failed → "Email was not sent: <safe reason>"; colour-coded by
+    status. The global top flash still shows; composer-local feedback is the new, required surface.
+  - **Land on the composer:** `send_email` redirects to the templates tab with the selected `template_id` **and
+    `#bw-composer` anchor** (inline redirect — the shared `redirect_to_template` CRUD helper is unchanged to avoid
+    a Ruby keyword/positional-hash regression).
+  - **Status + logs link:** banner shows the latest per-template delivery-log status/time/recipient
+    (`@composer_last_log`) and a **"View Email Logs"** link.
+  - **Double-send guard:** Send button uses `data-disable-with="Sending…"`.
+  - **Message consistency:** service result messages standardised; Email Log status (success/blocked/failed)
+    matches the banner; sanitized errors only.
+- **Not changed:** no DB migration; no SMTP secret/credential change; no WhatsApp/Meta; no auth/audit
+  (15G.2/15G.3) behavior; CRUD template redirects unchanged; all three outcomes still write an Email Log row.
+- **Validation:** new send request specs (visible result near composer for success/blocked/invalid email; composer
+  anchor in redirect; template stays selected; Email Log row written; no SMTP secret in body); full Bloomwire
+  email + 15G.2 + 15G.3 suite **113 examples, 0 failures**; RuboCop clean.
+- **Residual / deferred:** (a) composer "Update preview" still uses a **GET** round-trip (values in query string) —
+  POST-based preview hardening still open; (b) **email deliverability / domain authentication** (spam-folder
+  landing from personal Gmail SMTP) — separate investigation, no DNS/credential change applied; (c) **15G.4**
+  auth-audit polish.
 
 ### Phase 15F.2 — Email Template UX Completion — `Implemented` — PR _pending_
 - **Trigger:** dev runtime QA on `ba76e21` passed core flows but found Email Templates incomplete: composer had

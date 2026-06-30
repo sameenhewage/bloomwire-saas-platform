@@ -15,6 +15,36 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15F.3 — Email Send Feedback UX Polish
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Owner-only SuperAdmin UX (Send-from-Template feedback). **No DB migration.**
+- **Why:** After a template send the only feedback was a flash at the **top** of the page; the page appeared to
+  just refresh, so the owner couldn't tell whether the email was sent, blocked, or failed.
+- **What changed:**
+  - **Composer-local result banner:** the "Send from Template" composer now renders a visible
+    success/blocked/failed banner (`#bw-send-result`) right at the composer — success → *"Email sent
+    successfully to <recipient>"*, blocked/failed → *"Email was not sent: <safe reason>"* (colour-coded by
+    status; `role="status"`/`aria-live`). The global flash still shows too.
+  - **Land on the composer:** `send_email` redirects to the Email Templates tab with the selected
+    `template_id` **and `#bw-composer` anchor**, so the owner lands on the result without scrolling. CRUD redirects
+    unchanged.
+  - **Status + Email Logs link:** the banner shows the latest delivery-log status/time/recipient for the template
+    and a **"View Email Logs"** link.
+  - **Double-send guard:** the Send button uses `data-disable-with="Sending…"` (rails-ujs/Turbo) so a second
+    click during submit is avoided.
+  - **Consistent messaging:** `SendTemplateEmailService` result messages standardised to the
+    "sent successfully" / "was not sent: <reason>" shape; Email Log status (success/blocked/failed) matches the
+    banner. No SMTP secret or raw exception secret is ever shown (errors stay sanitized).
+- **Not changed:** no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no auth/audit (15G.2/15G.3)
+  behavior; existing successful send/log behavior preserved (all three outcomes still write an Email Log row).
+- **Deferred follow-ups:** (a) **composer "Update preview" GET query-string hardening** (POST-based preview) —
+  still open; (b) **Email deliverability / domain authentication** (emails land in spam from personal Gmail SMTP —
+  investigation + DNS/provider recommendations, no DNS/credential changes applied); (c) **15G.4** auth-audit polish.
+- **Validation:** send request specs (incl. visible-result-near-composer for success/blocked/invalid, composer
+  anchor, template stays selected, Email Log row, no-secret); full Bloomwire email + 15G.2 + 15G.3 suite
+  **113 examples, 0 failures**; RuboCop clean.
+
 ### Phase 15F.2 — Email Template UX Completion + QA Findings Polish
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_

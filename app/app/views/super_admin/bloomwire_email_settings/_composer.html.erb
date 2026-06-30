@@ -26,6 +26,26 @@
       <% end %>
     </p>
 
+    <%# Phase 15F.3: composer-local send result — visible right here (success/blocked/failed), so the owner sees
+        the outcome without scrolling to the top flash. The send redirects to #bw-composer to land on this. %>
+    <% composer_result = flash[:notice].presence || flash[:warning].presence || flash[:error].presence || flash[:alert].presence %>
+    <% if composer_result %>
+      <% tone = flash[:notice].present? ? 'success' : (flash[:warning].present? ? 'blocked' : 'failed') %>
+      <% accent = { 'success' => '#137333', 'blocked' => '#b06000', 'failed' => '#c5221f' }[tone] %>
+      <div id="bw-send-result" role="status" aria-live="polite"
+           style="border:1px solid #e3e3e3; border-left:4px solid <%= accent %>; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+        <p style="margin:0; font-weight:600; color:<%= accent %>;"><%= composer_result %></p>
+        <% if @composer_last_log %>
+          <p class="bw-help" style="margin:6px 0 0;">
+            Status: <strong><%= @composer_last_log.status %></strong>
+            · <%= @composer_last_log.created_at&.to_fs(:short) %>
+            · to <%= @composer_last_log.recipient_email.presence || '—' %>
+          </p>
+        <% end %>
+        <p style="margin:8px 0 0;"><%= link_to 'View Email Logs', super_admin_bloomwire_email_settings_path(tab: 'email_logs'), class: 'bw-link' %></p>
+      </div>
+    <% end %>
+
     <% unless smtp_ready %>
       <div class="bw-blocked" style="margin-bottom:16px;">
         <div>
@@ -97,7 +117,8 @@
 
           <div class="bw-form-actions">
             <button type="submit" class="bw-btn bw-btn--secondary" formmethod="get" formaction="<%= super_admin_bloomwire_email_settings_path %>">Update preview</button>
-            <%= submit_tag 'Send Email', class: 'bw-btn bw-btn--primary', disabled: !can_send %>
+            <%# Phase 15F.3: disable on submit (rails-ujs/Turbo) to avoid an accidental double-send. %>
+            <%= submit_tag 'Send Email', class: 'bw-btn bw-btn--primary', disabled: !can_send, data: { disable_with: 'Sending…' } %>
           </div>
           <% unless can_send %>
             <p class="bw-help">

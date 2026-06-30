@@ -63,16 +63,18 @@ class Bloomwire::SendTemplateEmailService
       to: @c.recipient.to_s.strip, setting: @setting,
       subject: @c.subject, body: @c.body, cta_label: @c.cta_label, cta_url: @c.cta_url
     ).deliver_now
-    Result.new(status: 'success', message: "Email sent to #{@c.recipient.to_s.strip}.", log: record('success'))
+    Result.new(status: 'success', message: "Email sent successfully to #{@c.recipient.to_s.strip}.", log: record('success'))
   end
 
+  # Phase 15F.3: user-facing messages use a consistent "sent successfully" / "was not sent: <reason>" shape so
+  # the composer-local feedback banner reads clearly. The Email Log keeps the raw (sanitized) reason for detail.
   def blocked(reason)
     msg = BLOCK_MESSAGES.fetch(reason, 'Email cannot be sent.')
-    Result.new(status: 'blocked', message: msg, log: record('blocked', error: msg))
+    Result.new(status: 'blocked', message: "Email was not sent: #{msg}", log: record('blocked', error: msg))
   end
 
   def failed(safe)
-    Result.new(status: 'failed', message: "Email failed: #{safe}", log: record('failed', error: safe))
+    Result.new(status: 'failed', message: "Email was not sent: #{safe}", log: record('failed', error: safe))
   end
 
   def record(status, error: nil)

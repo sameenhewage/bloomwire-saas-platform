@@ -62,7 +62,10 @@ class SuperAdmin::BloomwireEmailTemplatesController < SuperAdmin::ApplicationCon
     ).call
 
     flash_key = { 'success' => :notice, 'blocked' => :warning }.fetch(result.status, :error)
-    redirect_to_template(template, flash_key => result.message)
+    # Phase 15F.3: land the owner back ON the composer (anchor) so the success/blocked/failed result is visible
+    # without manual scrolling. The composer renders a local result banner from this flash.
+    redirect_to super_admin_bloomwire_email_settings_path(tab: 'templates', template_id: template.id, anchor: 'bw-composer'),
+                flash: { flash_key => result.message }
   end
 
   private

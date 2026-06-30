@@ -302,6 +302,54 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
     end
   end
 
+  describe 'Phase 15F.3 — send feedback UX (visible result near composer)' do
+    before { sign_in(owner, scope: :super_admin) }
+
+    it 'success: redirects to the composer anchor with the template selected + visible success near composer' do
+      configure_smtp!
+      allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
+
+      post send_path, params: { compose: { recipient: 'jane@example.com', **full_invitation_vars } }
+      expect(response).to have_http_status(:redirect)
+      expect(response.redirect_url).to include("template_id=#{template.id}") # template stays selected
+      expect(response.redirect_url).to include('#bw-composer')               # lands on the composer
+
+      follow_redirect!
+      expect(response.body).to include('id="bw-send-result"')                # composer-local result banner
+      expect(response.body).to include('Email sent successfully to jane@example.com')
+      expect(response.body).to include('View Email Logs')
+      expect(Bloomwire::EmailDeliveryLog.where(status: 'success').count).to be >= 1
+    end
+
+    it 'blocked (missing variable): shows a visible "was not sent" message near the composer' do
+      configure_smtp!
+      expect do
+        post send_path, params: { compose: { recipient: 'jane@example.com', recipient_name: 'Jane' } } # vars missing
+      end.to change { Bloomwire::EmailDeliveryLog.where(status: 'blocked').count }.by(1)
+      expect(response.redirect_url).to include('#bw-composer')
+      follow_redirect!
+      expect(response.body).to include('id="bw-send-result"')
+      expect(response.body).to include('Email was not sent:')
+    end
+
+    it 'invalid email: shows a visible validation message near the composer' do
+      configure_smtp!
+      post send_path, params: { compose: { recipient: 'not-an-email', **full_invitation_vars } }
+      expect(response.redirect_url).to include('#bw-composer')
+      follow_redirect!
+      expect(response.body).to include('id="bw-send-result"')
+      expect(response.body).to match(/Email was not sent:.*valid/i)
+    end
+
+    it 'does not expose the SMTP password in the send-result response body' do
+      configure_smtp!
+      allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
+      post send_path, params: { compose: { recipient: 'jane@example.com', **full_invitation_vars } }
+      follow_redirect!
+      expect(response.body).not_to include(smtp_password)
+    end
+  end
+
   describe 'access control + secret safety' do
     it 'bounces a non-owner, sends nothing, and writes no log' do
       configure_smtp!
