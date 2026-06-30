@@ -59,6 +59,7 @@
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | Implemented (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
 | 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | _pending_ | Implemented |
+| 15F.4 | Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan) | _pending_ | Investigation (report-only) |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
@@ -274,6 +275,31 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 15F.4 — Email Deliverability + Domain Authentication — `Investigation (report-only)` — PR _pending_
+- **Trigger:** email send + template UX are DEV PASS and mail is delivered, but messages to the owner's
+  `bloomwire.lk` mailbox land in **junk/spam**. Report-only investigation; tracked separately from the 15F.3 Send
+  Feedback UX so the two concerns don't mix.
+- **Scope guardrails:** no code · no DB migration · **no DNS change** · **no SMTP credential change** ·
+  **no production deploy** · **no WhatsApp/Meta/provider credentials touched** · no secrets printed.
+- **Current dev SMTP behavior (read-only, masked):** `smtp.gmail.com:587`, `login` + STARTTLS; SMTP username and
+  `from_email` both `@gmail.com` (**personal Gmail**, not Workspace for `bloomwire.lk`); From display-name
+  `"Bloomwire"`; no Reply-To / no Return-Path override (envelope = the gmail.com username). Password length only.
+- **Diagnosis — not an auth failure:** sending *as* `gmail.com` via Gmail's authenticated servers → SPF pass,
+  DKIM `d=gmail.com`, DMARC aligned for `gmail.com`. The junking is **brand-identity / reputation / content**:
+  (1) brand display-name on a free `@gmail.com` address; (2) branded content linking to **dev.unecast.com**
+  (sender domain ≠ link domain, low-reputation dev host); (3) no `bloomwire.lk` sending reputation.
+  Owner header evidence (`Authentication-Results`, `Received-SPF`, DKIM `d=`, `From`, `Return-Path`) will confirm.
+- **Recommended production setup (NOT applied; owner DNS/provider action required):** dedicated sending subdomain
+  (`mail.bloomwire.lk` / `notify.bloomwire.lk`) · transactional provider (Postmark / Resend / AWS SES / Mailgun /
+  SendGrid / Brevo) · SPF on the subdomain only (`v=spf1 include:<provider> -all`, leave root SPF untouched) ·
+  provider DKIM selector on the subdomain · DMARC `p=none` + `rua` first, then tighten · From == authenticated
+  domain (`noreply@mail.bloomwire.lk`) + real Reply-To · production links on the real brand/app domain ·
+  bounce/complaint webhooks into Email Logs.
+- **App send flow:** unchanged and still **PASS** (deliverability/DNS/provider, not an app bug).
+- **Impact:** does **not** block Phase 16 dev work (dev mail is delivered); **blocks production / client email
+  readiness** until the DNS/provider setup is completed.
+- **Validation:** read-only dev SMTP-config inspection (masked); docs-only; no code/tests changed.
 
 ### Phase 15F.2 — Email Template UX Completion — `Implemented` — PR _pending_
 - **Trigger:** dev runtime QA on `ba76e21` passed core flows but found Email Templates incomplete: composer had
