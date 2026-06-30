@@ -55,5 +55,27 @@ RSpec.describe Bloomwire::EmailTestMailer do
       expect(text).to include('Accept Invitation: https://app.bloomwire.lk/i/abc')
       expect(text).not_to include('{{')
     end
+
+    # Phase 15F.6: the delivered HTML button uses an absolute href and the email-safe table pattern, and never
+    # emits a malformed "[url]label" CTA.
+    it 'renders an email-safe button with an absolute href and no malformed "[url]label" text (15F.6)' do
+      html = mail.html_part.body.to_s
+      expect(html).to include('href="https://app.bloomwire.lk/i/abc"') # absolute href
+      expect(html).to match(%r{<table[^>]*>.*Accept Invitation.*</table>}m) # table-based button
+      expect(html).not_to include('[https://app.bloomwire.lk/i/abc]')  # no bracketed/reversed CTA
+      expect(html).not_to include('[Accept Invitation]')
+    end
+
+    # Phase 15F.6 defense-in-depth: even if a non-absolute URL reaches the mailer (the send already blocks it),
+    # the HTML must NOT render a broken button or leak the raw URL as "[www.google.com]Accept Invitation".
+    it 'omits the button (no malformed CTA) when the resolved URL is not absolute (15F.6)' do
+      m = described_class.template_email(
+        to: 'jane@example.com', setting: setting, subject: 'Welcome Jane',
+        body: 'Hi Jane', cta_label: 'Accept Invitation', cta_url: 'www.google.com'
+      )
+      html = m.html_part.body.to_s
+      expect(html).not_to include('[www.google.com]')          # the reported malformed symptom
+      expect(html).not_to include('href="www.google.com"')     # no relative-href button
+    end
   end
 end

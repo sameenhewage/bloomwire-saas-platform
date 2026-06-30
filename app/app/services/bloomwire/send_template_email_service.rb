@@ -16,6 +16,7 @@ class Bloomwire::SendTemplateEmailService
     missing_recipient: 'Enter a recipient email address.',
     invalid_email: 'Enter a valid recipient email address.',
     unfilled_variables: 'Some {{variables}} are not filled in. Fill every variable before sending.',
+    invalid_cta_url: 'Enter a full URL starting with https:// for the button link (e.g. https://example.com).',
     incomplete_smtp: 'SMTP is not fully configured. Complete it in Configuration first.',
     smtp_disabled: 'Outbound email is disabled. Enable it in Configuration first.'
   }.freeze
@@ -46,8 +47,18 @@ class Bloomwire::SendTemplateEmailService
     recipient = @c.recipient.to_s.strip
     return :invalid_email if recipient.present? && !recipient.match?(EMAIL_FORMAT)
     return :unfilled_variables if unresolved_placeholders?
+    return :invalid_cta_url if cta_url_present_but_not_absolute?
 
     nil
+  end
+
+  # Phase 15F.6: when a CTA link is present, it must be an ABSOLUTE http(s):// URL. A scheme-less/relative value
+  # (e.g. "www.google.com") is blocked BEFORE SMTP so the delivered email never contains a broken button that
+  # email clients render as raw text. Runs after the placeholder check, so an unfilled {{variable}} in the link
+  # is reported as "unfilled", not "invalid URL".
+  def cta_url_present_but_not_absolute?
+    url = @c.cta_url.to_s.strip
+    url.present? && !Bloomwire::EmailTemplate.absolute_cta_url?(url)
   end
 
   # Any leftover `{{ ... }}` in the rendered output means a variable was not filled (or is malformed) — block,

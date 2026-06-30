@@ -13,7 +13,11 @@
     used = @selected_template.used_variables
     missing = Array(@compose[:missing])
     has_placeholders = [@compose[:subject], @compose[:body], @compose[:cta_label], @compose[:cta_url]].any? { |t| t.to_s.match?(/\{\{.*?\}\}/) }
-    can_send = smtp_ready && missing.empty? && !has_placeholders
+    # Phase 15F.6: when a button link is present (and fully resolved), it must be an absolute http(s):// URL —
+    # a scheme-less link (e.g. "www.google.com") would deliver a broken button, so it blocks the send here too.
+    cta_url_str = @compose[:cta_url].to_s.strip
+    cta_url_invalid = cta_url_str.present? && !cta_url_str.match?(/\{\{.*?\}\}/) && !Bloomwire::EmailTemplate.absolute_cta_url?(cta_url_str)
+    can_send = smtp_ready && missing.empty? && !has_placeholders && !cta_url_invalid
   %>
   <div class="bw-card" id="bw-composer" style="margin-top:16px;">
     <h2 class="bw-card__title">Send from Template — <%= @selected_template.name %></h2>
@@ -77,6 +81,20 @@
       </div>
     <% end %>
 
+    <%# Phase 15F.6: the button link resolved to a non-absolute URL — block + explain (preview hides the button). %>
+    <% if smtp_ready && missing.empty? && !has_placeholders && cta_url_invalid %>
+      <div class="bw-blocked" style="margin-bottom:16px;">
+        <div>
+          <p class="bw-blocked__title">Button link must be a full URL</p>
+          <p>
+            The button link is <strong><%= @compose[:cta_url] %></strong>. Enter a full URL starting with
+            <code>https://</code> (e.g. <code>https://example.com</code>). The send stays blocked until the button
+            link is a valid URL, so the delivered email never shows a broken button.
+          </p>
+        </div>
+      </div>
+    <% end %>
+
     <div style="display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start;">
       <div>
         <%= form_tag(send_email_super_admin_bloomwire_email_template_path(@selected_template), method: :post) do %>
@@ -124,6 +142,8 @@
             <p class="bw-help">
               <% if !smtp_ready %>
                 The send button is disabled until SMTP is configured and enabled.
+              <% elsif cta_url_invalid %>
+                The send button is disabled until the button link is a full <code>https://</code> URL.
               <% else %>
                 The send button is disabled until every variable is filled (no <code>{{placeholders}}</code> left).
               <% end %>

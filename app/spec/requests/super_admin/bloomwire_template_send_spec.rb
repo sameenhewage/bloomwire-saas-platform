@@ -350,6 +350,41 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
     end
   end
 
+  describe 'Phase 15F.6 — CTA button link must be an absolute URL' do
+    before do
+      sign_in(owner, scope: :super_admin)
+      configure_smtp!
+    end
+
+    it 'blocks a scheme-less button link BEFORE SMTP and shows a clear composer message' do
+      expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+      expect do
+        post send_path, params: { compose: { recipient: 'jane@example.com', **full_invitation_vars, invitation_link: 'www.google.com' } }
+      end.to change { Bloomwire::EmailDeliveryLog.where(status: 'blocked').count }.by(1)
+      expect(response.redirect_url).to include('#bw-composer')
+      follow_redirect!
+      expect(response.body).to include('id="bw-send-result"')
+      expect(response.body).to match(%r{Email was not sent:.*https://}i)
+      expect(ActionMailer::Base.deliveries).to be_empty
+    end
+
+    it 'sends when the button link is an absolute https URL' do
+      allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
+      post send_path, params: { compose: { recipient: 'jane@example.com', **full_invitation_vars, invitation_link: 'https://www.google.com' } }
+      follow_redirect!
+      expect(response.body).to include('Email sent successfully to jane@example.com')
+      expect(Bloomwire::EmailDeliveryLog.where(status: 'success').count).to be >= 1
+    end
+
+    it 'composer preview shows a block state (no fake button) for an invalid button link' do
+      get '/super_admin/bloomwire_email_settings',
+          params: { tab: 'templates', template_id: template.id,
+                    compose: { **full_invitation_vars, invitation_link: 'www.google.com' } }
+      expect(response.body).to include('Button link must be a full URL')
+      expect(response.body).not_to include('href="www.google.com"')
+    end
+  end
+
   describe 'access control + secret safety' do
     it 'bounces a non-owner, sends nothing, and writes no log' do
       configure_smtp!

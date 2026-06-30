@@ -164,4 +164,18 @@ RSpec.describe Bloomwire::EmailTemplate do
       expect(blank[:missing_variables]).to eq(['business_name'])
     end
   end
+
+  # Phase 15F.6: resolved-CTA-URL validity used by send/preview + the branded button render.
+  describe '.absolute_cta_url?' do
+    it 'accepts absolute http(s) URLs' do
+      expect(described_class.absolute_cta_url?('https://www.google.com')).to be(true)
+      expect(described_class.absolute_cta_url?('http://example.com/path?x=1')).to be(true)
+      expect(described_class.absolute_cta_url?('  https://x.test/y  ')).to be(true) # trimmed
+    end
+
+    it 'rejects scheme-less, relative, blank, and unsafe-scheme links' do
+      ['www.google.com', 'example.com/x', '/relative', '', nil, 'javascript:alert(1)', 'ftp://h', '{{invitation_link}}']
+        .each { |u| expect(described_class.absolute_cta_url?(u)).to be(false) }
+    end
+  end
 end

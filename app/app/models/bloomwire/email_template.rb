@@ -42,6 +42,13 @@ class Bloomwire::EmailTemplate < ApplicationRecord
   # then letters/digits/underscores (e.g. recipient_name, custom_order_id, order_id_2).
   VARIABLE_PATTERN = /\{\{\s*([a-z][a-z0-9_]*)\s*\}\}/
 
+  # Phase 15F.6: a delivered CTA button needs an ABSOLUTE http(s):// href. A scheme-less/relative value
+  # (e.g. "www.google.com") is neutralized by email clients — the styled button collapses to raw text and the
+  # URL leaks (e.g. "[www.google.com]Accept Invitation"). This validates the RESOLVED cta_url (AFTER
+  # {{variable}} interpolation) at send + preview, gates the branded button render, and also blocks
+  # javascript:/data: that a variable value might otherwise inject into the href.
+  CTA_URL_ABSOLUTE = %r{\Ahttps?://\S+\z}i
+
   # Sample values used to render the "Preview with Sample Data" panel. Non-secret, illustrative only.
   SAMPLE_VARS = {
     'recipient_name' => 'Sameen Hewage',
@@ -79,6 +86,12 @@ class Bloomwire::EmailTemplate < ApplicationRecord
   # keep_id_suffix: true so trailing "_id" is NOT dropped (ActiveSupport's humanize strips it by default).
   def self.humanize_variable(var)
     var.to_s.humanize(keep_id_suffix: true)
+  end
+
+  # Phase 15F.6: true when `url` is an absolute, email-safe CTA href (http(s):// + a host). Drives send/preview
+  # CTA validation and the branded button render so a relative/scheme-less link never reaches a delivered email.
+  def self.absolute_cta_url?(url)
+    url.to_s.strip.match?(CTA_URL_ABSOLUTE)
   end
 
   def render_subject(vars = SAMPLE_VARS)
