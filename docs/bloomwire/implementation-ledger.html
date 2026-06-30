@@ -158,6 +158,7 @@
         <tr><td>15F.1</td><td>Send-from-Template composer (owner-only)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
+        <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -314,6 +315,16 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15G.2 — Auth Integrity Hardening <span class="badge done">Hardened</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Trigger</b>: forensic RCA of an owner login failure. Proven the deploy, platform-admin/permissions code (<code>grant!</code>/<code>revoke!</code>/<code>reactivate!</code>/inviter-existing/<code>EnsurePlatformOwnerService</code>), migrations, seeds, and Devise secret/pepper did <b>not</b> mutate the password. The only path that <i>could</i> change an existing SuperAdmin's password was the <b>generic Administrate User edit form's password field</b> (non-blank / browser-autofill submit).</li>
+        <li><b>Change</b>: <code>UserDashboard#form_attributes</code> drops <code>:password</code> + <code>:confirmed_at</code> from the <b>edit</b> form (create still sets an initial password); <code>SuperAdmin::UsersController#resource_params</code> strips, on <b>update only</b>, <code>password, password_confirmation, encrypted_password, reset_password_token, reset_password_sent_at, confirmed_at</code> (defense-in-depth). <code>:type</code> still stripped in Mode ON. Password changes go only via the Devise reset flow.</li>
+        <li><b>Protected from generic edit</b>: <code>encrypted_password</code>, <code>password</code>, <code>password_confirmation</code>, <code>reset_password_token</code>, <code>reset_password_sent_at</code>, <code>confirmed_at</code>, <code>type</code>.</li>
+        <li><b>Not changed</b>: no DB data, no password reset, no rollback, no migrations, no Devise/secret/session config, no platform-admin/account-role logic.</li>
+        <li><b>Tests</b>: new <code>bloomwire_auth_integrity_spec.rb</code> (10 examples) + 48-example regression on related super_admin specs; RuboCop clean; no secrets/hashes printed (SHA-256 fingerprint comparison).</li>
       </ul>
     </div>
   </section>

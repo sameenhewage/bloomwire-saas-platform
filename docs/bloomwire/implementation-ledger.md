@@ -60,6 +60,7 @@
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
+| 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
 
 ---
 
@@ -271,6 +272,26 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 15G.2 — Auth Integrity Hardening — `Hardened` — PR _pending_
+- **Trigger:** forensic RCA of an owner login failure. Proven that the deploy, the platform-admin/permissions
+  code (`grant!`/`revoke!`/`reactivate!`/inviter-existing/`EnsurePlatformOwnerService`), migrations, seeds, and
+  Devise secret/pepper did **not** mutate the user's password. The only code path that *could* change an
+  existing SuperAdmin's password was the **generic Administrate User edit form's password field** (non-blank /
+  browser-autofill submit). This phase closes that vector before go-live.
+- **Change (minimal, test-backed):**
+  - `UserDashboard#form_attributes` drops `:password` + `:confirmed_at` from the **edit** form (create still
+    sets an initial password); the edit form renders no password input.
+  - `SuperAdmin::UsersController#resource_params` strips, **on update only**, an auth-sensitive denylist:
+    `password, password_confirmation, encrypted_password, reset_password_token, reset_password_sent_at,
+    confirmed_at` (defense-in-depth). `:type` still stripped in Bloomwire Mode. Password changes go only via the
+    Devise reset flow.
+- **Protected from generic Users edit:** `encrypted_password`, `password`, `password_confirmation`,
+  `reset_password_token`, `reset_password_sent_at`, `confirmed_at`, `type`.
+- **Not changed:** no DB data, no password reset, no rollback, no migrations, no Devise/secret/session config,
+  no platform-admin/account-role logic. New-user create + platform-admin invite (new email) still set a password.
+- **Tests:** new `bloomwire_auth_integrity_spec.rb` (10 examples) + 48-example regression across the related
+  super_admin specs; RuboCop clean. No secrets/hashes printed (SHA-256 fingerprint comparison only).
 
 ---
 

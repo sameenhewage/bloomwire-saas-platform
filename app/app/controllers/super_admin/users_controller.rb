@@ -65,9 +65,17 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
     resource_class.with_attached_avatar
   end
 
+  # Phase 15G.2 (Auth Integrity Hardening): these fields can NEVER be changed through the generic Users EDIT
+  # form — defense-in-depth on top of UserDashboard#form_attributes dropping them. Password changes go ONLY
+  # through the Devise reset/password flow. Stripped on UPDATE only, so NEW-user create can still set an initial
+  # password (encrypted_password / reset_password_* are not form attributes anyway — belt-and-suspenders).
+  AUTH_SENSITIVE_UPDATE_PARAMS = %i[
+    password password_confirmation encrypted_password reset_password_token reset_password_sent_at confirmed_at
+  ].freeze
+
   def resource_params
     permitted_params = super
-    permitted_params.delete(:password) if permitted_params[:password].blank?
+    AUTH_SENSITIVE_UPDATE_PARAMS.each { |field| permitted_params.delete(field) } if action_name == 'update'
     # Phase 15A.2: never let the raw Users page set/change users.type when Bloomwire Mode is ON — platform-admin
     # identity is managed only via Bloomwire -> Platform Admins. (Defense-in-depth: the UserDashboard already
     # drops :type from form/permitted attributes in Mode ON.)

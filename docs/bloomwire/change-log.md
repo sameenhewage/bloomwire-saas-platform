@@ -15,6 +15,37 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15G.2 — Auth Integrity Hardening (before go-live)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Security hardening (SuperAdmin console; no DB data change, no deploy)
+- **Why:** Forensic RCA of an owner login failure (`sameen@bloomwire.lk` rejected with "Invalid Password")
+  found **no** deploy/permissions/secret cause (secret + Devise pepper stable; `grant!`/`revoke!`/`reactivate!`/
+  inviter(existing)/`EnsurePlatformOwnerService` never touch user auth; no migration/seed mutates the hash). The
+  **only** code path that could change an existing SuperAdmin's password was the **generic Administrate User
+  edit form's password field** (a non-blank submit, e.g. **browser autofill**). This PR closes that vector.
+- **What changed (minimal):**
+  - `UserDashboard#form_attributes` drops **`:password`** and **`:confirmed_at`** from the **edit** form (new-user
+    create still sets an initial password). The edit form no longer renders a password input.
+  - `SuperAdmin::UsersController#resource_params` strips an auth-sensitive denylist **on update only** —
+    `password, password_confirmation, encrypted_password, reset_password_token, reset_password_sent_at,
+    confirmed_at` — defense-in-depth so the generic edit can never mutate them even if a field is force-posted.
+    `:type` remains stripped in Bloomwire Mode (unchanged). Password changes go **only** through the Devise
+    reset flow.
+- **Auth-sensitive fields now protected from the generic Users edit:** `encrypted_password`, `password`,
+  `password_confirmation`, `reset_password_token`, `reset_password_sent_at`, `confirmed_at`, `type`.
+- **Not changed:** no DB data, no password reset, no rollback, no migrations, no deploy, no Devise/secret/session
+  config, no platform-admin/account-role logic. New-user create + the platform-admin invite (new email) still set
+  an initial password as before.
+- **Security:** no secrets/hashes printed; specs compare only SHA-256 fingerprints of the stored hash.
+- **Validation:** RuboCop clean; **new auth-integrity request spec (10 examples)** + regression on the related
+  super_admin specs (**48 examples**) green. Tests: generic edit (name) keeps hash · force-posted password on
+  update ignored (original still valid, injected rejected) · edit form renders no password field · confirmed_at
+  not settable via generic update · grant/revoke/reactivate leave hash/type/confirmed_at · inviter(existing) keeps
+  hash · account-role assignment leaves hash/type/confirmed_at · non-owner access unchanged.
+- **Deploy required:** Yes (after review/merge; not performed here). Owner login recovery (password reset) is a
+  separate, approval-gated step — **not** in this PR.
+
 ### Phase 15G.1 — Fix false-success dev deploy (stdin-consumed deploy script)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_
