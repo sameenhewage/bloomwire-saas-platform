@@ -59,7 +59,7 @@
 | 15F | Owner-only Email Settings (DB SMTP + templates) | #78 | DEV PASS (encryption parked) |
 | 15F.1 | Send-from-Template composer (owner-only) | _pending_ | Implemented |
 | 15F.2 | Email Template UX Completion (dynamic vars + preview==send + validation + logs subject) | #84 | 100% DEV PASS |
-| 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | _pending_ | Implemented |
+| 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | #86 | DEV PASS |
 | 15F.4 | Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan) | _pending_ | Investigation (report-only) |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
@@ -285,7 +285,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 15F.3 — Email Send Feedback UX Polish — `Implemented` — PR _pending_
+### Phase 15F.3 — Email Send Feedback UX Polish — `DEV PASS` — PR #86 (merged `bf6aa15`)
 - **Trigger:** Phase 15F.2 was deployed + DEV PASS, but the owner found the send feedback unclear — after a
   template send the only signal was a flash at the **top** of the page; the page appeared to refresh, so it was
   unclear whether the email was sent, blocked, or failed.

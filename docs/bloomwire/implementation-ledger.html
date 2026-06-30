@@ -157,7 +157,7 @@
         <tr><td>15F</td><td>Owner-only Email Settings (DB SMTP + templates)</td><td>#78</td><td><span class="badge done">DEV PASS</span> <span class="badge warn">encryption parked</span></td></tr>
         <tr><td>15F.1</td><td>Send-from-Template composer (owner-only)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
         <tr><td>15F.2</td><td>Email Template UX Completion (dynamic vars + preview==send + validation + logs subject)</td><td>#84</td><td><span class="badge done">100% DEV PASS</span></td></tr>
-        <tr><td>15F.3</td><td>Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span></td></tr>
+        <tr><td>15F.3</td><td>Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard)</td><td>#86</td><td><span class="badge done">DEV PASS</span></td></tr>
         <tr><td>15F.4</td><td>Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan)</td><td><i>pending</i></td><td><span class="badge docs">Investigation (report-only)</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
@@ -323,7 +323,7 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 15F.3 — Email Send Feedback UX Polish <span class="badge done">Implemented</span> <span class="pr">PR pending</span></h3>
+    <div class="card"><h3>Phase 15F.3 — Email Send Feedback UX Polish <span class="badge done">DEV PASS</span> <span class="pr">PR #86 · merged bf6aa15</span></h3>
       <ul>
         <li><b>Trigger</b>: 15F.2 was deployed + DEV PASS, but send feedback was unclear — only a flash at the <b>top</b> of the page; the page appeared to refresh, so the owner couldn't tell if the email was sent, blocked, or failed.</li>
         <li><b>Composer-local result banner</b> (<code>#bw-send-result</code>, <code>role="status"</code>): success → "Email sent successfully to &lt;recipient&gt;"; blocked/failed → "Email was not sent: &lt;safe reason&gt;"; colour-coded by status. Global top flash still shows.</li>

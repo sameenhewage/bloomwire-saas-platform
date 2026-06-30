@@ -16,8 +16,11 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 15F.3 — Email Send Feedback UX Polish
-- **PR:** _pending_
-- **Merge SHA:** _pending merge_
+- **PR:** #86
+- **Merge SHA:** `bf6aa15d8816a2276365ca6e0451e16e6023ba0c` (fast-forwarded into `version_1`)
+- **Dev status:** **DEV PASS** — deployed to dev (`bf6aa15`), runtime QA passed 2026-06-30: composer-local
+  success/blocked/invalid banners visible at `#bw-composer`, redirect keeps `template_id`, Email Logs success +
+  blocked rows recorded, double-send guard present, no SMTP secret in any rendered HTML.
 - **Type:** Owner-only SuperAdmin UX (Send-from-Template feedback). **No DB migration.**
 - **Why:** After a template send the only feedback was a flash at the **top** of the page; the page appeared to
   just refresh, so the owner couldn't tell whether the email was sent, blocked, or failed.
