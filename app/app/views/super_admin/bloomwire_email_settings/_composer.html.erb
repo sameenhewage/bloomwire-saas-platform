@@ -12,7 +12,7 @@
     smtp_ready = @email_setting.persisted? && @email_setting.missing_required_fields.empty? && @email_setting.enabled?
     used = @selected_template.used_variables
     missing = Array(@compose[:missing])
-    has_placeholders = [@compose[:subject], @compose[:body], @compose[:cta_url]].any? { |t| t.to_s.match?(/\{\{.*?\}\}/) }
+    has_placeholders = [@compose[:subject], @compose[:body], @compose[:cta_label], @compose[:cta_url]].any? { |t| t.to_s.match?(/\{\{.*?\}\}/) }
     can_send = smtp_ready && missing.empty? && !has_placeholders
   %>
   <div class="bw-card" id="bw-composer" style="margin-top:16px;">

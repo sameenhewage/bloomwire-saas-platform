@@ -264,6 +264,42 @@ RSpec.describe 'SuperAdmin Bloomwire Send-from-Template', type: :request do
       expect(Bloomwire::EmailDeliveryLog.last.status).to eq('blocked')
       expect(ActionMailer::Base.deliveries).to be_empty
     end
+
+    it 'detects a variable used ONLY in the CTA label: generates its input and blocks a blank send (review fix)' do
+      configure_smtp!
+      cta_tpl = Bloomwire::EmailTemplate.create!(
+        key: 'qa_cta', name: 'QA CTA', subject: 'Hello there', body: 'Static body, no vars.',
+        cta_label: 'Open {{business_name}}', cta_url: 'https://x.test/o'
+      )
+      get "/super_admin/bloomwire_email_settings?tab=templates&template_id=#{cta_tpl.id}"
+      expect(response.body).to include('compose[business_name]') # input generated for a CTA-only variable
+      expect(response.body).to include('Business name')
+
+      expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+      post send_path(cta_tpl), params: { compose: { recipient: 'cta@example.com' } } # business_name blank
+      expect(Bloomwire::EmailDeliveryLog.last.status).to eq('blocked')
+      expect(ActionMailer::Base.deliveries).to be_empty
+    end
+
+    it 'renders a filled CTA-label variable in the delivered email (preview == send for CTA label, review fix)' do
+      configure_smtp!
+      cta_tpl = Bloomwire::EmailTemplate.create!(
+        key: 'qa_cta2', name: 'QA CTA 2', subject: 'Hello', body: 'Static body.',
+        cta_label: 'Open {{business_name}}', cta_url: 'https://x.test/o'
+      )
+      sent = nil
+      allow(Bloomwire::EmailTestMailer).to receive(:template_email) do |**kwargs|
+        sent = kwargs
+        delivery
+      end
+      submitted = { recipient: 'cta@example.com', business_name: 'Globex' }
+      post send_path(cta_tpl), params: { compose: submitted }
+
+      expected = cta_tpl.composition_for(ActionController::Parameters.new(submitted).permit!)
+      expect(sent[:cta_label]).to eq('Open Globex')
+      expect(sent[:cta_label]).to eq(expected[:cta_label])
+      expect(sent[:cta_label]).not_to match(/\{\{.*?\}\}/)
+    end
   end
 
   describe 'access control + secret safety' do

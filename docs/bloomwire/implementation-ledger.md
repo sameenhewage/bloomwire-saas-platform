@@ -289,13 +289,20 @@
 - **Blank-on-first-load (review fix):** composer variable inputs open **empty**; `SAMPLE_VARS` are placeholder/
   helper text + the separate "Sample preview" only — never prefilled as real values. Send stays disabled until
   every variable is intentionally filled, so sample data can't be accidentally sent.
+- **CTA button label (review fix):** the CTA **label** is now included in variable detection, interpolation,
+  and the leftover-`{{placeholder}}` block — a variable used only in the button label generates a composer input,
+  renders identically in preview + delivered email, and blocks the send if unfilled (completes the "no raw
+  `{{placeholder}}` delivered" guarantee).
 - **Validation:** `SendTemplateEmailService` blocks invalid recipient email + any leftover `{{placeholder}}`
-  before SMTP (blocked Email Log + clear message); composer shows inline "fill these in" + disables Send.
+  (subject/body/CTA label/CTA URL) before SMTP (blocked Email Log + clear message); composer shows inline "fill
+  these in" + disables Send.
 - **Email Logs:** literal sent subject column added (data already stored per send). Sample preview relabeled.
+- **Deferred:** composer "Update preview" GET round-trip puts values in the URL query string → **Phase 15F.3**
+  UX hardening (POST-based preview); optional auth-audit polish → **15G.4**.
 - **Not changed:** no DB migration; no SMTP secret/credential change; no WhatsApp/Meta; no 15G.2/15G.3 auth
   behavior. CRUD (create/edit/duplicate/deactivate/reactivate) preserved. Optional auth-audit polish deferred to
   **15G.4**.
-- **Validation:** model+service+request specs; full email + 15G.2 + 15G.3 suite **104 examples, 0 failures**;
+- **Validation:** model+service+request specs; full email + 15G.2 + 15G.3 suite **109 examples, 0 failures**;
   RuboCop clean; no secrets (fake values only). **Phase 16 blocked** until merged + deployed + runtime QA passes.
 
 ### Phase 15G.2 — Auth Integrity Hardening — `Hardened` — PR _pending_

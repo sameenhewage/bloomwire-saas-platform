@@ -55,7 +55,7 @@ class Bloomwire::SendTemplateEmailService
   LEFTOVER_PLACEHOLDER = /\{\{.*?\}\}/m
 
   def unresolved_placeholders?
-    [@c.subject, @c.body, @c.cta_url].any? { |t| t.to_s.match?(LEFTOVER_PLACEHOLDER) }
+    [@c.subject, @c.body, @c.cta_label, @c.cta_url].any? { |t| t.to_s.match?(LEFTOVER_PLACEHOLDER) }
   end
 
   def deliver!

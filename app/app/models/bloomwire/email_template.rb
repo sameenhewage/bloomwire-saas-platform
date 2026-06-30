@@ -97,11 +97,12 @@ class Bloomwire::EmailTemplate < ApplicationRecord
     cta_label.present?
   end
 
-  # Every `{{variable}}` actually referenced by this template across subject + body + CTA link, in first-seen
-  # order and de-duplicated. Phase 15F.2: parses ANY variable name (incl. custom ones), not just the known
-  # VARIABLES, so the composer can generate an input for each. Drives composer inputs + send/preview validation.
+  # Every `{{variable}}` actually referenced by this template across subject + body + CTA label + CTA link, in
+  # first-seen order and de-duplicated. Phase 15F.2: parses ANY variable name (incl. custom ones), not just the
+  # known VARIABLES, so the composer can generate an input for each. Drives composer inputs + send/preview
+  # validation. CTA label is included so a variable used only in the button label is still detected (review fix).
   def used_variables
-    [subject, body, cta_url].join("\n").scan(VARIABLE_PATTERN).flatten.uniq
+    [subject, body, cta_label, cta_url].join("\n").scan(VARIABLE_PATTERN).flatten.uniq
   end
 
   # Resolve owner-submitted composer values for THIS template. Phase 15F.2: only NON-BLANK values are applied,
@@ -126,7 +127,9 @@ class Bloomwire::EmailTemplate < ApplicationRecord
     {
       subject: render_subject(vars),
       body: render_body(vars),
-      cta_label: composer_value(submitted, :button_label).presence || cta_label,
+      # Review fix: interpolate the CTA label too (submitted button label override or the template's cta_label),
+      # so a {{variable}} in the button label is resolved for preview AND send — and left visible if unfilled.
+      cta_label: self.class.interpolate((composer_value(submitted, :button_label).presence || cta_label).to_s, vars),
       cta_url: self.class.interpolate((composer_value(submitted, :button_link).presence || cta_url).to_s, vars),
       missing_variables: missing_variables(submitted)
     }

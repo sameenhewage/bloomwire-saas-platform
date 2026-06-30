@@ -119,6 +119,12 @@ RSpec.describe Bloomwire::EmailTemplate do
     it 'returns nothing for a template with no placeholders' do
       expect(described_class.new(subject: 'Hello', body: 'No variables here').used_variables).to eq([])
     end
+
+    it 'detects a variable used ONLY in the CTA button label (review fix)' do
+      template = described_class.new(subject: 'Hi', body: 'Static body',
+                                     cta_label: 'Open {{business_name}}', cta_url: 'https://x.test')
+      expect(template.used_variables).to include('business_name')
+    end
   end
 
   describe '#composition_for (Phase 15F.2 — single resolver for preview AND send)' do
@@ -144,6 +150,18 @@ RSpec.describe Bloomwire::EmailTemplate do
       expect(out[:body]).to eq('Join {{business_name}} now')        # raw placeholder, not the SAMPLE value
       expect(out[:body]).not_to include('Bloomwire (Pvt) Ltd')      # SAMPLE_VARS['business_name'] must not leak
       expect(out[:missing_variables]).to eq(['business_name'])
+    end
+
+    it 'interpolates the CTA label and flags a blank CTA-only variable as missing (review fix)' do
+      cta_template = described_class.new(subject: 'Hi', body: 'Static body',
+                                         cta_label: 'Open {{business_name}}', cta_url: 'https://x.test')
+      filled = cta_template.composition_for('business_name' => 'Globex')
+      expect(filled[:cta_label]).to eq('Open Globex')
+      expect(filled[:missing_variables]).to eq([])
+
+      blank = cta_template.composition_for('business_name' => '')
+      expect(blank[:cta_label]).to eq('Open {{business_name}}')     # raw placeholder, not sampled
+      expect(blank[:missing_variables]).to eq(['business_name'])
     end
   end
 end

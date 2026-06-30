@@ -108,4 +108,16 @@ RSpec.describe Bloomwire::SendTemplateEmailService do
     expect(Bloomwire::EmailDeliveryLog.last.error_message).to match(/variable|placeholder/i)
     expect(ActionMailer::Base.deliveries).to be_empty
   end
+
+  it 'blocks a leftover {{placeholder}} in the CTA LABEL before SMTP (review fix)' do
+    expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+    comp = described_class::Composition.new(
+      template: template, recipient: 'to@example.com', subject: 'Hi Jane', body: 'Hello Jane at Acme',
+      cta_label: 'Open {{business_name}}', cta_url: 'https://x.test'
+    )
+    result = described_class.new(setting: complete_setting, composition: comp).call
+    expect(result.status).to eq('blocked')
+    expect(Bloomwire::EmailDeliveryLog.last.error_message).to match(/variable|placeholder/i)
+    expect(ActionMailer::Base.deliveries).to be_empty
+  end
 end

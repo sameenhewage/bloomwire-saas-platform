@@ -37,9 +37,15 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
     shown only as **placeholder/helper text** (and in the separate "Sample preview"), never prefilled as real
     values. The Send button stays disabled until the owner intentionally fills every required variable, so
     sample data can never be accidentally sent.
+  - **CTA button label (review fix):** the CTA **label** is now included in variable detection
+    (`used_variables`), interpolation (`composition_for`), and the leftover-`{{placeholder}}` block
+    (`SendTemplateEmailService`). A `{{variable}}` used **only** in the button label now generates a composer
+    input, renders identically in the preview and the delivered email, and **blocks the send** if left unfilled —
+    completing the "no raw `{{placeholder}}` is ever delivered" guarantee (subject/body/CTA URL unchanged).
   - **Validation (pre-send):** `SendTemplateEmailService` now blocks an **invalid recipient email** and **any
-    leftover `{{placeholder}}`** before opening SMTP (in addition to missing recipient / SMTP not ready), with
-    a blocked Email Log + clear message. The composer shows an inline "fill these in" warning and disables Send.
+    leftover `{{placeholder}}`** (subject, body, CTA label, CTA URL) before opening SMTP (in addition to missing
+    recipient / SMTP not ready), with a blocked Email Log + clear message. The composer shows an inline "fill
+    these in" warning and disables Send.
   - **Email Logs:** the tab now shows the **literal sent subject** (already stored per-send) alongside
     template, recipient, status, actor, timestamp.
   - **Sample preview** (editor Panel 3) relabeled "Sample preview / Sample data only — not the send preview".
@@ -47,10 +53,14 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   custom-variable template now flows create → save → generated input → preview → send → log.
 - **Not changed:** no DB migration, no SMTP secret/credential change, no WhatsApp/Meta, no Auth-Integrity
   (15G.2) or admin-audit (15G.3) behavior. Existing successful send/log behavior preserved (now requires all
-  variables filled). The optional auth-audit polish (record `type` in `blocked_fields`, trim `changed_fields`
-  noise) is **deferred to a separate Phase 15G.4 PR** to keep this PR focused.
-- **Validation:** model (8) + service (7) + send request (16) specs, full Bloomwire email + 15G.2 + 15G.3 suite
-  **104 examples, 0 failures**; RuboCop clean. No secrets in code/logs/specs (fake values only).
+  variables filled).
+- **Deferred follow-ups:** (a) the composer's "Update preview" uses a GET round-trip, so composer values appear
+  in the preview URL query string — tracked as **Phase 15F.3 / UX hardening** (e.g. a POST-based preview); not
+  fixed here (out of scope, not risk-free). (b) optional auth-audit polish (record `type` in `blocked_fields`,
+  trim `changed_fields` noise) → **Phase 15G.4**.
+- **Validation:** model + service + send-request specs (incl. dynamic vars, custom vars, CTA-label vars,
+  preview==send, blank-blocks, invalid-email-blocks, blank-on-first-load); full Bloomwire email + 15G.2 + 15G.3
+  suite **109 examples, 0 failures**; RuboCop clean. No secrets in code/logs/specs (fake values only).
 - **Phase 16 remains BLOCKED** until this PR is merged, deployed to dev, and runtime QA passes.
 
 ### Phase 15G.3 — Auth Go-Live Guardrails (audit + smoke + runbook)
