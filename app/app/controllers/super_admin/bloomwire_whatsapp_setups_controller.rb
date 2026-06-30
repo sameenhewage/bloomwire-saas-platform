@@ -39,8 +39,10 @@ class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationCon
   end
 
   # Phase 16C: Ops-only business-owner activation. Sends Devise set-password (reset) instructions to the setup
-  # account's administrator(s) so a provisioned owner can sign in. Creates/changes no records, grants no platform
-  # admin, exposes no token. SMTP failure is rescued inside the service so this never 500s.
+  # account's administrator(s) so a provisioned owner can sign in. Creates no new accounts/users/account_users/
+  # inboxes/conversations/messages, changes no roles, and grants no platform admin; the only mutation is Devise's
+  # recoverable/reset-password fields on the targeted admin user(s). Never exposes the token. SMTP failure is
+  # rescued inside the service so this never 500s.
   def send_owner_activation
     result = Bloomwire::BusinessOwnerActivator.call(account: @setup.account)
     audit_owner_activation

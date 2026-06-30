@@ -2,10 +2,11 @@ require 'rails_helper'
 
 # Phase 16C: Ops-triggered business-owner activation. Sends Devise set-password (reset) instructions to a
 # managed account's ADMINISTRATOR user(s) so a provisioned owner can set a password and sign in. Mirrors
-# Bloomwire::PlatformAdminInviter#send_password_setup (best-effort, rescued). It must never create/change
-# accounts/users/roles, never grant platform admin, and never expose the reset token. We assert behavior via
-# Devise's `reset_password_sent_at` (set by `send_reset_password_instructions`), so the test does not depend on
-# mailer/ActiveJob delivery mode and never reads a token.
+# Bloomwire::PlatformAdminInviter#send_password_setup (best-effort, rescued). It must create no new
+# accounts/users/account_users, change no roles, grant no platform admin, and never expose the reset token —
+# the ONLY intended mutation is Devise's recoverable/reset-password fields on the targeted admin user(s). We
+# assert behavior via Devise's `reset_password_sent_at` (set by `send_reset_password_instructions`), so the test
+# does not depend on mailer/ActiveJob delivery mode and never reads a token.
 RSpec.describe Bloomwire::BusinessOwnerActivator do
   let(:account) { create(:account) }
   let(:owner) { create(:user) }
@@ -26,7 +27,7 @@ RSpec.describe Bloomwire::BusinessOwnerActivator do
       expect(result.error).to be_nil
     end
 
-    it 'creates/changes NO accounts, users, account_users, or platform-admin grants' do
+    it 'creates no new accounts/users/account_users and no platform-admin grant (counts unchanged; only Devise recoverable fields change)' do
       expect { described_class.call(account: account) }
         .to not_change(User, :count)
         .and not_change(Account, :count)

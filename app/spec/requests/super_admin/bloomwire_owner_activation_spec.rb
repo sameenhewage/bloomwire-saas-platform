@@ -3,7 +3,8 @@ require 'rails_helper'
 # Phase 16C: Ops/SuperAdmin "Send activation email" on the WhatsApp setup detail page. Sends Devise
 # set-password (reset) instructions to the setup account's ADMINISTRATOR(s) so a provisioned owner can sign in.
 # Asserts behavior via Devise `reset_password_sent_at` (no token read), plus authorization, master-OFF
-# availability, a safe audit entry, no platform-admin grant, no data mutation, and no secret in the response.
+# availability, a safe audit entry, no platform-admin grant, no NEW records / no role change (the only mutation is
+# Devise recoverable fields on the targeted admin), and no secret in the response.
 RSpec.describe 'SuperAdmin Bloomwire owner activation', type: :request do
   let(:platform_admin) { create(:super_admin) }                              # approved platform admin (default)
   let(:non_platform_admin) { create(:super_admin, :unapproved_platform_admin) } # identity but NOT authorized

@@ -301,13 +301,16 @@
 - **What it does:** sends Devise **set-password (reset) instructions** to the setup account's **administrator(s)
   only** (native `Account#administrators`; never agents), mirroring `PlatformAdminInviter#send_password_setup`
   (best-effort, rescued). Owner sets a password and signs in to the **native** Chatwoot WhatsApp inbox.
-- **Not changed:** no DB migration; creates/changes **no** accounts/users/account_users/inboxes/conversations/
-  messages; **no** `PlatformAdmin` grant; **no** role change; **no** global `BusinessOwner`; reuses Devise
-  `recoverable` + native models (no duplication). No Meta/WhatsApp calls; no SMTP credential change.
+- **Not changed:** no DB migration; creates **no new** accounts/users/account_users/inboxes/conversations/
+  messages; **no** role change; **no** `PlatformAdmin` grant; **no** global `BusinessOwner`; reuses Devise
+  `recoverable` + native models (no data duplication). No Meta/WhatsApp calls; no SMTP credential change.
+- **Only intended mutation:** Devise's recoverable/reset-password fields (`reset_password_token` digest +
+  `reset_password_sent_at`) on the targeted administrator user(s) — required to send the set-password email; the
+  reset token/password/link are never exposed in UI/logs/audit.
 - **Security:** `/super_admin` platform-admin boundary + master-mode gate; reset token/password/link **never**
   shown in UI/logs/audit; safe audit via `AdminUserAudit` (field-names only); SMTP failure rescued (no 500).
 - **Validation:** service + request specs (admin-only targeting · authorization · master-OFF unavailable ·
-  no-platform-grant · no-data-mutation · safe audit · no-secret · SMTP-failure) — **15 examples, 0 failures**;
+  no-platform-grant · no-new-records / no-role-change · safe audit · no-secret · SMTP-failure) — **15 examples, 0 failures**;
   setups/readiness/provisioning/credentials regression green; RuboCop clean.
 
 ### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade — `DEV PASS` — PR #90 (merged `88e0701`)

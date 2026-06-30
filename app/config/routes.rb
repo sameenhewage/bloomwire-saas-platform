@@ -691,7 +691,8 @@ Rails.application.routes.draw do
           get :credentials
           patch :update_credentials
           # Bloomwire Phase 16C: Ops-only "send activation email" — Devise set-password instructions to the
-          # setup account's business administrator(s). No record mutation, no platform-admin grant, no secrets.
+          # setup account's business administrator(s). Creates no new records / no role change (only Devise's
+          # recoverable fields on the admin change); no platform-admin grant; no secrets.
           post :send_owner_activation
         end
       end

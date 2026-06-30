@@ -330,9 +330,10 @@
       <ul>
         <li><b>Trigger</b>: provisioning creates the owner <b>confirmed with a throwaway password and no email</b> &rarr; a provisioned owner couldn't log in.</li>
         <li><b>What</b>: a <b>"Send activation email"</b> action on the WhatsApp setup detail page sends Devise <b>set-password (reset)</b> instructions to the account's <b>administrator(s) only</b> (native <code>Account#administrators</code>; never agents) via new <code>Bloomwire::BusinessOwnerActivator</code> (mirrors <code>PlatformAdminInviter#send_password_setup</code>, best-effort/rescued). Owner sets a password &rarr; native Chatwoot WhatsApp inbox.</li>
-        <li><b>Not changed</b>: no migration; no new accounts/users/account_users/inboxes/conversations/messages; no <code>PlatformAdmin</code> grant; no role change; no global <code>BusinessOwner</code>; reuses Devise <code>recoverable</code> + native models. No Meta/WhatsApp calls; no SMTP credential change.</li>
+        <li><b>Not changed</b>: no migration; creates <b>no new</b> accounts/users/account_users/inboxes/conversations/messages; no role change; no <code>PlatformAdmin</code> grant; no global <code>BusinessOwner</code>; reuses Devise <code>recoverable</code> + native models (no data duplication). No Meta/WhatsApp calls; no SMTP credential change.</li>
+        <li><b>Only intended mutation</b>: Devise's recoverable/reset-password fields (<code>reset_password_token</code> digest + <code>reset_password_sent_at</code>) on the targeted administrator user(s) — required to send the set-password email; reset token/password/link never exposed in UI/logs/audit.</li>
         <li><b>Security</b>: <code>/super_admin</code> platform-admin + master-mode gate; reset token/password/link never shown in UI/logs/audit; safe audit via <code>AdminUserAudit</code> (field-names only); SMTP failure rescued (no 500).</li>
-        <li><b>Validation</b>: service + request specs (admin-only targeting, authorization, master-OFF, no-platform-grant, no-data-mutation, safe audit, no-secret, SMTP-failure) — <b>15 examples, 0 failures</b>; setups/readiness/provisioning/credentials regression green; RuboCop clean.</li>
+        <li><b>Validation</b>: service + request specs (admin-only targeting, authorization, master-OFF, no-platform-grant, no-new-records / no-role-change, safe audit, no-secret, SMTP-failure) — <b>15 examples, 0 failures</b>; setups/readiness/provisioning/credentials regression green; RuboCop clean.</li>
       </ul>
     </div>
 

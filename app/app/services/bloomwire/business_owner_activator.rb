@@ -4,10 +4,13 @@
 #
 # Guarantees (do not weaken):
 # - Targets account ADMINISTRATORS only (never agents) via the native Account#administrators association.
-# - Creates/changes NO accounts/users/account_users/roles and grants NO platform admin — it only enqueues a
-#   reset-password email per administrator.
-# - NEVER reads, returns, logs, or exposes the reset token/password (Devise stores the token; we touch only the
-#   send call). The result carries a count + a safe error symbol — no secrets.
+# - Creates NO new accounts/users/account_users/inboxes/conversations/messages; changes NO roles; creates NO
+#   platform-admin grant; does not duplicate data.
+# - The ONLY intended mutation is Devise's recoverable/reset-password fields (reset_password_token digest +
+#   reset_password_sent_at) on the targeted administrator user(s) — required for Devise to send the set-password
+#   instructions.
+# - NEVER reads, returns, logs, or exposes the reset token/password/link (Devise stores the token digest; we
+#   only call the send). The result carries a count + a safe error symbol — no secrets.
 class Bloomwire::BusinessOwnerActivator
   # sent_count: number of administrators a reset email was enqueued for.
   # error: nil on success, :no_admin when the account has no administrator, :send_failed when every send failed.
