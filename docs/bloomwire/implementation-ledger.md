@@ -62,7 +62,7 @@
 | 15F.3 | Email Send Feedback UX Polish (composer-local result banner + composer anchor + double-send guard) | #86 | DEV PASS |
 | 15F.4 | Email Deliverability + Domain Authentication (why mail lands in junk + production DNS/provider plan) | _pending_ | Investigation (report-only) |
 | 15F.6 | Email CTA Button Rendering Fix (validate resolved CTA URL is absolute + email-safe button) | #89 | DEV PASS |
-| 15F.UI | Email Templates UI Polish & Responsive Upgrade (3→2→1 grid, toolbar, preview frame, prominent composer) | #90 | pending review/deploy |
+| 15F.UI | Email Templates UI Polish & Responsive Upgrade (3→2→1 grid, toolbar, preview frame, prominent composer) | #90 | DEV PASS |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
@@ -287,7 +287,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade — `pending review/deploy` — PR #90
+### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade — `DEV PASS` — PR #90 (merged `88e0701`)
 - **Trigger:** the Email Templates page worked but felt cramped/dense, panels competed, the Send-from-Template
   composer was too low + under-emphasised, the toolbar was cramped, the preview read like a debug area, and the
   3-panel grid jumped 3→1 columns at 1200px (no graceful medium/tablet reflow).
@@ -301,8 +301,10 @@
 - **Not changed:** no controller/model/route/DB change; no SMTP credential/provider/DNS/WhatsApp-Meta change;
   owner-only gate intact; every form/link/id (`#bw-composer`, `#bw-send-result`, compose fields, CRUD forms),
   validation, send-feedback banner, and button states preserved.
-- **Validation:** render request specs (templates tab + composer + previews) green; SCSS compiles; before/after
-  + responsive runtime QA on dev pending deploy.
+- **Validation:** render request specs (templates tab + composer + previews) green; SCSS compiles; **dev runtime
+  QA passed on `88e0701`** — deployed CSS confirms 1440 = 3-col, ≤1280 = 2-col + sample-preview full-width reflow,
+  ≤880 = stacked, ≤980 = composer stacks; owner-only gate intact; no migration; SMTP unchanged. Before/after
+  screenshots = owner-assisted (MCP browser had no authenticated owner session).
 
 ### Phase 15F.6 — Email CTA Button Rendering Fix — `DEV PASS` — PR #89 (merged `53e3e7b`)
 - **Trigger:** a delivered invitation email showed the CTA as plain text `[www.google.com]Accept Invitation` —
