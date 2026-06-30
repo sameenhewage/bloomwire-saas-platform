@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_29_000003) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_30_000001) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -259,6 +259,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_29_000003) do
     t.datetime "updated_at", null: false
     t.boolean "active", default: true, null: false
     t.index ["account_id"], name: "index_automation_rules_on_account_id"
+  end
+
+  create_table "bloomwire_admin_audit_logs", force: :cascade do |t|
+    t.bigint "actor_id"
+    t.bigint "target_user_id"
+    t.string "controller"
+    t.string "action"
+    t.jsonb "changed_fields", default: [], null: false
+    t.jsonb "blocked_fields", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["actor_id"], name: "index_bloomwire_admin_audit_logs_on_actor_id"
+    t.index ["created_at"], name: "index_bloomwire_admin_audit_logs_on_created_at"
+    t.index ["target_user_id"], name: "index_bloomwire_admin_audit_logs_on_target_user_id"
   end
 
   create_table "bloomwire_email_delivery_logs", force: :cascade do |t|

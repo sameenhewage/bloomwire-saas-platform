@@ -159,6 +159,7 @@
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span></td></tr>
+        <tr><td>15G.3</td><td>Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -325,6 +326,17 @@
         <li><b>Protected from generic edit</b>: <code>encrypted_password</code>, <code>password</code>, <code>password_confirmation</code>, <code>reset_password_token</code>, <code>reset_password_sent_at</code>, <code>confirmed_at</code>, <code>type</code>.</li>
         <li><b>Not changed</b>: no DB data, no password reset, no rollback, no migrations, no Devise/secret/session config, no platform-admin/account-role logic.</li>
         <li><b>Tests</b>: new <code>bloomwire_auth_integrity_spec.rb</code> (10 examples) + 48-example regression on related super_admin specs; RuboCop clean; no secrets/hashes printed (SHA-256 fingerprint comparison).</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 15G.3 — Auth Go-Live Guardrails <span class="badge done">Hardened</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Audit trail</b> (closes the RCA provability gap): new table <code>bloomwire_admin_audit_logs</code> + <code>Bloomwire::AdminAuditLog</code> + <code>Bloomwire::AdminUserAudit</code>. Every <code>super_admin/users#update</code> records one row — <code>actor_id</code>, <code>target_user_id</code>, <code>controller</code>, <code>action</code>, <code>changed_fields</code>, <code>blocked_fields</code> (auth-sensitive params stripped by 15G.2). <b>Field NAMES only, never values</b>; auditing never breaks the request.</li>
+        <li><b>Never stored</b>: <code>password</code>, <code>password_confirmation</code>, <code>encrypted_password</code>, reset tokens, secrets, raw hashes.</li>
+        <li><b>Auth smoke</b> (<code>.github/scripts/auth-smoke.sh</code>): optional operator-run dev/staging login smoke with a <b>dedicated disposable test admin</b> — refuses the owner account + production URLs, reads the password from a file (never argv/<code>ps</code>), verifies sign-in success + deployed <code>/app/.git_sha</code>. Not auto-wired (no CI secret).</li>
+        <li><b>Runbook §7</b>: password changes only via the Devise reset flow (never the generic Users edit); audit fields/exclusions; auth-smoke procedure.</li>
+        <li><b>Dev verification</b>: deployed SHA <code>f140717</code>; owner login-ready (SuperAdmin/confirmed/owner active; recovery reset applied — fingerprint changed); <code>/super_admin/sign_in</code> = 200.</li>
+        <li><b>Not changed</b>: no rollback, no password reset, no production, no WhatsApp/Meta/provider creds, no business/account role semantics. Migration <code>20260630000001_create_bloomwire_admin_audit_logs</code> (additive). Tests: audit (3) + 15G.2 (10) + user-flow (6) green; RuboCop clean; <code>bash -n</code> smoke OK.</li>
       </ul>
     </div>
   </section>

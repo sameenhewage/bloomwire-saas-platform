@@ -15,6 +15,36 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 15G.3 — Auth Go-Live Guardrails (audit + smoke + runbook)
+- **PR:** _pending_
+- **Merge SHA:** _pending merge_
+- **Type:** Security/audit guardrails (SuperAdmin console + ops; one additive table; no behavior change to
+  business/account roles, WhatsApp, or secrets)
+- **Why:** finalize auth guardrails before go-live, building on 15G.2. The prior RCA had **no provable trail**
+  of who/what mutated a user; this adds one, plus a documented login smoke and runbook rules.
+- **What changed:**
+  - **Audit trail:** new Bloomwire-owned table `bloomwire_admin_audit_logs` + `Bloomwire::AdminAuditLog` +
+    `Bloomwire::AdminUserAudit`. Every `super_admin/users#update` records one row: `actor_id`, `target_user_id`,
+    `controller`, `action`, `changed_fields` (columns changed), `blocked_fields` (auth-sensitive params that were
+    submitted but stripped by 15G.2). **Field NAMES only — never values.** Auditing never breaks the request.
+  - **Auth smoke:** `.github/scripts/auth-smoke.sh` — optional, operator-run dev/staging login smoke using a
+    **dedicated disposable test admin** (refuses the owner account + production URLs; password read from a file,
+    never argv/`ps`; verifies sign-in success + deployed `/app/.git_sha`). Not auto-wired (no test-admin secret
+    in CI).
+  - **Runbook §7:** password changes only via Devise reset (never the generic Users edit), the audit
+    fields/exclusions, and the auth-smoke procedure.
+- **Auth fields never stored in the audit:** `password`, `password_confirmation`, `encrypted_password`,
+  `reset_password_token`, `reset_password_sent_at`, raw hashes, secrets.
+- **Dev runtime verification (15G.3 task 1):** dev deployed SHA `f140717…`; owner account login-ready
+  (SuperAdmin, confirmed, owner active, recovery reset applied — fingerprint changed); `/super_admin/sign_in`
+  = 200; the deployed code carries the 15G.2 edit-form/param protections (CI spec green on `f140717`).
+- **Not changed:** no rollback, no password reset (recovery already done separately), no production change, no
+  WhatsApp/Meta/provider credentials, no business/account role semantics, no Devise/secret/session config.
+- **Validation:** RuboCop clean; new audit request spec (3) + 15G.2 auth-integrity (10) + user-flow (6) green;
+  `bash -n` on the smoke script OK. No secrets/hashes printed (specs assert no secret value lands in the audit).
+- **Migration:** `20260630000001_create_bloomwire_admin_audit_logs` (additive). **Deploy required:** Yes after
+  review/merge (runs the migration); not performed here.
+
 ### Phase 15G.2 — Auth Integrity Hardening (before go-live)
 - **PR:** _pending_
 - **Merge SHA:** _pending merge_

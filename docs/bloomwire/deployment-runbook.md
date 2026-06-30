@@ -161,4 +161,41 @@ Deploys are SHA-addressable, so rollback = redeploy a previous good SHA.
 
 ---
 
-<sub>Bloomwire Deployment Runbook · docs only · Phase 15G CI/CD foundation · dev/staging only, no production.</sub>
+## 7. Auth go-live guardrails (Phase 15G.2 / 15G.3)
+
+### 7.1 Password changes — rules
+- **Never** change a password via the generic SuperAdmin **Users → Edit** form. That form no longer renders a
+  password (or `confirmed_at`) field, and the controller strips auth-sensitive params on update (15G.2).
+- **Password changes go only through the Devise reset/password flow** (the "Forgot password?" link / reset
+  email), or, for an explicit recovery, a deliberate one-user `rails runner` reset with hidden terminal input
+  (`read -s`) — never a temp password file, never a printed password.
+- New SuperAdmins are created via **Bloomwire → Platform Admins** (the inviter sends a reset email so the new
+  admin sets their own password). Platform-admin grant/revoke/reactivate never touch user auth fields.
+
+### 7.2 Admin user-edit audit (Phase 15G.3)
+Every admin edit of a user via `super_admin/users#update` writes one `bloomwire_admin_audit_logs` row.
+**Recorded (NAMES only, never values):** `actor_id`, `target_user_id`, `controller`, `action`,
+`changed_fields` (columns that changed), `blocked_fields` (auth-sensitive params that were submitted but
+stripped). **Never stored:** `password`, `password_confirmation`, `encrypted_password`, reset tokens, secrets,
+or raw hashes. Query example: `Bloomwire::AdminAuditLog.recent.where(target_user_id: <id>)`.
+
+### 7.3 Auth smoke (dev/staging only)
+Optional, operator-run login smoke using a **dedicated, disposable dev/staging test admin** — never the real
+owner. Set up a throwaway test SuperAdmin once (via Bloomwire → Platform Admins, or a dev seed), keep its
+password in the environment's secret store, then after a deploy run:
+```
+SMOKE_BASE_URL=https://dev.unecast.com \
+SMOKE_EMAIL=<dedicated-dev-test-admin> \
+SMOKE_PASSWORD=<dev/staging secret> \
+EXPECTED_SHA=<deployed sha> SMOKE_SSH=contabo-dev \
+bash .github/scripts/auth-smoke.sh
+```
+It verifies the sign-in route accepts the test admin (`SMOKE_OK`) and, when `EXPECTED_SHA`+`SMOKE_SSH` are set,
+that the in-container `/app/.git_sha` matches (`SHA_OK`). The script **refuses** production URLs and the owner
+account, reads the password from a file (never argv/`ps`), and prints no secret. It is **not** wired into the
+auto-deploy, so no test-admin secret has to live in CI; run it manually post-deploy (the deploy already does
+the health + SHA smoke automatically).
+
+---
+
+<sub>Bloomwire Deployment Runbook · docs only · Phase 15G CI/CD foundation + 15G.2/15G.3 auth guardrails · dev/staging only, no production.</sub>

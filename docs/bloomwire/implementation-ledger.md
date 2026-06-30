@@ -61,6 +61,7 @@
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened |
+| 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened |
 
 ---
 
@@ -292,6 +293,26 @@
   no platform-admin/account-role logic. New-user create + platform-admin invite (new email) still set a password.
 - **Tests:** new `bloomwire_auth_integrity_spec.rb` (10 examples) + 48-example regression across the related
   super_admin specs; RuboCop clean. No secrets/hashes printed (SHA-256 fingerprint comparison only).
+
+### Phase 15G.3 — Auth Go-Live Guardrails — `Hardened` — PR _pending_
+- **Audit trail (closes the RCA provability gap):** new Bloomwire-owned table `bloomwire_admin_audit_logs` +
+  `Bloomwire::AdminAuditLog` + `Bloomwire::AdminUserAudit`. Every `super_admin/users#update` records one row —
+  `actor_id`, `target_user_id`, `controller`, `action`, `changed_fields` (columns changed), `blocked_fields`
+  (auth-sensitive params submitted but stripped by 15G.2). **Field NAMES only, never values**; auditing never
+  breaks the request (rescued).
+- **Never stored:** `password`, `password_confirmation`, `encrypted_password`, reset tokens, secrets, raw hashes.
+- **Auth smoke (`.github/scripts/auth-smoke.sh`):** optional operator-run dev/staging login smoke with a
+  **dedicated disposable test admin** — refuses the owner account + production URLs, reads the password from a
+  file (never argv/`ps`), verifies sign-in success + deployed `/app/.git_sha`. Not auto-wired (no CI secret).
+- **Runbook §7:** password changes only via the Devise reset flow (never the generic Users edit); audit fields +
+  exclusions; the auth-smoke procedure.
+- **Dev runtime verification (task 1):** deployed SHA `f140717…`; owner login-ready (SuperAdmin/confirmed/owner
+  active; recovery reset applied — fingerprint changed); `/super_admin/sign_in` = 200; deployed code carries the
+  15G.2 protections.
+- **Not changed:** no rollback, no password reset (recovery already done), no production, no WhatsApp/Meta/
+  provider credentials, no business/account role semantics, no Devise/secret/session config.
+- **Migration:** `20260630000001_create_bloomwire_admin_audit_logs` (additive). **Tests:** audit request spec
+  (3) + 15G.2 (10) + user-flow (6) green; RuboCop clean; `bash -n` on the smoke script OK.
 
 ---
 

@@ -16,7 +16,15 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
 
   def update
     requested_resource.skip_reconfirmation! if resource_params[:confirmed_at].present?
+    blocked = attempted_auth_sensitive_fields
     super
+    # Phase 15G.3: audit this admin user edit (field NAMES only, never values). `blocked` = auth-sensitive
+    # params that were submitted but stripped by resource_params (15G.2). Auditing never breaks the request.
+    Bloomwire::AdminUserAudit.record_update!(
+      actor: current_super_admin, target: requested_resource,
+      changed_fields: requested_resource.saved_changes.keys, blocked_fields: blocked,
+      controller: controller_path, action: action_name
+    )
   end
 
   # Override this method to specify custom lookup behavior.
@@ -81,6 +89,15 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
     # drops :type from form/permitted attributes in Mode ON.)
     permitted_params.delete(:type) if Bloomwire::Features.master_enabled?
     permitted_params
+  end
+
+  # Phase 15G.3: the auth-sensitive params the client SUBMITTED on this update (NAMES only — recorded as the
+  # audit's blocked_fields). Values are never read or stored. resource_params strips these (15G.2).
+  def attempted_auth_sensitive_fields
+    raw = params[:user]
+    return [] unless raw.respond_to?(:key?)
+
+    AUTH_SENSITIVE_UPDATE_PARAMS.map(&:to_s).select { |field| raw.key?(field) }
   end
 
   # See https://administrate-prototype.herokuapp.com/customizing_controller_actions
