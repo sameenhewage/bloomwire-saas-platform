@@ -13,13 +13,21 @@
       <div style="font-size:15px;line-height:1.6;color:#1f2937;">
         <%= simple_format(body.to_s) %>
       </div>
-      <% if cta_label.to_s.present? && cta_url.to_s.present? %>
-        <div style="text-align:center;margin:28px 0 4px;">
-          <a href="<%= cta_url %>" target="_blank" rel="nofollow noopener"
-             style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;padding:12px 30px;border-radius:8px;font-size:15px;font-weight:600;">
-            <%= cta_label %>
-          </a>
-        </div>
+      <%# Phase 15F.6: email-safe CTA button. Rendered ONLY when the (resolved) URL is an absolute http(s)://
+          link — a scheme-less/relative href is neutralized by email clients (button degrades to raw text), and
+          the send/preview already block that case. Table + td bgcolor is the email-client-robust button pattern
+          (Outlook/Gmail/Apple Mail); inline styles only; label + href are HTML-escaped by <%%=. %>
+      <% if cta_label.to_s.present? && Bloomwire::EmailTemplate.absolute_cta_url?(cta_url) %>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:28px auto 4px;">
+          <tr>
+            <td align="center" bgcolor="#7c3aed" style="border-radius:8px;">
+              <a href="<%= cta_url %>" target="_blank" rel="nofollow noopener"
+                 style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;padding:12px 30px;border-radius:8px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;line-height:1.2;">
+                <%= cta_label %>
+              </a>
+            </td>
+          </tr>
+        </table>
       <% end %>
     </div>
     <div style="text-align:center;color:#9ca3af;font-size:12px;line-height:1.6;padding:18px 0 4px;">

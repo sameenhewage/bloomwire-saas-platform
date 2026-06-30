@@ -16,7 +16,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 15F.UI — Email Templates UI Polish & Responsive Upgrade
-- **PR:** _pending_
+- **PR:** #90 — _pending review/deploy_
 - **Merge SHA:** _pending merge_
 - **Type:** Owner-only SuperAdmin **UI/UX + responsive** polish for Email Settings → Email Templates.
   **CSS + view-wrapper only — no behavior, controller, model, route, or DB change.**
@@ -43,6 +43,38 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   (**53 examples, 0 failures** on the render specs); SCSS compiles (Vite build CI). Runtime QA + before/after on
   dev pending deploy.
 - **Scope note:** Templates tab + shared page shell/status cards only; other Email Settings tabs untouched.
+
+### Phase 15F.6 — Email CTA Button Rendering Fix
+- **PR:** #89
+- **Merge SHA:** `53e3e7bffacbede7f0515ed82cffbd04c9693fca` (fast-forwarded into `version_1`)
+- **Dev status:** **DEV PASS** — deployed to dev (`53e3e7b`), runtime QA passed 2026-06-30: scheme-less CTA URL
+  blocked before SMTP; valid `https://` renders the email-safe purple button (absolute href); delivered HTML has
+  no `[www.google.com]Accept Invitation`; text fallback `Accept Invitation: https://…`; preview == delivered.
+- **Type:** Owner-only SuperAdmin email-rendering + validation bugfix (Send from Template CTA). **No DB migration.**
+- **Root cause:** the template's stored `cta_url` (`{{invitation_link}}`) passed the template-level
+  `cta_url_safe_scheme` validation (placeholder is allowed), but the **RESOLVED** CTA URL (after the owner fills a
+  variable) was **never validated**. A scheme-less value like `www.google.com` flowed through `SendTemplateEmailService`
+  to the mailer, producing a **relative `<a href="www.google.com">`**. Email clients (e.g. Gmail) neutralize a
+  relative/scheme-less href in HTML email, so the styled button collapsed to raw text and the URL leaked —
+  delivered as `[www.google.com]Accept Invitation` instead of a purple button.
+- **What changed:**
+  - **Resolved-URL validation:** new `Bloomwire::EmailTemplate.absolute_cta_url?` (requires absolute
+    `http(s)://`). `SendTemplateEmailService` now **blocks before SMTP** with `invalid_cta_url` when a CTA link is
+    present but not absolute — message: *"Enter a full URL starting with https:// for the button link
+    (e.g. https://example.com)."* (Also blocks `javascript:`/`data:` injected via a variable value.)
+  - **Email-safe button:** the shared `_branded_email.html.erb` now renders the CTA as a **table + `td bgcolor`**
+    button (robust across Outlook/Gmail/Apple Mail), inline styles only, label + href HTML-escaped, and only when
+    the URL is absolute — so a broken/relative button is never emitted.
+  - **Preview == delivered:** the composer disables Send + shows a *"Button link must be a full URL"* block when
+    the resolved link is not absolute, and the Final preview (same shared partial) hides the button — matching the
+    blocked send (no fake working button).
+  - **Text fallback** unchanged and correct: `Accept Invitation: https://…` (never `[url]label`).
+- **Not changed:** no DB migration; no SMTP secret/credential change; no DNS; no WhatsApp/Meta; no auth/audit
+  (15G.2/15G.3) behavior; CTA label interpolation (15F.2) and send-feedback UX (15F.3) preserved.
+- **Validation:** model unit (`absolute_cta_url?`), service (scheme-less blocks pre-SMTP, absolute sends, no-CTA
+  sends), mailer (table button + absolute href + no `[url]label`; defense-in-depth skip for non-absolute), request
+  (composer block + message, valid send, preview block-state). Full Bloomwire email + 15G.2 + 15G.3 suite
+  **123 examples, 0 failures**; RuboCop clean. No SMTP secret in body/logs.
 
 ### Phase 15F.3 — Email Send Feedback UX Polish
 - **PR:** #86

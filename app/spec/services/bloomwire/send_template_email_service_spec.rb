@@ -109,6 +109,41 @@ RSpec.describe Bloomwire::SendTemplateEmailService do
     expect(ActionMailer::Base.deliveries).to be_empty
   end
 
+  it 'blocks a scheme-less/relative CTA URL before SMTP (Phase 15F.6 — must be absolute http(s)://)' do
+    expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
+    comp = described_class::Composition.new(
+      template: template, recipient: 'to@example.com', subject: 'Hi Jane', body: 'Hello Jane at Acme',
+      cta_label: 'Accept Invitation', cta_url: 'www.google.com'
+    )
+    result = described_class.new(setting: complete_setting, composition: comp).call
+    expect(result.status).to eq('blocked')
+    expect(result.message).to match(%r{https://}i)
+    expect(Bloomwire::EmailDeliveryLog.last.error_message).to match(/full URL|https/i)
+    expect(ActionMailer::Base.deliveries).to be_empty
+  end
+
+  it 'delivers when the CTA URL is an absolute https URL (Phase 15F.6)' do
+    delivery = instance_double(ActionMailer::MessageDelivery, deliver_now: true)
+    allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
+    comp = described_class::Composition.new(
+      template: template, recipient: 'to@example.com', subject: 'Hi Jane', body: 'Hello Jane at Acme',
+      cta_label: 'Accept Invitation', cta_url: 'https://www.google.com'
+    )
+    result = described_class.new(setting: complete_setting, composition: comp).call
+    expect(result.status).to eq('success')
+  end
+
+  it 'sends a template with NO CTA (blank url) — CTA validation only applies when a link is present (15F.6)' do
+    delivery = instance_double(ActionMailer::MessageDelivery, deliver_now: true)
+    allow(Bloomwire::EmailTestMailer).to receive(:template_email).and_return(delivery)
+    comp = described_class::Composition.new(
+      template: template, recipient: 'to@example.com', subject: 'Hi Jane', body: 'Hello Jane at Acme',
+      cta_label: '', cta_url: ''
+    )
+    result = described_class.new(setting: complete_setting, composition: comp).call
+    expect(result.status).to eq('success')
+  end
+
   it 'blocks a leftover {{placeholder}} in the CTA LABEL before SMTP (review fix)' do
     expect(Bloomwire::EmailTestMailer).not_to receive(:template_email)
     comp = described_class::Composition.new(
