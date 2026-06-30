@@ -30,8 +30,19 @@ receipt of both dev QA emails: **"You're invited to join QA Biz Ltd on Bloomwire
 - **No production deploy** was performed; **audit rows were not purged**; **no WhatsApp/Meta/provider
   credentials** were touched.
 - **Phase 16 is READY to start** (all auth + email flows are DEV PASS and the email receipts are confirmed).
-- **Non-blocking follow-ups:** Phase **15F.3** (POST-based composer preview / query-string hardening) and Phase
-  **15G.4** (optional auth-audit polish: record `type` in `blocked_fields`, trim `changed_fields` noise).
+
+**Phase roadmap / numbering (authoritative):**
+
+| Phase | Scope | Status |
+|---|---|---|
+| **15F.2** | Email Template UX Completion | **100% DEV PASS** (PR #84, merged `ea3487b`) |
+| **15F.3** | Email **Send Feedback UX Polish** | PR #86 — **pending review/deploy** (held for review) |
+| **15F.4** | Email **Deliverability + Domain Authentication** | PR #87 — **report-only / docs-only** |
+| **15F.5** | **POST-based composer preview / query-string hardening** | **future follow-up** (not yet started) |
+| **15G.4** | Optional **auth-audit polish** (record `type` in `blocked_fields`, trim `changed_fields` noise) | **future follow-up** |
+
+> Note: the POST-based composer preview / query-string hardening is **Phase 15F.5** — it is **not** 15F.3
+> (15F.3 is the Send Feedback UX Polish). Earlier drafts that called it "15F.3" have been corrected.
 
 ### Phase 15F.2 — Email Template UX Completion + QA Findings Polish
 - **PR:** #84
@@ -75,7 +86,7 @@ receipt of both dev QA emails: **"You're invited to join QA Biz Ltd on Bloomwire
   (15G.2) or admin-audit (15G.3) behavior. Existing successful send/log behavior preserved (now requires all
   variables filled).
 - **Deferred follow-ups:** (a) the composer's "Update preview" uses a GET round-trip, so composer values appear
-  in the preview URL query string — tracked as **Phase 15F.3 / UX hardening** (e.g. a POST-based preview); not
+  in the preview URL query string — tracked as **Phase 15F.5** (POST-based preview / query-string hardening); not
   fixed here (out of scope, not risk-free). (b) optional auth-audit polish (record `type` in `blocked_fields`,
   trim `changed_fields` noise) → **Phase 15G.4**.
 - **Validation:** model + service + send-request specs (incl. dynamic vars, custom vars, CTA-label vars,

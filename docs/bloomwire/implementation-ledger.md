@@ -67,8 +67,10 @@
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
 > dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched.
-> **Phase 16 is READY to start.** Non-blocking follow-ups: **15F.3** (POST-based preview / query-string
-> hardening), **15G.4** (optional auth-audit polish).
+> **Phase 16 is READY to start.** Roadmap (authoritative): **15F.3** = Email Send Feedback UX Polish (PR #86,
+> pending review/deploy); **15F.4** = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only);
+> **15F.5** = POST-based composer preview / query-string hardening (future); **15G.4** = optional auth-audit polish
+> (future). The POST-based preview hardening is **15F.5**, not 15F.3.
 
 ---
 
@@ -303,8 +305,8 @@
   (subject/body/CTA label/CTA URL) before SMTP (blocked Email Log + clear message); composer shows inline "fill
   these in" + disables Send.
 - **Email Logs:** literal sent subject column added (data already stored per send). Sample preview relabeled.
-- **Deferred:** composer "Update preview" GET round-trip puts values in the URL query string → **Phase 15F.3**
-  UX hardening (POST-based preview); optional auth-audit polish → **15G.4**.
+- **Deferred:** composer "Update preview" GET round-trip puts values in the URL query string → **Phase 15F.5**
+  (POST-based preview / query-string hardening); optional auth-audit polish → **15G.4**.
 - **Not changed:** no DB migration; no SMTP secret/credential change; no WhatsApp/Meta; no 15G.2/15G.3 auth
   behavior. CRUD (create/edit/duplicate/deactivate/reactivate) preserved. Optional auth-audit polish deferred to
   **15G.4**.
