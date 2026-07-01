@@ -16,7 +16,7 @@
   }
   hidden_resources = %w[account_users access_tokens installation_configs dashboard devise/sessions app_configs
                         bloomwire_configs bloomwire_whatsapp_setups bloomwire_whatsapp_setup_requests
-                        bloomwire_customer_provisionings bloomwire_platform_admins instance_statuses settings
+                        bloomwire_platform_admins instance_statuses settings
                         push_diagnostics bloomwire_email_settings bloomwire_email_templates]
 %>
 
@@ -57,7 +57,6 @@
             </summary>
             <ul class="bw-nav-sub">
               <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setups_url, label: 'All Setups' } %>
-              <%= render partial: 'nav_item', locals: { url: new_super_admin_bloomwire_customer_provisioning_url, label: 'New Provision' } %>
               <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setup_requests_url, label: 'WhatsApp Requests' } %>
             </ul>
           </details>

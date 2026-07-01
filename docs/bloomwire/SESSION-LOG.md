@@ -19,17 +19,17 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `9b09f9e`  (Phase 16C merged — PR #95)
-- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`)
-- **Open PRs:** docs-only **16C DEV-PASS stamp** (PR #96, this change) — not merged.
-- **Latest completed:** Phase **16C** (Business-owner activation — Ops "Send activation email") — merged PR #95 (`9b09f9e`), **`DEV PASS` end-to-end** on dev: owner **received the activation email, set a password, logged in, and reached the native Chatwoot inbox**; admin-only targeting, safe audit, no new grant, roles unchanged, no secrets, no Meta/WhatsApp. (Before it: 15F.UI DEV PASS, PR #90 `88e0701`, stamp PR #91; product-framing docs PR #94 `a42cb2b`.)
-- **16C mailer blocker — RESOLVED:** dev **global `SMTP_*` env was empty** → stock `config/initializers/mailer.rb` fell back to broken `sendmail` (`Errno::EPIPE`, no delivery). **Fixed operationally on dev:** populated the global `SMTP_*` env from the owner's local `#PERSONAL EMAIL SETTINGS` (`SMTP_PORT=587`, STARTTLS) + recreated rails+sidekiq → `delivery_method=:smtp` (rails+sidekiq). No `Bloomwire::EmailSetting` change · no code change · no credential values printed. (Per-account *Email Settings* SMTP is a separate DB-backed path.)
-- **Working tree:** clean; nothing in-flight except this docs stamp.
+- **`version_1` tip:** `1df6799`  (PR #96 merged — 16C DEV-PASS docs stamp)
+- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A not deployed.
+- **Latest completed / merged:** **PR #96** — Phase **16C** DEV-PASS docs stamp, merged into `version_1` (`1df6799`). Phase 16C itself is **DEV PASS end-to-end** (owner received the activation email → set password → logged in → native inbox). Before it: 15F.UI DEV PASS (PR #90 `88e0701`); product-framing docs (PR #94 `a42cb2b`).
+- **In-flight / open (NOT merged):** **Phase 17A** — remove SuperAdmin provisioning + manual setup-mapping UI. **PR #97**, head `55e5464`, branch `feature/bloomwire-phase-17a-remove-provisioning` — **open · CI green (8/8) · not merged.** **Implemented on the PR branch but not completed/merged yet** (full Bloomwire scope 647 ex, 0 fail; router/mapping preserved; no table drops / no data deleted). Removes the SuperAdmin "Provision customer" flow + standalone "New setup mapping" CRUD + the 16C owner-activation (once merged, 16C is superseded); keeps global webhook/router + `Bloomwire::WhatsappSetup` mapping + encrypted `Channel::Whatsapp#provider_config` + `WhatsappCredentialWriter` + read-only observability.
+- **New architecture (ADR-0008 — lands with PR #97, not yet merged):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only**; account/user creation stays **native** (SuperAdmin → Accounts/Users); customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (wizard, PR C); the internal mapping stays but is created by the wizard, not manual Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed later, after PR C).
+- **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Prod parity (important):** the **production** global `SMTP_*` env must likewise be populated — the same empty-env root cause would block prod activation/reset/invite emails. The fix so far is **dev-only** (operational `.env`).
-  2. **Owner-assisted before/after screenshots** for 15F.6 + 15F.UI (MCP browser not logged in — owner captures). Widths 1440/1280/1024/768 at `…/bloomwire_email_settings?tab=templates&template_id=1`.
-  3. **Phase 15F.5** — POST-based composer preview / query-string hardening (future follow-up).
-  4. **Phase 15F.4 (production)** — email deliverability: dedicated sending subdomain + transactional provider + SPF/DKIM/DMARC. Report-only done (PR #87); blocks production/client email readiness only, not dev.
+  1. **PR B** — rebuild the read-only WhatsApp Setups surface into a **Global WhatsApp Platform Config** page (webhook URL · verify-token status · router enabled/disabled · webhook health · last webhook received · platform readiness · read-only connected-inbox list).
+  2. **PR C** — customer-side **Add Inbox wizard** (Bloomwire mode ON) that creates the WhatsApp channel + inbox + `WhatsappSetup` mapping (seam: `ChannelFactory.vue` + `useBloomwireCapabilities`); then remove the parked `WhatsappSetupRequest`.
+  3. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
+  4. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability: subdomain + transactional provider + SPF/DKIM/DMARC, PR #87).
 
 ---
 
@@ -73,6 +73,33 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-01 — Phase 17A — Remove SuperAdmin provisioning + manual setup-mapping UI (architecture pivot, PR A)
+- **Owner decision:** kill the SuperAdmin "Provision new WhatsApp customer" flow and the standalone "New setup
+  mapping" CRUD (over-engineered; duplicate Chatwoot account/user/inbox). New model (ADR-0008): SuperAdmin
+  WhatsApp = **Global config only**; native SuperAdmin → Accounts/Users for account/user creation; customers set
+  up WhatsApp from **Account Settings → Inboxes → Add Inbox** (wizard, PR C); the router mapping stays, created
+  by the wizard.
+- **Removed (branch `feature/bloomwire-phase-17a-remove-provisioning`, off `version_1` `1df6799`):**
+  `bloomwire_customer_provisionings` controller/route/view · `Bloomwire::CustomerProvisioningService` ·
+  `bloomwire_whatsapp_setups` `new/create/edit/update` (+ new/edit/_form views) → `only: [:index, :show]` · **16C**
+  `send_owner_activation` + `Bloomwire::BusinessOwnerActivator` + "Business owner access" card (owner decision
+  6a — redundant now; native Devise invite/reset covers it) · nav "New Provision" + index provision/new-mapping/
+  edit links · obsolete specs (provisionings, provisioning service, activator, owner-activation request) ·
+  refactored boundary/setups/ops-boundary specs off `CustomerProvisioningService`.
+- **Kept (router must-stay):** global webhook + `WhatsappRouter`; `Bloomwire::WhatsappSetup` model+table (router
+  resolves `ready_for_webhook.where(phone_number_id:)`); encrypted `Channel::Whatsapp#provider_config` +
+  `WhatsappCredentialWriter`; readiness; read-only index/show/readiness/credentials (transitional → PR B).
+- **Parked (owner decision 6b):** `Bloomwire::WhatsappSetupRequest` deprecated in docs/routes comments — **not
+  removed**, table retained; remove later after PR C.
+- **Not dropped:** no migration · **no table drops · no data deleted** — setup #1 / account #1 untouched, router
+  still resolves it.
+- **Validation:** new routing spec (removed routes absent; observability + parked setup-requests routable) · full
+  Bloomwire spec scope **647 examples, 0 failures (1 pre-existing pending)** · router + whatsapp_events_job
+  regression green · RuboCop clean. No deploy · no production · no Meta/WhatsApp · no secrets · no DB drops.
+- **New ADR-0008** created (architecture pivot); ADR-0004 left focused on the router (short pointer added).
+- **Gotcha:** with `resources … only: [:index, :show]`, the path `…/new` is absorbed by the `show` `:id` route
+  (id=`'new'`), so assert route-removal of `new` via `route_to(…#show, id: 'new')`, not `not_to be_routable`.
 
 ### 2026-07-01 — Phase 16C mailer fix → end-to-end `DEV PASS` (docs stamp amended, PR #96)
 - **Root cause of the earlier block:** the dev **global `SMTP_*` env was empty** (`SMTP_ADDRESS`/`SMTP_USERNAME`/

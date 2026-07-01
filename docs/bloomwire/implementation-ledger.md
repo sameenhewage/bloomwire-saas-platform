@@ -71,7 +71,8 @@
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
 | 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
-| 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) |
+| 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) · **superseded/removed by 17A** |
+| 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | _pending_ | Implemented (removal) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -291,6 +292,31 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 17A — Remove SuperAdmin customer-provisioning + manual setup-mapping UI — `Implemented (removal)` — PR _pending_
+- **Decision (ADR-0008):** the SuperAdmin "Provision new WhatsApp customer" flow and the standalone "New setup
+  mapping" CRUD were over-engineered and duplicated Chatwoot's native account/user/inbox model. New architecture:
+  **SuperAdmin WhatsApp = Global WhatsApp Platform Config only** · account/user creation stays **native**
+  (SuperAdmin → Accounts/Users) · customers complete WhatsApp setup from **Account Settings → Inboxes → Add Inbox**
+  · the internal `phone_number_id → inbox/channel` mapping remains but is created by the **customer-side wizard**
+  (PR C), not manual Ops UI.
+- **Removed:** `super_admin/bloomwire_customer_provisionings_controller` + route + view + `Bloomwire::CustomerProvisioningService`;
+  `bloomwire_whatsapp_setups` actions `new/create/edit/update` (+ `new`/`edit`/`_form` views) → route `only:
+  [:index, :show]`; **16C** `send_owner_activation` + `Bloomwire::BusinessOwnerActivator` + "Business owner
+  access" card (redundant now — native Devise invite/reset covers owner access once provisioning is gone); nav
+  "New Provision" + index provision/new-mapping/edit links; obsolete specs; stale controller-name refs.
+- **Kept intact (router must-stay):** `Bloomwire::Webhooks::WhatsappRouter` + webhook controller;
+  `Bloomwire::WhatsappSetup` model + `bloomwire_whatsapp_setups` table (router resolves
+  `ready_for_webhook.where(phone_number_id:)` → inbox/channel); encrypted `Channel::Whatsapp#provider_config` +
+  `Bloomwire::WhatsappCredentialWriter`; `WhatsappRealHopReadiness`; read-only index/show/readiness/credentials
+  (transitional → Global Config in PR B).
+- **Not changed / not dropped:** no migration, **no table drops, no data deleted** — existing setup #1 / account
+  #1 untouched and still routes. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed later after PR C).
+- **Validation:** routing spec (removed routes absent; observability + parked setup-requests routable) · boundary
+  + setups + ops-boundary specs refactored · **full Bloomwire scope 647 examples, 0 failures (1 pre-existing
+  pending)** · router + whatsapp_events_job regression green · RuboCop clean. No deploy · no Meta/WhatsApp · no secrets.
+- **Follow-ups:** PR B (rebuild read-only surface into Global WhatsApp Config) · PR C (customer Add Inbox wizard
+  that creates channel + inbox + `WhatsappSetup` mapping) · then remove the parked `WhatsappSetupRequest`.
 
 ### Phase 16C — Business-owner activation (set-password after provisioning) — `DEV PASS` (end-to-end) — PR #95 (merged `9b09f9e`)
 - **Trigger:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and

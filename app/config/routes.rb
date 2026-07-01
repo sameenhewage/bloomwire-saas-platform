@@ -684,23 +684,21 @@ Rails.application.routes.draw do
 
       resource :app_config, only: [:show, :create]
       resource :bloomwire_config, only: [:show, :create]
-      resources :bloomwire_whatsapp_setups, only: [:index, :new, :create, :show, :edit, :update] do
+      # Bloomwire Phase 17A: read-only WhatsApp observability surface (transitional → rebuilt into Global WhatsApp
+      # Config in PR B). The manual setup-mapping CRUD (new/create/edit/update) and the 16C owner-activation action
+      # were REMOVED; customer WhatsApp onboarding happens natively (Settings → Inboxes → Add Inbox, PR C). The
+      # internal router mapping (Bloomwire::WhatsappSetup) stays — created by the wizard, not manual Ops UI.
+      resources :bloomwire_whatsapp_setups, only: [:index, :show] do
         member do
           get :readiness
           # Bloomwire Phase 14 S2a: Ops-only credential-capture surface for the linked channel's provider_config.
           get :credentials
           patch :update_credentials
-          # Bloomwire Phase 16C: Ops-only "send activation email" — Devise set-password instructions to the
-          # setup account's business administrator(s). Creates no new records / no role change (only Devise's
-          # recoverable fields on the admin change); no platform-admin grant; no secrets.
-          post :send_owner_activation
         end
       end
+      # Bloomwire Phase 17A: setup-request intake queue — DEPRECATED / PARKED (superseded by the customer-side Add
+      # Inbox wizard in PR C). Kept read/update-only for now; to be removed later with a separate data-cleanup migration.
       resources :bloomwire_whatsapp_setup_requests, only: [:index, :show, :update]
-      # Bloomwire Phase 14 S3: Ops-only customer provisioning (account + owner + shell channel + setup mapping).
-      # :index is present so the SuperAdmin/Administrate layout can resolve the resource's collection path; it
-      # just redirects to the provisioning form.
-      resources :bloomwire_customer_provisionings, only: [:index, :new, :create]
       # Bloomwire Phase 15A.1: owner-only platform-admin management (grant/soft-revoke/reactivate).
       resources :bloomwire_platform_admins, only: [:index, :create] do
         member do

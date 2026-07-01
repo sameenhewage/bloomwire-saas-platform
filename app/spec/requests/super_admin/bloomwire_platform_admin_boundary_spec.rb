@@ -152,24 +152,4 @@ RSpec.describe 'Bloomwire Platform Admin Boundary', type: :request do
       expect(Bloomwire::PlatformAdmin.approved?(created)).to be(false)
     end
   end
-
-  describe 'S3 provisioned users remain normal Users with no platform access' do
-    it 'creates the owner and agent as type=nil and not platform admins' do
-      result = Bloomwire::CustomerProvisioningService.new(
-        account_name: 'Aroma Flora',
-        owner_email: "owner-#{SecureRandom.hex(4)}@example.com",
-        owner_name: 'Flora Owner',
-        agent_emails: "agent-#{SecureRandom.hex(4)}@example.com",
-        display_phone_number: '15551239999',
-        phone_number_id: "PNID-#{SecureRandom.hex(4)}",
-        business_account_id: "WABA-#{SecureRandom.hex(4)}"
-      ).perform
-
-      [result[:owner], *result[:agents]].each do |user|
-        expect(user.type).to be_nil
-        expect(SuperAdmin.exists?(id: user.id)).to be(false)
-        expect(Bloomwire::PlatformAdmin.approved?(user)).to be(false)
-      end
-    end
-  end
 end
