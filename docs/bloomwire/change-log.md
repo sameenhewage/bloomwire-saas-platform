@@ -38,20 +38,27 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   calls; no secrets.
 - **Files:** `app/services/bloomwire/business_owner_activator.rb` (new) · `super_admin/bloomwire_whatsapp_setups_controller.rb`
   · `config/routes.rb` · `views/super_admin/bloomwire_whatsapp_setups/show.html.erb` · specs · docs.
-- **DEV runtime (2026-06-30) — `PASS-BUT-BLOCKED`:** deployed `version_1 @ 9b09f9e` to dev (deploy run
-  `28461253274`; rails+sidekiq `/app/.git_sha` match · health 200 local+public · 0×5xx · postgres/redis volumes
-  preserved · no pending migrations). **Action runtime-verified** on dev: the setup-detail **"Business owner
-  access"** card renders, **"Send activation email"** returns a success flash, the **administrator's**
-  `reset_password_sent_at` updates while the **agent's** does **not** (admin-only targeting), **0** new
-  accounts/users/account_users/inboxes/conversations/messages, **no** `PlatformAdmin` grant, roles unchanged,
-  a safe audit row is written (field-names only: `changed_fields=[]`, `blocked_fields=[]`), and **no
-  token/password/reset-link** appears in UI or audit. **Blocked (owner email + login not exercised):** (1) the
-  only existing setup's administrator is the **real owner** (not a disposable target — not clicked), and (2) dev's
-  **global Devise mailer uses `sendmail` with no working MTA → `Errno::EPIPE`**, so the reset/activation email
-  does not deliver. (Note: the per-account Bloomwire *Email Settings* SMTP path is separate from the global Devise
-  mailer.) **No production deploy · no Meta/WhatsApp calls · no SMTP/mail-config or credential changes · no roles
-  changed · no real owner/user touched.** Devise tokens appear in Sidekiq job-arg logs for **all** Devise emails
-  (pre-existing Chatwoot/Sidekiq behavior, not introduced by 16C); Phase 16C's own UI/flash/audit expose none.
+- **DEV runtime (2026-06-30 → 2026-07-01) — `DEV PASS` (end-to-end):** deployed `version_1 @ 9b09f9e` to dev
+  (deploy run `28461253274`; rails+sidekiq `/app/.git_sha` match · health 200 local+public · 0×5xx · postgres/redis
+  volumes preserved · no pending migrations). **Feature end-to-end verified on dev:** the setup-detail **"Business
+  owner access"** card renders, **"Send activation email"** works and targeted the **real account administrator**
+  `User #2` / `sameen@bloomwire.lk` (account #1 admin). The owner **received the email, set a password, logged in,
+  and reached the native Chatwoot inbox** — confirmed. `reset_password_sent_at` was set at send-time then **cleared
+  by Devise after the successful reset** (expected; `reset_password_token` also cleared = consumed). Safe audit row
+  written (`action=send_owner_activation`, field-names only: `changed_fields=[]`, `blocked_fields=[]`); **no** reset
+  token/password/link exposed in UI/audit/docs; **no** `PlatformAdmin` grant created by the activation (`User #2`'s
+  pre-existing `owner` grant is old — **0** new grants in the last 30m/12h); roles unchanged (`User #2`=administrator;
+  `sameen.android@gmail.com` / `User #50`=agent, SMTP sender/dev only, never made admin); **no** Meta/WhatsApp calls;
+  **no** production deploy. SMTP verified with booleans/masked output only — no secrets printed. (Devise tokens do
+  appear in Sidekiq job-arg logs for all Devise emails — pre-existing Chatwoot behavior, not 16C.)
+- **Mailer root cause & fix (why the earlier block cleared):** the earlier `PASS-BUT-BLOCKED` was caused by the dev
+  **global SMTP env being empty**, so stock Chatwoot `config/initializers/mailer.rb` correctly fell back to
+  `:sendmail`, which had no working MTA → `Errno::EPIPE` (no delivery). Phase 15F **templated** emails worked because
+  they use the **DB-backed `Bloomwire::EmailSetting`** SMTP path; Devise/16C use the **global ActionMailer (ENV)**
+  path. **Fix (operational, dev only):** populated the dev global `SMTP_*` env from the owner's local
+  `#PERSONAL EMAIL SETTINGS` block (`SMTP_PORT=587`, STARTTLS on) and **recreated rails + sidekiq** →
+  `delivery_method=:smtp` on both. **No `Bloomwire::EmailSetting` change · no code change · no credential values
+  printed · no production deploy.**
 
 ### Docs — Product framing correction
 - **PR:** _pending_ · **Type:** docs-only (no code, no runtime behavior, no deploy).
