@@ -26,12 +26,26 @@ module Bloomwire::Capabilities
       # Connect/config writes are already blocked server-side (PR #47); this drives the UI hide + route block.
       # The catalog READ (apps#index/show) intentionally stays open — it is consumed by runtime conversation
       # surfaces (ContactPanel Linear, video-call button, label suggestions), so it must not 403.
-      canAccessIntegrations: capability(admin, Bloomwire::Features.restrict_provider_setup?)
+      canAccessIntegrations: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      # Phase 17C.1: the managed, customer self-serve WhatsApp onboarding wizard (Embedded Signup first) is
+      # available to a business ADMINISTRATOR only when native WhatsApp setup is managed (Bloomwire mode ON AND
+      # native WhatsApp restricted). It is the mutually-exclusive counterpart of canManageNativeWhatsappSetup:
+      # when native setup is allowed the admin uses the native flow; when native setup is restricted (managed)
+      # the admin self-serves the managed wizard. With Bloomwire OFF this is false (stock has no managed
+      # self-serve path); agents are always false. Backend enforcement (the future dedicated endpoint) remains
+      # the boundary — this only drives UI availability.
+      canSelfServeManagedWhatsapp: managed_capability(admin, Bloomwire::Features.restrict_native_whatsapp_setup?)
     }
   end
 
   # A capability is true only when the user is an administrator AND the matching restriction is NOT in effect.
   def capability(admin, restricted)
     admin && !restricted
+  end
+
+  # A managed capability is true only when the user is an administrator AND the managed feature IS in effect
+  # (the positive counterpart of `capability`). Used for managed-mode-only surfaces (e.g. self-serve WhatsApp).
+  def managed_capability(admin, enabled)
+    admin && enabled
   end
 end

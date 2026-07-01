@@ -33,7 +33,7 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
                                          canManageAccountControlPlane canManageProviderSetup
                                          canManageNativeWhatsappSetup canDeleteManagedProviderInbox
                                          canRegisterProviderWebhook canCreateInbox canManageBots
-                                         canAccessIntegrations
+                                         canAccessIntegrations canSelfServeManagedWhatsapp
                                        ])
       expect(caps.values).to all(be_in([true, false]))
     end
@@ -126,6 +126,49 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
   describe 'agent role' do
     it 'reports account-control capability false for an agent (regardless of toggle)' do
       expect(caps_for(agent)['canManageAccountControlPlane']).to be(false)
+    end
+  end
+
+  # Phase 17C.1 — managed self-serve WhatsApp onboarding (Embedded Signup first).
+  describe 'canSelfServeManagedWhatsapp' do
+    context 'when Bloomwire mode is ON and native WhatsApp setup is restricted (managed)' do
+      before do
+        set_toggle('BLOOMWIRE_MODE_ENABLED', true)
+        set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
+      end
+
+      it 'is true for a business administrator' do
+        expect(caps_for(administrator)['canSelfServeManagedWhatsapp']).to be(true)
+      end
+
+      it 'is false for an agent' do
+        expect(caps_for(agent)['canSelfServeManagedWhatsapp']).to be(false)
+      end
+
+      it 'does not weaken canManageNativeWhatsappSetup (native stays restricted for the admin)' do
+        expect(caps_for(administrator)['canManageNativeWhatsappSetup']).to be(false)
+      end
+    end
+
+    context 'when Bloomwire mode is ON but native WhatsApp setup is NOT restricted' do
+      before { set_toggle('BLOOMWIRE_MODE_ENABLED', true) } # restrict toggle stays OFF
+
+      it 'is false for an administrator (they use the native flow instead)' do
+        expect(caps_for(administrator)['canSelfServeManagedWhatsapp']).to be(false)
+      end
+
+      it 'keeps canManageNativeWhatsappSetup true for the admin (native not weakened)' do
+        expect(caps_for(administrator)['canManageNativeWhatsappSetup']).to be(true)
+      end
+    end
+
+    context 'when Bloomwire is OFF (stock)' do
+      it 'is false for an administrator and leaves native/inbox capabilities at stock (true)' do
+        caps = caps_for(administrator)
+        expect(caps['canSelfServeManagedWhatsapp']).to be(false)
+        expect(caps['canManageNativeWhatsappSetup']).to be(true)
+        expect(caps['canCreateInbox']).to be(true)
+      end
     end
   end
 end

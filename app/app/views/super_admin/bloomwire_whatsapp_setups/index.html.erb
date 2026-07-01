@@ -49,6 +49,14 @@
       <dd class="bw-dl__value font-mono text-xs"><%= gc[:app_id].presence || 'Not configured' %></dd>
     </div>
     <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Embedded Signup config (WHATSAPP_CONFIGURATION_ID)</dt>
+      <dd class="bw-dl__value">
+        <span class="bw-badge <%= gc[:configuration_id_present] ? 'bw-badge--success' : 'bw-badge--danger' %>" data-config="configuration_id" data-present="<%= gc[:configuration_id_present] %>">
+          <%= gc[:configuration_id_present] ? 'Present' : 'Missing' %>
+        </span>
+      </dd>
+    </div>
+    <div class="bw-dl__row">
       <dt class="bw-dl__key w-64">Meta App Secret</dt>
       <dd class="bw-dl__value">
         <span class="bw-badge <%= gc[:app_secret_present] ? 'bw-badge--success' : 'bw-badge--danger' %>" data-secret="app_secret" data-present="<%= gc[:app_secret_present] %>">

@@ -19,15 +19,15 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `6eac9fa`  (PR #98 merged — Phase 17B Global WhatsApp Config)
-- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B not deployed.
+- **`version_1` tip:** `5a8952b`  (PR #99 merged — 17B docs stamp; 17B code merged at `6eac9fa`)
+- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1 not deployed.
 - **Latest completed / merged:** **PR #98** — Phase **17B** SuperAdmin **"Global WhatsApp Config"** page (read-only), merged into `version_1` (`6eac9faf2cf50bf9910da4ae62179c73cfb96957`). `Bloomwire::GlobalWhatsappConfig` (secret-free) drives the setups `index`: webhook callback URL · Meta App ID (public; **required readiness prerequisite** — missing `WHATSAPP_APP_ID` blocks `platform_ready`) · **App Secret / verify token = Present/Missing only** · router on/off · platform readiness + blockers · "Last webhook received: Not tracked yet" · read-only connected-inbox list. No migration · no store · no secrets · no Meta/WhatsApp · no deploy. Before it: PR #97 (17A removal, `8719de2`); PR #96 (16C docs stamp, `1df6799`).
-- **In-flight / open:** **none** (17B merged). Next feature milestone = PR C (not started).
+- **In-flight / open (NOT merged):** **Phase 17C.1** — backend foundation for customer WhatsApp Embedded Signup. Branch `feature/bloomwire-phase-17c1-embedded-signup-foundation` — **implemented; PR to open.** New capability `canSelfServeManagedWhatsapp` (admin + Bloomwire ON + native WhatsApp restricted; mutually-exclusive with `canManageNativeWhatsappSetup`) · new `Bloomwire::WhatsappSetupCreator` (non-secret router-mapping create/update for an existing channel+inbox; idempotent; cross-account-safe; **no secrets/provider_config**) · `WHATSAPP_CONFIGURATION_ID` presence-only readiness prerequisite in `GlobalWhatsappConfig`. **No endpoint/token-exchange/Meta-client/wizard/channel-inbox-creation** (later slices). Full Bloomwire scope **677 ex, 0 fail**.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **PR C** — customer-side **Add Inbox → WhatsApp → Embedded Signup wizard** (Bloomwire mode ON) that creates the WhatsApp channel + inbox + `WhatsappSetup` mapping (seam: `ChannelFactory.vue` + `useBloomwireCapabilities`); then remove the parked `WhatsappSetupRequest`.
+  1. **PR 17C.2** — dedicated Bloomwire embedded-signup **endpoint + service** (token exchange + phone info + channel[`source:bloomwire_managed`]+inbox + **app-to-WABA subscription at the GLOBAL callback** + `WhatsappSetupCreator`), Meta calls **stubbed** in specs. Then **17C.3** frontend wizard (`ChannelFactory.vue` + `useBloomwireCapabilities` + new `canSelfServeManagedWhatsapp`) + **17C.4** verify/go-live; then remove the parked `WhatsappSetupRequest`. **Owner decisions still needed:** dedicated endpoint vs native carve-out (recommend dedicated); Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys enabled before real customer tokens are stored.
   2. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   3. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
   4. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability, PR #87).
@@ -74,6 +74,31 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-01 — Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup (C1 only)
+- **Discovery first (17C.0):** confirmed the seams via 3 parallel read-only explorations — native embedded signup
+  registers a **per-channel** webhook (conflicts with the Bloomwire **global** router → a later slice needs a
+  dedicated endpoint + `source:'bloomwire_managed'`); both tables already exist (**no migration**); router mapping
+  contract = `ready_for_webhook` + `phone_number_id` + `inbox_id` + `channel_whatsapp_id` (+ channel alignment).
+- **Built (C1, branch `feature/bloomwire-phase-17c1-embedded-signup-foundation` off `version_1` `5a8952b`):**
+  1. capability **`canSelfServeManagedWhatsapp`** = `managed_capability(admin, restrict_native_whatsapp_setup?)`
+     — new `managed_capability` helper (positive counterpart of `capability`); mutually-exclusive with
+     `canManageNativeWhatsappSetup`; agents/OFF → false; existing caps untouched.
+  2. **`Bloomwire::WhatsappSetupCreator`** — non-secret router-mapping create/update for an existing channel+inbox
+     (`ready_for_webhook`); rejects api_key/provider_config kwargs; idempotent per `channel_whatsapp_id`; fails
+     closed (safe symbols) on cross-account / missing pnid / pnid-claimed-by-another-channel; never touches
+     `provider_config`; no account/user/inbox/channel creation; no Meta call.
+  3. **`WHATSAPP_CONFIGURATION_ID`** → presence-only Embedded-Signup prerequisite in `GlobalWhatsappConfig`
+     (named blocker + gates `platform_ready`; shown Present/Missing on the 17B page; value never rendered).
+- **Explicitly NOT done (C1 scope):** no dedicated endpoint, token exchange, Meta client, app-to-WABA
+  subscription, frontend wizard, channel/inbox creation, manual fallback, native `/whatsapp/authorization`
+  carve-out, or `channel.setup_webhooks`.
+- **Validation:** capability + creator + readiness specs; **full Bloomwire scope 677 examples, 0 failures (1
+  pre-existing pending)**; RuboCop clean. Regression: Global Config read-only; native auth still blocked; router
+  + setup #1 unchanged. No deploy · no production · no secrets printed/stored · no Meta/WhatsApp · no migration.
+- **Gotchas:** Ruby 3 `self.call(**)` anonymous forwarding for the ArgumentsForwarding cop; keyword-arg
+  constructor needs an inline `Metrics/ParameterLists` disable; data-driven/`same_account?` refactor to keep
+  `validate` under the complexity limit; `aggregate_failures` for multi-expectation examples.
 
 ### 2026-07-01 — Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only, PR B)
 - **Discovery first (owner-requested):** mapped where the global WhatsApp config/secrets live before building.

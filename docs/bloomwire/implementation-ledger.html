@@ -168,6 +168,7 @@
         <tr><td>16C</td><td>Business-owner activation (Ops "send activation email" &rarr; Devise set-password to account admins)</td><td>#95</td><td><span class="badge done">DEV PASS</span> <span class="badge done">end-to-end</span> <span class="badge docs">superseded/removed by 17A</span></td></tr>
         <tr><td>17A</td><td>Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping)</td><td>#97</td><td><span class="badge done">Merged</span> <code>8719de2</code></td></tr>
         <tr><td>17B</td><td>SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list</td><td>#98</td><td><span class="badge done">Merged</span> <code>6eac9fa</code></td></tr>
+        <tr><td>17C.1</td><td>Backend foundation for customer WhatsApp Embedded Signup (capability <code>canSelfServeManagedWhatsapp</code> + <code>WhatsappSetupCreator</code> + <code>WHATSAPP_CONFIGURATION_ID</code> readiness)</td><td><i>pending</i></td><td><span class="badge done">Implemented (backend foundation)</span></td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -325,6 +326,17 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup <span class="badge done">Implemented (backend foundation)</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Goal</b>: land backend seams (C1 only) for the future customer Add-Inbox &rarr; WhatsApp &rarr; Embedded Signup wizard, with no native-flow behavior change, no Meta calls, no migration, no secrets.</li>
+        <li><b>Capability</b> <code>canSelfServeManagedWhatsapp</code> = admin + Bloomwire ON + native WhatsApp restricted (mutually-exclusive with <code>canManageNativeWhatsappSetup</code>); agents/OFF &rarr; false; existing capabilities unchanged.</li>
+        <li><b>Service</b> <code>Bloomwire::WhatsappSetupCreator</code>: creates/updates the non-secret <code>WhatsappSetup</code> router mapping (status <code>ready_for_webhook</code>) for an existing channel+inbox. Non-secret inputs only (rejects api_key/provider_config); idempotent per <code>channel_whatsapp_id</code>; fails closed on cross-account / missing <code>phone_number_id</code> / pnid-claimed-by-another-channel. No account/user/inbox/channel creation; no Meta call; never mutates <code>provider_config</code>.</li>
+        <li><b>Readiness</b>: <code>WHATSAPP_CONFIGURATION_ID</code> added to <code>GlobalWhatsappConfig</code> as a presence-only Embedded-Signup prerequisite (named blocker when missing + gates <code>platform_ready</code>; shown Present/Missing; value never rendered).</li>
+        <li><b>Not done (C1)</b>: no dedicated endpoint, token exchange, Meta client, app-to-WABA subscription, frontend wizard, channel/inbox creation, manual fallback, or native <code>/whatsapp/authorization</code> carve-out.</li>
+        <li><b>Validation</b>: capability + creator + readiness specs; <b>full Bloomwire scope 677 examples, 0 failures (1 pre-existing pending)</b>; RuboCop clean. Regression: Global Config read-only; native auth still blocked; router + setup #1 unchanged. No deploy · no secrets · no Meta/WhatsApp · no migration.</li>
       </ul>
     </div>
 
