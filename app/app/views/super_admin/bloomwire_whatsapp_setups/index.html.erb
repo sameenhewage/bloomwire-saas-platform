@@ -1,26 +1,93 @@
 <% content_for(:title) do %>
-  WhatsApp Setups
+  Global WhatsApp Config
 <% end %>
 <% content_for(:breadcrumb) do %>
-  <%= bw_crumbs('Bloomwire', ['WhatsApp Setups', super_admin_bloomwire_whatsapp_setups_path], 'All Setups') %>
+  <%= bw_crumbs('Bloomwire', 'Global WhatsApp Config') %>
 <% end %>
+
+<% gc = @global_config %>
 
 <div class="bw-page-head">
   <div>
-    <h1 class="bw-page-title">WhatsApp Setups</h1>
+    <h1 class="bw-page-title">Global WhatsApp Config</h1>
     <p class="bw-page-subtitle">
-      Read-only status of managed WhatsApp inboxes — setup readiness and non-secret routing identifiers;
-      credentials live on the channel and are never shown here. Customers set up WhatsApp from their own account
-      (Settings → Inboxes → Add Inbox); this surface no longer creates or edits mappings.
+      Read-only view of the Bloomwire platform WhatsApp configuration (global webhook, router, and Meta app
+      credential status) and the connected WhatsApp inboxes. Global secrets are managed via environment / ops and
+      are shown here as <strong>present / missing only</strong> — never displayed or edited on this page. Customers
+      connect WhatsApp from their own account (Settings → Inboxes → Add Inbox).
     </p>
   </div>
 </div>
 
+<div class="bw-card">
+  <h2 class="bw-card__title">Platform configuration</h2>
+  <div class="flex flex-wrap items-center gap-3 mb-3">
+    <span class="bw-badge <%= gc[:platform_ready] ? 'bw-badge--success' : 'bw-badge--danger' %>" data-readiness="<%= gc[:platform_ready] ? 'ready' : 'blocked' %>">
+      Platform: <%= gc[:platform_ready] ? 'Ready' : 'Blocked' %>
+    </span>
+    <span class="bw-badge <%= gc[:bloomwire_mode_enabled] ? 'bw-badge--success' : 'bw-badge--neutral' %>" data-flag="bloomwire_mode">
+      Bloomwire mode: <%= gc[:bloomwire_mode_enabled] ? 'ON' : 'OFF' %>
+    </span>
+    <span class="bw-badge <%= gc[:router_enabled] ? 'bw-badge--success' : 'bw-badge--danger' %>" data-flag="webhook_router">
+      Webhook router: <%= gc[:router_enabled] ? 'Enabled' : 'Disabled' %>
+    </span>
+  </div>
+
+  <% if gc[:blockers].present? %>
+    <ul class="text-sm bw-text-secondary" data-role="blockers">
+      <% gc[:blockers].each do |blocker| %><li>⚠ <%= blocker %></li><% end %>
+    </ul>
+  <% end %>
+
+  <dl class="text-sm">
+    <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Global webhook callback URL</dt>
+      <dd class="bw-dl__value font-mono text-xs"><%= gc[:callback_url].presence || '— (set BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST)' %></dd>
+    </div>
+    <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Meta App ID</dt>
+      <dd class="bw-dl__value font-mono text-xs"><%= gc[:app_id].presence || 'Not configured' %></dd>
+    </div>
+    <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Meta App Secret</dt>
+      <dd class="bw-dl__value">
+        <span class="bw-badge <%= gc[:app_secret_present] ? 'bw-badge--success' : 'bw-badge--danger' %>" data-secret="app_secret" data-present="<%= gc[:app_secret_present] %>">
+          <%= gc[:app_secret_present] ? 'Present' : 'Missing' %>
+        </span>
+      </dd>
+    </div>
+    <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Webhook verify token</dt>
+      <dd class="bw-dl__value">
+        <span class="bw-badge <%= gc[:verify_token_present] ? 'bw-badge--success' : 'bw-badge--danger' %>" data-secret="verify_token" data-present="<%= gc[:verify_token_present] %>">
+          <%= gc[:verify_token_present] ? 'Present' : 'Missing' %>
+        </span>
+      </dd>
+    </div>
+    <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Last webhook received</dt>
+      <dd class="bw-dl__value bw-text-secondary" data-field="last_webhook_received">Not tracked yet</dd>
+    </div>
+    <div class="bw-dl__row">
+      <dt class="bw-dl__key w-64">Connected WhatsApp inboxes</dt>
+      <dd class="bw-dl__value"><%= gc[:connected_inbox_count] %></dd>
+    </div>
+  </dl>
+
+  <p class="bw-help mt-4">
+    App Secret and verify token are Bloomwire platform secrets, set via environment / ops — shown here as
+    present / missing only, and never displayed or edited on this page. Feature toggles (Bloomwire mode, webhook
+    router) are managed on the
+    <%= link_to 'Bloomwire Features', super_admin_bloomwire_config_path, class: 'bw-link' %> page.
+  </p>
+</div>
+
+<h2 class="bw-card__title" style="margin: 24px 4px 8px;">Connected WhatsApp inboxes</h2>
 <div class="bw-card bw-card--flush">
   <% if @setups.empty? %>
     <div class="bw-empty">
       <span class="bw-empty__icon"><svg width="22" height="22"><use xlink:href="#icon-whatsapp-line" /></svg></span>
-      <p class="bw-empty__title">No managed WhatsApp inboxes yet</p>
+      <p class="bw-empty__title">No connected WhatsApp inboxes yet</p>
       <p class="bw-empty__text">Customers connect WhatsApp from their own account (Settings → Inboxes → Add Inbox).
         Connected inboxes appear here as read-only status.</p>
     </div>
@@ -29,7 +96,7 @@
       <thead>
         <tr>
           <th>ID</th><th>Account</th><th>Inbox</th><th>Channel</th><th>Status</th>
-          <th>Readiness</th><th>Request</th><th>Phone Number ID</th><th>Display Number</th><th></th>
+          <th>Readiness</th><th>Request</th><th>Phone No. ID (masked)</th><th>Display (masked)</th><th></th>
         </tr>
       </thead>
       <tbody>

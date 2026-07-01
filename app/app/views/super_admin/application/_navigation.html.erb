@@ -50,13 +50,13 @@
           <details class="bw-nav-group" <%= 'open' if bw_whatsapp_section_open? %>>
             <summary class="bw-nav-item <%= 'is-active' if bw_whatsapp_section_open? %>">
               <svg width="16" height="16"><use xlink:href="#icon-whatsapp-line" /></svg>
-              <span>WhatsApp Setups</span>
+              <span>WhatsApp</span>
               <svg class="bw-nav-group__chevron" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
               </svg>
             </summary>
             <ul class="bw-nav-sub">
-              <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setups_url, label: 'All Setups' } %>
+              <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setups_url, label: 'Global Config' } %>
               <%= render partial: 'nav_item', locals: { url: super_admin_bloomwire_whatsapp_setup_requests_url, label: 'WhatsApp Requests' } %>
             </ul>
           </details>

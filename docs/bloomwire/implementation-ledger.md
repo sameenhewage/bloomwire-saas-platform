@@ -72,7 +72,8 @@
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
 | 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
 | 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) · **superseded/removed by 17A** |
-| 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | _pending_ | Implemented (removal) |
+| 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | #97 | Merged (`8719de2`) |
+| 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | _pending_ | Implemented (read-only UI) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -293,7 +294,30 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 17A — Remove SuperAdmin customer-provisioning + manual setup-mapping UI — `Implemented (removal)` — PR _pending_
+### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only) — `Implemented (read-only UI)` — PR _pending_
+- **Goal (ADR-0008):** turn the post-17A read-only WhatsApp Setups surface into a clean **Global WhatsApp Platform
+  Config** page — never anything resembling customer setup/provisioning.
+- **What:** new `Bloomwire::GlobalWhatsappConfig` service (secret-free read-only summary) drives the rebuilt
+  setups `index`: global webhook callback URL · Meta App ID (public; **required readiness prerequisite** — a
+  missing `WHATSAPP_APP_ID` blocks `platform_ready`, since PR C onboarding is Embedded Signup first) · **App
+  Secret / verify token = Present/Missing only** · router enabled/disabled · platform readiness + named blockers · **"Last webhook
+  received: Not tracked yet"** · read-only connected-inbox list (account, inbox, masked phone/`phone_number_id`,
+  setup status, readiness). Nav → "WhatsApp › Global Config".
+- **Secret-storage decision (owner-approved read-only):** no encrypted global-secret store exists —
+  `InstallationConfig` is plaintext; App Secret + verify token are **ENV/ops-managed**, read via
+  `GlobalConfigService`. PR B shows **presence only** (`config_present?`), **never displays or saves** the values,
+  and adds **no plaintext storage, no migration, no new store**. Editable secrets = parked (would need a separate
+  encrypted `Bloomwire::PlatformConfig` design/ADR).
+- **Not changed / not reintroduced:** no customer provisioning, no manual "New setup mapping", no account/user/
+  inbox creation, no `Bloomwire::WhatsappSetup` create/edit here; router + webhook + setup #1 unchanged; feature
+  toggles stay on the existing "Bloomwire Features" page (linked, not duplicated).
+- **Validation:** `global_whatsapp_config_spec` (presence-only; never leaks values; callback URL; blockers; inbox
+  count) + request specs (page renders; secrets Present/Missing with **values never rendered even when
+  configured**; non-platform-admin blocked; master-OFF hides surface). **Full Bloomwire scope 657 examples, 0
+  failures (1 pre-existing pending)**; RuboCop clean. No deploy · no Meta/WhatsApp · no secrets printed.
+- **Follow-ups:** last-webhook-received telemetry (deferred) · PR C customer Add-Inbox Embedded-Signup wizard.
+
+### Phase 17A — Remove SuperAdmin customer-provisioning + manual setup-mapping UI — `Merged` — PR #97 (merged `8719de2`)
 - **Decision (ADR-0008):** the SuperAdmin "Provision new WhatsApp customer" flow and the standalone "New setup
   mapping" CRUD were over-engineered and duplicated Chatwoot's native account/user/inbox model. New architecture:
   **SuperAdmin WhatsApp = Global WhatsApp Platform Config only** · account/user creation stays **native**
