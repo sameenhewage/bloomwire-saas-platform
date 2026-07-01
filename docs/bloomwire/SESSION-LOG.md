@@ -19,16 +19,17 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `6cf23b4`
-- **Dev deployed SHA:** `88e0701`  (public: https://dev.unecast.com · health `/health`)
-- **Open PRs:** none
-- **Latest completed:** Phase **15F.UI** (Email Templates UI Polish & Responsive Upgrade) — **DEV PASS**, merged PR #90 (`88e0701`), DEV-PASS stamp PR #91 (`6cf23b4`).
-- **Everything through 15F.UI is merged + DEV PASS + docs-stamped.** Working tree clean; nothing in-flight.
+- **`version_1` tip:** `9b09f9e`  (Phase 16C merged — PR #95)
+- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`)
+- **Open PRs:** docs-only **16C DEV-PASS stamp** (PR #96, this change) — not merged.
+- **Latest completed:** Phase **16C** (Business-owner activation — Ops "Send activation email") — merged PR #95 (`9b09f9e`), **`DEV PASS` end-to-end** on dev: owner **received the activation email, set a password, logged in, and reached the native Chatwoot inbox**; admin-only targeting, safe audit, no new grant, roles unchanged, no secrets, no Meta/WhatsApp. (Before it: 15F.UI DEV PASS, PR #90 `88e0701`, stamp PR #91; product-framing docs PR #94 `a42cb2b`.)
+- **16C mailer blocker — RESOLVED:** dev **global `SMTP_*` env was empty** → stock `config/initializers/mailer.rb` fell back to broken `sendmail` (`Errno::EPIPE`, no delivery). **Fixed operationally on dev:** populated the global `SMTP_*` env from the owner's local `#PERSONAL EMAIL SETTINGS` (`SMTP_PORT=587`, STARTTLS) + recreated rails+sidekiq → `delivery_method=:smtp` (rails+sidekiq). No `Bloomwire::EmailSetting` change · no code change · no credential values printed. (Per-account *Email Settings* SMTP is a separate DB-backed path.)
+- **Working tree:** clean; nothing in-flight except this docs stamp.
 - **Next up (not started — pick with owner):**
-  1. **Owner-assisted before/after screenshots** for 15F.6 + 15F.UI (visual record; MCP browser is not logged in — owner captures in their own session). Widths 1440/1280/1024/768 at `…/bloomwire_email_settings?tab=templates&template_id=1`.
-  2. **Phase 15F.5** — POST-based composer preview / query-string hardening (future follow-up).
-  3. **Phase 15F.4 (production)** — email deliverability: dedicated sending subdomain + transactional provider + SPF/DKIM/DMARC. Report-only done (PR #87); blocks production/client email readiness only, not dev.
-  4. Optional: visual-consistency pass on the other Email Settings tabs (configuration / test-email / logs).
+  1. **Prod parity (important):** the **production** global `SMTP_*` env must likewise be populated — the same empty-env root cause would block prod activation/reset/invite emails. The fix so far is **dev-only** (operational `.env`).
+  2. **Owner-assisted before/after screenshots** for 15F.6 + 15F.UI (MCP browser not logged in — owner captures). Widths 1440/1280/1024/768 at `…/bloomwire_email_settings?tab=templates&template_id=1`.
+  3. **Phase 15F.5** — POST-based composer preview / query-string hardening (future follow-up).
+  4. **Phase 15F.4 (production)** — email deliverability: dedicated sending subdomain + transactional provider + SPF/DKIM/DMARC. Report-only done (PR #87); blocks production/client email readiness only, not dev.
 
 ---
 
@@ -58,6 +59,7 @@
 **Gotchas learned**
 - `docker exec -i … rails runner -` **consumes the SSH heredoc stdin** — later commands in the same heredoc won't run. Use `docker exec … rails runner '<script>'` (no `-i`, script as arg) when more commands follow, or put the `-i` form last.
 - `curl` treats `[ ]` as URL globbing → use **`curl -g`** for URLs with `compose[...]` params.
+- **Two SMTP paths (don't confuse them):** (1) **global Devise/transactional** mail (password reset, 16C activation, platform-admin invite) uses **ENV `SMTP_*`** via `config/initializers/mailer.rb` — if `SMTP_ADDRESS` is blank it silently falls back to `:sendmail` (no MTA on dev → `Errno::EPIPE`, no delivery); (2) **per-account templated** email (15F) uses the **DB-backed `Bloomwire::EmailSetting`** SMTP. Fixing global mail = populate the global `SMTP_*` env (Gmail: port 587 + STARTTLS) and **recreate rails+sidekiq** (recreate, not restart, to reload `.env`). Verify with `ActionMailer::Base.delivery_method` == `:smtp` (booleans/masked; never print values).
 
 **Infra / key paths**
 - Dev SSH alias **`contabo-dev`**; containers `app-rails-1`, `app-sidekiq-1`, `app-postgres-1`, `app-redis-1`.
@@ -71,6 +73,49 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-01 — Phase 16C mailer fix → end-to-end `DEV PASS` (docs stamp amended, PR #96)
+- **Root cause of the earlier block:** the dev **global `SMTP_*` env was empty** (`SMTP_ADDRESS`/`SMTP_USERNAME`/
+  `SMTP_PASSWORD` blank; `SMTP_PORT`=1025), so stock Chatwoot `config/initializers/mailer.rb` correctly fell back
+  to `:sendmail` — which had no working MTA → `Errno::EPIPE`. 15F **templated** emails delivered because they use
+  the **DB-backed `Bloomwire::EmailSetting`** SMTP path; Devise/16C use the **global ActionMailer (ENV)** path.
+- **Fix (operational, dev only):** populated the dev global `SMTP_*` env from the owner's local
+  `#PERSONAL EMAIL SETTINGS` block (parsed locally → piped over SSH stdin, **never printed**; `SMTP_PORT` forced to
+  587, STARTTLS on) and **recreated rails + sidekiq** → `delivery_method=:smtp` on both (remote `.env` backed up).
+  **No `Bloomwire::EmailSetting` change · no code change · no production deploy · no credential values printed.**
+- **End-to-end verified (owner-assisted):** owner opened setup #1, clicked **"Send activation email"** (targets
+  real admin `User #2` / `sameen@bloomwire.lk`), **received the email, set a password, logged in, reached the
+  native Chatwoot inbox**. Server-side (booleans/masked only): reset consumed (`reset_password_token` cleared;
+  `reset_password_sent_at` cleared by Devise post-reset — expected); safe audit row (`send_owner_activation`,
+  field-names only); **0** new `PlatformAdmin` grants (User #2's `owner` grant is pre-existing/old); roles
+  unchanged (`sameen.android@gmail.com` / `User #50` stayed **agent**/sender, never admin); mail delivered via SMTP
+  (`mail_performed`≥1, `epipe=0`); no Meta/WhatsApp calls.
+- **`sameen.android@gmail.com` = SMTP sender/dev account** (clarified) — NOT a recipient, NOT an administrator.
+- **Carry-forward:** apply the same global `SMTP_*` env population to **production** before relying on prod
+  activation/reset/invite emails (dev-only fix so far).
+- **Guardrails:** docs-only PR #96; no code/deploy/secrets/credentials/Meta/WhatsApp changes; 16C = `DEV PASS`.
+
+### 2026-06-30 — Phase 16C DEV deploy + runtime QA (`PASS-BUT-BLOCKED`) + docs stamp
+- Deployed `version_1 @ 9b09f9e` to dev (run `28461253274` via `gh workflow run deploy-dev.yml`): rails+sidekiq
+  `/app/.git_sha` match · health 200 local+public · 0×5xx · postgres/redis volumes preserved · no pending
+  migrations · `SMTP_*` env present (unchanged). Deploy = **DEV PASS**.
+- **16C action runtime-verified** on dev by driving the real Ops page in-process (with a **temp disposable
+  platform-admin**, since removed): "Business owner access" card renders · "Send activation email" → success
+  flash · the **administrator's** `reset_password_sent_at` updates while the **agent's** does not · **0** new
+  accounts/users/account_users/inboxes/conversations/messages · **no** `PlatformAdmin` grant · roles unchanged ·
+  safe audit row (field-names only) · **no** token/password/link in UI or audit.
+- **Blocked (owner email + login not exercised):** (1) the only existing setup's admin is the **real owner**
+  (`account #1` → real `User #2`); `sameen.android@gmail.com` is an **agent**, not a valid target → button **not
+  clicked** on the real owner; (2) dev's **global Devise mailer = `sendmail`, no MTA → `Errno::EPIPE`** (email
+  does not deliver). Per owner instruction: stopped, **did not retry**, **never used the real owner email**.
+- **Cleanup:** earlier temp QA tenant/users/SA removed; the QA **audit row preserved**; the failed QA mail job
+  (token-bearing payload) purged from the Sidekiq retry set; **real `account #1` / `User #2` / setup #1 untouched**.
+- **Gotcha learned:** dev's **global Devise/transactional mailer uses `sendmail` with no working MTA** (Errno::EPIPE)
+  — distinct from the per-account *Email Settings* SMTP. Devise reset tokens also appear in **Sidekiq job-arg logs**
+  for all Devise emails (pre-existing platform behavior). **Unblocker:** point the global ActionMailer at SMTP
+  (`SMTP_*` env already present), then re-run the owner-assisted login.
+- **Guardrails:** no production deploy · no Meta/WhatsApp calls · no SMTP/mail-config or credential changes · no
+  roles changed · no real owner touched. Stamp recorded in change-log + ledger (md/html); 16C = `PASS-BUT-BLOCKED`.
 
 ### 2026-06-30 — Product framing correction (docs-only)
 - Corrected the misleading "WhatsApp-first SaaS product" wording across the durable docs to the canonical

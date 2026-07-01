@@ -16,7 +16,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 16C — Business-owner activation (set-password after provisioning)
-- **PR:** _pending_ · **Type:** owner-only SuperAdmin/Ops action. **No DB migration.**
+- **PR:** #95 · **merge SHA** `9b09f9e` · **Type:** owner-only SuperAdmin/Ops action. **No DB migration.**
 - **Why:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and no
   email**, so a provisioned owner had no way to log in. This adds the missing activation step.
 - **What:** a **"Send activation email"** action on the WhatsApp **setup detail** page
@@ -38,6 +38,27 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   calls; no secrets.
 - **Files:** `app/services/bloomwire/business_owner_activator.rb` (new) · `super_admin/bloomwire_whatsapp_setups_controller.rb`
   · `config/routes.rb` · `views/super_admin/bloomwire_whatsapp_setups/show.html.erb` · specs · docs.
+- **DEV runtime (2026-06-30 → 2026-07-01) — `DEV PASS` (end-to-end):** deployed `version_1 @ 9b09f9e` to dev
+  (deploy run `28461253274`; rails+sidekiq `/app/.git_sha` match · health 200 local+public · 0×5xx · postgres/redis
+  volumes preserved · no pending migrations). **Feature end-to-end verified on dev:** the setup-detail **"Business
+  owner access"** card renders, **"Send activation email"** works and targeted the **real account administrator**
+  `User #2` / `sameen@bloomwire.lk` (account #1 admin). The owner **received the email, set a password, logged in,
+  and reached the native Chatwoot inbox** — confirmed. `reset_password_sent_at` was set at send-time then **cleared
+  by Devise after the successful reset** (expected; `reset_password_token` also cleared = consumed). Safe audit row
+  written (`action=send_owner_activation`, field-names only: `changed_fields=[]`, `blocked_fields=[]`); **no** reset
+  token/password/link exposed in UI/audit/docs; **no** `PlatformAdmin` grant created by the activation (`User #2`'s
+  pre-existing `owner` grant is old — **0** new grants in the last 30m/12h); roles unchanged (`User #2`=administrator;
+  `sameen.android@gmail.com` / `User #50`=agent, SMTP sender/dev only, never made admin); **no** Meta/WhatsApp calls;
+  **no** production deploy. SMTP verified with booleans/masked output only — no secrets printed. (Devise tokens do
+  appear in Sidekiq job-arg logs for all Devise emails — pre-existing Chatwoot behavior, not 16C.)
+- **Mailer root cause & fix (why the earlier block cleared):** the earlier `PASS-BUT-BLOCKED` was caused by the dev
+  **global SMTP env being empty**, so stock Chatwoot `config/initializers/mailer.rb` correctly fell back to
+  `:sendmail`, which had no working MTA → `Errno::EPIPE` (no delivery). Phase 15F **templated** emails worked because
+  they use the **DB-backed `Bloomwire::EmailSetting`** SMTP path; Devise/16C use the **global ActionMailer (ENV)**
+  path. **Fix (operational, dev only):** populated the dev global `SMTP_*` env from the owner's local
+  `#PERSONAL EMAIL SETTINGS` block (`SMTP_PORT=587`, STARTTLS on) and **recreated rails + sidekiq** →
+  `delivery_method=:smtp` on both. **No `Bloomwire::EmailSetting` change · no code change · no credential values
+  printed · no production deploy.**
 
 ### Docs — Product framing correction
 - **PR:** _pending_ · **Type:** docs-only (no code, no runtime behavior, no deploy).
