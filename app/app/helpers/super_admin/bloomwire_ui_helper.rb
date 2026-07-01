@@ -8,8 +8,7 @@ module SuperAdmin::BloomwireUiHelper
 
   # Whether the sidebar "WhatsApp Setups" group should render expanded (on any WhatsApp surface).
   def bw_whatsapp_section_open?
-    %w[bloomwire_whatsapp_setups bloomwire_customer_provisionings
-       bloomwire_whatsapp_setup_requests].include?(controller_name)
+    %w[bloomwire_whatsapp_setups bloomwire_whatsapp_setup_requests].include?(controller_name)
   end
 
   # Whether the current SuperAdmin is an active platform OWNER (drives owner-only nav: Platform Admins).

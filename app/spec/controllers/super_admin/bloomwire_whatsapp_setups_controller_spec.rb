@@ -1,10 +1,11 @@
 require 'rails_helper'
 
-# Bloomwire WhatsApp Setup Mapping foundation: a SuperAdmin/Ops-only readiness surface that references
-# existing account/inbox/Channel::Whatsapp records and tracks a setup status + non-secret routing ids.
-# Secrets stay in Channel::Whatsapp#provider_config (never duplicated). Gated by Bloomwire master mode;
-# OFF => stock (surface unavailable). Fake values only.
-RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup Mapping', type: :request do
+# Phase 17A: the SuperAdmin WhatsApp Setup surface is now READ-ONLY (index/show + readiness/credentials). The
+# manual setup-mapping CRUD (new/create/edit/update) was removed — customer WhatsApp onboarding happens natively
+# (Settings -> Inboxes -> Add Inbox). Secrets stay in Channel::Whatsapp#provider_config (never duplicated on the
+# mapping). Gated by Bloomwire master mode; OFF => stock (surface unavailable). Fake values only.
+# (Route absence for new/create/edit/update is asserted in bloomwire_phase_17a_removed_routes_spec.rb.)
+RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup (read-only surface)', type: :request do
   let(:super_admin) { create(:super_admin) }
   let(:account) { create(:account) }
 
@@ -26,14 +27,6 @@ RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup Mapping', type: :request do
       expect(response).to have_http_status(:redirect)
       expect(response.redirect_url).to include('/super_admin/sign_in')
     end
-
-    it 'does not create a mapping' do
-      expect do
-        post '/super_admin/bloomwire_whatsapp_setups',
-             params: { bloomwire_whatsapp_setup: { account_id: account.id, setup_status: 'pending' } }
-      end.not_to change(Bloomwire::WhatsappSetup, :count)
-      expect(response).to have_http_status(:redirect)
-    end
   end
 
   context 'when authenticated as a super admin' do
@@ -50,62 +43,16 @@ RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup Mapping', type: :request do
     context 'when Bloomwire master mode is ON' do
       before { set_toggle('BLOOMWIRE_MODE_ENABLED', true) }
 
-      it 'lists setups on index' do
+      it 'lists setups on index (read-only)' do
         create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
         get '/super_admin/bloomwire_whatsapp_setups'
         expect(response).to have_http_status(:success)
       end
 
-      it 'renders the new form' do
-        get '/super_admin/bloomwire_whatsapp_setups/new'
-        expect(response).to have_http_status(:success)
-      end
-
-      it 'creates a setup with non-secret identifiers' do
-        expect do
-          post '/super_admin/bloomwire_whatsapp_setups', params: {
-            bloomwire_whatsapp_setup: {
-              account_id: account.id, setup_status: 'configured',
-              waba_id: 'FAKE-WABA-1', phone_number_id: 'FAKE-PNID-1',
-              display_phone_number: '+10000000001', status_reason: 'creds entered by ops'
-            }
-          }
-        end.to change(Bloomwire::WhatsappSetup, :count).by(1)
-        setup = Bloomwire::WhatsappSetup.last
-        expect(setup.account_id).to eq(account.id)
-        expect(setup.setup_status).to eq('configured')
-        expect(setup.phone_number_id).to eq('FAKE-PNID-1')
-      end
-
-      it 'updates a setup status' do
-        setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
-        patch "/super_admin/bloomwire_whatsapp_setups/#{setup.id}", params: {
-          bloomwire_whatsapp_setup: { setup_status: 'configured', status_reason: 'creds entered' }
-        }
-        expect(setup.reload.setup_status).to eq('configured')
-      end
-
-      it 'rejects marking ready_for_webhook without the required routing fields' do
-        setup = create(:bloomwire_whatsapp_setup, account: account, setup_status: 'pending')
-        patch "/super_admin/bloomwire_whatsapp_setups/#{setup.id}", params: {
-          bloomwire_whatsapp_setup: { setup_status: 'ready_for_webhook' }
-        }
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(setup.reload.setup_status).to eq('pending')
-      end
-
-      it 'shows a setup' do
+      it 'shows a setup (read-only)' do
         setup = create(:bloomwire_whatsapp_setup, account: account)
         get "/super_admin/bloomwire_whatsapp_setups/#{setup.id}"
         expect(response).to have_http_status(:success)
-      end
-
-      it 'rejects an invalid setup status' do
-        expect do
-          post '/super_admin/bloomwire_whatsapp_setups', params: {
-            bloomwire_whatsapp_setup: { account_id: account.id, setup_status: 'not_a_status' }
-          }
-        end.not_to change(Bloomwire::WhatsappSetup, :count)
       end
     end
   end

@@ -15,6 +15,32 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17A — Remove SuperAdmin customer-provisioning + manual setup-mapping UI (architecture pivot)
+- **PR:** _pending_ · **Type:** removal / dead-code. **No DB migration · no table drops · no data deleted.**
+- **Why:** the SuperAdmin "Provision new WhatsApp customer" flow and the standalone "New setup mapping" CRUD
+  were over-engineered and duplicated Chatwoot's native account/user/inbox responsibilities. New architecture
+  (see ADR-0008): **SuperAdmin WhatsApp = Global WhatsApp Platform Config only; account/user creation stays
+  native (SuperAdmin → Accounts/Users); customers complete WhatsApp setup from Account Settings → Inboxes → Add
+  Inbox; the internal `phone_number_id → inbox/channel` mapping remains but is created by the customer-side
+  wizard (PR C), not manual Ops UI.**
+- **Removed:** `bloomwire_customer_provisionings` controller/route/view + `Bloomwire::CustomerProvisioningService`;
+  the `new/create/edit/update` actions + `new`/`edit`/`_form` views of `bloomwire_whatsapp_setups` (route →
+  `only: [:index, :show]`); the 16C `send_owner_activation` action + `Bloomwire::BusinessOwnerActivator` + the
+  "Business owner access" card (redundant — native Devise invite/reset covers owner access now that provisioning
+  is gone); nav "New Provision" link + index "Provision/New mapping/Edit" links + empty-state button; obsolete
+  specs. Boundary/CRUD specs refactored off `CustomerProvisioningService`.
+- **Kept intact:** global webhook + `Bloomwire::Webhooks::WhatsappRouter`; `Bloomwire::WhatsappSetup`
+  model+table (**router mapping** — `ready_for_webhook.where(phone_number_id:)`); encrypted
+  `Channel::Whatsapp#provider_config` + `Bloomwire::WhatsappCredentialWriter`; readiness calculator; the
+  read-only setups index/show/readiness/credentials surfaces (transitional → Global Config in PR B). **Existing
+  setup #1 / account #1 data untouched; router still resolves it.**
+- **Parked:** `Bloomwire::WhatsappSetupRequest` intake queue is **deprecated** (superseded by the PR C wizard) —
+  **not removed in 17A**; kept read/update-only, table retained (future removal = a separate data-cleanup migration).
+- **Validation:** new routing spec proves removed routes are absent (create/edit/update/provision/activation) while
+  index/show/readiness/credentials + parked setup-requests stay routable; **full Bloomwire spec scope = 647
+  examples, 0 failures (1 pre-existing pending)**; router + whatsapp_events_job regression green; RuboCop clean.
+  No deploy · no production · no Meta/WhatsApp calls · no secrets · no DB drops.
+
 ### Phase 16C — Business-owner activation (set-password after provisioning)
 - **PR:** #95 · **merge SHA** `9b09f9e` · **Type:** owner-only SuperAdmin/Ops action. **No DB migration.**
 - **Why:** `CustomerProvisioningService` creates the business owner **confirmed with a throwaway password and no

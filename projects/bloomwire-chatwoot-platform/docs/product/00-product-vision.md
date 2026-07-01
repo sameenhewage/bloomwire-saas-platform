@@ -8,9 +8,10 @@ for tenant businesses on a Chatwoot base.
 
 ## Vision
 
-A multi-tenant, Chatwoot-based platform where Bloomwire Ops can provision and route WhatsApp numbers for many tenant
-businesses through a single Meta app + global webhook front-door, while tenants get the native Chatwoot inbox/agent
-experience.
+A multi-tenant, Chatwoot-based platform where tenant businesses connect their own WhatsApp (native Account
+Settings → Inboxes → Add Inbox wizard) and Bloomwire Ops operates the shared routing front-door — a single Meta
+app + global webhook — while tenants get the native Chatwoot inbox/agent experience. (Ops does **not** provision
+customers or edit per-inbox mappings by hand; see ADR-0008.)
 
 ## Principles
 

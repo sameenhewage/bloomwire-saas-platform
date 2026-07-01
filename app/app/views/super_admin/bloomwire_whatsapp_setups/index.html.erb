@@ -9,13 +9,10 @@
   <div>
     <h1 class="bw-page-title">WhatsApp Setups</h1>
     <p class="bw-page-subtitle">
-      Bloomwire Ops controls WhatsApp technical setup per customer account/inbox. This surface tracks setup
-      readiness and non-secret routing identifiers; credentials live in the channel and are never shown here.
+      Read-only status of managed WhatsApp inboxes — setup readiness and non-secret routing identifiers;
+      credentials live on the channel and are never shown here. Customers set up WhatsApp from their own account
+      (Settings → Inboxes → Add Inbox); this surface no longer creates or edits mappings.
     </p>
-  </div>
-  <div class="flex items-center gap-2 shrink-0">
-    <%= link_to 'Provision new customer', new_super_admin_bloomwire_customer_provisioning_path, class: 'bw-btn bw-btn--primary' %>
-    <%= link_to 'New setup mapping', new_super_admin_bloomwire_whatsapp_setup_path, class: 'bw-btn bw-btn--secondary' %>
   </div>
 </div>
 
@@ -23,9 +20,9 @@
   <% if @setups.empty? %>
     <div class="bw-empty">
       <span class="bw-empty__icon"><svg width="22" height="22"><use xlink:href="#icon-whatsapp-line" /></svg></span>
-      <p class="bw-empty__title">No WhatsApp setups yet</p>
-      <p class="bw-empty__text">Provision a managed customer to create an account, inbox, and WhatsApp channel shell.</p>
-      <%= link_to 'Provision new customer', new_super_admin_bloomwire_customer_provisioning_path, class: 'bw-btn bw-btn--primary' %>
+      <p class="bw-empty__title">No managed WhatsApp inboxes yet</p>
+      <p class="bw-empty__text">Customers connect WhatsApp from their own account (Settings → Inboxes → Add Inbox).
+        Connected inboxes appear here as read-only status.</p>
     </div>
   <% else %>
     <table class="bw-table">
@@ -60,7 +57,6 @@
             <td class="font-mono text-xs"><%= readiness[:masked][:display_phone_number] %></td>
             <td class="whitespace-nowrap">
               <%= link_to 'View', super_admin_bloomwire_whatsapp_setup_path(setup), class: 'bw-link' %>
-              <%= link_to 'Edit', edit_super_admin_bloomwire_whatsapp_setup_path(setup), class: 'bw-link ml-3' %>
             </td>
           </tr>
         <% end %>

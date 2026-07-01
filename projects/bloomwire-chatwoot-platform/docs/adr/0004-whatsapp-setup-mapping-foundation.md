@@ -4,6 +4,10 @@
 - Extends: ADR-0001 / ADR-0002 / ADR-0003 (never overrides)
 - Scope: the "Controlled Channel Readiness / WhatsApp Setup Mapping" slice. Foundation only — no global
   webhook router, no managed onboarding wizard, no routing registry, no real Meta E2E.
+- Update (Phase 17A → see **ADR-0008**): the **manual Ops "setup-mapping" CRUD and the "provision customer"
+  surfaces are RETIRED**. The `Bloomwire::WhatsappSetup` model/table foundation described here REMAINS (the global
+  router reads it), but the mapping is now created by the **customer-side Add-Inbox wizard**, not manual Ops UI.
+  This ADR stays authoritative for the mapping *foundation*; the responsibility model is defined in ADR-0008.
 
 ## Context
 

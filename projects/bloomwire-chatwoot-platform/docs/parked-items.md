@@ -24,6 +24,7 @@ Owner types: **Bloomwire Ops** · **Meta admin** · **Product**.
 | **PARK-SEC-NONWA** | Non-WhatsApp channel secret-at-rest / scrub before managed enable | C. Security/privacy | **Parked** — pre-req before enabling those channels | Bloomwire Ops + Eng | Medium | **No** |
 | **PARK-SEC-ADR6** | ADR-0006 production rollout (encryption keys + `provider_config` backfill) | C. Security/privacy | **Parked** — before first real customer token at rest | Bloomwire Ops | Medium | **No** |
 | **PARK-OPS-ONBOARD** | Onboarding runbook: "≥1 approved template before go-live" + 13E.3 live runbook | D. Ops/onboarding | **Parked** — authored when PARK-13E unparks | Bloomwire Ops | Low | **No** |
+| **PARK-WA-SETUP-REQUEST** | Remove the deprecated `Bloomwire::WhatsappSetupRequest` intake queue (model + SuperAdmin views + account API) — superseded by the customer Add-Inbox wizard (Phase 17A / ADR-0008) | D. Ops/onboarding | **Parked** — remove after PR C wizard ships (code + separate data-cleanup migration; no table drop yet) | Eng | Low | **No** |
 | **PARK-INT-APIVER** | Template-management Graph version still pinned `v14.0` (`business_account_path`) | E. Internal upgrade/fallback | **Parked** — non-urgent version hardening | Eng | Low | **No** |
 | **PARK-INT-ROLLBACK** | Toggle-OFF / rollback testing for the template path | E. Internal upgrade/fallback | **Parked** — deferred by request | Bloomwire Ops + Eng | Low | **No** |
 
@@ -161,6 +162,17 @@ Ops-only CREATE and OFF == stock behavior.
   masked evidence template when PARK-13E unparks.
 - **Unpark condition:** PARK-13E reaches `approved >= 1`.
 - **Owner:** Bloomwire Ops · **Risk:** Low · **Blocks core chat?** No.
+
+### PARK-WA-SETUP-REQUEST — Remove the deprecated `Bloomwire::WhatsappSetupRequest` intake queue
+- **Why parked:** Phase 17A (ADR-0008) retired the Ops-driven onboarding; the "request managed setup" intake
+  queue is superseded by the customer-side **Add Inbox wizard** (PR C). Deprecated now but **kept** (routes,
+  SuperAdmin views, account API, model, table) so nothing breaks before the wizard ships.
+- **What is missing:** after PR C is proven, remove `Bloomwire::WhatsappSetupRequest` (model + `super_admin`
+  controller/views + `api/v1/accounts/bloomwire/whatsapp_setup_requests` + specs), then a **separate data-cleanup
+  migration** to drop `bloomwire_whatsapp_setup_requests` (no table drop in 17A; preserve any existing rows until
+  then).
+- **Unpark condition:** PR C (customer Add-Inbox wizard) merged + DEV-proven.
+- **Owner:** Eng · **Risk:** Low · **Blocks core chat?** No.
 
 ---
 

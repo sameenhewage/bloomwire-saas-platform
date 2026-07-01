@@ -1,9 +1,12 @@
 # 02 — Core Flows
 
-## 1. Managed WhatsApp onboarding (Ops)
+## 1. Managed WhatsApp onboarding (customer self-serve)
 
-Ops provisions a WABA / number on behalf of a tenant → creates `Channel::Whatsapp` + `Inbox` → writes the routing
-registry (non-secret identifiers + status). Detailed states live in the architecture plan onboarding state machine.
+A tenant **administrator** connects their WhatsApp from **Account Settings → Inboxes → Add Inbox** (Bloomwire
+wizard when Bloomwire mode is ON), entering their own WhatsApp/Meta credentials → creates `Channel::Whatsapp` +
+`Inbox` → writes the routing mapping (non-secret identifiers + status). Bloomwire Ops operates the **global**
+platform config + webhook front-door — **not** per-customer provisioning or manual mapping edits. Detailed states
+live in the architecture plan onboarding state machine. (See ADR-0008.)
 
 ## 2. Inbound message routing
 

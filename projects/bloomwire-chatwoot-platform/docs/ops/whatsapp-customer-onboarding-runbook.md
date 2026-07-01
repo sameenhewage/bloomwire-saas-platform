@@ -1,9 +1,13 @@
 # Runbook — Bloomwire WhatsApp Customer Onboarding (Ops)
 
-> **STATUS: ready for a MANUAL, Ops-driven first-customer pilot (Phase 14 S1).** Every record + guardrail this
-> runbook depends on already exists and is spec-proven (isolation, fail-closed routing, secret hiding,
-> encryption at rest, PII-clean logs). Onboarding today is a **manual multi-step Ops process** — one-click
-> provisioning (S3) and a secure Ops credential-capture surface (S2) are **not built yet** (see §9).
+> **STATUS (updated Phase 17A — see [ADR-0008](../adr/0008-whatsapp-onboarding-responsibility-pivot.md)): the
+> Ops-driven manual provisioning model in this runbook is RETIRED.** SuperAdmin no longer provisions customers or
+> creates/edits setup mappings. **New model:** account/user creation is **native** (SuperAdmin → Accounts/Users);
+> customers set up WhatsApp themselves from **Account Settings → Inboxes → Add Inbox** (Bloomwire wizard, PR C),
+> entering their own WhatsApp/Meta credentials; the internal `phone_number_id → inbox/channel` router mapping is
+> created by that wizard. SuperAdmin WhatsApp becomes a **Global WhatsApp Platform Config** surface (PR B). The
+> manual "Provision Customer" / "create setup mapping" steps below are **historical / no longer available**; the
+> router, mapping, credential-encryption, and guardrail facts remain accurate.
 >
 > **Secret hygiene (non-negotiable):** never paste or print access tokens, app secret, verify token, DB
 > password, `provider_config`, or a **full** phone number / `phone_number_id` into this file, chat, logs, PRs,
