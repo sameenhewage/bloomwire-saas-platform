@@ -298,8 +298,9 @@
 - **Goal (ADR-0008):** turn the post-17A read-only WhatsApp Setups surface into a clean **Global WhatsApp Platform
   Config** page — never anything resembling customer setup/provisioning.
 - **What:** new `Bloomwire::GlobalWhatsappConfig` service (secret-free read-only summary) drives the rebuilt
-  setups `index`: global webhook callback URL · Meta App ID (public identifier) · **App Secret / verify token =
-  Present/Missing only** · router enabled/disabled · platform readiness + named blockers · **"Last webhook
+  setups `index`: global webhook callback URL · Meta App ID (public; **required readiness prerequisite** — a
+  missing `WHATSAPP_APP_ID` blocks `platform_ready`, since PR C onboarding is Embedded Signup first) · **App
+  Secret / verify token = Present/Missing only** · router enabled/disabled · platform readiness + named blockers · **"Last webhook
   received: Not tracked yet"** · read-only connected-inbox list (account, inbox, masked phone/`phone_number_id`,
   setup status, readiness). Nav → "WhatsApp › Global Config".
 - **Secret-storage decision (owner-approved read-only):** no encrypted global-secret store exists —
@@ -312,7 +313,7 @@
   toggles stay on the existing "Bloomwire Features" page (linked, not duplicated).
 - **Validation:** `global_whatsapp_config_spec` (presence-only; never leaks values; callback URL; blockers; inbox
   count) + request specs (page renders; secrets Present/Missing with **values never rendered even when
-  configured**; non-platform-admin blocked; master-OFF hides surface). **Full Bloomwire scope 656 examples, 0
+  configured**; non-platform-admin blocked; master-OFF hides surface). **Full Bloomwire scope 657 examples, 0
   failures (1 pre-existing pending)**; RuboCop clean. No deploy · no Meta/WhatsApp · no secrets printed.
 - **Follow-ups:** last-webhook-received telemetry (deferred) · PR C customer Add-Inbox Embedded-Signup wizard.
 

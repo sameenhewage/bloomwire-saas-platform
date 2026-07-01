@@ -62,16 +62,37 @@ RSpec.describe Bloomwire::GlobalWhatsappConfig do
         expect(r[:callback_url]).to be_nil
         expect(r[:app_id]).to be_nil
         expect(r[:platform_ready]).to be(false)
-        expect(r[:blockers]).to include(a_string_matching(/WHATSAPP_APP_SECRET/),
+        expect(r[:blockers]).to include(a_string_matching(/WHATSAPP_APP_ID/),
+                                        a_string_matching(/WHATSAPP_APP_SECRET/),
                                         a_string_matching(/GLOBAL_VERIFY_TOKEN/),
                                         a_string_matching(/PUBLIC_CALLBACK_HOST/))
+      end
+    end
+
+    context 'when only WHATSAPP_APP_ID is missing (Embedded Signup prerequisite)' do
+      before do
+        stub_features(master: true, router: true)
+        stub_config(
+          'WHATSAPP_APP_SECRET' => 'FAKE-APP-SECRET-VALUE',
+          'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN' => 'FAKE-VERIFY-TOKEN-VALUE',
+          'BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST' => 'chat.example.com',
+          'WHATSAPP_APP_ID' => nil
+        )
+      end
+
+      it 'still reports app_id_present and lists it as a blocker, and is not platform-ready' do
+        r = described_class.new.result
+        expect(r[:app_id_present]).to be(false)
+        expect(r[:app_id]).to be_nil
+        expect(r[:blockers]).to include(a_string_matching(/WHATSAPP_APP_ID is missing/))
+        expect(r[:platform_ready]).to be(false)
       end
     end
 
     context 'when the router toggle is off' do
       it 'flags the router as a blocker' do
         stub_features(master: true, router: false)
-        stub_config('BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST' => 'chat.example.com',
+        stub_config('BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST' => 'chat.example.com', 'WHATSAPP_APP_ID' => 'z',
                     'WHATSAPP_APP_SECRET' => 'x', 'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN' => 'y')
         r = described_class.new.result
         expect(r[:router_enabled]).to be(false)

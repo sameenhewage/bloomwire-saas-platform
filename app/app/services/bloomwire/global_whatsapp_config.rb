@@ -7,7 +7,9 @@
 # nothing, edits nothing, and never calls Meta. The Meta App ID (WHATSAPP_APP_ID) is a PUBLIC identifier (already
 # exposed to the dashboard frontend via window.chatwootConfig), so it may be shown. Global secrets stay
 # ENV/ops-managed (there is no encrypted global-secret store — see ADR-0008 / 17B discovery); this page is
-# read-only and does NOT provide a way to save them.
+# read-only and does NOT provide a way to save them. The Meta App ID is also a required platform-readiness
+# prerequisite (customer onboarding in PR C is Embedded Signup first, which needs the app id) — its presence
+# gates platform_ready and, when missing, is named in blockers.
 class Bloomwire::GlobalWhatsappConfig
   CALLBACK_PATH = '/bloomwire/webhooks/whatsapp'.freeze
   APP_SECRET_KEY = 'WHATSAPP_APP_SECRET'.freeze
@@ -59,15 +61,22 @@ class Bloomwire::GlobalWhatsappConfig
     public_host_valid? ? "https://#{public_host}#{CALLBACK_PATH}" : nil
   end
 
-  # Human-readable NAMES only of missing global prerequisites — never a secret value.
+  # Human-readable NAMES only of missing global prerequisites — never a secret value. WHATSAPP_APP_ID is a
+  # required prerequisite because customer onboarding (PR C) is Embedded Signup first, which needs the Meta app id.
   def blockers
-    @blockers ||= [].tap do |list|
-      list << 'Bloomwire mode is OFF' unless Bloomwire::Features.master_enabled?
-      list << 'Global webhook router is OFF' unless Bloomwire::Features.enabled?(:global_webhook_router)
-      list << "#{APP_SECRET_KEY} is missing" unless config_present?(APP_SECRET_KEY)
-      list << "#{VERIFY_TOKEN_KEY} is missing" unless config_present?(VERIFY_TOKEN_KEY)
-      list << "#{PUBLIC_HOST_KEY} is missing/invalid" unless public_host_valid?
-    end
+    @blockers ||= readiness_checks.reject { |passed, _message| passed }.map { |_passed, message| message }
+  end
+
+  # [passed?, message] pairs — data-driven so adding a prerequisite never grows branch complexity.
+  def readiness_checks
+    [
+      [Bloomwire::Features.master_enabled?, 'Bloomwire mode is OFF'],
+      [Bloomwire::Features.enabled?(:global_webhook_router), 'Global webhook router is OFF'],
+      [config_present?(APP_ID_KEY), "#{APP_ID_KEY} is missing"],
+      [config_present?(APP_SECRET_KEY), "#{APP_SECRET_KEY} is missing"],
+      [config_present?(VERIFY_TOKEN_KEY), "#{VERIFY_TOKEN_KEY} is missing"],
+      [public_host_valid?, "#{PUBLIC_HOST_KEY} is missing/invalid"]
+    ]
   end
 
   def connected_inbox_count

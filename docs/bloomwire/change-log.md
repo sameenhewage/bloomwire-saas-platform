@@ -21,8 +21,9 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   WhatsApp Platform Config** page (webhook front-door + Meta-app credential *status* + router + readiness +
   connected-inbox list), instead of anything resembling customer setup/provisioning.
 - **What:** new `Bloomwire::GlobalWhatsappConfig` (secret-free read-only summary) drives a rebuilt setups
-  `index` → **Global WhatsApp Config**: global webhook callback URL · Meta App ID (public) · **App Secret /
-  verify token = Present/Missing only** · router enabled/disabled · platform readiness + named blockers ·
+  `index` → **Global WhatsApp Config**: global webhook callback URL · Meta App ID (public; **required
+  readiness prerequisite** — Embedded Signup needs it, so a missing `WHATSAPP_APP_ID` blocks `platform_ready`) ·
+  **App Secret / verify token = Present/Missing only** · router enabled/disabled · platform readiness + named blockers ·
   **"Last webhook received: Not tracked yet"** · read-only connected-inbox list (account, inbox, masked
   phone/`phone_number_id`, setup status, readiness). Nav → "WhatsApp › Global Config".
 - **Secret-storage decision (owner-approved):** there is **no encrypted global-secret store** (InstallationConfig
@@ -35,7 +36,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   toggles stay on the existing "Bloomwire Features" page (linked, not duplicated). `WhatsappSetupRequest` still parked.
 - **Validation:** new service spec (presence-only, never leaks values, callback URL, blockers, inbox count) +
   request specs (page renders; **secrets shown Present/Missing, values never rendered even when configured**;
-  non-platform-admin blocked; master-OFF hides surface). **Full Bloomwire scope = 656 examples, 0 failures (1
+  non-platform-admin blocked; master-OFF hides surface). **Full Bloomwire scope = 657 examples, 0 failures (1
   pre-existing pending)**; RuboCop clean. No deploy · no production · **no Meta/WhatsApp calls** · no secrets printed.
 
 ### Phase 17A — Remove SuperAdmin customer-provisioning + manual setup-mapping UI (architecture pivot)

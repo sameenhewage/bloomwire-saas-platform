@@ -22,7 +22,7 @@
 - **`version_1` tip:** `8719de2`  (PR #97 merged — Phase 17A removal)
 - **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B not deployed.
 - **Latest completed / merged:** **PR #97** — Phase **17A** (remove SuperAdmin provisioning + manual setup-mapping UI + 16C activation), merged into `version_1` (`8719de2`). Router + `Bloomwire::WhatsappSetup` mapping + encrypted channel creds preserved; no table drops / no data deleted. Before it: PR #96 (16C DEV-PASS docs stamp, `1df6799`).
-- **In-flight / open (NOT merged):** **Phase 17B** — SuperAdmin **"Global WhatsApp Config"** page (read-only). Branch `feature/bloomwire-phase-17b-global-whatsapp-config` — **implemented; PR to open; not merged.** New `Bloomwire::GlobalWhatsappConfig` (secret-free) drives the rebuilt setups `index`: webhook callback URL · Meta App ID · **App Secret / verify token = Present/Missing only** · router on/off · platform readiness + blockers · "Last webhook received: Not tracked yet" · read-only connected-inbox list. Full Bloomwire scope **656 ex, 0 fail**.
+- **In-flight / open (NOT merged):** **Phase 17B** — SuperAdmin **"Global WhatsApp Config"** page (read-only). Branch `feature/bloomwire-phase-17b-global-whatsapp-config` — **PR #98 open; CI green; not merged.** New `Bloomwire::GlobalWhatsappConfig` (secret-free) drives the rebuilt setups `index`: webhook callback URL · Meta App ID (public; **required readiness prerequisite** — missing `WHATSAPP_APP_ID` blocks `platform_ready`, Embedded Signup needs it) · **App Secret / verify token = Present/Missing only** · router on/off · platform readiness + blockers · "Last webhook received: Not tracked yet" · read-only connected-inbox list. Full Bloomwire scope **657 ex, 0 fail**.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean (17B on its branch).
@@ -94,9 +94,12 @@
   values and asserts the response body excludes them and shows "Present"). No customer provisioning / manual
   mapping reintroduced; no account/user/inbox creation; no `WhatsappSetup` create/edit.
 - **Validation:** service spec (6) + setups request spec (incl. presence-only + master-OFF + non-admin) ·
-  **full Bloomwire scope 656 examples, 0 failures (1 pre-existing pending)** · RuboCop clean · router regression
+  **full Bloomwire scope 657 examples, 0 failures (1 pre-existing pending)** · RuboCop clean · router regression
   green. No deploy · no production · no Meta/WhatsApp · no secrets printed · no migration.
 - **Gotcha:** `RSpec/MultipleExpectations` (max 7) — split the page-render test into render vs no-CRUD.
+- **Review fix (PR #98):** `WHATSAPP_APP_ID` is now a **required readiness prerequisite** — a missing App ID is
+  named in `blockers` and sets `platform_ready = false` (Embedded Signup needs it). Still presence-aware only;
+  App ID value may be shown (public); no secret storage / migration / telemetry added.
 
 ### 2026-07-01 — Phase 17A — Remove SuperAdmin provisioning + manual setup-mapping UI (architecture pivot, PR A)
 - **Owner decision:** kill the SuperAdmin "Provision new WhatsApp customer" flow and the standalone "New setup
