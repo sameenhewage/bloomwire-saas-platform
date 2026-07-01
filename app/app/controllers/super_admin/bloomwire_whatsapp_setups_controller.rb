@@ -9,7 +9,10 @@ class SuperAdmin::BloomwireWhatsappSetupsController < SuperAdmin::ApplicationCon
   before_action :set_setup, only: [:show, :readiness, :credentials, :update_credentials]
   before_action :set_credential_channel, only: [:credentials, :update_credentials]
 
+  # Phase 17B: "Global WhatsApp Config" landing — a read-only platform-config summary (secret-free) plus the
+  # read-only list of connected WhatsApp inboxes. Creates/edits nothing; never calls Meta.
   def index
+    @global_config = Bloomwire::GlobalWhatsappConfig.new.result
     @setups = Bloomwire::WhatsappSetup.includes(:account, :inbox, :channel_whatsapp).order(created_at: :desc)
     # Phase 12E: per-setup non-secret operational observability (reuses the readiness calculator; never Meta).
     @readiness = @setups.index_with { |setup| Bloomwire::WhatsappRealHopReadiness.new(setup).result }

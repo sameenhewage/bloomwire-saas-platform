@@ -54,6 +54,37 @@ RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup (read-only surface)', type: 
         get "/super_admin/bloomwire_whatsapp_setups/#{setup.id}"
         expect(response).to have_http_status(:success)
       end
+
+      # Phase 17B: the index is now the read-only "Global WhatsApp Config" page.
+      it 'renders the Global WhatsApp Config page (read-only platform config)' do
+        get '/super_admin/bloomwire_whatsapp_setups'
+        expect(response).to have_http_status(:success)
+        expect(response.body).to include('Global WhatsApp Config')
+        expect(response.body).to include('Platform configuration')
+        expect(response.body).to include('Meta App Secret')
+        expect(response.body).to include('Webhook verify token')
+        expect(response.body).to include('Connected WhatsApp inboxes')
+        expect(response.body).to include('Not tracked yet')
+      end
+
+      it 'does not reintroduce provisioning or manual setup-mapping CRUD' do
+        get '/super_admin/bloomwire_whatsapp_setups'
+        expect(response.body).not_to include('Provision')
+        expect(response.body).not_to include('New setup mapping')
+        expect(response.body).not_to include('Edit mapping')
+      end
+
+      it 'shows global secrets as presence only and never renders their values' do
+        allow(GlobalConfigService).to receive(:load).and_call_original
+        allow(GlobalConfigService).to receive(:load)
+          .with('WHATSAPP_APP_SECRET', nil).and_return('FAKE-GLOBAL-APP-SECRET')
+        allow(GlobalConfigService).to receive(:load)
+          .with('BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN', nil).and_return('FAKE-GLOBAL-VERIFY-TOKEN')
+        get '/super_admin/bloomwire_whatsapp_setups'
+        expect(response.body).not_to include('FAKE-GLOBAL-APP-SECRET')
+        expect(response.body).not_to include('FAKE-GLOBAL-VERIFY-TOKEN')
+        expect(response.body).to include('Present')
+      end
     end
   end
 

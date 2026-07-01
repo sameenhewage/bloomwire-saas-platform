@@ -15,8 +15,31 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only)
+- **PR:** _pending_ · **Type:** read-only SuperAdmin UI. **No DB migration · no new store · no secrets stored.**
+- **Why:** complete ADR-0008 by turning the post-17A read-only WhatsApp Setups surface into a clean **Global
+  WhatsApp Platform Config** page (webhook front-door + Meta-app credential *status* + router + readiness +
+  connected-inbox list), instead of anything resembling customer setup/provisioning.
+- **What:** new `Bloomwire::GlobalWhatsappConfig` (secret-free read-only summary) drives a rebuilt setups
+  `index` → **Global WhatsApp Config**: global webhook callback URL · Meta App ID (public) · **App Secret /
+  verify token = Present/Missing only** · router enabled/disabled · platform readiness + named blockers ·
+  **"Last webhook received: Not tracked yet"** · read-only connected-inbox list (account, inbox, masked
+  phone/`phone_number_id`, setup status, readiness). Nav → "WhatsApp › Global Config".
+- **Secret-storage decision (owner-approved):** there is **no encrypted global-secret store** (InstallationConfig
+  is plaintext; App Secret + verify token are **ENV/ops-managed** deployment secrets, read via
+  `GlobalConfigService`). PR B is therefore **read-only**: it shows **presence only** via `config_present?`,
+  **never displays or saves** App Secret / verify token, adds **no plaintext storage, no migration, no new store**.
+  (Future editable secrets would need a separate encrypted `Bloomwire::PlatformConfig` design/ADR — parked.)
+- **Not changed / not reintroduced:** no customer provisioning, no manual "New setup mapping", no account/user/
+  inbox creation, no `Bloomwire::WhatsappSetup` create/edit here; router + webhook + setup #1 unchanged. Feature
+  toggles stay on the existing "Bloomwire Features" page (linked, not duplicated). `WhatsappSetupRequest` still parked.
+- **Validation:** new service spec (presence-only, never leaks values, callback URL, blockers, inbox count) +
+  request specs (page renders; **secrets shown Present/Missing, values never rendered even when configured**;
+  non-platform-admin blocked; master-OFF hides surface). **Full Bloomwire scope = 656 examples, 0 failures (1
+  pre-existing pending)**; RuboCop clean. No deploy · no production · **no Meta/WhatsApp calls** · no secrets printed.
+
 ### Phase 17A — Remove SuperAdmin customer-provisioning + manual setup-mapping UI (architecture pivot)
-- **PR:** _pending_ · **Type:** removal / dead-code. **No DB migration · no table drops · no data deleted.**
+- **PR:** #97 · **merge SHA** `8719de2` · **Type:** removal / dead-code. **No DB migration · no table drops · no data deleted.**
 - **Why:** the SuperAdmin "Provision new WhatsApp customer" flow and the standalone "New setup mapping" CRUD
   were over-engineered and duplicated Chatwoot's native account/user/inbox responsibilities. New architecture
   (see ADR-0008): **SuperAdmin WhatsApp = Global WhatsApp Platform Config only; account/user creation stays
