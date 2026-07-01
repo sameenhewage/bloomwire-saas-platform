@@ -15,8 +15,10 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only)
-- **PR:** _pending_ · **Type:** read-only SuperAdmin UI. **No DB migration · no new store · no secrets stored.**
+### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only) — MERGED
+- **PR:** #98 · **merge SHA** `6eac9faf2cf50bf9910da4ae62179c73cfb96957` · **Status:** merged into `version_1`
+  (new tip `6eac9fa`). **Type:** read-only SuperAdmin UI. **No DB migration · no new store · no secrets stored ·
+  no deploy · no production · no Meta/WhatsApp calls.** (Dev remains at `9b09f9e`.)
 - **Why:** complete ADR-0008 by turning the post-17A read-only WhatsApp Setups surface into a clean **Global
   WhatsApp Platform Config** page (webhook front-door + Meta-app credential *status* + router + readiness +
   connected-inbox list), instead of anything resembling customer setup/provisioning.
