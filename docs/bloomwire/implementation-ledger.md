@@ -73,7 +73,7 @@
 | 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
 | 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) · **superseded/removed by 17A** |
 | 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | #97 | Merged (`8719de2`) |
-| 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | _pending_ | Implemented (read-only UI) |
+| 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -294,7 +294,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only) — `Implemented (read-only UI)` — PR _pending_
+### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only) — `Merged` — PR #98 (merge SHA `6eac9faf2cf50bf9910da4ae62179c73cfb96957`; `version_1` tip `6eac9fa`)
 - **Goal (ADR-0008):** turn the post-17A read-only WhatsApp Setups surface into a clean **Global WhatsApp Platform
   Config** page — never anything resembling customer setup/provisioning.
 - **What:** new `Bloomwire::GlobalWhatsappConfig` service (secret-free read-only summary) drives the rebuilt
