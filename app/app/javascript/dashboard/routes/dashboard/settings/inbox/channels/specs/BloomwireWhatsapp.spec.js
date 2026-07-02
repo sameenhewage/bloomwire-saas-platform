@@ -3,10 +3,11 @@ import { mount, RouterLinkStub, flushPromises } from '@vue/test-utils';
 import BloomwireWhatsapp from '../BloomwireWhatsapp.vue';
 import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbeddedSignup';
 
-// Phase 17C.3: customer WhatsApp number-registration wizard. All Meta + store calls are mocked (no real Meta,
-// no HTTP). Proves: no credential fields; Connect/Register runs Meta embedded signup and posts ONLY the
-// non-secret signup credentials to the Bloomwire store action; success renders a safe DTO with Open inbox +
-// Inbox settings (and NEVER an Add Agents step); failures show a single sanitized generic message.
+// Phase 17C.3: customer WhatsApp connection wizard. All Meta + store calls are mocked (no real Meta, no HTTP).
+// The wizard opens on a connection-choice screen (Coexistence = disabled/coming-soon, never calls the backend;
+// Register New Number = the Standard number-registration flow). Standard proves: no credential fields; posts ONLY
+// the non-secret signup credentials to the Bloomwire store action; success renders a safe DTO with Open inbox +
+// Inbox settings (NEVER an Add Agents step); failures show a single sanitized generic message.
 const dispatch = vi.fn();
 vi.mock('vuex', () => ({ useStore: () => ({ dispatch }) }));
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: key => key }) }));
@@ -41,7 +42,8 @@ const mountWizard = () => {
       stubs: {
         RouterLink: RouterLinkStub,
         NextButton: {
-          template: '<button class="next-button">{{ label }}<slot /></button>',
+          template:
+            '<button class="next-button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}<slot /></button>',
           props: [
             'label',
             'isLoading',
@@ -50,6 +52,8 @@ const mountWizard = () => {
             'outline',
             'teal',
             'slate',
+            'faded',
+            'ghost',
           ],
         },
         LoadingState: { template: '<div class="loading-state" />' },
@@ -57,6 +61,14 @@ const mountWizard = () => {
       },
     },
   });
+};
+
+// Advance from the connection-choice screen into the Standard registration form.
+const startRegister = async wrapper => {
+  await wrapper
+    .find('[data-testid="bloomwire-wa-choice-standard-cta"]')
+    .trigger('click');
+  await flushPromises();
 };
 
 const submit = async wrapper => {
@@ -69,9 +81,61 @@ beforeEach(() => {
   runEmbeddedSignup.mockReset();
 });
 
-describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () => {
-  it('renders only the inbox-name + WhatsApp-number fields — no credential inputs', () => {
+describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
+  it('opens on the choice screen with exactly two options (Coexistence + Register New Number) and no form', () => {
     const wrapper = mountWizard();
+    expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
+      true
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-choice-coexistence"]').exists()
+    ).toBe(true);
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-choice-standard"]').exists()
+    ).toBe(true);
+    // no registration form yet → no inputs (and definitely no credential inputs)
+    expect(wrapper.findAll('input')).toHaveLength(0);
+  });
+
+  it('shows Coexistence as coming-soon/disabled, lists its prerequisites, and never calls the backend', async () => {
+    const wrapper = mountWizard();
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-coexistence-status"]').text()
+    ).toBe(`${B}.CHOOSE.COEXISTENCE.STATUS`);
+    const cta = wrapper.find('[data-testid="bloomwire-wa-coexistence-cta"]');
+    expect(cta.attributes('disabled')).toBeDefined();
+    // prerequisite list is rendered
+    expect(
+      wrapper.findAll('[data-testid="bloomwire-wa-choice-coexistence"] li')
+        .length
+    ).toBe(8);
+
+    await cta.trigger('click');
+    await flushPromises();
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
+      true
+    );
+  });
+
+  it('continues to the Standard registration form when Register New Number is clicked', async () => {
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
+      false
+    );
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      true
+    );
+    expect(wrapper.findAll('input')).toHaveLength(2);
+  });
+});
+
+describe('BloomwireWhatsapp.vue — Standard registration flow', () => {
+  it('renders only the inbox-name + WhatsApp-number fields — no credential inputs', async () => {
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
     const inputs = wrapper.findAll('input');
     expect(inputs).toHaveLength(2);
     expect(
@@ -88,8 +152,9 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
     expect(html).not.toContain('provider_config');
   });
 
-  it('uses the "Register WhatsApp number" wording on the primary action', () => {
+  it('uses the "Register WhatsApp number" wording on the primary action', async () => {
     const wrapper = mountWizard();
+    await startRegister(wrapper);
     expect(wrapper.find('[data-testid="bloomwire-wa-register"]').text()).toBe(
       `${B}.REGISTER_BUTTON`
     );
@@ -99,6 +164,7 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
     runEmbeddedSignup.mockResolvedValue(CREDS);
     dispatch.mockResolvedValue(DTO);
     const wrapper = mountWizard();
+    await startRegister(wrapper);
     await submit(wrapper);
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(
@@ -111,6 +177,7 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
     runEmbeddedSignup.mockResolvedValue(CREDS);
     dispatch.mockResolvedValue(DTO);
     const wrapper = mountWizard();
+    await startRegister(wrapper);
     await submit(wrapper);
 
     expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
@@ -124,7 +191,6 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
 
     const html = wrapper.html();
     expect(html).toContain('••••0001'); // masked number (source of truth from the DTO)
-    // raw signup credentials + secrets never rendered
     expect(html).not.toContain('META-CODE');
     expect(html).not.toContain('WABA-1');
     expect(html).not.toContain('PNID-1');
@@ -136,6 +202,7 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
     runEmbeddedSignup.mockResolvedValue(CREDS);
     dispatch.mockResolvedValue(DTO);
     const wrapper = mountWizard();
+    await startRegister(wrapper);
     await wrapper
       .find('[data-testid="bloomwire-wa-inbox-name"]')
       .setValue('My Support Line');
@@ -151,6 +218,7 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
     runEmbeddedSignup.mockResolvedValue(CREDS);
     dispatch.mockRejectedValue(new Error('RAW META 500: leaked-token-xyz'));
     const wrapper = mountWizard();
+    await startRegister(wrapper);
     await submit(wrapper);
 
     const error = wrapper.find('[data-testid="bloomwire-wa-error"]');
@@ -166,6 +234,7 @@ describe('BloomwireWhatsapp.vue (managed self-serve registration wizard)', () =>
   it('does not call the endpoint when the customer cancels the Meta popup', async () => {
     runEmbeddedSignup.mockResolvedValue(null);
     const wrapper = mountWizard();
+    await startRegister(wrapper);
     await submit(wrapper);
     expect(dispatch).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="bloomwire-wa-error"]').text()).toBe(

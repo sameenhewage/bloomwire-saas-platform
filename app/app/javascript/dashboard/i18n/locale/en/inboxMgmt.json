@@ -329,6 +329,35 @@
         "BLOOMWIRE_MANAGED": {
           "TITLE": "Register your WhatsApp number",
           "DESC": "Connect your WhatsApp Business number with Meta. We handle the technical setup for you — no API keys, tokens, or webhook configuration required.",
+          "CHOOSE": {
+            "TITLE": "Connect WhatsApp Channel",
+            "SUBTITLE": "Choose how you want to connect your WhatsApp number to Bloomwire.",
+            "BACK": "Back to connection options",
+            "COEXISTENCE": {
+              "TITLE": "Connect Existing WhatsApp Business App",
+              "BADGE": "Coexistence",
+              "STATUS": "Coming soon",
+              "DESC": "Keep using your WhatsApp Business App while connecting the same number to Bloomwire.",
+              "REQUIREMENTS_TITLE": "What you’ll need",
+              "REQUIREMENTS": {
+                "APP_VERSION": "WhatsApp Business App v2.24.17 or newer",
+                "APP_AGE": "WhatsApp Business App active for at least 7 days",
+                "COUNTRY": "A supported country",
+                "META_BUSINESS": "A Meta Business Account",
+                "QR": "During connection, Meta may show a QR code to scan with the WhatsApp Business App",
+                "HISTORY": "Recent chat history may sync",
+                "DEVICES": "Linked companion devices may be temporarily unlinked",
+                "BOTH": "You can keep using both the app and Bloomwire"
+              }
+            },
+            "STANDARD": {
+              "TITLE": "Register New Number",
+              "BADGE": "Standard",
+              "STATUS": "Available now",
+              "DESC": "Register a new or eligible existing number for WhatsApp Cloud API use through Bloomwire.",
+              "CTA": "Register New Number"
+            }
+          },
           "INBOX_NAME": {
             "LABEL": "Inbox name",
             "PLACEHOLDER": "e.g. Support WhatsApp",

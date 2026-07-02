@@ -15,13 +15,21 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17C.3 — Customer frontend WhatsApp number-registration wizard
-- **PR:** _pending_ · **Type:** frontend feature (Vue). **No DB migration · no backend endpoint contract change ·
-  no real Meta/WhatsApp calls (mocked in tests) · no native `/whatsapp/authorization` carve-out · no manual
-  credentials UI · no "Add Agents" step · no secrets exposed · no deploy · no production.**
+### Phase 17C.3 — Customer frontend WhatsApp connection wizard (connection-choice + number registration) — OPEN (PR #104, not merged)
+- **PR:** #104 · **open / in-flight (NOT merged)** · **Type:** frontend feature (Vue). **No DB migration · no
+  backend endpoint contract change · no real Meta/WhatsApp calls (mocked in tests) · no native
+  `/whatsapp/authorization` carve-out · no manual credentials UI · no "Add Agents" step · no secrets exposed · no
+  deploy · no production.**
 - **Why:** the customer-facing UI on top of the 17C.2 endpoint — Settings → Inboxes → Add Inbox → WhatsApp
-  Business → register the number with Meta → ready inbox. Managed mode only; native flows untouched.
+  Business → **choose a connection method** → register the number with Meta → ready inbox. Managed mode only;
+  native flows untouched.
 - **What:**
+  - **Connection-choice screen (first step):** "Connect WhatsApp Channel" presents **two** options —
+    (1) **Connect Existing WhatsApp Business App** (badge **Coexistence**) shown **disabled / "Coming soon"** with
+    its prerequisites listed; it **never calls the backend** (no coexistence backend support yet); and
+    (2) **Register New Number** (badge **Standard**, "Available now") which continues into the number-registration
+    flow. Wording uses "Connect with Meta" / "Register WhatsApp number" / "Register New Number" — no "Connect
+    Facebook" primary label.
   - **Capability plumbing:** `useBloomwireCapabilities` now exposes **`canSelfServeManagedWhatsapp`** — an opt-in
     capability that **defaults to FALSE** (unlike the stock-safe-true capabilities), so it only appears on an
     explicit server `true` (admin + native WhatsApp restricted + `managed_whatsapp_onboarding`); hidden in stock.
@@ -39,12 +47,14 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
     existing inbox-update API (no endpoint contract change). Failures show a single sanitized generic message —
     "We couldn’t complete WhatsApp registration. Please try again or contact Bloomwire support." — never a raw
     Meta/server payload or token.
-- **Not done (later slices):** 17C.4 verify/go-live UX; removal of the parked `WhatsappSetupRequest`.
+- **Not done (later slices):** **Coexistence backend** (the disabled card is UI-only until then); 17C.4
+  verify/go-live UX; removal of the parked `WhatsappSetupRequest`.
 - **Validation:** Vitest — `useBloomwireCapabilities` (default-false + explicit-true), `ChannelFactory` (wizard
   renders in managed mode / native otherwise / whatsapp_call unaffected), `ChannelList` (card shown only with the
-  capability), and `BloomwireWhatsapp` (no credential fields; posts only signup credentials; success shows Open
-  inbox + Inbox settings + **no Add-Agents route**; sanitized error hides raw payloads; cancel → no call; custom
-  name → existing update API). **33 new/updated tests pass (69/69 in the inbox-settings + capability suite)**;
+  capability), and `BloomwireWhatsapp` (**choice screen: exactly two options; Coexistence disabled/coming-soon +
+  8 prerequisites + never calls the backend; Register New Number continues to the form**; no credential fields;
+  posts only signup credentials; success shows Open inbox + Inbox settings + **no Add-Agents route**; sanitized
+  error hides raw payloads; cancel → no call; custom name → existing update API). **36 new/updated tests pass**;
   ESLint clean; i18n JSON valid. **No real Meta calls** (Meta SDK + store mocked). Native `Whatsapp.vue` and the
   native embedded-signup component are unchanged; stock behavior preserved (capability defaults false).
 

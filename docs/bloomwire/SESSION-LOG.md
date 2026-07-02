@@ -22,7 +22,7 @@
 - **`version_1` tip:** `4b0fb2251009ce3644a3ab992aea79fa37e40b41`  (PR #103 merged — 17C.2 docs stamp; 17C.2 code merged at `84481ed`)
 - **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3 not deployed.
 - **Latest completed / merged:** **PR #102** — Phase **17C.2** dedicated Bloomwire WhatsApp **Embedded Signup endpoint + service** (`POST /api/v1/accounts/:id/bloomwire/whatsapp/embedded_signup` → `Bloomwire::WhatsappEmbeddedSignupService`; global-router `subscribe_app_to_waba` only; `source:'bloomwire_managed'` channel + inbox + `ready_for_webhook` mapping; Meta stubbed), merged at `84481ed`. Before it: PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **Phase 17C.3** — customer **frontend WhatsApp number-registration wizard**. Branch `feature/bloomwire-phase-17c3-whatsapp-wizard` — **implemented; PR to open.** `useBloomwireCapabilities` exposes **`canSelfServeManagedWhatsapp`** (opt-in, default FALSE) · `ChannelList`/`ChannelFactory` show + render the new **`BloomwireWhatsapp.vue`** wizard in managed mode (replacing native WhatsApp) · wizard = confirm number + optional inbox name (NO credentials) → **Connect with Meta / Register WhatsApp number** → posts only signup credentials to the 17C.2 endpoint (`inboxes/createBloomwireWhatsAppEmbeddedSignup`) → safe DTO (masked number, Ready) + Open inbox/Inbox settings, **no Add-Agents step**; sanitized generic error. **Meta SDK + store mocked in tests** (no real Meta). Vitest **33 tests** (69/69 suite); ESLint clean. Native flows untouched; no backend/migration change.
+- **In-flight / open (NOT merged):** **Phase 17C.3** — customer **frontend WhatsApp connection wizard**. **PR #104** (branch `feature/bloomwire-phase-17c3-whatsapp-wizard`) — **open; connection-choice screen added (UX revision).** Opens on a **"Connect WhatsApp Channel"** choice screen: **Connect Existing WhatsApp Business App** (Coexistence) is **disabled / "Coming soon"** with prerequisites + **no backend call**; **Register New Number** (Standard, available) continues into the number-registration flow. `useBloomwireCapabilities` exposes **`canSelfServeManagedWhatsapp`** (opt-in, default FALSE) · `ChannelList`/`ChannelFactory` show + render **`BloomwireWhatsapp.vue`** in managed mode (replacing native WhatsApp) · Standard flow = confirm number + optional inbox name (NO credentials) → **Connect with Meta / Register WhatsApp number** → posts only signup credentials to the 17C.2 endpoint (`inboxes/createBloomwireWhatsAppEmbeddedSignup`) → safe DTO (masked number, Ready) + Open inbox/Inbox settings, **no Add-Agents step**; sanitized generic error. **Meta SDK + store mocked in tests** (no real Meta). Vitest **36 tests**; ESLint clean. Native flows untouched; no backend/migration change. Coexistence backend is a later slice.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
@@ -74,6 +74,25 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-02 — Phase 17C.3 (UX revision) — connection-choice screen (PR #104, still open)
+- **Change (review feedback, WhatsWay-style flow):** `BloomwireWhatsapp.vue` now opens on a **"Connect WhatsApp
+  Channel"** choice screen before the number-registration form, with a `mode` state (`choose` → `register`):
+  1. **Connect Existing WhatsApp Business App** — badge **Coexistence**, **disabled / "Coming soon"**, lists the
+     prerequisites (app v2.24.17+, active 7+ days, supported country, Meta Business Account, QR scan, chat-history
+     sync, companion devices may unlink, keep using both). It **never calls the backend** (no coexistence backend
+     yet — the card is UI-only).
+  2. **Register New Number** — badge **Standard**, "Available now" — continues into the existing Standard flow
+     (confirm number + optional inbox name → Connect with Meta → safe DTO → Open inbox / Inbox settings).
+- **Unchanged hard rules:** no Add-Agents step; no credential fields; Standard flow still posts only the
+  non-secret signup credentials to the 17C.2 endpoint; sanitized generic error; safe DTO only; native
+  `/whatsapp/authorization` + native `Whatsapp.vue` untouched; no backend/migration change.
+- **Tests:** BloomwireWhatsapp spec grew to **10** (3 new choice-screen tests: exactly two options; Coexistence
+  disabled/coming-soon + 8 prerequisites + no backend call; Register New Number continues to the form) — existing
+  Standard-flow tests now navigate through the choice screen. **36 tests total** across the 4 spec files; ESLint
+  clean; i18n JSON valid; no real Meta. **PR #104 remains open (not merged).**
+- **Gotcha:** the disabled Coexistence CTA has no `@click` handler at all (not just `disabled`) so it can never
+  reach the endpoint; `:key="req"` on the requirements `v-for` uses the (unique) translated text.
 
 ### 2026-07-02 — Phase 17C.3 — Customer frontend WhatsApp number-registration wizard
 - **Built (branch `feature/bloomwire-phase-17c3-whatsapp-wizard` off `version_1` `4b0fb22`):** the customer UI on
