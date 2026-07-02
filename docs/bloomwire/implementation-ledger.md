@@ -76,7 +76,7 @@
 | 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
 | 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | #100 | Merged (`ac79a88`) |
 | 17C.2 | Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (`bloomwire/whatsapp/embedded_signup`; global-router app-to-WABA subscribe; `bloomwire_managed` channel + inbox + mapping; Meta stubbed) | #102 | Merged (`84481ed`) |
-| 17C.3 | Customer frontend WhatsApp connection wizard (`canSelfServeManagedWhatsapp` gate + `BloomwireWhatsapp.vue`; **connection-choice screen** → Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials/agents step; Meta mocked) | #104 | Open (in-flight, not merged) |
+| 17C.3 | Customer frontend WhatsApp connection wizard (`canSelfServeManagedWhatsapp` gate + `BloomwireWhatsapp.vue`; **connection-choice screen** → Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials/agents step; Meta mocked) | #104 | Merged (`bf81c7c`) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -297,7 +297,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 17C.3 — Customer frontend WhatsApp connection wizard — `Open (in-flight, not merged)` — PR #104
+### Phase 17C.3 — Customer frontend WhatsApp connection wizard — `Merged` — PR #104 (merge SHA `bf81c7c62f5c9f8621142250e37b47e51b86ed82`; approved head `1bc432f`; `version_1` tip `bf81c7c`)
 - **Goal:** the customer UI on the 17C.2 endpoint — Settings → Inboxes → Add Inbox → WhatsApp Business → **choose a
   connection method** → register the number with Meta → ready inbox. Managed mode only; native flows untouched;
   number registration only (no agents step — Chatwoot's inbox-agent management owns that).

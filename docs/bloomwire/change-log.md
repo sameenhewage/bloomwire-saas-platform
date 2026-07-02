@@ -15,11 +15,13 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17C.3 — Customer frontend WhatsApp connection wizard (connection-choice + number registration) — OPEN (PR #104, not merged)
-- **PR:** #104 · **open / in-flight (NOT merged)** · **Type:** frontend feature (Vue). **No DB migration · no
-  backend endpoint contract change · no real Meta/WhatsApp calls (mocked in tests) · no native
-  `/whatsapp/authorization` carve-out · no manual credentials UI · no "Add Agents" step · no secrets exposed · no
-  deploy · no production.**
+### Phase 17C.3 — Customer frontend WhatsApp connection wizard (connection-choice + number registration) — MERGED
+- **PR:** #104 · **merge SHA** `bf81c7c62f5c9f8621142250e37b47e51b86ed82` · **approved head**
+  `1bc432fcc127a5b78cf7c2bb6ca4c8ce4301f4bd` · **Status:** merged into `version_1` (new tip `bf81c7c`).
+  **Type:** frontend feature (Vue). **No backend Ruby/routes/services/controllers change · no DB migration · no
+  real Meta/WhatsApp calls (mocked in tests) · no native `/whatsapp/authorization` carve-out · no manual
+  credentials UI · no "Add Agents" step · no secrets exposed · no deploy · no production.** (Dev remains at
+  `9b09f9e`.)
 - **Why:** the customer-facing UI on top of the 17C.2 endpoint — Settings → Inboxes → Add Inbox → WhatsApp
   Business → **choose a connection method** → register the number with Meta → ready inbox. Managed mode only;
   native flows untouched.
