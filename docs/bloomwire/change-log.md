@@ -15,9 +15,11 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup
-- **PR:** _pending_ · **Type:** backend foundation (capability + service + readiness). **No DB migration · no
-  new store · no secrets stored/printed · no Meta/WhatsApp calls · no frontend wizard · no native-auth carve-out.**
+### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup — MERGED
+- **PR:** #100 · **merge SHA** `ac79a888e825f3c018924685c79c2bb47695e325` · **Status:** merged into `version_1`
+  (new tip `ac79a88`; approved head `47b8b5e`). **Type:** backend foundation (capability + service + readiness).
+  **No DB migration · no new store · no secrets stored/printed · no Meta/WhatsApp calls · no frontend wizard · no
+  native `/whatsapp/authorization` carve-out · no deploy · no production.** (Dev remains at `9b09f9e`.)
 - **Why:** first backend slice (C1 only) of the customer self-serve WhatsApp onboarding (Embedded Signup first,
   ADR-0008). Adds the seams a later wizard will use, with no behavior change to native flows.
 - **What:**
