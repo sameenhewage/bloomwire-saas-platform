@@ -1,6 +1,8 @@
 import { ref } from 'vue';
 import { shallowMount } from '@vue/test-utils';
 import ChannelFactory from '../ChannelFactory.vue';
+import Whatsapp from '../channels/Whatsapp.vue';
+import BloomwireWhatsapp from '../channels/BloomwireWhatsapp.vue';
 import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 vi.mock('dashboard/composables/useBloomwireCapabilities');
@@ -11,12 +13,14 @@ const mountFactory = (
     canManageProviderSetup = true,
     canManageNativeWhatsappSetup = true,
     canCreateInbox = true,
+    canSelfServeManagedWhatsapp = false,
   } = {}
 ) => {
   useBloomwireCapabilities.mockReturnValue({
     canManageProviderSetup: ref(canManageProviderSetup),
     canManageNativeWhatsappSetup: ref(canManageNativeWhatsappSetup),
     canCreateInbox: ref(canCreateInbox),
+    canSelfServeManagedWhatsapp: ref(canSelfServeManagedWhatsapp),
   });
 
   return shallowMount(ChannelFactory, {
@@ -69,5 +73,33 @@ describe('ChannelFactory.vue (Bloomwire direct-route setup guard)', () => {
     expect(isBlocked(mountFactory('api', { canCreateInbox: false }))).toBe(
       true
     );
+  });
+
+  // Phase 17C.3: managed self-serve WhatsApp registration wizard.
+  describe('managed self-serve WhatsApp (17C.3)', () => {
+    it('renders the Bloomwire registration wizard for whatsapp when self-serve is granted, even with native whatsapp + inbox creation restricted', () => {
+      const wrapper = mountFactory('whatsapp', {
+        canManageNativeWhatsappSetup: false,
+        canCreateInbox: false,
+        canSelfServeManagedWhatsapp: true,
+      });
+      expect(isBlocked(wrapper)).toBe(false);
+      expect(wrapper.findComponent(BloomwireWhatsapp).exists()).toBe(true);
+      expect(wrapper.findComponent(Whatsapp).exists()).toBe(false);
+    });
+
+    it('renders the native WhatsApp component (not the managed wizard) when self-serve is not granted', () => {
+      const wrapper = mountFactory('whatsapp'); // canSelfServeManagedWhatsapp defaults false
+      expect(wrapper.findComponent(BloomwireWhatsapp).exists()).toBe(false);
+      expect(wrapper.findComponent(Whatsapp).exists()).toBe(true);
+    });
+
+    it('does not swap whatsapp_call to the managed wizard', () => {
+      const wrapper = mountFactory('whatsapp_call', {
+        canSelfServeManagedWhatsapp: true,
+        canManageNativeWhatsappSetup: true,
+      });
+      expect(wrapper.findComponent(BloomwireWhatsapp).exists()).toBe(false);
+    });
   });
 });

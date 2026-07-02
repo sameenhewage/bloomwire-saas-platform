@@ -61,7 +61,30 @@ describe('useBloomwireCapabilities', () => {
       'canCreateInbox',
       'canManageBots',
       'canAccessIntegrations',
+      'canSelfServeManagedWhatsapp',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
+  });
+
+  // Phase 17C.3: opt-in managed capability — defaults to FALSE (must stay hidden in stock / older backend), and
+  // only appears on an explicit server `true`.
+  describe('canSelfServeManagedWhatsapp (opt-in, default false)', () => {
+    it('defaults to false when the capability map is absent', () => {
+      mockGetters({ capabilities: undefined });
+      const { canSelfServeManagedWhatsapp } = useBloomwireCapabilities();
+      expect(canSelfServeManagedWhatsapp.value).toBe(false);
+    });
+
+    it('defaults to false when the specific key is missing (other caps present)', () => {
+      mockGetters({ capabilities: { canManageProviderSetup: true } });
+      const { canSelfServeManagedWhatsapp } = useBloomwireCapabilities();
+      expect(canSelfServeManagedWhatsapp.value).toBe(false);
+    });
+
+    it('is true only on an explicit server true', () => {
+      mockGetters({ capabilities: { canSelfServeManagedWhatsapp: true } });
+      const { canSelfServeManagedWhatsapp } = useBloomwireCapabilities();
+      expect(canSelfServeManagedWhatsapp.value).toBe(true);
+    });
   });
 });

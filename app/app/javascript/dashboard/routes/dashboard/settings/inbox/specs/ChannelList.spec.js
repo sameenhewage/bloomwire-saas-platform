@@ -15,6 +15,7 @@ const mountList = ({
   canManageProviderSetup = true,
   canManageNativeWhatsappSetup = true,
   canCreateInbox = true,
+  canSelfServeManagedWhatsapp = false,
 } = {}) => {
   useMapGetter.mockReturnValue(ref({ apiChannelName: 'API' }));
   useAccount.mockReturnValue({
@@ -25,6 +26,7 @@ const mountList = ({
     canManageProviderSetup: ref(canManageProviderSetup),
     canManageNativeWhatsappSetup: ref(canManageNativeWhatsappSetup),
     canCreateInbox: ref(canCreateInbox),
+    canSelfServeManagedWhatsapp: ref(canSelfServeManagedWhatsapp),
   });
 
   return shallowMount(ChannelList, {
@@ -93,5 +95,34 @@ describe('ChannelList.vue (Bloomwire provider/whatsapp setup hiding)', () => {
     );
     expect(keys).toContain('website');
     expect(keys).toContain('api');
+  });
+
+  // Phase 17C.3: in managed mode native whatsapp + inbox creation are restricted, but the WhatsApp card is shown
+  // for self-serve registration when the managed capability is granted.
+  it('shows the whatsapp card when canSelfServeManagedWhatsapp is true, even with native whatsapp + inbox creation restricted', () => {
+    const keys = channelKeys(
+      mountList({
+        canManageNativeWhatsappSetup: false,
+        canManageProviderSetup: false,
+        canCreateInbox: false,
+        canSelfServeManagedWhatsapp: true,
+      })
+    );
+    expect(keys).toContain('whatsapp');
+    // still only the managed WhatsApp registration card — not whatsapp_call, and not other restricted channels
+    expect(keys).not.toContain('whatsapp_call');
+    expect(keys).not.toContain('facebook');
+    expect(keys).not.toContain('website');
+  });
+
+  it('does not show the whatsapp card in managed mode when self-serve is not granted', () => {
+    const keys = channelKeys(
+      mountList({
+        canManageNativeWhatsappSetup: false,
+        canCreateInbox: false,
+        canSelfServeManagedWhatsapp: false,
+      })
+    );
+    expect(keys).not.toContain('whatsapp');
   });
 });

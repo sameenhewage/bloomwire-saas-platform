@@ -24,10 +24,13 @@ export function useBloomwireCapabilities() {
     return account?.bloomwire_capabilities ?? {};
   });
 
-  const buildCapability = key =>
+  // `fallback` is the value used when the key is absent. Stock-hiding capabilities default TRUE (preserve stock
+  // Chatwoot); opt-in managed capabilities MUST pass `false` so they stay hidden in stock / older-backend / not-
+  // loaded states and only appear on an explicit server `true`.
+  const buildCapability = (key, fallback = STOCK_SAFE_DEFAULT) =>
     computed(() => {
       const value = capabilities.value?.[key];
-      return value === undefined ? STOCK_SAFE_DEFAULT : value;
+      return value === undefined ? fallback : value;
     });
 
   return {
@@ -45,5 +48,11 @@ export function useBloomwireCapabilities() {
     canCreateInbox: buildCapability('canCreateInbox'),
     canManageBots: buildCapability('canManageBots'),
     canAccessIntegrations: buildCapability('canAccessIntegrations'),
+    // Phase 17C.3: managed self-serve WhatsApp Embedded Signup wizard. Opt-in (default FALSE) — only shown when
+    // the backend explicitly grants it (admin + native WhatsApp restricted + managed_whatsapp_onboarding on).
+    canSelfServeManagedWhatsapp: buildCapability(
+      'canSelfServeManagedWhatsapp',
+      false
+    ),
   };
 }

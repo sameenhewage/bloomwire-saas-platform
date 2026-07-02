@@ -15,6 +15,39 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17C.3 — Customer frontend WhatsApp number-registration wizard
+- **PR:** _pending_ · **Type:** frontend feature (Vue). **No DB migration · no backend endpoint contract change ·
+  no real Meta/WhatsApp calls (mocked in tests) · no native `/whatsapp/authorization` carve-out · no manual
+  credentials UI · no "Add Agents" step · no secrets exposed · no deploy · no production.**
+- **Why:** the customer-facing UI on top of the 17C.2 endpoint — Settings → Inboxes → Add Inbox → WhatsApp
+  Business → register the number with Meta → ready inbox. Managed mode only; native flows untouched.
+- **What:**
+  - **Capability plumbing:** `useBloomwireCapabilities` now exposes **`canSelfServeManagedWhatsapp`** — an opt-in
+    capability that **defaults to FALSE** (unlike the stock-safe-true capabilities), so it only appears on an
+    explicit server `true` (admin + native WhatsApp restricted + `managed_whatsapp_onboarding`); hidden in stock.
+  - **Card + factory gate:** `ChannelList` shows the WhatsApp card in managed mode (even though native WhatsApp /
+    inbox-creation are restricted), and `ChannelFactory` renders the new `BloomwireWhatsapp.vue` wizard **in place
+    of** the native WhatsApp setup when the capability is granted. Agents (no capability) never see it.
+  - **Wizard `BloomwireWhatsapp.vue`:** an optional inbox-name + WhatsApp-number **confirmation** form (NO App
+    Secret / Verify Token / Webhook URL / API token / provider_config fields) → **"Register WhatsApp number" /
+    "Connect with Meta"** launches Meta Embedded Signup (`useWhatsappEmbeddedSignup`) and posts **only** the
+    non-secret signup credentials (code/business_id/waba_id/phone_number_id) to the 17C.2 endpoint via the new
+    `inboxes/createBloomwireWhatsAppEmbeddedSignup` action + `WhatsappChannel.createBloomwireEmbeddedSignup`.
+    Success renders a **safe DTO only** (inbox id/name, masked number from the backend/Meta source of truth,
+    status Ready) with **Open inbox** + **Inbox settings** — and deliberately **no "Add Agents" step** (Chatwoot's
+    existing inbox-agent management owns that). A customer-entered inbox name is applied best-effort via the
+    existing inbox-update API (no endpoint contract change). Failures show a single sanitized generic message —
+    "We couldn’t complete WhatsApp registration. Please try again or contact Bloomwire support." — never a raw
+    Meta/server payload or token.
+- **Not done (later slices):** 17C.4 verify/go-live UX; removal of the parked `WhatsappSetupRequest`.
+- **Validation:** Vitest — `useBloomwireCapabilities` (default-false + explicit-true), `ChannelFactory` (wizard
+  renders in managed mode / native otherwise / whatsapp_call unaffected), `ChannelList` (card shown only with the
+  capability), and `BloomwireWhatsapp` (no credential fields; posts only signup credentials; success shows Open
+  inbox + Inbox settings + **no Add-Agents route**; sanitized error hides raw payloads; cancel → no call; custom
+  name → existing update API). **33 new/updated tests pass (69/69 in the inbox-settings + capability suite)**;
+  ESLint clean; i18n JSON valid. **No real Meta calls** (Meta SDK + store mocked). Native `Whatsapp.vue` and the
+  native embedded-signup component are unchanged; stock behavior preserved (capability defaults false).
+
 ### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service — MERGED
 - **PR:** #102 · **merge SHA** `84481ed1eeceadf91860f03a1515b01bb7d7abd4` · **approved head**
   `c8bd01e4b78165060539014d93a13f431dc1a12e` · **Status:** merged into `version_1` (new tip `84481ed`).

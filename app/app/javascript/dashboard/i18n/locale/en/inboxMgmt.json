@@ -326,6 +326,35 @@
           "MANUAL_LINK_TEXT": "manual setup flow",
           "CALLING_ENABLE_FAILED": "Your WhatsApp inbox is ready, but voice calling couldn't be turned on — this number isn't enrolled in the WhatsApp Business Calling API yet. Reach out to Meta or your WhatsApp Business Solution Provider to onboard it, then turn calling on from the inbox's Calls settings."
         },
+        "BLOOMWIRE_MANAGED": {
+          "TITLE": "Register your WhatsApp number",
+          "DESC": "Connect your WhatsApp Business number with Meta. We handle the technical setup for you — no API keys, tokens, or webhook configuration required.",
+          "INBOX_NAME": {
+            "LABEL": "Inbox name",
+            "PLACEHOLDER": "e.g. Support WhatsApp",
+            "HELP": "Optional. You can rename this later in Inbox settings."
+          },
+          "PHONE_NUMBER": {
+            "LABEL": "WhatsApp number",
+            "PLACEHOLDER": "e.g. +1 555 123 0001",
+            "HELP": "The number you expect to register. Meta confirms the final number during registration."
+          },
+          "CONNECT_BUTTON": "Connect with Meta",
+          "REGISTER_BUTTON": "Register WhatsApp number",
+          "PROCESSING": "Registering your WhatsApp number…",
+          "CANCELLED": "WhatsApp registration was cancelled.",
+          "ERROR": "We couldn’t complete WhatsApp registration. Please try again or contact Bloomwire support.",
+          "SUCCESS": {
+            "TITLE": "WhatsApp number registered",
+            "SUBTITLE": "Your WhatsApp inbox is ready to receive messages.",
+            "INBOX_LABEL": "Inbox",
+            "NUMBER_LABEL": "WhatsApp number",
+            "STATUS_LABEL": "Status",
+            "STATUS_READY": "Ready",
+            "OPEN_INBOX": "Open inbox",
+            "INBOX_SETTINGS": "Inbox settings"
+          }
+        },
         "API": {
           "ERROR_MESSAGE": "We were not able to save the WhatsApp channel"
         }
