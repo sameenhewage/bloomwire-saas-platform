@@ -74,6 +74,7 @@
 | 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) · **superseded/removed by 17A** |
 | 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | #97 | Merged (`8719de2`) |
 | 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
+| 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | _pending_ | Implemented (backend foundation) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -293,6 +294,35 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup — `Implemented (backend foundation)` — PR _pending_
+- **Goal:** land the backend seams (C1 only) the future customer Add-Inbox → WhatsApp → Embedded Signup wizard
+  will use, with **no** behavior change to native flows and **no** Meta calls / migration / secrets.
+- **What:**
+  1. **`canSelfServeManagedWhatsapp`** capability (`Bloomwire::Capabilities`) = `managed_capability(admin,
+     restrict_native_whatsapp_setup? && Features.enabled?(:managed_whatsapp_onboarding))` — admin + Bloomwire ON +
+     native WhatsApp restricted + the explicit **`managed_whatsapp_onboarding`** feature (master-gated +
+     **privacy-dependent**, so privacy hardening required). Mutually-exclusive with `canManageNativeWhatsappSetup`;
+     agents/OFF/feature-OFF/privacy-OFF/native-not-restricted → false. Existing capabilities unchanged. _(Review
+     Blocker 1.)_
+  2. **`Bloomwire::WhatsappSetupCreator`** — creates/updates the non-secret `Bloomwire::WhatsappSetup` router
+     mapping for an already-existing channel+inbox (status `ready_for_webhook`). Non-secret inputs only (rejects
+     api_key/provider_config kwargs); idempotent per `channel_whatsapp_id`; fails closed on cross-account,
+     missing `phone_number_id`, or a `phone_number_id` claimed by another channel. **When `ready_for_webhook`,
+     enforces router handoff-safety** (mirrors `WhatsappRouter.channel_aligned_with_payload?`): Cloud provider +
+     provider_config `phone_number_id` match + `channel.phone_number == "+<display>"`, else `:unsupported_provider`
+     / `:phone_number_id_mismatch` / `:display_phone_number_mismatch` (no value leaked). _(Review Blocker 2.)_ No
+     account/user/inbox/channel creation; no Meta call; never mutates channel `provider_config`.
+  3. **`WHATSAPP_CONFIGURATION_ID`** added to `Bloomwire::GlobalWhatsappConfig` as a **presence-only** Embedded
+     Signup prerequisite (named blocker when missing + gates `platform_ready`; shown Present/Missing on the 17B
+     page; value never rendered). App Secret / verify token stay presence-only.
+- **Not done (C1 scope):** no dedicated endpoint, token exchange, Meta client, app-to-WABA subscription, frontend
+  wizard, channel/inbox creation, manual fallback, or native `/whatsapp/authorization` carve-out.
+- **Validation:** capability + creator (incl. router-alignment negative specs) + readiness specs; **full Bloomwire
+  scope 683 examples, 0 failures (1 pre-existing pending)**; RuboCop clean. Regression: Global Config read-only;
+  native auth still blocked; router + setup #1 unchanged. No deploy · no production · no secrets · no Meta/WhatsApp · no migration.
+- **Follow-ups:** C2 (dedicated Bloomwire embedded-signup endpoint/service, Meta stubbed) · C3 (frontend wizard) ·
+  C4 (verify/go-live). Real Meta E2E is owner-operated.
 
 ### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only) — `Merged` — PR #98 (merge SHA `6eac9faf2cf50bf9910da4ae62179c73cfb96957`; `version_1` tip `6eac9fa`)
 - **Goal (ADR-0008):** turn the post-17A read-only WhatsApp Setups surface into a clean **Global WhatsApp Platform

@@ -15,6 +15,46 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup
+- **PR:** _pending_ · **Type:** backend foundation (capability + service + readiness). **No DB migration · no
+  new store · no secrets stored/printed · no Meta/WhatsApp calls · no frontend wizard · no native-auth carve-out.**
+- **Why:** first backend slice (C1 only) of the customer self-serve WhatsApp onboarding (Embedded Signup first,
+  ADR-0008). Adds the seams a later wizard will use, with no behavior change to native flows.
+- **What:**
+  1. **New capability `canSelfServeManagedWhatsapp`** (`Bloomwire::Capabilities`) — `admin &&
+     restrict_native_whatsapp_setup? && Bloomwire::Features.enabled?(:managed_whatsapp_onboarding)` (administrator
+     **and** Bloomwire mode ON with native WhatsApp restricted **and** the explicit `managed_whatsapp_onboarding`
+     feature enabled — which is master-gated **and privacy-dependent**, so privacy hardening is required too).
+     Mutually-exclusive counterpart of `canManageNativeWhatsappSetup`; agents → false; Bloomwire OFF / feature OFF
+     / privacy OFF / native-not-restricted → false. Existing capabilities (`canManageNativeWhatsappSetup`,
+     `canCreateInbox`, …) unchanged. _(Review Blocker 1: gate on the existing managed-onboarding feature, not just
+     the native restriction.)_
+  2. **New service `Bloomwire::WhatsappSetupCreator`** — creates/updates the internal **non-secret**
+     `Bloomwire::WhatsappSetup` router mapping (account/inbox/channel/phone_number_id/waba_id/display, status
+     `ready_for_webhook`) for an **already-existing** channel+inbox. Accepts only explicit non-secret inputs
+     (**no api_key/token/provider_config** — raises on such kwargs); idempotent per `channel_whatsapp_id`;
+     fails closed (safe symbol errors) on cross-account inbox/channel, missing `phone_number_id`, or a
+     `phone_number_id` already claimed by another channel. **When `ready_for_webhook`, it also enforces
+     router handoff-safety** (mirrors `WhatsappRouter.channel_aligned_with_payload?`): Cloud (`whatsapp_cloud`)
+     provider + `provider_config['phone_number_id']` match + `channel.phone_number == "+<display>"`, else
+     `:unsupported_provider` / `:phone_number_id_mismatch` / `:display_phone_number_mismatch` (no value leaked) —
+     so no "ready" row the global router would refuse is ever persisted. _(Review Blocker 2.)_ Creates **no**
+     account/user/inbox/channel; **no** Meta call; never mutates `provider_config`.
+  3. **Readiness:** `WHATSAPP_CONFIGURATION_ID` is now a **presence-only** Embedded-Signup prerequisite in
+     `Bloomwire::GlobalWhatsappConfig` — missing → named blocker ("WHATSAPP_CONFIGURATION_ID is missing") + gates
+     `platform_ready`; surfaced on the 17B page as Present/Missing (value never shown; it is not a secret). App
+     Secret / verify token remain presence-only, values never rendered.
+- **Not done (out of C1 scope):** no dedicated embedded-signup endpoint, no token exchange, no Meta API client
+  calls, no app-to-WABA subscription, no frontend wizard, no Channel::Whatsapp/Inbox creation here, no manual
+  fallback, no native `/whatsapp/authorization` carve-out, no `channel.setup_webhooks`.
+- **Validation:** capability specs (feature ON→admin true when native restricted, feature OFF→false, privacy OFF→
+  false, agent→false, OFF→stock, native caps not weakened) + `WhatsappSetupCreator` specs (create/idempotent/
+  cross-account-reject/missing-pnid/pnid-conflict/**router-alignment: unsupported-provider + pnid-mismatch +
+  display-mismatch fail closed**/no-secret/router resolves) + readiness specs (configuration_id present→no blocker,
+  missing→blocker+not-ready). **Full Bloomwire scope 683 examples, 0 failures (1 pre-existing pending)**; RuboCop
+  clean. Regression: SuperAdmin Global Config stays read-only; native `/whatsapp/authorization` stays blocked under
+  managed restrictions; router + setup #1 unchanged.
+
 ### Phase 17B — SuperAdmin "Global WhatsApp Config" page (read-only) — MERGED
 - **PR:** #98 · **merge SHA** `6eac9faf2cf50bf9910da4ae62179c73cfb96957` · **Status:** merged into `version_1`
   (new tip `6eac9fa`). **Type:** read-only SuperAdmin UI. **No DB migration · no new store · no secrets stored ·

@@ -58,13 +58,16 @@ RSpec.describe 'SuperAdmin Bloomwire WhatsApp Setup (read-only surface)', type: 
       # Phase 17B: the index is now the read-only "Global WhatsApp Config" page.
       it 'renders the Global WhatsApp Config page (read-only platform config)' do
         get '/super_admin/bloomwire_whatsapp_setups'
-        expect(response).to have_http_status(:success)
-        expect(response.body).to include('Global WhatsApp Config')
-        expect(response.body).to include('Platform configuration')
-        expect(response.body).to include('Meta App Secret')
-        expect(response.body).to include('Webhook verify token')
-        expect(response.body).to include('Connected WhatsApp inboxes')
-        expect(response.body).to include('Not tracked yet')
+        aggregate_failures do
+          expect(response).to have_http_status(:success)
+          expect(response.body).to include('Global WhatsApp Config')
+          expect(response.body).to include('Platform configuration')
+          expect(response.body).to include('Meta App Secret')
+          expect(response.body).to include('Webhook verify token')
+          expect(response.body).to include('WHATSAPP_CONFIGURATION_ID')
+          expect(response.body).to include('Connected WhatsApp inboxes')
+          expect(response.body).to include('Not tracked yet')
+        end
       end
 
       it 'does not reintroduce provisioning or manual setup-mapping CRUD' do

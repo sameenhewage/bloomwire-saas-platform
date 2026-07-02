@@ -22,7 +22,8 @@ RSpec.describe Bloomwire::GlobalWhatsappConfig do
           'WHATSAPP_APP_SECRET' => 'FAKE-APP-SECRET-VALUE',
           'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN' => 'FAKE-VERIFY-TOKEN-VALUE',
           'BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST' => 'chat.example.com',
-          'WHATSAPP_APP_ID' => '1234567890'
+          'WHATSAPP_APP_ID' => '1234567890',
+          'WHATSAPP_CONFIGURATION_ID' => 'CONFIG-ID-1'
         )
       end
 
@@ -38,6 +39,7 @@ RSpec.describe Bloomwire::GlobalWhatsappConfig do
         r = described_class.new.result
         expect(r[:callback_url]).to eq('https://chat.example.com/bloomwire/webhooks/whatsapp')
         expect(r[:app_id]).to eq('1234567890')
+        expect(r[:configuration_id_present]).to be(true)
         expect(r[:router_enabled]).to be(true)
         expect(r[:platform_ready]).to be(true)
         expect(r[:blockers]).to be_empty
@@ -89,10 +91,41 @@ RSpec.describe Bloomwire::GlobalWhatsappConfig do
       end
     end
 
+    context 'when only WHATSAPP_CONFIGURATION_ID is missing (Embedded Signup prerequisite, Phase 17C.1)' do
+      before do
+        stub_features(master: true, router: true)
+        stub_config(
+          'WHATSAPP_APP_SECRET' => 'FAKE-APP-SECRET-VALUE',
+          'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN' => 'FAKE-VERIFY-TOKEN-VALUE',
+          'BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST' => 'chat.example.com',
+          'WHATSAPP_APP_ID' => '1234567890',
+          'WHATSAPP_CONFIGURATION_ID' => nil
+        )
+      end
+
+      it 'reports configuration_id_present false, names it a blocker, and is not platform-ready' do
+        r = described_class.new.result
+        expect(r[:configuration_id_present]).to be(false)
+        expect(r[:blockers]).to include(a_string_matching(/WHATSAPP_CONFIGURATION_ID is missing/))
+        expect(r[:platform_ready]).to be(false)
+      end
+    end
+
+    context 'when WHATSAPP_CONFIGURATION_ID is present' do
+      it 'does not add a configuration-id blocker (presence-only, value not required in result)' do
+        stub_features(master: true, router: true)
+        stub_config('WHATSAPP_CONFIGURATION_ID' => 'CONFIG-ID-9')
+        r = described_class.new.result
+        expect(r[:configuration_id_present]).to be(true)
+        expect(r[:blockers]).not_to include(a_string_matching(/WHATSAPP_CONFIGURATION_ID/))
+      end
+    end
+
     context 'when the router toggle is off' do
       it 'flags the router as a blocker' do
         stub_features(master: true, router: false)
         stub_config('BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST' => 'chat.example.com', 'WHATSAPP_APP_ID' => 'z',
+                    'WHATSAPP_CONFIGURATION_ID' => 'c',
                     'WHATSAPP_APP_SECRET' => 'x', 'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN' => 'y')
         r = described_class.new.result
         expect(r[:router_enabled]).to be(false)

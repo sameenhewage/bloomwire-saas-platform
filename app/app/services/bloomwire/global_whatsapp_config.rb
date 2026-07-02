@@ -16,6 +16,7 @@ class Bloomwire::GlobalWhatsappConfig
   VERIFY_TOKEN_KEY = 'BLOOMWIRE_WHATSAPP_GLOBAL_VERIFY_TOKEN'.freeze
   PUBLIC_HOST_KEY = 'BLOOMWIRE_WHATSAPP_PUBLIC_CALLBACK_HOST'.freeze
   APP_ID_KEY = 'WHATSAPP_APP_ID'.freeze
+  CONFIGURATION_ID_KEY = 'WHATSAPP_CONFIGURATION_ID'.freeze
   PUBLIC_HOST_FORMAT = /\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::\d{1,5})?\z/i
 
   def result
@@ -30,6 +31,7 @@ class Bloomwire::GlobalWhatsappConfig
       app_secret_present: config_present?(APP_SECRET_KEY),
       app_id_present: config_present?(APP_ID_KEY),
       app_id: app_id_value, # public identifier — safe to display
+      configuration_id_present: config_present?(CONFIGURATION_ID_KEY), # presence-only (Embedded Signup config id)
       platform_ready: blockers.empty?,
       blockers: blockers,
       connected_inbox_count: connected_inbox_count,
@@ -73,6 +75,7 @@ class Bloomwire::GlobalWhatsappConfig
       [Bloomwire::Features.master_enabled?, 'Bloomwire mode is OFF'],
       [Bloomwire::Features.enabled?(:global_webhook_router), 'Global webhook router is OFF'],
       [config_present?(APP_ID_KEY), "#{APP_ID_KEY} is missing"],
+      [config_present?(CONFIGURATION_ID_KEY), "#{CONFIGURATION_ID_KEY} is missing"],
       [config_present?(APP_SECRET_KEY), "#{APP_SECRET_KEY} is missing"],
       [config_present?(VERIFY_TOKEN_KEY), "#{VERIFY_TOKEN_KEY} is missing"],
       [public_host_valid?, "#{PUBLIC_HOST_KEY} is missing/invalid"]
