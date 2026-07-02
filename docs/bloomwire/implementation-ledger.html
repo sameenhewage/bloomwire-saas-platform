@@ -171,7 +171,8 @@
         <tr><td>17C.1</td><td>Backend foundation for customer WhatsApp Embedded Signup (capability <code>canSelfServeManagedWhatsapp</code> + <code>WhatsappSetupCreator</code> + <code>WHATSAPP_CONFIGURATION_ID</code> readiness)</td><td>#100</td><td><span class="badge done">Merged</span> <code>ac79a88</code></td></tr>
         <tr><td>17C.2</td><td>Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (<code>bloomwire/whatsapp/embedded_signup</code>; global-router app-to-WABA subscribe; <code>bloomwire_managed</code> channel + inbox + mapping; Meta stubbed)</td><td>#102</td><td><span class="badge done">Merged</span> <code>84481ed</code></td></tr>
         <tr><td>17C.3</td><td>Customer frontend WhatsApp connection wizard (<code>canSelfServeManagedWhatsapp</code> gate + <code>BloomwireWhatsapp.vue</code>; <b>connection-choice screen</b>: Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials / no agents step; Meta mocked)</td><td>#104</td><td><span class="badge done">Merged</span> <code>bf81c7c</code></td></tr>
-        <tr><td>17D.1</td><td>WhatsApp Business App <b>Coexistence backend contract</b> (<code>bloomwire/whatsapp/coexistence_embedded_signup</code> + <code>WhatsappCoexistenceEmbeddedSignupService</code>; <code>connection_mode=coexistence</code>; inherits safe 17C.2 seam; Meta stubbed) — backend only, Coexistence UI still disabled</td><td>#107</td><td><span class="badge">Open (ready for review, not merged)</span></td></tr>
+        <tr><td>17D.0</td><td>WhatsApp Business App <b>Coexistence discovery contract</b> (<code>docs/bloomwire/whatsapp-coexistence-discovery.md</code>; evidence/report-only — locks the <code>connection_mode=coexistence</code> contract + boundary before enabling)</td><td>#106</td><td><span class="badge done">Merged</span> <code>f9aeac7</code></td></tr>
+        <tr><td>17D.1</td><td>WhatsApp Business App <b>Coexistence backend contract</b> (<code>bloomwire/whatsapp/coexistence_embedded_signup</code> + <code>WhatsappCoexistenceEmbeddedSignupService</code>; <code>connection_mode=coexistence</code>; inherits safe 17C.2 seam; Meta stubbed) — backend only, Coexistence UI still disabled</td><td>#107</td><td><span class="badge done">Merged</span> <code>ebdcba2</code></td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -332,7 +333,15 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 17D.1 — WhatsApp Business App Coexistence backend contract <span class="badge">Open (ready for review, not merged)</span> <span class="pr">PR #107</span></h3>
+    <div class="card"><h3>Phase 17D.0 — WhatsApp Business App Coexistence discovery contract <span class="badge done">Merged</span> <span class="pr">PR #106 · f9aeac7</span></h3>
+      <ul>
+        <li><b>Goal</b>: evidence/report-only discovery that locks the Coexistence backend contract before enabling the disabled "Connect Existing WhatsApp Business App" card — so 17D.1 could implement it without leaking credentials, duplicating messages, or weakening the native flow.</li>
+        <li><b>What</b>: <code>docs/bloomwire/whatsapp-coexistence-discovery.md</code> — current-<code>version_1</code> evidence, the intended <code>connection_mode=coexistence</code> contract, open questions, and the 17D.1/17D.2/17D.3 plan. Docs only; no code/route/frontend/migration/deploy/Meta.</li>
+        <li><b>Validation</b>: docs-only; CI docs governance green.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17D.1 — WhatsApp Business App Coexistence backend contract <span class="badge done">Merged</span> <span class="pr">PR #107 · ebdcba2</span></h3>
       <ul>
         <li><b>Goal</b>: backend for <b>"Connect Existing WhatsApp Business App" (Coexistence)</b> — the option the 17C.3 wizard shows disabled/"Coming soon". Backend contract only; UI card stays disabled until 17D.3.</li>
         <li><b>Endpoint</b> <code>POST /api/v1/accounts/:account_id/bloomwire/whatsapp/coexistence_embedded_signup</code> (same namespace as 17C.2 <code>embedded_signup</code>). Admin-only; 404/inert unless native WhatsApp restricted AND <code>managed_whatsapp_onboarding</code>; <code>Current.account</code>-scoped; safe DTO + sanitized errors. Native <code>/whatsapp/authorization</code> untouched.</li>
