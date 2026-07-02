@@ -14,8 +14,12 @@ const router = useRouter();
 const { accountId, currentAccount } = useAccount();
 // Bloomwire (11B.6C/11B.7C): hide channel setup entries when Ops-managed (backend still enforces the 403).
 // 11B.7C: in managed mode ALL inbox creation is Ops-owned, so even self-service website/api cards are hidden.
-const { canManageProviderSetup, canManageNativeWhatsappSetup, canCreateInbox } =
-  useBloomwireCapabilities();
+const {
+  canManageProviderSetup,
+  canManageNativeWhatsappSetup,
+  canCreateInbox,
+  canSelfServeManagedWhatsapp,
+} = useBloomwireCapabilities();
 
 const globalConfig = useMapGetter('globalConfig/get');
 
@@ -117,6 +121,9 @@ const channelList = computed(() => {
 });
 
 const isChannelSetupAllowed = key => {
+  // 17C.3: in managed mode the WhatsApp card is shown for self-serve registration even though native WhatsApp /
+  // inbox-creation are restricted (false). Gated by its own capability; the card routes to the managed wizard.
+  if (key === 'whatsapp' && canSelfServeManagedWhatsapp.value) return true;
   // 11B.7C: managed mode blocks ALL inbox creation, so self-service channels are gated too.
   if (!canCreateInbox.value) return false;
   if (SELF_SERVICE_CHANNELS.includes(key)) return true;

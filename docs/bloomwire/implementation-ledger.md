@@ -76,6 +76,7 @@
 | 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
 | 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | #100 | Merged (`ac79a88`) |
 | 17C.2 | Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (`bloomwire/whatsapp/embedded_signup`; global-router app-to-WABA subscribe; `bloomwire_managed` channel + inbox + mapping; Meta stubbed) | #102 | Merged (`84481ed`) |
+| 17C.3 | Customer frontend WhatsApp connection wizard (`canSelfServeManagedWhatsapp` gate + `BloomwireWhatsapp.vue`; **connection-choice screen** → Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials/agents step; Meta mocked) | #104 | Open (in-flight, not merged) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -295,6 +296,35 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 17C.3 — Customer frontend WhatsApp connection wizard — `Open (in-flight, not merged)` — PR #104
+- **Goal:** the customer UI on the 17C.2 endpoint — Settings → Inboxes → Add Inbox → WhatsApp Business → **choose a
+  connection method** → register the number with Meta → ready inbox. Managed mode only; native flows untouched;
+  number registration only (no agents step — Chatwoot's inbox-agent management owns that).
+- **What:**
+  - **Connection-choice screen (first step):** "Connect WhatsApp Channel" → two options: **Connect Existing
+    WhatsApp Business App** (badge Coexistence) **disabled / "Coming soon"** with its prerequisites listed and
+    **no backend call** (no coexistence backend yet); and **Register New Number** (badge Standard, "Available
+    now") which continues to the number-registration form.
+  - `useBloomwireCapabilities` exposes **`canSelfServeManagedWhatsapp`** (opt-in, **default FALSE** — hidden in
+    stock; shown only on explicit server `true`).
+  - `ChannelList` shows the WhatsApp card in managed mode; `ChannelFactory` renders `BloomwireWhatsapp.vue` in
+    place of native WhatsApp when the capability is granted. Agents never see it.
+  - `BloomwireWhatsapp.vue` (Standard flow): optional inbox-name + number confirmation (NO App Secret / Verify
+    Token / Webhook / API token / provider_config) → **Connect with Meta / Register WhatsApp number** → posts only
+    the non-secret signup credentials to the 17C.2 endpoint (`inboxes/createBloomwireWhatsAppEmbeddedSignup` +
+    `WhatsappChannel.createBloomwireEmbeddedSignup`). Success = safe DTO (inbox id/name, masked number, Ready) +
+    Open inbox / Inbox settings; failure = one sanitized generic message. Custom name applied best-effort via the
+    existing inbox-update API (no endpoint contract change).
+- **Security/DTO:** no credentials collected; response/DOM never show token/api_key/provider_config; registered
+  number = backend/Meta source of truth (masked), not the typed value; raw Meta/server errors never surfaced;
+  Coexistence card triggers no network call.
+- **Not done:** Coexistence **backend** (card is UI-only/disabled until then); 17C.4 verify/go-live; retire parked
+  `WhatsappSetupRequest`.
+- **Validation:** Vitest **36 tests** (capability default-false; factory/list gating; **choice screen: two
+  options, Coexistence disabled/coming-soon + 8 prerequisites + no backend call, Register New Number continues**;
+  wizard no-agents + no-credentials + sanitized error + posts-only-credentials); ESLint clean; i18n JSON valid; no
+  real Meta (SDK + store mocked). No migration · no deploy · no production · no backend/native change.
 
 ### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service — `Merged` — PR #102 (merge SHA `84481ed1eeceadf91860f03a1515b01bb7d7abd4`; approved head `c8bd01e`; `version_1` tip `84481ed`)
 - **Goal (ADR-0008):** the customer-side Embedded-Signup backend on the 17C.1 foundation — no native flow touched,

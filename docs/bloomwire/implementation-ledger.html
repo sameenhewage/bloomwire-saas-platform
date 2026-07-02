@@ -170,6 +170,7 @@
         <tr><td>17B</td><td>SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list</td><td>#98</td><td><span class="badge done">Merged</span> <code>6eac9fa</code></td></tr>
         <tr><td>17C.1</td><td>Backend foundation for customer WhatsApp Embedded Signup (capability <code>canSelfServeManagedWhatsapp</code> + <code>WhatsappSetupCreator</code> + <code>WHATSAPP_CONFIGURATION_ID</code> readiness)</td><td>#100</td><td><span class="badge done">Merged</span> <code>ac79a88</code></td></tr>
         <tr><td>17C.2</td><td>Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (<code>bloomwire/whatsapp/embedded_signup</code>; global-router app-to-WABA subscribe; <code>bloomwire_managed</code> channel + inbox + mapping; Meta stubbed)</td><td>#102</td><td><span class="badge done">Merged</span> <code>84481ed</code></td></tr>
+        <tr><td>17C.3</td><td>Customer frontend WhatsApp connection wizard (<code>canSelfServeManagedWhatsapp</code> gate + <code>BloomwireWhatsapp.vue</code>; <b>connection-choice screen</b>: Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials / no agents step; Meta mocked)</td><td>#104</td><td><span class="badge">Open (not merged)</span></td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -327,6 +328,19 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17C.3 — Customer frontend WhatsApp connection wizard <span class="badge">Open (not merged)</span> <span class="pr">PR #104</span></h3>
+      <ul>
+        <li><b>Flow</b>: Settings &rarr; Inboxes &rarr; Add Inbox &rarr; WhatsApp Business &rarr; <b>choose a connection method</b> &rarr; register the number with Meta &rarr; ready inbox. Managed mode only; number registration only (no agents step — Chatwoot inbox-agent management owns that).</li>
+        <li><b>Connection-choice screen</b>: "Connect WhatsApp Channel" &rarr; two options — <b>Connect Existing WhatsApp Business App</b> (badge Coexistence) <b>disabled / "Coming soon"</b> with prerequisites listed and <b>no backend call</b> (no coexistence backend yet); and <b>Register New Number</b> (badge Standard, "Available now") which continues to the registration form.</li>
+        <li><b>Capability</b>: <code>useBloomwireCapabilities</code> exposes <code>canSelfServeManagedWhatsapp</code> (opt-in, <b>default FALSE</b> — hidden in stock; shown only on explicit server <code>true</code>).</li>
+        <li><b>Gate</b>: <code>ChannelList</code> shows the WhatsApp card in managed mode; <code>ChannelFactory</code> renders <code>BloomwireWhatsapp.vue</code> in place of native WhatsApp when granted. Agents never see it.</li>
+        <li><b>Standard flow</b>: optional inbox-name + number confirmation (NO App Secret / Verify Token / Webhook / API token / provider_config) &rarr; <b>Connect with Meta / Register WhatsApp number</b> &rarr; posts only the non-secret signup credentials to the 17C.2 endpoint. Success = safe DTO (inbox id/name, masked number, Ready) + Open inbox / Inbox settings; failure = one sanitized generic message. Custom name via the existing inbox-update API.</li>
+        <li><b>Security</b>: no credentials collected; DOM/response never show token/api_key/provider_config; registered number = backend/Meta source of truth (masked); raw Meta/server errors never surfaced; Coexistence card makes no network call.</li>
+        <li><b>Validation</b>: Vitest 36 tests (capability default-false; factory/list gating; choice screen [two options, Coexistence disabled/coming-soon + prerequisites + no backend call, Register New Number continues]; wizard no-agents + no-credentials + sanitized error + posts-only-credentials); ESLint clean; i18n JSON valid; no real Meta (SDK + store mocked). No migration · no deploy · no backend/native change.</li>
+        <li><b>Not done</b>: Coexistence backend (card is UI-only/disabled until then); 17C.4 verify/go-live; retire parked <code>WhatsappSetupRequest</code>.</li>
       </ul>
     </div>
 

@@ -276,6 +276,26 @@ export const actions = {
       throw error;
     }
   },
+  // Phase 17C.3: managed self-serve WhatsApp Embedded Signup. The endpoint returns a safe DTO (inbox/channel/
+  // setup/masked phone), NOT a full inbox record, so we refresh the inbox list instead of ADD_INBOXES and return
+  // the DTO to the caller. No secrets (api_key/token/provider_config) are ever in the payload or the response.
+  createBloomwireWhatsAppEmbeddedSignup: async (
+    { commit, dispatch },
+    params
+  ) => {
+    try {
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: true });
+      const response =
+        await WhatsappChannel.createBloomwireEmbeddedSignup(params);
+      await dispatch('get');
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
+      sendAnalyticsEvent('whatsapp');
+      return response.data;
+    } catch (error) {
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
+      throw error;
+    }
+  },
   ...channelActions,
   // TODO: Extract other create channel methods to separate files to reduce file size
   // - createChannel

@@ -326,6 +326,64 @@
           "MANUAL_LINK_TEXT": "manual setup flow",
           "CALLING_ENABLE_FAILED": "Your WhatsApp inbox is ready, but voice calling couldn't be turned on — this number isn't enrolled in the WhatsApp Business Calling API yet. Reach out to Meta or your WhatsApp Business Solution Provider to onboard it, then turn calling on from the inbox's Calls settings."
         },
+        "BLOOMWIRE_MANAGED": {
+          "TITLE": "Register your WhatsApp number",
+          "DESC": "Connect your WhatsApp Business number with Meta. We handle the technical setup for you — no API keys, tokens, or webhook configuration required.",
+          "CHOOSE": {
+            "TITLE": "Connect WhatsApp Channel",
+            "SUBTITLE": "Choose how you want to connect your WhatsApp number to Bloomwire.",
+            "BACK": "Back to connection options",
+            "COEXISTENCE": {
+              "TITLE": "Connect Existing WhatsApp Business App",
+              "BADGE": "Coexistence",
+              "STATUS": "Coming soon",
+              "DESC": "Keep using your WhatsApp Business App while connecting the same number to Bloomwire.",
+              "REQUIREMENTS_TITLE": "What you’ll need",
+              "REQUIREMENTS": {
+                "APP_VERSION": "WhatsApp Business App v2.24.17 or newer",
+                "APP_AGE": "WhatsApp Business App active for at least 7 days",
+                "COUNTRY": "A supported country",
+                "META_BUSINESS": "A Meta Business Account",
+                "QR": "During connection, Meta may show a QR code to scan with the WhatsApp Business App",
+                "HISTORY": "Recent chat history may sync",
+                "DEVICES": "Linked companion devices may be temporarily unlinked",
+                "BOTH": "You can keep using both the app and Bloomwire"
+              }
+            },
+            "STANDARD": {
+              "TITLE": "Register New Number",
+              "BADGE": "Standard",
+              "STATUS": "Available now",
+              "DESC": "Register a new or eligible existing number for WhatsApp Cloud API use through Bloomwire.",
+              "CTA": "Register New Number"
+            }
+          },
+          "INBOX_NAME": {
+            "LABEL": "Inbox name",
+            "PLACEHOLDER": "e.g. Support WhatsApp",
+            "HELP": "Optional. You can rename this later in Inbox settings."
+          },
+          "PHONE_NUMBER": {
+            "LABEL": "WhatsApp number",
+            "PLACEHOLDER": "e.g. +1 555 123 0001",
+            "HELP": "The number you expect to register. Meta confirms the final number during registration."
+          },
+          "CONNECT_BUTTON": "Connect with Meta",
+          "REGISTER_BUTTON": "Register WhatsApp number",
+          "PROCESSING": "Registering your WhatsApp number…",
+          "CANCELLED": "WhatsApp registration was cancelled.",
+          "ERROR": "We couldn’t complete WhatsApp registration. Please try again or contact Bloomwire support.",
+          "SUCCESS": {
+            "TITLE": "WhatsApp number registered",
+            "SUBTITLE": "Your WhatsApp inbox is ready to receive messages.",
+            "INBOX_LABEL": "Inbox",
+            "NUMBER_LABEL": "WhatsApp number",
+            "STATUS_LABEL": "Status",
+            "STATUS_READY": "Ready",
+            "OPEN_INBOX": "Open inbox",
+            "INBOX_SETTINGS": "Inbox settings"
+          }
+        },
         "API": {
           "ERROR_MESSAGE": "We were not able to save the WhatsApp channel"
         }
