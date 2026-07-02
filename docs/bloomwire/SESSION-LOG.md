@@ -75,7 +75,7 @@
 
 ## C. Session journal  *(newest first — prepend new entries)*
 
-### 2026-07-02 — Phase 17C.3 (UX revision) — connection-choice screen (PR #104, still open)
+### 2026-07-02 — Phase 17C.3 (UX revision) — connection-choice screen (PR #104, merged)
 - **Change (review feedback, WhatsWay-style flow):** `BloomwireWhatsapp.vue` now opens on a **"Connect WhatsApp
   Channel"** choice screen before the number-registration form, with a `mode` state (`choose` → `register`):
   1. **Connect Existing WhatsApp Business App** — badge **Coexistence**, **disabled / "Coming soon"**, lists the
