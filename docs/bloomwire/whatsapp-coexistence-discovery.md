@@ -1,6 +1,6 @@
 # Phase 17D.0 — WhatsApp Business App Coexistence Discovery
 
-Status: **open / discovery only**
+Status: **merged via PR #106 at `f9aeac7245bb6e9869c25233ed68377f77062e90`; discovery-only contract, no deploy.** This phase is docs only — no code, no route, no frontend, no migration, no production, and no real Meta/WhatsApp calls. The 17D.1 backend contract that this discovery locked was subsequently merged via **PR #107 at `ebdcba2831fd40330eaefd5a6dfe87f97a00b867`**. **17D.2** (webhook/coexistence proof) remains next and **17D.3** (frontend enablement) remains future — the Coexistence card stays disabled/"Coming soon" until 17D.3.
 
 Base: `version_1` after PR #105 docs stamp (`c4ca7022902c933e34e8fb07964ae0c2dda928d3`).
 
