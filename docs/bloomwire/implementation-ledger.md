@@ -75,7 +75,7 @@
 | 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | #97 | Merged (`8719de2`) |
 | 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
 | 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | #100 | Merged (`ac79a88`) |
-| 17C.2 | Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (`bloomwire/whatsapp/embedded_signup`; global-router app-to-WABA subscribe; `bloomwire_managed` channel + inbox + mapping; Meta stubbed) | _pending_ | Implemented (endpoint + service) |
+| 17C.2 | Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (`bloomwire/whatsapp/embedded_signup`; global-router app-to-WABA subscribe; `bloomwire_managed` channel + inbox + mapping; Meta stubbed) | #102 | Merged (`84481ed`) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -296,7 +296,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service — `Implemented (endpoint + service)` — PR _pending_
+### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service — `Merged` — PR #102 (merge SHA `84481ed1eeceadf91860f03a1515b01bb7d7abd4`; approved head `c8bd01e`; `version_1` tip `84481ed`)
 - **Goal (ADR-0008):** the customer-side Embedded-Signup backend on the 17C.1 foundation — no native flow touched,
   no frontend wizard yet, no real Meta calls in tests.
 - **Endpoint:** `POST /api/v1/accounts/:account_id/bloomwire/whatsapp/embedded_signup`

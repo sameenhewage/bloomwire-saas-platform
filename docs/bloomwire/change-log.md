@@ -15,10 +15,13 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service
-- **PR:** _pending_ · **Type:** feature (account-scoped endpoint + service). **No DB migration · no frontend
-  wizard · no real Meta/WhatsApp calls (all stubbed in tests) · no native `/whatsapp/authorization` carve-out ·
-  no `channel.setup_webhooks` / `override_callback_uri` · no secrets printed/returned · no deploy · no production.**
+### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service — MERGED
+- **PR:** #102 · **merge SHA** `84481ed1eeceadf91860f03a1515b01bb7d7abd4` · **approved head**
+  `c8bd01e4b78165060539014d93a13f431dc1a12e` · **Status:** merged into `version_1` (new tip `84481ed`).
+  **Type:** feature (account-scoped endpoint + service). **No DB migration · no frontend wizard · no real
+  Meta/WhatsApp calls (all stubbed in tests) · no native `/whatsapp/authorization` carve-out · no
+  `channel.setup_webhooks` / `override_callback_uri` · no secrets printed/returned · no deploy · no production.**
+  (Dev remains at `9b09f9e`.)
 - **Why:** implement the customer-side Embedded-Signup backend (ADR-0008) on the 17C.1 foundation, WITHOUT
   touching native embedded signup and WITHOUT weakening any native flow.
 - **What:**
