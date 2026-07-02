@@ -19,15 +19,15 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `ebdcba2831fd40330eaefd5a6dfe87f97a00b867`  (PR #107 merged — Phase 17D.1 Coexistence backend contract; PR #106 17D.0 discovery merged just before at `f9aeac7`)
-- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1 not deployed.
-- **Latest completed / merged:** **PR #107** — Phase **17D.1** WhatsApp Business App **Coexistence backend contract** (`POST …/bloomwire/whatsapp/coexistence_embedded_signup` → `WhatsappCoexistenceEmbeddedSignupService < WhatsappEmbeddedSignupService`; `connection_mode=coexistence`; inherits the full safe 17C.2 seam; Meta stubbed), merged at `ebdcba2`. Just before: **PR #106** — Phase **17D.0** Coexistence **discovery contract** (docs-only), merged at `f9aeac7`. Before them: PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open:** **none** (17D.0 + 17D.1 merged). Next feature milestone = **17D.2** (webhook/coexistence proof), then **17D.3** (frontend enablement — the Coexistence card stays **disabled/"Coming soon"** until then) — not started.
+- **`version_1` tip:** `5002942a381ccd95dfd550afc4db4e6346c1493f`  (PR #108 merged — 17D.0/17D.1 docs stamp; 17D.1 code merged at `ebdcba2`, 17D.0 at `f9aeac7`)
+- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2 not deployed.
+- **Latest completed / merged:** **PR #107** — Phase **17D.1** WhatsApp Business App **Coexistence backend contract** (`WhatsappCoexistenceEmbeddedSignupService < WhatsappEmbeddedSignupService`; `connection_mode=coexistence`; inherits the safe 17C.2 seam; Meta stubbed), merged at `ebdcba2`; **PR #106** 17D.0 discovery at `f9aeac7`; docs-stamp **PR #108** → `version_1` `5002942`. Before them: PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17D.2** — WhatsApp Business App **Coexistence webhook proof**. Branch `feature/bloomwire-phase-17d2-coexistence-webhook-proof` — **backend/webhook proof only; Coexistence UI card stays disabled/"Coming soon".** Proved: the global router routes a coexistence channel by `phone_number_id` (never inspects `connection_mode`; wrong pnid fails closed; account-scoped); `smb_message_echoes` already uses the **outgoing** echo path (`IncomingMessageWhatsappCloudService(outgoing_echo: true)`, not a duplicate inbound); `smb_app_state_sync` was unhandled → added a **safe-ignore guard** to `Webhooks::WhatsappEventsJob` (redacted log, no inbound processing, no message/conversation, no crash). **Only production change** = the app-state-sync guard; routing + echo needed none. Proof doc `docs/bloomwire/whatsapp-coexistence-webhook-proof.md`. Targeted **43 ex, 0 fail**; webhook regression **58 ex, 0 fail**; RuboCop clean. **No real Meta** (fake payloads); no frontend enablement; no migration/deploy/secrets; native `/whatsapp/authorization` + `BloomwireWhatsapp.vue` untouched. **17D.3** frontend enablement is future.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Coexistence follow-ups:** **17D.2** webhook/coexistence proof (confirm inbound routes for a coexistence WABA via the global router), then **17D.3** frontend enablement (flip the wizard Coexistence card from disabled/"Coming soon" to live against the 17D.1 endpoint). Then **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
+  1. **Coexistence follow-ups:** **17D.2** webhook/coexistence proof is **in-flight (PR to open)**; next is **17D.3** frontend enablement (flip the wizard Coexistence card from disabled/"Coming soon" to live against the 17D.1 endpoint). Then **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
   2. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   3. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
   4. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability, PR #87).
@@ -74,6 +74,32 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-03 — Phase 17D.2 — WhatsApp Business App Coexistence webhook proof (PR to open)
+- **Built (branch `feature/bloomwire-phase-17d2-coexistence-webhook-proof` off `version_1` `5002942`):** a
+  backend/webhook proof that the existing global router (ADR-0005) + stock `Webhooks::WhatsappEventsJob` safely
+  handle Coexistence traffic before frontend enablement. **No frontend enablement** — `BloomwireWhatsapp.vue`
+  untouched, Coexistence card stays disabled until 17D.3.
+- **Investigation first:** read the router, the global webhook controller, the events job, and the coexistence
+  service. Findings: (a) the router keys only on `metadata.phone_number_id` + channel alignment, never
+  `connection_mode` → coexistence channels route identically; (b) the events job **already** handles
+  `smb_message_echoes` → `IncomingMessageWhatsappCloudService(outgoing_echo: true)` (outgoing path, not a
+  duplicate inbound); (c) `smb_app_state_sync` was **not** special-cased → it fell through to inbound processing.
+- **RED → GREEN (only code change):** a failing test proved `smb_app_state_sync` called
+  `IncomingMessageWhatsappCloudService`; added an `app_state_sync_event?` guard + `handle_app_state_sync` to
+  `Webhooks::WhatsappEventsJob` that logs one redacted, content-free line and returns — no inbound processing, no
+  message/conversation, no crash. Routing + echo required no code change (already safe).
+- **Specs:** router coexistence context (routes by pnid; echo payload routes; wrong pnid fails closed;
+  account-scoped) + events-job coexistence context (echo → outgoing path; app_state_sync → safe ignore, no
+  service call, no message/conversation) + two fake payload helpers (`bw_echo_payload`, `bw_app_state_sync_payload`).
+- **Validation:** targeted router + events-job = **43 examples, 0 failures**; broader webhook regression (router,
+  job, PII logging, request logging, inbound e2e) = **58 examples, 0 failures**; RuboCop clean. Proof doc:
+  `docs/bloomwire/whatsapp-coexistence-webhook-proof.md`. No real Meta (fake payloads, no HTTP); no migration/
+  schema; no deploy; no production; no secrets; no app-side duplicate chat storage; native `/whatsapp/
+  authorization` untouched. **PR to open (not merged).** 17D.3 frontend enablement is future.
+- **Gotcha:** the events job accesses payloads with symbol keys (indifferent-access via `perform_later`
+  round-trip), while the router uses string keys — so job specs build symbol-keyed payloads (`params.deep_dup`)
+  and router specs use string-keyed helpers.
 
 ### 2026-07-02 — Phase 17D.1 — WhatsApp Business App Coexistence backend contract (PR #107, merged)
 - **Built (branch `feature/bloomwire-phase-17d1-coexistence-backend` off `version_1` `c4ca702`):** the backend

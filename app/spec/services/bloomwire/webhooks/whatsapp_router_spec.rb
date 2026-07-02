@@ -131,4 +131,61 @@ RSpec.describe Bloomwire::Webhooks::WhatsappRouter do
       expect(described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-OK'))).to be_nil
     end
   end
+
+  # Phase 17D.2 — WhatsApp Business App Coexistence webhook proof. A coexistence-created channel is a normal
+  # whatsapp_cloud channel marked provider_config[source]=bloomwire_managed + [connection_mode]=coexistence.
+  # The router keys ONLY on phone_number_id + channel alignment, so connection_mode never changes routing.
+  describe 'coexistence routing (connection_mode=coexistence)' do
+    def aligned_coexistence_setup(account:, phone_number_id:, display_phone_number:)
+      channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
+                                          phone_number: "+#{display_phone_number}", sync_templates: false,
+                                          validate_provider_config: false)
+      channel.update!(provider_config: channel.provider_config.merge('phone_number_id' => phone_number_id,
+                                                                     'source' => 'bloomwire_managed',
+                                                                     'connection_mode' => 'coexistence'))
+      setup = create(:bloomwire_whatsapp_setup, account: account, inbox: channel.inbox, channel_whatsapp: channel,
+                                                phone_number_id: phone_number_id, setup_status: 'ready_for_webhook')
+      [setup, channel]
+    end
+
+    it 'routes a coexistence channel by phone_number_id (connection_mode does not affect routing)' do
+      setup, channel = aligned_coexistence_setup(account: account, phone_number_id: 'PNID-COEX',
+                                                 display_phone_number: '15551230009')
+      payload = meta_payload(phone_number_id: 'PNID-COEX', display_phone_number: '15551230009')
+      aggregate_failures do
+        expect(channel.provider_config['connection_mode']).to eq('coexistence')
+        expect(described_class.resolve_handoff_safe_setup(payload)).to eq(setup)
+      end
+    end
+
+    it 'routes a coexistence smb_message_echoes payload the same way (keys on metadata phone_number_id)' do
+      setup, = aligned_coexistence_setup(account: account, phone_number_id: 'PNID-COEX',
+                                         display_phone_number: '15551230009')
+      echo = bw_echo_payload(phone_number_id: 'PNID-COEX', display_phone_number: '15551230009')
+      expect(described_class.resolve_handoff_safe_setup(echo)).to eq(setup)
+    end
+
+    it 'does not route when the phone_number_id does not match the coexistence mapping' do
+      aligned_coexistence_setup(account: account, phone_number_id: 'PNID-COEX', display_phone_number: '15551230009')
+      payload = meta_payload(phone_number_id: 'PNID-WRONG', display_phone_number: '15551230009')
+      expect(described_class.resolve_handoff_safe_setup(payload)).to be_nil
+    end
+
+    it 'is account-scoped: each coexistence payload resolves only to its own account mapping' do
+      account_b = create(:account)
+      setup_a, = aligned_coexistence_setup(account: account, phone_number_id: 'PNID-A', display_phone_number: '15551230001')
+      setup_b, = aligned_coexistence_setup(account: account_b, phone_number_id: 'PNID-B', display_phone_number: '15551230002')
+
+      resolved_a = described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-A', display_phone_number: '15551230001'))
+      resolved_b = described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-B', display_phone_number: '15551230002'))
+
+      aggregate_failures do
+        expect(resolved_a).to eq(setup_a)
+        expect(resolved_a.account_id).to eq(account.id)
+        expect(resolved_b).to eq(setup_b)
+        expect(resolved_b.account_id).to eq(account_b.id)
+        expect(resolved_a.account_id).not_to eq(resolved_b.account_id)
+      end
+    end
+  end
 end

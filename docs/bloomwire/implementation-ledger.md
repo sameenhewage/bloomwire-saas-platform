@@ -79,6 +79,7 @@
 | 17C.3 | Customer frontend WhatsApp connection wizard (`canSelfServeManagedWhatsapp` gate + `BloomwireWhatsapp.vue`; **connection-choice screen** → Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials/agents step; Meta mocked) | #104 | Merged (`bf81c7c`) |
 | 17D.0 | WhatsApp Business App **Coexistence discovery contract** (`docs/bloomwire/whatsapp-coexistence-discovery.md`; evidence/report-only — locks the `connection_mode=coexistence` contract + boundary before enabling) | #106 | Merged (`f9aeac7`) |
 | 17D.1 | WhatsApp Business App **Coexistence backend contract** (`bloomwire/whatsapp/coexistence_embedded_signup` + `WhatsappCoexistenceEmbeddedSignupService`; `connection_mode=coexistence`; inherits safe 17C.2 seam; Meta stubbed) — backend only, Coexistence UI still disabled | #107 | Merged (`ebdcba2`) |
+| 17D.2 | WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by phone_number_id; `smb_message_echoes` → existing outgoing echo path; `smb_app_state_sync` → new safe-ignore guard; proof doc; fake payloads) — backend/webhook only, Coexistence UI still disabled | _pending_ | Open (in-flight, not merged) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -307,6 +308,27 @@
   `connection_mode=coexistence` contract, open questions, and the 17D.1/17D.2/17D.3 plan. Docs only; no code,
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
+
+### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — `Open (in-flight, not merged)` — PR _pending_
+- **Goal:** prove the existing global webhook router (ADR-0005) + stock `Webhooks::WhatsappEventsJob` safely handle
+  Coexistence traffic before frontend enablement (17D.3). Backend/webhook proof only; Coexistence card stays
+  disabled/"Coming soon".
+- **Proven:**
+  1. **Routing** — router keys on `phone_number_id` + channel alignment, never `connection_mode`; a coexistence
+     channel routes identically; wrong pnid fails closed; account-scoped.
+  2. **`smb_message_echoes`** — already handled via the **outgoing** echo path
+     (`IncomingMessageWhatsappCloudService(outgoing_echo: true)`); not a duplicate inbound; account/inbox-scoped.
+  3. **`smb_app_state_sync`** — was unhandled (fell through to inbound processing) → added a **safe-ignore** guard
+     (`app_state_sync_event?` + `handle_app_state_sync`): redacted content-free log, no inbound processing, no
+     message/conversation, no crash.
+  4. **No duplicate storage** — existing Chatwoot processing only; no app-side chat/message tables.
+- **Only production change:** `app/app/jobs/webhooks/whatsapp_events_job.rb` (the app-state-sync guard). Routing +
+  echo required no code change. Proof doc: `docs/bloomwire/whatsapp-coexistence-webhook-proof.md`.
+- **Security/DTO:** no secrets logged; fake payloads only; no real Meta/WhatsApp; native `/whatsapp/authorization`
+  + `BloomwireWhatsapp.vue` untouched.
+- **Not done:** 17D.3 frontend enablement.
+- **Validation:** targeted rspec router + events-job = **43 ex, 0 fail**; broader webhook regression = **58 ex, 0
+  fail**; RuboCop clean. No migration · no deploy · no production · no real Meta · no frontend enablement.
 
 ### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — `Merged` — PR #107 (merge SHA `ebdcba2831fd40330eaefd5a6dfe87f97a00b867`; approved head `67b63cd`; `version_1` tip `ebdcba2`)
 - **Goal:** the backend for **"Connect Existing WhatsApp Business App" (Coexistence)** — the option the 17C.3
