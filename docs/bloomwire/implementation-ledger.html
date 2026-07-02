@@ -169,6 +169,7 @@
         <tr><td>17A</td><td>Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping)</td><td>#97</td><td><span class="badge done">Merged</span> <code>8719de2</code></td></tr>
         <tr><td>17B</td><td>SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list</td><td>#98</td><td><span class="badge done">Merged</span> <code>6eac9fa</code></td></tr>
         <tr><td>17C.1</td><td>Backend foundation for customer WhatsApp Embedded Signup (capability <code>canSelfServeManagedWhatsapp</code> + <code>WhatsappSetupCreator</code> + <code>WHATSAPP_CONFIGURATION_ID</code> readiness)</td><td>#100</td><td><span class="badge done">Merged</span> <code>ac79a88</code></td></tr>
+        <tr><td>17C.2</td><td>Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (<code>bloomwire/whatsapp/embedded_signup</code>; global-router app-to-WABA subscribe; <code>bloomwire_managed</code> channel + inbox + mapping; Meta stubbed)</td><td><i>pending</i></td><td><span class="badge done">Implemented (endpoint + service)</span></td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -326,6 +327,16 @@
         <li><b>Fix (one line)</b>: <code>… run --rm -T rails bundle exec rails db:migrate &lt;/dev/null</code> (<code>-T</code> + stdin redirect). Only <code>compose run</code> was affected (<code>up -d</code> detached; smoke <code>exec -T</code> already safe).</li>
         <li><b>Not changed</b>: no app code, no migrations, no compose files, no <code>.env</code>, no secrets, no production path; postgres/redis volumes untouched. Docs: runbook §6 + change-log updated.</li>
         <li><b>Validation</b>: <code>bash -n</code> OK; PR CI green. Corrected re-deploy of <code>version_1</code> gated on review/merge.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service <span class="badge done">Implemented (endpoint + service)</span> <span class="pr">PR pending</span></h3>
+      <ul>
+        <li><b>Endpoint</b> <code>POST /api/v1/accounts/:account_id/bloomwire/whatsapp/embedded_signup</code> (admin-only; 404/inert unless native WhatsApp restricted AND <code>managed_whatsapp_onboarding</code> enabled; <code>Current.account</code>-scoped; safe DTO + sanitized errors). Never touches native <code>/whatsapp/authorization</code>.</li>
+        <li><b>Service</b> <code>Bloomwire::WhatsappEmbeddedSignupService</code>: fail-closed preflight (platform readiness; <b>encryption required outside dev/test before token storage</b>) &rarr; Meta steps (token exchange + phone info + <b><code>subscribe_app_to_waba</code> only</b>, the global router; never <code>override_waba_callback</code>/<code>subscribe_waba_webhook</code>/<code>channel.setup_webhooks</code>) &rarr; atomic DB: <code>source:'bloomwire_managed'</code> Cloud channel shell (<code>save(validate:false)</code>), encrypted token via <code>WhatsappCredentialWriter</code>, <code>Inbox</code>, and <code>ready_for_webhook</code> mapping via <code>WhatsappSetupCreator</code>. Meta failures &rarr; sanitized <code>:meta_error</code>, persist nothing.</li>
+        <li><b>Security</b>: token only in encrypted <code>provider_config</code>; mapping holds only non-secret ids; response never includes token/api_key/provider_config; Meta error bodies never logged/returned.</li>
+        <li><b>Not done</b>: frontend wizard (17C.3), verify/go-live (17C.4), manual fallback; <code>WhatsappSetupRequest</code> still parked.</li>
+        <li><b>Validation</b>: service + request specs (Meta stubbed); native regression 31 ex 0 fail; <b>full Bloomwire scope 700 examples, 0 failures (1 pre-existing pending)</b>; RuboCop clean. No real Meta · no migration · no deploy · no secrets.</li>
       </ul>
     </div>
 

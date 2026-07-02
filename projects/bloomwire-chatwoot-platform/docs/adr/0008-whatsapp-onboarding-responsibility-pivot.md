@@ -51,6 +51,19 @@ once provisioning is gone, native Devise invite/reset covers owner access.
 - **Follow-ups:** PR B = rebuild the read-only surface into the Global WhatsApp Platform Config page; PR C =
   the customer Add-Inbox wizard (creates channel + inbox + mapping), then retire `WhatsappSetupRequest`.
 
+### Implementation status
+- **PR B (Phase 17B, merged):** SuperAdmin read-only Global WhatsApp Config page.
+- **Phase 17C.1 (merged):** backend foundation — `canSelfServeManagedWhatsapp` capability, `WhatsappSetupCreator`,
+  `WHATSAPP_CONFIGURATION_ID` readiness.
+- **Phase 17C.2 (this ADR realised for the backend):** dedicated **`POST /api/v1/accounts/:id/bloomwire/whatsapp/
+  embedded_signup`** + `Bloomwire::WhatsappEmbeddedSignupService`. It uses the **GLOBAL webhook router** — only an
+  app-to-WABA subscription (`FacebookApiClient#subscribe_app_to_waba`), **never** a per-channel callback override
+  or `channel.setup_webhooks` — creates a `source:'bloomwire_managed'` channel + inbox, stores the customer token
+  **only** in encrypted `provider_config`, and writes the `ready_for_webhook` mapping. Native `/whatsapp/
+  authorization` is untouched (no carve-out). Customer token storage fails closed outside dev/test unless AR
+  encryption is configured.
+- **Remaining:** PR C frontend wizard (17C.3) + verify/go-live (17C.4); then retire `WhatsappSetupRequest`.
+
 ## Invariants preserved
 
 No `users.type` for business roles · no `BusinessOwner` role · no duplicate chat/message source of truth · no

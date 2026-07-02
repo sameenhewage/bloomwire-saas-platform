@@ -19,15 +19,15 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `ac79a888e825f3c018924685c79c2bb47695e325`  (PR #100 merged — Phase 17C.1 backend foundation)
-- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1 not deployed.
-- **Latest completed / merged:** **PR #100** — Phase **17C.1** backend foundation for customer WhatsApp Embedded Signup, merged into `version_1` (`ac79a888e825f3c018924685c79c2bb47695e325`; approved head `47b8b5e`). Capability `canSelfServeManagedWhatsapp` (admin + native restricted + `managed_whatsapp_onboarding` feature, privacy-dependent) · `Bloomwire::WhatsappSetupCreator` (non-secret router-mapping create/update with router handoff-safety) · `WHATSAPP_CONFIGURATION_ID` presence-only readiness. No migration · no store · no secrets · no Meta/WhatsApp · no frontend wizard · no native-auth carve-out · no deploy. Before it: PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open:** **none** (17C.1 merged). Next feature milestone = **17C.2** (dedicated Bloomwire embedded-signup endpoint/service, Meta stubbed) — not started.
+- **`version_1` tip:** `0feb8886546c7060215577dd56c8fe546143ad32`  (PR #101 merged — 17C.1 docs stamp; 17C.1 code merged at `ac79a88`)
+- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2 not deployed.
+- **Latest completed / merged:** **PR #100** — Phase **17C.1** backend foundation (capability `canSelfServeManagedWhatsapp` + `Bloomwire::WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness), merged at `ac79a88`. Before it: PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17C.2** — dedicated Bloomwire WhatsApp **Embedded Signup endpoint + service**. Branch `feature/bloomwire-phase-17c2-embedded-signup-endpoint` — **implemented; PR to open.** `POST /api/v1/accounts/:id/bloomwire/whatsapp/embedded_signup` (admin-only; 404 unless native restricted + `managed_whatsapp_onboarding`; `Current.account`-scoped; safe DTO) → `Bloomwire::WhatsappEmbeddedSignupService` (fail-closed readiness + **encryption-before-token-storage** guard; token exchange + phone info + **`subscribe_app_to_waba` only** — global router, no per-channel override/`setup_webhooks`; `source:'bloomwire_managed'` channel shell + encrypted token via `WhatsappCredentialWriter` + `Inbox` + `ready_for_webhook` mapping via `WhatsappSetupCreator`; Meta errors sanitized). **All Meta stubbed in tests.** Native flows untouched. Full Bloomwire scope **700 ex, 0 fail**.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **PR 17C.2** — dedicated Bloomwire embedded-signup **endpoint + service** (token exchange + phone info + channel[`source:bloomwire_managed`]+inbox + **app-to-WABA subscription at the GLOBAL callback** + `WhatsappSetupCreator`), Meta calls **stubbed** in specs. Then **17C.3** frontend wizard (`ChannelFactory.vue` + `useBloomwireCapabilities` + new `canSelfServeManagedWhatsapp`) + **17C.4** verify/go-live; then remove the parked `WhatsappSetupRequest`. **Owner decisions still needed:** dedicated endpoint vs native carve-out (recommend dedicated); Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys enabled before real customer tokens are stored.
+  1. **PR 17C.3** — customer **frontend wizard** (Add Inbox → WhatsApp → Connect with Meta) wiring `ChannelFactory.vue` + `useWhatsappEmbeddedSignup` + `useBloomwireCapabilities` (`canSelfServeManagedWhatsapp`) to the new `bloomwire/whatsapp/embedded_signup` endpoint; then **17C.4** verify/go-live; then remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test).
   2. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   3. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
   4. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability, PR #87).
@@ -74,6 +74,33 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-02 — Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service
+- **Built (branch `feature/bloomwire-phase-17c2-embedded-signup-endpoint` off `version_1` `0feb888`):** dedicated
+  `POST /api/v1/accounts/:id/bloomwire/whatsapp/embedded_signup` (`Bloomwire::Whatsapp::EmbeddedSignupsController`)
+  + `Bloomwire::WhatsappEmbeddedSignupService`, on the 17C.1 foundation. Native `/whatsapp/authorization` +
+  native `EmbeddedSignupService` untouched (no carve-out).
+- **Reuse (safe parts only):** `Whatsapp::TokenExchangeService` + `Whatsapp::PhoneInfoService` +
+  `FacebookApiClient#subscribe_app_to_waba` (the ONE webhook call — app-to-WABA at the app-level global callback).
+  Deliberately NOT used: `channel.setup_webhooks`, `WebhookSetupService`, `subscribe_waba_webhook`,
+  `override_waba_callback` (all per-channel override — would bypass the global router).
+- **Channel creation pattern:** a `source:'bloomwire_managed'` Cloud channel **shell** saved `validate:false` — so
+  the model's live `validate_provider_config`, the `after_commit` per-channel webhook, and the `after_create`
+  template sync are all skipped — then the encrypted token is written via `Bloomwire::WhatsappCredentialWriter`
+  (no-wipe, `save(validate:false)`), an `Inbox` is created, and `Bloomwire::WhatsappSetupCreator` writes the
+  `ready_for_webhook` mapping (which enforces its own router alignment). All Meta calls happen BEFORE the DB
+  transaction, so a Meta failure persists nothing.
+- **Security:** token only in encrypted `provider_config`; mapping non-secret; safe DTO (ids/status/masked phone);
+  Meta errors sanitized to `:meta_error` (class-only log). Fail-closed preflight: not-ready + **encryption
+  required outside dev/test before any token storage** + code/waba present.
+- **Validation:** service spec (9) + request spec (8), **all Meta stubbed via service/client instance-doubles
+  (no HTTP/WebMock)**; native regression (embedded signup + inbox) 31 ex 0 fail; **full Bloomwire scope 700
+  examples, 0 failures (1 pre-existing pending)**; RuboCop clean. No real Meta · no migration · no frontend
+  wizard · no deploy · no production · no secrets printed/returned.
+- **Gotchas:** `save(validate:false)` on the shell skips `validate_provider_config` (the live-Meta credential
+  re-check) — the credential-less-shell-then-writer pattern (Phase 14 S3 lineage) avoids every channel-save Meta
+  call; `subscribe_app_to_waba` (no override) is the exact global-router hook; verified doubles that stub
+  `override_waba_callback`/`subscribe_waba_webhook` prove they are never called.
 
 ### 2026-07-01 — Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup (C1 only)
 - **Discovery first (17C.0):** confirmed the seams via 3 parallel read-only explorations — native embedded signup

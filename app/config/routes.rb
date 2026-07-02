@@ -345,6 +345,12 @@ Rails.application.routes.draw do
           # Bloomwire managed WhatsApp setup request (Ops intake). Admin-only; inert when Bloomwire mode is OFF.
           namespace :bloomwire do
             resources :whatsapp_setup_requests, only: [:index, :create]
+            # Phase 17C.2: dedicated customer WhatsApp Embedded Signup (managed self-serve). Admin-only; inert
+            # (404) unless managed WhatsApp onboarding is active. Uses the GLOBAL webhook router (app-to-WABA
+            # subscribe only); never the native /whatsapp/authorization path or per-channel callback override.
+            namespace :whatsapp do
+              resource :embedded_signup, only: [:create]
+            end
           end
 
           resources :webhooks, only: [:index, :create, :update, :destroy]

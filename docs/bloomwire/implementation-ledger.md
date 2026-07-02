@@ -75,6 +75,7 @@
 | 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | #97 | Merged (`8719de2`) |
 | 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
 | 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | #100 | Merged (`ac79a88`) |
+| 17C.2 | Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service (`bloomwire/whatsapp/embedded_signup`; global-router app-to-WABA subscribe; `bloomwire_managed` channel + inbox + mapping; Meta stubbed) | _pending_ | Implemented (endpoint + service) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -294,6 +295,26 @@
 - **Not changed:** no application code, no migrations, no compose files, no `.env`, no secrets, no production
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
+
+### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service — `Implemented (endpoint + service)` — PR _pending_
+- **Goal (ADR-0008):** the customer-side Embedded-Signup backend on the 17C.1 foundation — no native flow touched,
+  no frontend wizard yet, no real Meta calls in tests.
+- **Endpoint:** `POST /api/v1/accounts/:account_id/bloomwire/whatsapp/embedded_signup`
+  (`Api::V1::Accounts::Bloomwire::Whatsapp::EmbeddedSignupsController`). Admin-only; **404/inert** unless native
+  WhatsApp restricted AND `managed_whatsapp_onboarding` enabled; `Current.account`-scoped; safe DTO + sanitized errors.
+- **Service `Bloomwire::WhatsappEmbeddedSignupService`:** fail-closed preflight (platform readiness via
+  `GlobalWhatsappConfig#platform_ready`; **encryption required outside dev/test before token storage**; code/waba
+  present) → Meta steps (token exchange + phone info + **`subscribe_app_to_waba` only** — global router; never
+  `override_waba_callback`/`subscribe_waba_webhook`/`channel.setup_webhooks`) → atomic DB: `source:'bloomwire_managed'`
+  Cloud channel shell (`save(validate:false)` → no live `validate_provider_config`, no auto webhook, no template
+  sync), encrypted token via `WhatsappCredentialWriter`, `Inbox`, and `ready_for_webhook` mapping via
+  `WhatsappSetupCreator`. Meta failures → sanitized `:meta_error`, persist nothing.
+- **Security:** token only in encrypted `Channel::Whatsapp#provider_config`; mapping holds only non-secret ids;
+  DTO/response never include token/api_key/provider_config; Meta error bodies never logged/returned.
+- **Not done (later slices):** frontend wizard (17C.3), verify/go-live (17C.4), manual fallback; `WhatsappSetupRequest` still parked.
+- **Validation:** service spec (Meta stubbed) + request spec (authz/denials/safe-DTO); native regression 31 ex 0
+  fail; **full Bloomwire scope 700 examples, 0 failures (1 pre-existing pending)**; RuboCop clean. No real Meta ·
+  no migration · no deploy · no production · no secrets.
 
 ### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup — `Merged` — PR #100 (merge SHA `ac79a888e825f3c018924685c79c2bb47695e325`; `version_1` tip `ac79a88`)
 - **Goal:** land the backend seams (C1 only) the future customer Add-Inbox → WhatsApp → Embedded Signup wizard

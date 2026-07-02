@@ -15,6 +15,39 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17C.2 — Dedicated Bloomwire WhatsApp Embedded Signup endpoint + service
+- **PR:** _pending_ · **Type:** feature (account-scoped endpoint + service). **No DB migration · no frontend
+  wizard · no real Meta/WhatsApp calls (all stubbed in tests) · no native `/whatsapp/authorization` carve-out ·
+  no `channel.setup_webhooks` / `override_callback_uri` · no secrets printed/returned · no deploy · no production.**
+- **Why:** implement the customer-side Embedded-Signup backend (ADR-0008) on the 17C.1 foundation, WITHOUT
+  touching native embedded signup and WITHOUT weakening any native flow.
+- **What:**
+  - **Endpoint** `POST /api/v1/accounts/:account_id/bloomwire/whatsapp/embedded_signup`
+    (`Api::V1::Accounts::Bloomwire::Whatsapp::EmbeddedSignupsController`). Admin-only (`check_admin_authorization?`);
+    **404/inert** unless native WhatsApp is restricted AND `managed_whatsapp_onboarding` is enabled (the feature
+    half of `canSelfServeManagedWhatsapp`); `Current.account`-scoped (no cross-account). Safe DTO only; sanitized
+    generic error messages (never raw Meta payloads).
+  - **Service** `Bloomwire::WhatsappEmbeddedSignupService`: fail-closed preflight (platform readiness via
+    `GlobalWhatsappConfig#platform_ready`; **encryption required outside dev/test before any token storage**;
+    code/waba present) → Meta steps (`Whatsapp::TokenExchangeService` + `Whatsapp::PhoneInfoService` +
+    `FacebookApiClient#subscribe_app_to_waba` — **app-to-WABA subscription only, the GLOBAL router; never
+    `override_waba_callback`/`subscribe_waba_webhook`/`channel.setup_webhooks`**) → atomic DB (a
+    `source:'bloomwire_managed'` Cloud channel shell saved `validate:false` so no live `validate_provider_config`
+    / no auto webhook / no template sync, then the encrypted token written via `Bloomwire::WhatsappCredentialWriter`,
+    an `Inbox`, and the `ready_for_webhook` mapping via `Bloomwire::WhatsappSetupCreator`). Meta errors are
+    sanitized to `:meta_error` (class-only logs) and persist nothing.
+  - **Token/credential** stored ONLY in encrypted `Channel::Whatsapp#provider_config`; `Bloomwire::WhatsappSetup`
+    holds only non-secret routing ids. Chatwoot remains source of truth for account/user/inbox/channel.
+- **Not done (later slices):** frontend wizard (17C.3), verify/go-live UX (17C.4), manual fallback; no removal of
+  `WhatsappSetupRequest`.
+- **Validation:** service spec (Meta stubbed — bloomwire_managed channel + inbox + ready mapping the router
+  resolves; token only in provider_config; app-to-WABA subscribe, no per-channel webhook/override; fail-closed
+  not-ready/encryption/meta-error persist nothing) + request spec (admin allowed; agent denied; 404 when
+  Bloomwire OFF / onboarding OFF / native unrestricted; 422 not_ready / encryption; cross-account denied; DTO has
+  no token/api_key/provider_config). Native regression (embedded signup + inbox) **31 ex, 0 fail**; **full
+  Bloomwire scope 700 examples, 0 failures (1 pre-existing pending)**; RuboCop clean. **No real Meta calls** (all
+  stubbed via service/client doubles — no WebMock/HTTP).
+
 ### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup — MERGED
 - **PR:** #100 · **merge SHA** `ac79a888e825f3c018924685c79c2bb47695e325` · **Status:** merged into `version_1`
   (new tip `ac79a88`; approved head `47b8b5e`). **Type:** backend foundation (capability + service + readiness).
