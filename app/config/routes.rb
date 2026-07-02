@@ -348,8 +348,12 @@ Rails.application.routes.draw do
             # Phase 17C.2: dedicated customer WhatsApp Embedded Signup (managed self-serve). Admin-only; inert
             # (404) unless managed WhatsApp onboarding is active. Uses the GLOBAL webhook router (app-to-WABA
             # subscribe only); never the native /whatsapp/authorization path or per-channel callback override.
+            # Phase 17D.1: coexistence_embedded_signup is the "Connect Existing WhatsApp Business App" backend
+            # contract (connection_mode=coexistence) under the SAME namespace + safe boundary. Backend only — the
+            # Coexistence UI card stays disabled until a later frontend phase.
             namespace :whatsapp do
               resource :embedded_signup, only: [:create]
+              resource :coexistence_embedded_signup, only: [:create]
             end
           end
 

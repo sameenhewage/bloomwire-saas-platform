@@ -1,9 +1,9 @@
-# Phase 17D.1: dedicated customer WhatsApp Business App Coexistence endpoint.
-# Admin-only; inert unless managed WhatsApp self-serve is active. Delegates to the dedicated Coexistence service,
-# which marks connection_mode=coexistence and keeps the same safe DTO / global-router-only contract as 17C.2.
-#
-# NOTE: The route is intentionally added in the same phase that wires frontend usage. Until routed, this controller
-# documents the backend boundary and keeps the service contract testable without exposing a half-enabled API.
+# Phase 17D.1: dedicated customer WhatsApp Business App Coexistence endpoint
+# (POST /api/v1/accounts/:account_id/bloomwire/whatsapp/coexistence_embedded_signup).
+# Admin-only; inert (404) unless managed WhatsApp self-serve is active. Delegates to the dedicated Coexistence
+# service, which marks connection_mode=coexistence and keeps the same safe DTO / global-router-only contract as
+# 17C.2. This is the BACKEND contract only — the Coexistence UI card stays disabled/"Coming soon" until a later
+# frontend phase (17D.3). Never touches native /whatsapp/authorization.
 class Api::V1::Accounts::Bloomwire::Whatsapp::CoexistenceEmbeddedSignupsController < Api::V1::Accounts::BaseController
   before_action :ensure_managed_whatsapp_self_serve!
   before_action :check_admin_authorization?
