@@ -15,6 +15,37 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — OPEN (PR #107, ready for review, not merged)
+- **PR:** #107 · **open, non-draft, CI-green, ready for review (NOT merged)** · **Type:** backend contract (account-scoped endpoint +
+  service). **No frontend enablement · no DB migration · no real Meta/WhatsApp calls (mocked in tests) · no native
+  `/whatsapp/authorization` carve-out · no per-channel webhook override · no secrets exposed · no deploy · no
+  production.**
+- **Why:** the backend for **"Connect Existing WhatsApp Business App" (Coexistence)** — the option the 17C.3
+  wizard shows **disabled / "Coming soon"**. This slice lands the endpoint + service contract only; the UI card
+  stays disabled until a later frontend phase (17D.3).
+- **What:**
+  - **Endpoint** `POST /api/v1/accounts/:account_id/bloomwire/whatsapp/coexistence_embedded_signup`
+    (`Api::V1::Accounts::Bloomwire::Whatsapp::CoexistenceEmbeddedSignupsController`), wired under the **same**
+    account-scoped Bloomwire WhatsApp namespace as the 17C.2 `embedded_signup` route. Admin-only; **404/inert**
+    unless native WhatsApp restricted AND `managed_whatsapp_onboarding` enabled; `Current.account`-scoped; safe
+    DTO + sanitized errors. Native `/whatsapp/authorization` untouched.
+  - **Service** `Bloomwire::WhatsappCoexistenceEmbeddedSignupService < Bloomwire::WhatsappEmbeddedSignupService`
+    (17C.2). It **inherits the entire safe 17C.2 seam** — fail-closed readiness + encryption-before-token-storage,
+    token exchange + phone info + **`subscribe_app_to_waba` only** (global router; never
+    `override_waba_callback`/`subscribe_waba_webhook`/`channel.setup_webhooks`), encrypted token via
+    `Bloomwire::WhatsappCredentialWriter`, non-secret `Bloomwire::WhatsappSetup` mapping — and only overrides two
+    things: it marks the channel `provider_config['connection_mode'] = 'coexistence'` (source still
+    `bloomwire_managed`) and adds `connection_mode: 'coexistence'` to the `channel` + `setup` sections of the safe
+    DTO so Standard vs Coexistence are distinguishable without exposing any secret.
+- **Not done (future slices):** **17D.2** webhook/coexistence proof; **17D.3** frontend enablement (the wizard
+  Coexistence card stays **disabled/"Coming soon"** until then). No `WhatsappSetupRequest` removal.
+- **Validation:** service spec (Meta stubbed — coexistence channel + `ready_for_webhook` mapping the router
+  resolves; token only in provider_config; app-to-WABA subscribe, never per-channel override; fail-closed
+  not-ready/encryption persist nothing) + request spec (admin allowed with `connection_mode: coexistence` on
+  channel + setup; agent denied; 404 when Bloomwire OFF / onboarding OFF / native unrestricted; 422 not_ready /
+  encryption; cross-account denied; body has no token/api_key/provider_config). **14 targeted examples, 0
+  failures**; RuboCop clean; route resolves. **No real Meta calls** (service/client instance-doubles — no HTTP).
+
 ### Phase 17C.3 — Customer frontend WhatsApp connection wizard (connection-choice + number registration) — MERGED
 - **PR:** #104 · **merge SHA** `bf81c7c62f5c9f8621142250e37b47e51b86ed82` · **approved head**
   `1bc432fcc127a5b78cf7c2bb6ca4c8ce4301f4bd` · **Status:** merged into `version_1` (new tip `bf81c7c`).
