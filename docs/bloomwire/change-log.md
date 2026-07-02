@@ -15,11 +15,12 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — OPEN (PR #107, ready for review, not merged)
-- **PR:** #107 · **open, non-draft, CI-green, ready for review (NOT merged)** · **Type:** backend contract (account-scoped endpoint +
-  service). **No frontend enablement · no DB migration · no real Meta/WhatsApp calls (mocked in tests) · no native
-  `/whatsapp/authorization` carve-out · no per-channel webhook override · no secrets exposed · no deploy · no
-  production.**
+### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — MERGED
+- **PR:** #107 · **merge SHA** `ebdcba2831fd40330eaefd5a6dfe87f97a00b867` · **approved head**
+  `67b63cdf3b5cd15c1ac0ec0271cf75d992ca1fc4` · **Status:** merged into `version_1` (final tip `ebdcba2`, after
+  PR #106). **Type:** backend contract (account-scoped endpoint + service). **No frontend enablement · no DB
+  migration · no real Meta/WhatsApp calls (mocked in tests) · no native `/whatsapp/authorization` carve-out · no
+  per-channel webhook override · no secrets exposed · no deploy · no production.** (Dev remains at `9b09f9e`.)
 - **Why:** the backend for **"Connect Existing WhatsApp Business App" (Coexistence)** — the option the 17C.3
   wizard shows **disabled / "Coming soon"**. This slice lands the endpoint + service contract only; the UI card
   stays disabled until a later frontend phase (17D.3).
@@ -45,6 +46,18 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   channel + setup; agent denied; 404 when Bloomwire OFF / onboarding OFF / native unrestricted; 422 not_ready /
   encryption; cross-account denied; body has no token/api_key/provider_config). **14 targeted examples, 0
   failures**; RuboCop clean; route resolves. **No real Meta calls** (service/client instance-doubles — no HTTP).
+
+### Phase 17D.0 — WhatsApp Business App Coexistence discovery contract — MERGED
+- **PR:** #106 · **merge SHA** `f9aeac7245bb6e9869c25233ed68377f77062e90` · **approved head**
+  `1b8ae29dfb5183456548623c44e54e698fcd9994` · **Status:** merged into `version_1` (before PR #107). **Type:**
+  discovery / docs only (`docs/bloomwire/whatsapp-coexistence-discovery.md`). **No code · no route · no frontend ·
+  no DB migration · no real Meta/WhatsApp calls · no secrets · no deploy · no production.** (Dev remains at `9b09f9e`.)
+- **Why:** lock the Coexistence backend contract (safe seam, credential/DTO boundary, global-router handoff) via an
+  evidence/report-only discovery before enabling the disabled "Connect Existing WhatsApp Business App" card — so
+  17D.1 could implement it without leaking credentials, duplicating messages, or weakening the native flow.
+- **What:** the discovery document — current-`version_1` evidence, the intended `connection_mode=coexistence`
+  contract, open questions, and the 17D.1/17D.2/17D.3 plan. No behavior change.
+- **Validation:** docs-only (CI docs governance green on PR #106). No tests/code touched.
 
 ### Phase 17C.3 — Customer frontend WhatsApp connection wizard (connection-choice + number registration) — MERGED
 - **PR:** #104 · **merge SHA** `bf81c7c62f5c9f8621142250e37b47e51b86ed82` · **approved head**
