@@ -93,6 +93,42 @@ RSpec.describe Bloomwire::WhatsappSetupCreator do
     end
   end
 
+  # Phase 17C.1 review (Blocker 2): a ready_for_webhook mapping must be handoff-safe for the global router.
+  describe 'router handoff-safety' do
+    it 'rejects a non-Cloud (whatsapp_cloud) provider and creates no ready mapping' do
+      channel.update_column(:provider, 'default') # rubocop:disable Rails/SkipsModelValidations
+      aggregate_failures do
+        expect(call.error).to eq(:unsupported_provider)
+        expect(Bloomwire::WhatsappSetup.ready_for_webhook.count).to eq(0)
+      end
+    end
+
+    it 'rejects a channel whose provider_config phone_number_id does not match' do
+      result = call(phone_number_id: 'PNID-DIFFERENT')
+      aggregate_failures do
+        expect(result.error).to eq(:phone_number_id_mismatch)
+        expect(Bloomwire::WhatsappSetup.ready_for_webhook.count).to eq(0)
+      end
+    end
+
+    it 'rejects a channel whose phone_number does not match the display number' do
+      result = call(display_phone_number: '15559999999')
+      aggregate_failures do
+        expect(result.error).to eq(:display_phone_number_mismatch)
+        expect(Bloomwire::WhatsappSetup.ready_for_webhook.count).to eq(0)
+      end
+    end
+
+    it 'creates the mapping and the global router resolves it when the channel is aligned' do
+      setup = call.setup
+      payload = bw_inbound_text_payload(phone_number_id: 'PNID-C1-1', display_phone_number: '15551230001')
+      aggregate_failures do
+        expect(setup.setup_status).to eq('ready_for_webhook')
+        expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)&.id).to eq(setup.id)
+      end
+    end
+  end
+
   describe 'no-secret boundary' do
     it 'does not accept an api_key argument' do
       expect do

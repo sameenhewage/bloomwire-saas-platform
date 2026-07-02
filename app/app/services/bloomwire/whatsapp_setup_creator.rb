@@ -11,6 +11,9 @@
 #   channel's own inbox (mirrors the model validations, failing fast with a safe symbol error).
 # - Idempotent per channel_whatsapp_id (find_or_initialize). A phone_number_id already claimed by a DIFFERENT
 #   channel fails closed (:phone_number_id_conflict) — never silently re-points another account's routing.
+# - Router handoff-safe: a ready_for_webhook mapping is rejected (safe symbol) unless the channel is a Cloud
+#   (whatsapp_cloud) channel whose provider_config phone_number_id and phone_number align with the inputs, so we
+#   never persist a "ready" row the global webhook router (ADR-0005) would refuse.
 class Bloomwire::WhatsappSetupCreator
   # Safe result: `error` is a symbol NAME only (never a value/secret); success? when no error.
   Result = Struct.new(:setup, :error, keyword_init: true) do
@@ -65,12 +68,37 @@ class Bloomwire::WhatsappSetupCreator
     return :channel_inbox_mismatch unless inbox_owns_channel?
     return :phone_number_id_conflict if conflicting_phone_number_id?
 
+    router_alignment_error
+  end
+
+  # When the mapping will be ready_for_webhook it must be handoff-safe for the global router (ADR-0005):
+  # otherwise a "ready" row exists that the router would refuse, silently breaking inbound. Mirrors
+  # Bloomwire::Webhooks::WhatsappRouter.channel_aligned_with_payload? against the channel + inputs (non-secret
+  # checks only; returns a safe symbol — never leaks provider_config / provider / phone values).
+  def router_alignment_error
+    return nil unless @setup_status == Bloomwire::WhatsappSetup::ROUTEABLE_STATUS
+    return :unsupported_provider unless @channel.provider == 'whatsapp_cloud'
+    return :phone_number_id_mismatch unless channel_provider_config_phone_number_id == @phone_number_id
+    return :display_phone_number_mismatch unless @channel.phone_number == normalized_display
+
     nil
   end
 
   # The record (inbox / channel) must exist and belong to the given account (cross-tenant guard).
   def same_account?(record)
     record.present? && record.account_id == @account&.id
+  end
+
+  # Non-secret routing id from the channel's provider_config (compared, never returned/logged).
+  def channel_provider_config_phone_number_id
+    @channel.provider_config.to_h['phone_number_id']
+  end
+
+  # Normalize the display number to the router's "+<digits>" form (Webhooks::WhatsappEventsJob semantics).
+  def normalized_display
+    return if @display_phone_number.blank?
+
+    "+#{@display_phone_number.delete_prefix('+')}"
   end
 
   # The inbox must be this WhatsApp channel's own inbox (no mixed inbox/channel). Only reached after both the
