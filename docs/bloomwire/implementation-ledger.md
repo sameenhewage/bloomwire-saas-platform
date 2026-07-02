@@ -74,7 +74,7 @@
 | 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) · **superseded/removed by 17A** |
 | 17A | Remove SuperAdmin customer-provisioning + manual setup-mapping UI + 16C activation (architecture pivot; keep router/mapping) | #97 | Merged (`8719de2`) |
 | 17B | SuperAdmin "Global WhatsApp Config" page — read-only platform config (webhook/App-ID/secret-presence/router/readiness) + connected-inbox list | #98 | Merged (`6eac9fa`) |
-| 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | _pending_ | Implemented (backend foundation) |
+| 17C.1 | Backend foundation for customer WhatsApp Embedded Signup (capability `canSelfServeManagedWhatsapp` + `WhatsappSetupCreator` + `WHATSAPP_CONFIGURATION_ID` readiness) | #100 | Merged (`ac79a88`) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -295,7 +295,7 @@
   path; postgres/redis volumes untouched. Docs updated: runbook §6 troubleshooting + change-log.
 - **Validation:** `bash -n` OK; PR CI green. Corrected re-deploy of `version_1` is gated on review/merge.
 
-### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup — `Implemented (backend foundation)` — PR _pending_
+### Phase 17C.1 — Backend foundation for customer WhatsApp Embedded Signup — `Merged` — PR #100 (merge SHA `ac79a888e825f3c018924685c79c2bb47695e325`; `version_1` tip `ac79a88`)
 - **Goal:** land the backend seams (C1 only) the future customer Add-Inbox → WhatsApp → Embedded Signup wizard
   will use, with **no** behavior change to native flows and **no** Meta calls / migration / secrets.
 - **What:**
