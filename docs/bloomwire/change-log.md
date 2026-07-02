@@ -15,8 +15,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — OPEN (draft PR #107, not merged)
-- **PR:** #107 · **draft / in-flight (NOT merged)** · **Type:** backend contract (account-scoped endpoint +
+### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — OPEN (PR #107, ready for review, not merged)
+- **PR:** #107 · **open, non-draft, CI-green, ready for review (NOT merged)** · **Type:** backend contract (account-scoped endpoint +
   service). **No frontend enablement · no DB migration · no real Meta/WhatsApp calls (mocked in tests) · no native
   `/whatsapp/authorization` carve-out · no per-channel webhook override · no secrets exposed · no deploy · no
   production.**
