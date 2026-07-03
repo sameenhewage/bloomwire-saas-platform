@@ -188,4 +188,60 @@ RSpec.describe Bloomwire::Webhooks::WhatsappRouter do
       end
     end
   end
+
+  # Phase 17E.1 — multiple WhatsApp inboxes within ONE account (ADR-0009). Each phone_number_id resolves to its
+  # own inbox/channel; unknown pnid and crossed (pnid vs display) payloads fail closed; routing is
+  # connection_mode-agnostic (a Standard and a Coexistence inbox coexist and each resolves correctly).
+  describe 'multiple inboxes within a single account (Phase 17E.1 contract)' do
+    it 'routes each phone_number_id to its own inbox/channel in the same account' do
+      setup1, channel1 = aligned_setup(phone_number_id: 'PNID-1', display_phone_number: '15551230001')
+      setup2, channel2 = aligned_setup(phone_number_id: 'PNID-2', display_phone_number: '15551230002')
+
+      resolved1 = described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-1', display_phone_number: '15551230001'))
+      resolved2 = described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-2', display_phone_number: '15551230002'))
+
+      aggregate_failures do
+        expect(resolved1).to eq(setup1)
+        expect(resolved1.inbox_id).to eq(channel1.inbox.id)
+        expect(resolved2).to eq(setup2)
+        expect(resolved2.inbox_id).to eq(channel2.inbox.id)
+        expect(resolved1.account_id).to eq(account.id)
+        expect(resolved2.account_id).to eq(account.id)
+        expect(resolved1.inbox_id).not_to eq(resolved2.inbox_id)
+      end
+    end
+
+    it 'returns nil for an unknown phone_number_id even when the account already has other inboxes' do
+      aligned_setup(phone_number_id: 'PNID-1', display_phone_number: '15551230001')
+      aligned_setup(phone_number_id: 'PNID-2', display_phone_number: '15551230002')
+      expect(described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-UNKNOWN'))).to be_nil
+    end
+
+    it 'fails closed on a crossed payload (inbox-1 phone_number_id with inbox-2 display_phone_number)' do
+      aligned_setup(phone_number_id: 'PNID-1', display_phone_number: '15551230001')
+      aligned_setup(phone_number_id: 'PNID-2', display_phone_number: '15551230002')
+      crossed = meta_payload(phone_number_id: 'PNID-1', display_phone_number: '15551230002')
+      expect(described_class.resolve_handoff_safe_setup(crossed)).to be_nil
+    end
+
+    it 'routes a mix of Standard and Coexistence inboxes in one account (connection_mode does not affect routing)' do
+      standard_setup, = aligned_setup(phone_number_id: 'PNID-STD', display_phone_number: '15551230003')
+      # A coexistence inbox in the SAME account (source=bloomwire_managed + connection_mode=coexistence).
+      coex_channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
+                                               phone_number: '+15551230004', sync_templates: false,
+                                               validate_provider_config: false)
+      coex_channel.update!(provider_config: coex_channel.provider_config.merge('phone_number_id' => 'PNID-COEX',
+                                                                               'source' => 'bloomwire_managed',
+                                                                               'connection_mode' => 'coexistence'))
+      coexistence_setup = create(:bloomwire_whatsapp_setup, account: account, inbox: coex_channel.inbox,
+                                                            channel_whatsapp: coex_channel, phone_number_id: 'PNID-COEX',
+                                                            setup_status: 'ready_for_webhook')
+      aggregate_failures do
+        expect(described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-STD',
+                                                                       display_phone_number: '15551230003'))).to eq(standard_setup)
+        expect(described_class.resolve_handoff_safe_setup(meta_payload(phone_number_id: 'PNID-COEX',
+                                                                       display_phone_number: '15551230004'))).to eq(coexistence_setup)
+      end
+    end
+  end
 end

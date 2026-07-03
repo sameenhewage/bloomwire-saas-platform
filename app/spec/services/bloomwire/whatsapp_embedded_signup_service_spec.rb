@@ -124,4 +124,81 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
   end
+
+  # Phase 17E.1 — multiple WhatsApp inboxes per account (ADR-0009). One account can register several numbers;
+  # each distinct phone_number / phone_number_id becomes its own channel + inbox + mapping. Duplicate
+  # phone_number / phone_number_id stays globally blocked. All Meta calls stubbed per-number (no real Meta).
+  describe 'multiple WhatsApp inboxes per account (Phase 17E.1 contract)' do
+    before { stub_ready }
+
+    # Run the managed signup for ONE specific number, with Meta fully stubbed for this call.
+    def signup(phone_number_id:, phone_number:, waba_id: 'WABA-1', token: 'FAKE-CUSTOMER-TOKEN')
+      allow(Whatsapp::TokenExchangeService).to receive(:new)
+        .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
+      allow(Whatsapp::PhoneInfoService).to receive(:new)
+        .and_return(instance_double(Whatsapp::PhoneInfoService,
+                                    perform: { phone_number_id: phone_number_id, phone_number: phone_number,
+                                               verified: true, business_name: 'Acme' }))
+      allow(Whatsapp::FacebookApiClient).to receive(:new)
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true,
+                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil))
+      described_class.new(account: account,
+                          params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
+                                    phone_number_id: phone_number_id }).perform
+    end
+
+    it 'creates two distinct channels + inboxes + setups for two different numbers, all under the same account' do
+      r1 = signup(phone_number_id: 'PNID-1', phone_number: '+15551230001', waba_id: 'WABA-1')
+      r2 = signup(phone_number_id: 'PNID-2', phone_number: '+15551230002', waba_id: 'WABA-2')
+
+      setup1 = Bloomwire::WhatsappSetup.find_by(phone_number_id: 'PNID-1')
+      setup2 = Bloomwire::WhatsappSetup.find_by(phone_number_id: 'PNID-2')
+      aggregate_failures do
+        expect(r1).to be_success
+        expect(r2).to be_success
+        expect(account.inboxes.count).to eq(2)
+        expect(Channel::Whatsapp.where(account: account).count).to eq(2)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(2)
+        expect(setup1.account_id).to eq(account.id)
+        expect(setup2.account_id).to eq(account.id)
+        expect(setup1.channel_whatsapp_id).not_to eq(setup2.channel_whatsapp_id)
+        expect(setup1.inbox_id).not_to eq(setup2.inbox_id)
+      end
+    end
+
+    it 'routes each number to its own inbox (no overwrite of the first)' do
+      signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      signup(phone_number_id: 'PNID-2', phone_number: '+15551230002')
+      setup1 = Bloomwire::WhatsappSetup.find_by(phone_number_id: 'PNID-1')
+      setup2 = Bloomwire::WhatsappSetup.find_by(phone_number_id: 'PNID-2')
+      payload1 = bw_inbound_text_payload(phone_number_id: 'PNID-1', display_phone_number: '15551230001')
+      payload2 = bw_inbound_text_payload(phone_number_id: 'PNID-2', display_phone_number: '15551230002')
+      aggregate_failures do
+        expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload1)&.inbox_id).to eq(setup1.inbox_id)
+        expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload2)&.inbox_id).to eq(setup2.inbox_id)
+      end
+    end
+
+    it 'blocks a duplicate phone_number (second signup reuses the first number) and creates no second inbox' do
+      signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      dup = signup(phone_number_id: 'PNID-2', phone_number: '+15551230001')
+      aggregate_failures do
+        expect(dup).not_to be_success
+        expect(dup.error).to eq(:phone_number_taken)
+        expect(account.inboxes.count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
+      end
+    end
+
+    it 'blocks a duplicate phone_number_id claimed by another channel (rolls back the second channel)' do
+      signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      dup = signup(phone_number_id: 'PNID-1', phone_number: '+15551230002')
+      aggregate_failures do
+        expect(dup).not_to be_success
+        expect(dup.error).to eq(:phone_number_id_conflict)
+        expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
+      end
+    end
+  end
 end

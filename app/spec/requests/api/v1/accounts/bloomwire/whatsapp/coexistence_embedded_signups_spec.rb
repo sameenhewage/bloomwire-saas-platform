@@ -121,4 +121,54 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
       expect(response.status).to be_in([401, 403, 404])
     end
   end
+
+  # Phase 17E.1 — one account can register multiple Coexistence WhatsApp numbers (ADR-0009); each stays
+  # connection_mode=coexistence. Duplicate phone_number stays blocked (422). All Meta calls stubbed per-number.
+  context 'when an admin connects multiple coexistence numbers for one account (Phase 17E.1 contract)' do
+    before do
+      enable_managed_mode
+      stub_ready
+    end
+
+    def stub_meta_for(phone_number_id:, phone_number:)
+      allow(Whatsapp::TokenExchangeService).to receive(:new)
+        .and_return(instance_double(Whatsapp::TokenExchangeService, perform: 'FAKE-CUSTOMER-TOKEN'))
+      allow(Whatsapp::PhoneInfoService).to receive(:new)
+        .and_return(instance_double(Whatsapp::PhoneInfoService,
+                                    perform: { phone_number_id: phone_number_id, phone_number: phone_number,
+                                               verified: true, business_name: 'Acme' }))
+      allow(Whatsapp::FacebookApiClient).to receive(:new)
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true,
+                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil))
+    end
+
+    def register(phone_number_id:, phone_number:)
+      stub_meta_for(phone_number_id: phone_number_id, phone_number: phone_number)
+      post url, headers: admin.create_new_auth_token, params: body.merge(phone_number_id: phone_number_id), as: :json
+    end
+
+    it 'lets an admin connect two different existing numbers as two coexistence inboxes for the same account' do
+      register(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body.dig('channel', 'connection_mode')).to eq('coexistence')
+      register(phone_number_id: 'PNID-2', phone_number: '+15551230002')
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body.dig('channel', 'connection_mode')).to eq('coexistence')
+
+      aggregate_failures do
+        expect(account.inboxes.count).to eq(2)
+        expect(Bloomwire::WhatsappSetup.where(account: account).pluck(:phone_number_id)).to contain_exactly('PNID-1', 'PNID-2')
+      end
+    end
+
+    it 'rejects a duplicate phone_number with 422 and creates no second inbox' do
+      register(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      register(phone_number_id: 'PNID-2', phone_number: '+15551230001')
+      aggregate_failures do
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['code']).to eq('phone_number_taken')
+        expect(account.inboxes.count).to eq(1)
+      end
+    end
+  end
 end

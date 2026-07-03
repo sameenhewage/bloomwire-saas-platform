@@ -15,10 +15,32 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR — OPEN (PR #112, ready for review, not merged)
-- **PR:** #112 · **open, non-draft, ready for review (NOT merged)** ·
-  **Type:** docs-only discovery + ADR-0009. **No app code · no tests · no route · no DB migration/schema · no
-  workflow/deploy · no production · no real Meta/WhatsApp calls.**
+### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — OPEN (PR #113, ready for review, not merged)
+- **PR:** #113 · **open, non-draft, ready for review (NOT merged)** · **Type:** TEST-ONLY (RSpec).
+  **No product code · no DB migration/schema · no route · no frontend · no workflow/deploy · no production · no
+  real Meta/WhatsApp calls (all stubbed).**
+- **What:** turns the 17E.0 discovery ("one account can own multiple WhatsApp inboxes") into regression-locked
+  backend contract tests. Extended 5 specs + 1 new spec:
+  1. **Standard + Coexistence service specs** — two different numbers → two distinct `Channel::Whatsapp` +
+     `Inbox` + `Bloomwire::WhatsappSetup` under one account; duplicate `phone_number` → `:phone_number_taken`;
+     duplicate `phone_number_id` → `:phone_number_id_conflict` (second channel rolled back); coexistence keeps
+     `connection_mode=coexistence`.
+  2. **Standard + Coexistence request specs** — admin can register two numbers as two inboxes; duplicate → 422.
+  3. **Router spec** — two numbers in one account each resolve to their own inbox; unknown pnid → nil; crossed
+     pnid/display → fail-closed; routing is connection_mode-agnostic (Standard + Coexistence coexist).
+  4. **NEW category contract spec** — Category = Team + Inbox; ConversationFinder + ConversationPolicy prove a
+     category agent lists/opens ONLY their inbox (admin sees both); team-filtered assignment rejects a
+     cross-category (team-2-only) assignee.
+- **Product code changed?** **No — test-only.** All new tests pass against existing `version_1` code, confirming
+  the contract needs no fix. (Contacts-isolation caveat is intentionally NOT addressed here — deferred to 17E.2.)
+- **Validation:** targeted `rspec` (6 files) = **73 examples, 0 failures**; RuboCop clean; `git diff --check` clean.
+- **Security:** no secrets · no provider-credential mutation · no live Meta/WhatsApp (all stubbed) · no Enterprise
+  code touched. **No deploy · no production · dev remains `9b09f9e`.**
+
+### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR — MERGED
+- **PR:** #112 · **merge SHA** `83496896fcc7bcaa6ca076dbd2f346ee5eb4f7bc` · **Status:** merged into `version_1`
+  (final tip `83496896`). **Type:** docs-only discovery + ADR-0009. **No app code · no tests · no route · no DB
+  migration/schema · no workflow/deploy · no production · no real Meta/WhatsApp calls.**
 - **What:** locks the Bloomwire **multiple WhatsApp inbox per account** business model before the 17E hardening
   slices — `docs/bloomwire/whatsapp-multi-inbox-discovery.md` (verdict + evidence + caveats + phased plan) and
   `projects/bloomwire-chatwoot-platform/docs/adr/0009-multi-whatsapp-inbox-category-model.md`.
