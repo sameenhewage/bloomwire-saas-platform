@@ -81,7 +81,8 @@
 | 17D.1 | WhatsApp Business App **Coexistence backend contract** (`bloomwire/whatsapp/coexistence_embedded_signup` + `WhatsappCoexistenceEmbeddedSignupService`; `connection_mode=coexistence`; inherits safe 17C.2 seam; Meta stubbed) — backend only, Coexistence UI still disabled | #107 | Merged (`ebdcba2`) |
 | 17D.2 | WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by phone_number_id; `smb_message_echoes` → existing outgoing echo path; `smb_app_state_sync` → new safe-ignore guard; proof doc; fake payloads) — backend/webhook only, Coexistence UI still disabled | #109 | Merged (`4a57564`) |
 | 17D.3 | WhatsApp Business App **Coexistence frontend enablement** (enable the `BloomwireWhatsapp.vue` Coexistence card — remove disabled/"Coming soon"; `flow=coexistence` reuses the credential-free Embedded-Signup form + new `createBloomwireCoexistenceEmbeddedSignup` → `bloomwire/whatsapp/coexistence_embedded_signup`; Standard flow unchanged; Meta/SDK mocked) — frontend only, no backend/migration | #111 | Merged (`ea30579`) |
-| 17E.0 | Multiple WhatsApp Inbox per Account **discovery + ADR-0009** (`docs/bloomwire/whatsapp-multi-inbox-discovery.md` + ADR; **verdict SUPPORTED** — multi-inbox per account already works, services create a new channel+inbox+setup per number & block only duplicate `phone_number`/`phone_number_id`, no per-account cap, router resolves by `phone_number_id`; Category = Team + Inbox; caveats: contacts account-wide + no multi-inbox tests) — docs-only, no code/tests | #112 | Open (ready for review, not merged) |
+| 17E.0 | Multiple WhatsApp Inbox per Account **discovery + ADR-0009** (`docs/bloomwire/whatsapp-multi-inbox-discovery.md` + ADR; **verdict SUPPORTED** — multi-inbox per account already works, services create a new channel+inbox+setup per number & block only duplicate `phone_number`/`phone_number_id`, no per-account cap, router resolves by `phone_number_id`; Category = Team + Inbox; caveats: contacts account-wide + no multi-inbox tests) — docs-only, no code/tests | #112 | Merged (`8349689`) |
+| 17E.1 | Multiple WhatsApp Inbox **backend contract tests** (RSpec: Standard+Coexistence service/request → 2 numbers = 2 channels/inboxes/setups per account, dup `phone_number`/`phone_number_id` blocked; router 2 pnids→2 inboxes in one account, unknown/crossed fail-closed; NEW category contract: ConversationFinder+ConversationPolicy agent-isolation + team-filtered assignment) — **test-only, no product code** | PRNUM_PLACEHOLDER | Open (ready for review, not merged) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -311,7 +312,29 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR-0009 — `Open (ready for review, not merged)` — PR #112 (docs-only; head SHA advances per docs commit — see GitHub)
+### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — `Open (ready for review, not merged)` — PR PRNUM_PLACEHOLDER (test-only)
+- **Goal:** turn the 17E.0 discovery into automated, regression-locked backend coverage of "one account owns
+  multiple WhatsApp inboxes." **Test-only** — RSpec added; **no product code changed** (existing code already
+  satisfies the contract). No migration/schema; all Meta stubbed (no real Meta/WhatsApp).
+- **Coverage:**
+  - **Standard + Coexistence services** — two different numbers → two distinct `Channel::Whatsapp` + `Inbox` +
+    `Bloomwire::WhatsappSetup` (same account, distinct channel/inbox ids); each routes to its own inbox; duplicate
+    `phone_number` → `:phone_number_taken`; duplicate `phone_number_id` → `:phone_number_id_conflict` (second
+    channel rolled back); coexistence keeps `connection_mode=coexistence`.
+  - **Standard + Coexistence request endpoints** — admin registers two numbers as two inboxes; duplicate → 422.
+  - **Global router** — two numbers in ONE account each resolve to their own inbox; unknown pnid → nil; crossed
+    pnid/display → fail-closed; Standard + Coexistence coexist (routing is connection_mode-agnostic).
+  - **NEW category contract** (`spec/services/bloomwire/multi_whatsapp_inbox_category_contract_spec.rb`) —
+    Category = Team + Inbox: ConversationFinder + ConversationPolicy prove a category agent lists/opens ONLY its
+    own inbox (admin sees both); team-filtered assignment rejects a cross-category (team-2-only) assignee.
+- **Files:** extended `whatsapp_embedded_signup_service_spec.rb`, `whatsapp_coexistence_embedded_signup_service_spec.rb`,
+  `webhooks/whatsapp_router_spec.rb`, `requests/…/embedded_signups_spec.rb`, `requests/…/coexistence_embedded_signups_spec.rb`;
+  new `multi_whatsapp_inbox_category_contract_spec.rb`.
+- **Validation:** targeted `rspec` (6 files) = **73 examples, 0 failures**; RuboCop clean; `git diff --check` clean;
+  secret-scan clean. No deploy · no production · dev remains `9b09f9e`.
+- **Deferred:** contacts-isolation decision + any UI/permission changes → **17E.2**; runtime E2E → **17E.3**.
+
+### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR-0009 — `Merged` — PR #112 (merge SHA `83496896fcc7bcaa6ca076dbd2f346ee5eb4f7bc`; `version_1` tip `83496896`)
 - **Goal:** lock the Bloomwire **multiple WhatsApp inbox per account** business model (5 categories × 1 WhatsApp
   number × 10 agents) before the 17E hardening slices. Docs-only; no code, tests, route, migration, deploy, or Meta call.
 - **Deliverables:** `docs/bloomwire/whatsapp-multi-inbox-discovery.md` (executive verdict + evidence with file:line +
