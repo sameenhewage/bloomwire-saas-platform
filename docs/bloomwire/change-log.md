@@ -15,8 +15,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — OPEN (PR PRNUM_PLACEHOLDER, ready for review, not merged)
-- **PR:** PRNUM_PLACEHOLDER · **open, non-draft, ready for review (NOT merged)** · **Type:** TEST-ONLY (RSpec).
+### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — OPEN (PR #113, ready for review, not merged)
+- **PR:** #113 · **open, non-draft, ready for review (NOT merged)** · **Type:** TEST-ONLY (RSpec).
   **No product code · no DB migration/schema · no route · no frontend · no workflow/deploy · no production · no
   real Meta/WhatsApp calls (all stubbed).**
 - **What:** turns the 17E.0 discovery ("one account can own multiple WhatsApp inboxes") into regression-locked

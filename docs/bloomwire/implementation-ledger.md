@@ -82,7 +82,7 @@
 | 17D.2 | WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by phone_number_id; `smb_message_echoes` → existing outgoing echo path; `smb_app_state_sync` → new safe-ignore guard; proof doc; fake payloads) — backend/webhook only, Coexistence UI still disabled | #109 | Merged (`4a57564`) |
 | 17D.3 | WhatsApp Business App **Coexistence frontend enablement** (enable the `BloomwireWhatsapp.vue` Coexistence card — remove disabled/"Coming soon"; `flow=coexistence` reuses the credential-free Embedded-Signup form + new `createBloomwireCoexistenceEmbeddedSignup` → `bloomwire/whatsapp/coexistence_embedded_signup`; Standard flow unchanged; Meta/SDK mocked) — frontend only, no backend/migration | #111 | Merged (`ea30579`) |
 | 17E.0 | Multiple WhatsApp Inbox per Account **discovery + ADR-0009** (`docs/bloomwire/whatsapp-multi-inbox-discovery.md` + ADR; **verdict SUPPORTED** — multi-inbox per account already works, services create a new channel+inbox+setup per number & block only duplicate `phone_number`/`phone_number_id`, no per-account cap, router resolves by `phone_number_id`; Category = Team + Inbox; caveats: contacts account-wide + no multi-inbox tests) — docs-only, no code/tests | #112 | Merged (`8349689`) |
-| 17E.1 | Multiple WhatsApp Inbox **backend contract tests** (RSpec: Standard+Coexistence service/request → 2 numbers = 2 channels/inboxes/setups per account, dup `phone_number`/`phone_number_id` blocked; router 2 pnids→2 inboxes in one account, unknown/crossed fail-closed; NEW category contract: ConversationFinder+ConversationPolicy agent-isolation + team-filtered assignment) — **test-only, no product code** | PRNUM_PLACEHOLDER | Open (ready for review, not merged) |
+| 17E.1 | Multiple WhatsApp Inbox **backend contract tests** (RSpec: Standard+Coexistence service/request → 2 numbers = 2 channels/inboxes/setups per account, dup `phone_number`/`phone_number_id` blocked; router 2 pnids→2 inboxes in one account, unknown/crossed fail-closed; NEW category contract: ConversationFinder+ConversationPolicy agent-isolation + team-filtered assignment) — **test-only, no product code** | #113 | Open (ready for review, not merged) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -312,7 +312,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — `Open (ready for review, not merged)` — PR PRNUM_PLACEHOLDER (test-only)
+### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — `Open (ready for review, not merged)` — PR #113 (test-only)
 - **Goal:** turn the 17E.0 discovery into automated, regression-locked backend coverage of "one account owns
   multiple WhatsApp inboxes." **Test-only** — RSpec added; **no product code changed** (existing code already
   satisfies the contract). No migration/schema; all Meta stubbed (no real Meta/WhatsApp).
