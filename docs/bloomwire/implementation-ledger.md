@@ -79,7 +79,7 @@
 | 17C.3 | Customer frontend WhatsApp connection wizard (`canSelfServeManagedWhatsapp` gate + `BloomwireWhatsapp.vue`; **connection-choice screen** → Coexistence [disabled/coming-soon] + Register New Number [standard]; Connect with Meta → safe DTO; no credentials/agents step; Meta mocked) | #104 | Merged (`bf81c7c`) |
 | 17D.0 | WhatsApp Business App **Coexistence discovery contract** (`docs/bloomwire/whatsapp-coexistence-discovery.md`; evidence/report-only — locks the `connection_mode=coexistence` contract + boundary before enabling) | #106 | Merged (`f9aeac7`) |
 | 17D.1 | WhatsApp Business App **Coexistence backend contract** (`bloomwire/whatsapp/coexistence_embedded_signup` + `WhatsappCoexistenceEmbeddedSignupService`; `connection_mode=coexistence`; inherits safe 17C.2 seam; Meta stubbed) — backend only, Coexistence UI still disabled | #107 | Merged (`ebdcba2`) |
-| 17D.2 | WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by phone_number_id; `smb_message_echoes` → existing outgoing echo path; `smb_app_state_sync` → new safe-ignore guard; proof doc; fake payloads) — backend/webhook only, Coexistence UI still disabled | #109 | Open (ready for review, not merged) |
+| 17D.2 | WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by phone_number_id; `smb_message_echoes` → existing outgoing echo path; `smb_app_state_sync` → new safe-ignore guard; proof doc; fake payloads) — backend/webhook only, Coexistence UI still disabled | #109 | Merged (`4a57564`) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -309,7 +309,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — `Open (ready for review, not merged)` — PR #109 (head `8b95692`)
+### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — `Merged` — PR #109 (merge SHA `4a57564d7c1fbc54aeafbf9049f61b5b7a8b0795`; approved head `fbbbe14`; `version_1` tip `4a57564`)
 - **Goal:** prove the existing global webhook router (ADR-0005) + stock `Webhooks::WhatsappEventsJob` safely handle
   Coexistence traffic before frontend enablement (17D.3). Backend/webhook proof only; Coexistence card stays
   disabled/"Coming soon".
