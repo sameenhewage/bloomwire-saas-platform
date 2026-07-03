@@ -15,8 +15,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.2 — Contact isolation & UI/permission polish — OPEN (PR PRNUM_PLACEHOLDER, ready for review, not merged)
-- **PR:** PRNUM_PLACEHOLDER · **open, non-draft, ready for review (NOT merged)** · **Type:** backend permission
+### Phase 17E.2 — Contact isolation & UI/permission polish — OPEN (PR #114, ready for review, not merged)
+- **PR:** #114 · **open, non-draft, ready for review (NOT merged)** · **Type:** backend permission
   fix (gated) + RSpec. **Product code changed: YES.** **No DB migration/schema · no frontend · no route · no
   workflow/deploy · no production · no real Meta/WhatsApp · native `/whatsapp/authorization` + `Whatsapp.vue` +
   global webhook router untouched.**

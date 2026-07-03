@@ -83,7 +83,7 @@
 | 17D.3 | WhatsApp Business App **Coexistence frontend enablement** (enable the `BloomwireWhatsapp.vue` Coexistence card — remove disabled/"Coming soon"; `flow=coexistence` reuses the credential-free Embedded-Signup form + new `createBloomwireCoexistenceEmbeddedSignup` → `bloomwire/whatsapp/coexistence_embedded_signup`; Standard flow unchanged; Meta/SDK mocked) — frontend only, no backend/migration | #111 | Merged (`ea30579`) |
 | 17E.0 | Multiple WhatsApp Inbox per Account **discovery + ADR-0009** (`docs/bloomwire/whatsapp-multi-inbox-discovery.md` + ADR; **verdict SUPPORTED** — multi-inbox per account already works, services create a new channel+inbox+setup per number & block only duplicate `phone_number`/`phone_number_id`, no per-account cap, router resolves by `phone_number_id`; Category = Team + Inbox; caveats: contacts account-wide + no multi-inbox tests) — docs-only, no code/tests | #112 | Merged (`8349689`) |
 | 17E.1 | Multiple WhatsApp Inbox **backend contract tests** (RSpec: Standard+Coexistence service/request → 2 numbers = 2 channels/inboxes/setups per account, dup `phone_number`/`phone_number_id` blocked; router 2 pnids→2 inboxes in one account, unknown/crossed fail-closed; NEW category contract: ConversationFinder+ConversationPolicy agent-isolation + team-filtered assignment) — **test-only, no product code** | #113 | Merged (`5df9f9d`) |
-| 17E.2 | **Contact isolation & UI/permission polish** (gated backend fix — new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` + `Bloomwire::ContactVisibility` seam; agent contact list/search/show scoped to contacts reachable via assigned inboxes through `contact_inboxes`; admins see all; **OFF == stock**; routed through ContactsController/FilterService/SearchService/contacts base_controller) — **product code YES, no migration/frontend** | PRNUM_PLACEHOLDER | Open (ready for review, not merged) |
+| 17E.2 | **Contact isolation & UI/permission polish** (gated backend fix — new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` + `Bloomwire::ContactVisibility` seam; agent contact list/search/show scoped to contacts reachable via assigned inboxes through `contact_inboxes`; admins see all; **OFF == stock**; routed through ContactsController/FilterService/SearchService/contacts base_controller) — **product code YES, no migration/frontend** | #114 | Open (ready for review, not merged) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -313,7 +313,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17E.2 — Contact isolation & UI/permission polish — `Open (ready for review, not merged)` — PR PRNUM_PLACEHOLDER (product code: YES)
+### Phase 17E.2 — Contact isolation & UI/permission polish — `Open (ready for review, not merged)` — PR #114 (product code: YES)
 - **Goal / decision:** resolve the 17E.0/17E.1 caveat that stock Chatwoot contact list/search is account-wide.
   A business **agent** may only list/search/open contacts **reachable through their assigned inboxes** (via
   `contact_inboxes`); **admins see all**; a **shared** contact (linked to ≥2 inboxes) is visible to agents of any
