@@ -313,7 +313,25 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17E.4 — Contact ID hardening — `Open (not merged)` — PR #116 (product code: YES)
+### Phase 17E.4D — Dev Deploy + Authenticated Runtime Validation — `Done (PASS)` — deploy run `28684004558`
+- **Deploy:** `deploy-dev.yml` (manual; prod hard-blocked) deployed `version_1 @ 4525bea` to **dev only**
+  (`run_migrations=true` no-op — 0 pending in `3c45720..4525bea`; `prune=false`; postgres/redis volumes preserved).
+  Run `28684004558` **SUCCESS**. Post-deploy: `/app/.git_sha = 4525bea`, local+public health 200, login renders,
+  rails+sidekiq up, pg/redis reachable, **no pending migrations**, no 5xx. **Dev deployed SHA now `4525bea`.**
+- **DEV gate:** `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true` enabled on dev only (InstallationConfig; cache
+  cleared; resolves true); **kept enabled** — never enabled/modified in prod.
+- **Authenticated runtime smoke (gate ON) — PASS:** admin regression (existing session) — dashboard, WhatsApp
+  Standard+Coexistence (Available now), inbox list, conversations, contacts list/search, no 500/secret/Meta.
+  17E.4 targeted (synthetic account; Shopify stubbed, no real egress; in-process real controller stack) —
+  contact merge agent in-scope 200 / oos mergee+base 404 (intact) / admin 200; conversation-create agent in-scope
+  200 / oos 404 (0 side-effects) / admin 200; Shopify agent oos **422, 0 client calls (no egress)** / in-scope 200
+  (stub) / admin 200; isolation regression unassigned conv 401 (never 500), oos contact 404 (never 500), agent
+  index only assigned-inbox contact, admin all, seam agent=in-scope only.
+- **Evidence:** 0 console errors · 0 HTTP 5xx · 0 `graph.facebook.com` · 0 real `myshopify.com` · masked screenshot.
+- **Cleanup:** all synthetic records destroyed (0 remaining); no temp token files; real data unchanged
+  (account 1 still 5 contacts). No production; no real Meta/WhatsApp/Shopify.
+
+### Phase 17E.4 — Contact ID hardening — `Merged` — PR #116 (merge SHA `4525bea6baf8c17315436982f0d70106508b9c57`; `version_1` tip `4525bea`; deployed to dev in 17E.4D; product code: YES)
 - **Goal:** close the direct, ID-based contact-visibility gaps deferred in 17E.2/17E.3 (contact merge,
   conversation-create contact lookup, Shopify orders contact lookup) using the existing
   `Bloomwire::ContactVisibility.scope(account:, user:)` seam.

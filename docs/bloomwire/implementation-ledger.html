@@ -346,7 +346,17 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 17E.4 — Contact ID hardening <span class="badge">Open (not merged)</span> <span class="pr">PR #116 · product code YES</span></h3>
+    <div class="card"><h3>Phase 17E.4D — Dev Deploy + Authenticated Runtime Validation <span class="badge done">Done (PASS)</span> <span class="pr">deploy run 28684004558 · dev @ 4525bea</span></h3>
+      <ul>
+        <li><b>Deploy</b>: <code>deploy-dev.yml</code> (manual; prod hard-blocked) deployed <code>version_1 @ 4525bea</code> to <b>dev only</b> (run_migrations no-op — 0 pending; prune=false; postgres/redis volumes preserved). Run <code>28684004558</code> SUCCESS. Post-deploy: <code>/app/.git_sha = 4525bea</code>, local+public health 200, login renders, rails+sidekiq up, pg/redis reachable, <b>no pending migrations</b>, no 5xx.</li>
+        <li><b>DEV gate</b>: <code>BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true</code> enabled on dev only (resolves true); <b>kept enabled</b>; never in prod.</li>
+        <li><b>Authenticated smoke (gate ON) — PASS</b>: admin regression (dashboard, WhatsApp Standard+Coexistence, inbox/conversations/contacts/search, no 500/secret/Meta); 17E.4 targeted (synthetic, Shopify stubbed) — merge agent oos mergee+base 404 (intact) / in-scope 200 / admin 200; conversation-create agent oos 404 (0 side-effects) / in-scope 200 / admin 200; Shopify agent oos <b>422, 0 client calls (no egress)</b> / in-scope 200 / admin 200; isolation unassigned conv 401 (never 500), oos contact 404 (never 500), agent sees only assigned-inbox contact, admin all.</li>
+        <li><b>Evidence</b>: 0 console errors · 0 HTTP 5xx · 0 graph.facebook.com · 0 real myshopify.com · masked screenshot.</li>
+        <li><b>Cleanup</b>: all synthetic records destroyed (0 remaining); real data unchanged (account 1 still 5 contacts). No production; no real Meta/WhatsApp/Shopify.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17E.4 — Contact ID hardening <span class="badge done">Merged</span> <span class="pr">PR #116 · 4525bea · deployed 17E.4D</span></h3>
       <ul>
         <li><b>Goal</b>: close the direct, ID-based contact-visibility gaps deferred in 17E.2/17E.3 (contact merge, conversation-create contact lookup, Shopify orders contact lookup) via the existing <code>Bloomwire::ContactVisibility.scope(account:, user:)</code> seam.</li>
         <li><b>Fixes (one line each)</b>: <code>Actions::ContactMergesController#contacts</code> (out-of-scope base/mergee → 404); <code>ConversationsController#contact</code> → <code>seam.find(...)</code> (out-of-scope → 404; inbox authz unchanged); <code>Integrations::ShopifyController#contact</code> → <code>seam.find_by(id:)</code> (out-of-scope → nil → existing <code>validate_contact</code> 422 BEFORE any Shopify call → no egress).</li>

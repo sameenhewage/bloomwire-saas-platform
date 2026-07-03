@@ -15,10 +15,11 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.4 — Contact ID hardening — OPEN (PR #116, product code YES, not merged)
-- **PR:** #116 · **open, non-draft (NOT merged)** · **Type:** backend permission hardening (gated) + RSpec.
-  **Product code changed: YES.** **No DB migration/schema · no frontend · no route · no workflow/deploy · no
-  production · no real Meta/WhatsApp · native `/whatsapp/authorization` + `Whatsapp.vue` + global webhook router
+### Phase 17E.4 — Contact ID hardening — MERGED (PR #116, merge SHA `4525bea6baf8c17315436982f0d70106508b9c57`)
+- **PR:** #116 · **merged into `version_1` (tip `4525bea`)** via admin merge (branch policy required a review; CI was
+  8/8 green) · **Type:** backend permission hardening (gated) + RSpec.
+  **Product code changed: YES.** **No DB migration/schema · no frontend · no route · deployed to dev in **17E.4D** ·
+  no production · no real Meta/WhatsApp · native `/whatsapp/authorization` + `Whatsapp.vue` + global webhook router
   untouched.**
 - **What (closes the 17E.2/17E.3 deferred ID-based gaps):** routed 3 direct contact-by-id paths through the
   existing seam `Bloomwire::ContactVisibility.scope(account:, user:)` (one line each):
@@ -36,8 +37,31 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 - **Security:** no secrets · no provider-credential mutation · no live Meta/WhatsApp · no Enterprise code touched.
 - **Validation:** new **15/15**; suite (hardening + multi_inbox_runtime_e2e + contact_isolation + contact_visibility
   + shopify_controller + contact_merges_controller) **73/73**; conversations_controller regression **80/80**; RuboCop
-  clean; `git diff --check` clean; no migration/schema; secret scan clean. **No deploy · no production · no real
-  Meta · dev is `3c45720` (deployed in 17E.3D).**
+  clean; `git diff --check` clean; no migration/schema; secret scan clean. CI **8/8 green** at head `74b4519`.
+  **Deployed to dev in Phase 17E.4D; dev is now `4525bea`.**
+
+### Phase 17E.4D — Dev Deploy + Authenticated Runtime Validation — DONE (PASS)
+- **Deploy:** `deploy-dev.yml` (manual; prod hard-blocked) deployed `version_1 @ 4525bea` to **dev only**
+  (`run_migrations=true` no-op — 0 pending in `3c45720..4525bea`; `prune=false`; postgres/redis volumes preserved).
+  **Workflow run ID `28684004558` — SUCCESS.**
+- **Post-deploy:** `/app/.git_sha = 4525bea6baf8c17315436982f0d70106508b9c57`; local + public health 200; login
+  renders; rails + sidekiq up; postgres/redis reachable; **no pending migrations**; no 5xx.
+- **DEV feature config:** `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true` enabled on **dev only** via
+  InstallationConfig (cache cleared); runtime resolves **true**; **kept enabled** (never enabled/modified in prod).
+- **Authenticated runtime smoke (gate ON) — PASS.** Admin regression (existing session): dashboard, WhatsApp
+  Standard + Coexistence (Available now), inbox list, conversations, contacts list/search — no 500, no secret, no
+  Meta. 17E.4 targeted (synthetic agent/data; Shopify client stubbed — no real egress):
+  - **contact merge:** agent in-scope 200; out-of-scope mergee → 404 (contact intact); out-of-scope base → 404
+    (intact); admin cross-scope → 200.
+  - **conversation-create:** agent in-scope 200; out-of-scope → 404 (0 side-effects); admin → 200.
+  - **Shopify orders:** agent out-of-scope → **422 with 0 Shopify client calls (no egress)**; in-scope → 200
+    (stub); admin → 200.
+  - **isolation regression:** unassigned conversation direct → 401 (never 500); out-of-scope contact direct → 404
+    (never 500); agent index sees only the assigned-inbox contact; admin sees all; seam agent-scope = in-scope only.
+- **Evidence:** 0 console errors · 0 HTTP 5xx · 0 `graph.facebook.com` · 0 real `myshopify.com` requests · masked
+  screenshot (WhatsApp Standard/Coexistence).
+- **Cleanup:** all synthetic accounts/users/inboxes/contacts/conversations destroyed (0 remaining); no temp token
+  files; **real data unchanged** (account 1 still 5 contacts). **No production · no real Meta/WhatsApp/Shopify.**
 
 ### Phase 17E.3D — Dev Validation Release (dev-only deploy) — DONE
 - **Type:** dev deploy via `deploy-dev.yml` (manual dispatch; prod hard-blocked). Deployed `version_1 @ 3c45720`
