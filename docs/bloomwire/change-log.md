@@ -15,8 +15,40 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.2 — Contact isolation & UI/permission polish — OPEN (PR #114, ready for review, not merged)
-- **PR:** #114 · **open, non-draft, ready for review (NOT merged)** · **Type:** backend permission
+### Phase 17E.3 — Owner-operated runtime E2E with mocked Meta — OPEN (PR #115, test-only, not merged)
+- **PR:** #115 · **open, non-draft (NOT merged)** · **Type:** TEST-ONLY (RSpec runtime/integration E2E).
+  **Product code changed: NO.** **No DB migration/schema · no frontend · no route · no workflow/deploy · no
+  production · no real Meta/WhatsApp (mocked at the seam) · native `/whatsapp/authorization` + `Whatsapp.vue` +
+  global webhook router untouched.**
+- **What:** two new integration specs under `app/spec/integration/bloomwire/` proving the full multi-inbox +
+  customer/agent-visibility workflow end-to-end through the REAL runtime stack, Meta mocked
+  (`Whatsapp::TokenExchangeService`/`PhoneInfoService`/`FacebookApiClient` + `Bloomwire::GlobalWhatsappConfig`;
+  `WebMock.disable_net_connect!` blocks egress; an example asserts no `graph.facebook.com` call):
+  1. `multi_inbox_runtime_e2e_spec.rb` (**22 ex**): **Flow 1** admin creates Inbox 1 (Standard) + Inbox 2
+     (Coexistence) via mocked embedded signup, each mapped to its own `Channel::Whatsapp` + `Bloomwire::WhatsappSetup`,
+     safe DTO (no token/api_key), non-admin forbidden; **Flow 2** inbound webhook routes pnid1→Inbox 1, pnid2→Inbox 2
+     (connection_mode-agnostic), unknown + crossed pnid fail closed; **Flow 3** category agent lists/opens only its
+     own inbox's conversations (401 cross-open), admin both; **Flow 4** contact isolation gate ON (list/search/show +
+     sub-resource 404 + bulk label scoped; admin + gate-OFF unaffected); **Flow 5** UI-sanity-at-API (inbox list
+     scoped per agent).
+  2. `hardening_followup_inventory_spec.rb` (**5 ex, 1 pending**): characterizes the KNOWN, DEFERRED 17E.2 gaps.
+- **Hardening follow-up inventory (verified in the mocked runtime, NOT fixed — deferred, needs separate approval):**
+  with the gate ON, **contact merge** + **conversation-create** remain agent-reachable + unscoped (characterized as
+  current behavior); **CSAT report** is admin-only (protected — not an agent vector); **Shopify orders** is
+  statically reachable + unscoped but outside the mocked runtime (needs an integration hook + external stub) —
+  documented, pending. No NEW/unexpected leak beyond the documented 17E.2 set; a CONTROL example asserts the gate is
+  active (enumeration path still closed).
+- **Not changed:** no product code (test-only); admin visibility; conversation/inbox scoping; the global webhook
+  router; native WhatsApp; DB schema; frontend.
+- **Security:** no secrets (all fake) · no provider-credential mutation · no live Meta/WhatsApp (mocked) · no
+  Enterprise code touched.
+- **Validation:** new specs **27 examples, 0 failures, 1 pending**; regression (contact_isolation, contact_visibility,
+  multi_whatsapp_inbox_category_contract, whatsapp_router, whatsapp_inbound_e2e, embedded_signups,
+  coexistence_embedded_signups) = **109 examples, 0 failures, 1 pending**; RuboCop clean; `git diff --check` clean;
+  no migration/schema; secret scan clean. **No deploy · no production · no real Meta · dev remains `9b09f9e`.**
+
+### Phase 17E.2 — Contact isolation & UI/permission polish — MERGED (PR #114, merge SHA `d98f7d8080fb4bd7f7e46745b7f6ac373b798ade`)
+- **PR:** #114 · **merge SHA `d98f7d8080fb4bd7f7e46745b7f6ac373b798ade`** · merged into `version_1` (tip `d98f7d8`) · **Type:** backend permission
   fix (gated) + RSpec. **Product code changed: YES.** **No DB migration/schema · no frontend · no route · no
   workflow/deploy · no production · no real Meta/WhatsApp · native `/whatsapp/authorization` + `Whatsapp.vue` +
   global webhook router untouched.**

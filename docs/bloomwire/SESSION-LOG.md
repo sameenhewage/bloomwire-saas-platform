@@ -19,15 +19,15 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `5df9f9d74a59057e099e82c1e5471bfff0c8e449`  (PR #113 merged — Phase 17E.1 multi-WhatsApp-inbox backend contract tests)
+- **`version_1` tip:** `d98f7d8080fb4bd7f7e46745b7f6ac373b798ade`  (PR #114 merged — Phase 17E.2 gated contact isolation + bulk-label scoping)
 - **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2/17D.3 not deployed.
-- **Latest completed / merged:** **PR #113** — Phase **17E.1** Multiple WhatsApp Inbox **backend contract tests** (test-only; two numbers → two isolated inboxes per account; dup blocked; router per-pnid; category agent-isolation), merged at `5df9f9d74a59057e099e82c1e5471bfff0c8e449`. Before it: PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **Phase 17E.2** — **Contact isolation & UI/permission polish**. **PR #114 is open, non-draft, and ready for review** (branch `feature/bloomwire-phase-17e2-contact-isolation-permission-polish`) — **product code YES (gated backend fix); not merged, not deployed.** Resolves the 17E.0/17E.1 caveat: a business **agent** may only list/search/open contacts reachable via their assigned inboxes (through `contact_inboxes`); **admins see all**; **shared** contacts visible to agents of any linked inbox; conversation isolation stays primary. **Gated** by new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` (master AND-gated) — **OFF == stock Chatwoot**. Single seam `Bloomwire::ContactVisibility.scope` routed through `ContactsController#index/search/active/show`, `Contacts::FilterService`, global `SearchService#filter_contacts`, and `contacts/base_controller#ensure_contact`. **Review round 2 — blocker fixed:** the **bulk contact WRITE path** (`BulkActionsController#enqueue_contact_job` → `Contacts::BulkActionJob`) now filters `ids` through the seam before enqueue, so a gated agent can't bulk add/remove labels on out-of-scope contacts (delete stays admin-only). **No migration/schema, no frontend, no router/native-whatsapp change.** Deferred (documented): ID-based merge/CSAT/Shopify/conversation-create. Validation: `contact_isolation_spec` 20/20 + `contact_visibility_spec` 5/5 + bulk-path regression 76/76; RuboCop clean; blocker fix RED-proven via `git stash`.
+- **Latest completed / merged:** **PR #114** — Phase **17E.2** gated agent **contact isolation** + bulk contact-label scoping (product code, gated by `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY`; OFF == stock), merged at `d98f7d8080fb4bd7f7e46745b7f6ac373b798ade`. Before it: PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17E.3** — **Owner-operated runtime E2E with mocked Meta**. **PR #115 is open, non-draft, test-only** (branch `test/bloomwire-phase-17e3-runtime-e2e-mocked-meta`, base `version_1` `d98f7d8`) — **product code NO; not merged, not deployed.** Two integration specs under `app/spec/integration/bloomwire/` prove the full multi-inbox + customer/agent-visibility workflow end-to-end through the real runtime stack with **Meta mocked** at the seam (`Whatsapp::TokenExchangeService`/`PhoneInfoService`/`FacebookApiClient` + `Bloomwire::GlobalWhatsappConfig`; `WebMock.disable_net_connect!` blocks egress): admin 2-inbox setup (Standard + Coexistence) via mocked embedded signup; inbound webhook routing by `phone_number_id` (unknown/crossed fail closed; connection_mode-agnostic); category agent conversation isolation; contact isolation + bulk label (gate ON); UI-sanity at the API. A second spec **CHARACTERIZES (does not fix)** the KNOWN, DEFERRED 17E.2 gaps — **merge** + **conversation-create** are agent-reachable/unscoped; **CSAT** is admin-only (protected); **Shopify** is out-of-runtime (documented). Validation: new **27/0 (1 pending)** + regression **109/0 (1 pending)**; RuboCop clean; no migration/schema; no real Meta.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Multi-WhatsApp-inbox (17E):** **17E.0** (`83496896`) + **17E.1** (PR #113, `5df9f9d`) merged; **17E.2** contact isolation is **in-flight (PR #114, product code, open / ready for review, not merged)** — gated agent contact scoping (`BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY`), OFF == stock; **PR #114 review blocker fixed** (bulk contact label add/remove now scoped through the seam). Next: **17E.3** owner-operated runtime E2E (mocked Meta) — and a hardening follow-up for the still-deferred ID-based contact paths (merge/CSAT/Shopify/conversation-create) — before customer go-live.
+  1. **Multi-WhatsApp-inbox (17E):** **17E.0** (`83496896`) + **17E.1** (PR #113, `5df9f9d`) + **17E.2** (PR #114, `d98f7d8`) merged; **17E.3** owner-operated runtime E2E (mocked Meta) is **in-flight (PR #115, test-only, open / not merged)**. Next: a **hardening follow-up phase** (separate approval) to scope the still-deferred ID-based contact paths (**contact merge**, **conversation-create**, **Shopify orders**) through `Bloomwire::ContactVisibility` — 17E.3 verified these remain agent-reachable/unscoped with the gate ON (CSAT is admin-only/protected). Owner-operated real-Meta browser E2E remains before customer go-live.
   2. **Coexistence go-live:** **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
   3. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   4. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
@@ -75,6 +75,39 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-03 — Phase 17E.3 — Owner-operated runtime E2E with mocked Meta (PR #115, test-only, open)
+- **Built (branch `test/bloomwire-phase-17e3-runtime-e2e-mocked-meta` off `version_1` `d98f7d8`):** two RSpec
+  integration specs proving the full multi-WhatsApp-inbox + customer/agent-visibility workflow end-to-end through
+  the REAL runtime stack, with **Meta mocked only**. **Test-only — no product code, no migration/schema, no
+  frontend, no routes.** Meta is stubbed at the seam (`Whatsapp::TokenExchangeService` / `PhoneInfoService` /
+  `FacebookApiClient` + `Bloomwire::GlobalWhatsappConfig`); `WebMock.disable_net_connect!` blocks egress and an
+  example asserts no `graph.facebook.com` call.
+- **`app/spec/integration/bloomwire/multi_inbox_runtime_e2e_spec.rb` (22 ex):** Flow 1 admin creates Inbox 1
+  (Standard) + Inbox 2 (Coexistence) via mocked embedded signup (each mapped to its own `Channel::Whatsapp` +
+  `Bloomwire::WhatsappSetup`; safe DTO; non-admin forbidden); Flow 2 inbound webhook routes pnid1→Inbox 1,
+  pnid2→Inbox 2 (connection_mode-agnostic), unknown + crossed pnid fail closed; Flow 3 category agent conversation
+  isolation (cross-open → 401; admin both); Flow 4 contact isolation gate ON (list/search/show + sub-resource 404 +
+  bulk label scoped; admin + gate-OFF unaffected); Flow 5 UI-sanity at the API. The signup-created inboxes are
+  router-aligned, so setup → webhook → conversation/contact → isolation is one continuous flow.
+- **`app/spec/integration/bloomwire/hardening_followup_inventory_spec.rb` (5 ex, 1 pending):** CHARACTERIZES (does
+  NOT fix) the KNOWN, DEFERRED 17E.2 gaps with the gate ON — a CONTROL example proves the gate is active, then:
+  **contact merge** + **conversation-create** are agent-reachable + unscoped (current behavior, gap open);
+  **CSAT report** is admin-only (401 for agents — protected, not a vector); **Shopify orders** is statically
+  reachable + unscoped but outside the mocked runtime (needs an integration hook + external stub) — pending/skip.
+  No NEW/unexpected leak beyond the documented 17E.2 set → proceeded (verify + document, do not widen scope).
+- **Validation:** new **27 examples, 0 failures, 1 pending**; regression (contact_isolation, contact_visibility,
+  multi_whatsapp_inbox_category_contract, whatsapp_router, whatsapp_inbound_e2e, embedded_signups,
+  coexistence_embedded_signups) = **109 examples, 0 failures, 1 pending**; RuboCop clean; `git diff --check` clean;
+  secret scan clean; migration/schema guard empty. **PR #115 — open, non-draft, NOT merged.** No deploy · no
+  production · no real Meta · dev remains `9b09f9e`.
+- **Owner-operated browser E2E checklist (deferred to owner — no Capybara/system-spec harness in the repo):** run
+  against a local instance (Meta stubbed/mocked, never real Meta): (1) log in as account admin → Inbox settings →
+  add a managed WhatsApp inbox via Embedded Signup (mocked) twice → two inboxes appear; (2) feed a mocked inbound
+  webhook per number → a conversation appears under the matching inbox; (3) log in as a category agent → confirm
+  only that inbox's conversations + contacts are visible (no cross-category rows); (4) as admin → confirm both are
+  visible; (5) with the gate ON, confirm an agent cannot open another category's contact. Capture screenshots for
+  the record. Automated CI coverage is the request-level runtime E2E above.
 
 ### 2026-07-03 — Phase 17E.2 — PR #114 review blocker fix: bulk contact label actions scoped (product code, open)
 - **Review verdict `REQUEST_CHANGES`** on PR #114 (reviewed head `2cf9c09`): the bulk-action path
