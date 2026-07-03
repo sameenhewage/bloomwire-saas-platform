@@ -19,18 +19,19 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `4a57564d7c1fbc54aeafbf9049f61b5b7a8b0795`  (PR #109 merged — Phase 17D.2 Coexistence webhook proof)
+- **`version_1` tip:** `ea305792dc83f864f8e1374ce0ca832f99f7d8f9`  (PR #111 merged — Phase 17D.3 Coexistence frontend enablement)
 - **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2/17D.3 not deployed.
-- **Latest completed / merged:** **PR #109** — Phase **17D.2** WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by `phone_number_id`; `smb_message_echoes` → existing **outgoing** echo path; `smb_app_state_sync` → new **safe-ignore guard** in `Webhooks::WhatsappEventsJob`; proof doc; fake payloads), merged at `4a57564` (approved head `fbbbe14`). Before it: PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **Phase 17D.3** — WhatsApp Business App **Coexistence frontend enablement**. **PR #111 is open, non-draft, and ready for review** (head `2964279742ad220074831042d0209765ee1c0b72`; branch `feature/bloomwire-phase-17d3-coexistence-frontend`) — **frontend only; not merged, not deployed.** Enables the Coexistence card in `BloomwireWhatsapp.vue` (removes disabled/"Coming soon"; teal "Available now" + "Connect existing number" CTA); a `flow=coexistence` ref reuses the credential-free Embedded-Signup form + `useWhatsappEmbeddedSignup`, posting only `code`/`business_id`/`waba_id`/`phone_number_id` to the new `createBloomwireWhatsAppCoexistenceEmbeddedSignup` action → `WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup` → `POST …/bloomwire/whatsapp/coexistence_embedded_signup`. **Standard flow unchanged** (still `…/embedded_signup`). **No backend/controller/service/route/migration change; no native `/whatsapp/authorization` or `Whatsapp.vue` change; role gates intact; no secrets/manual-credential UI; no real Meta (SDK + postMessage mocked).** Vitest: component 15/15, new `whatsappChannel.spec.js` 4/4, hook 10/10; regression actions 20/20, ChannelFactory 9/9, ChannelList 8/8, capabilities 9/9; ESLint clean; JSON valid.
+- **Latest completed / merged:** **PR #111** — Phase **17D.3** WhatsApp Business App **Coexistence frontend enablement** (enables the Coexistence card in `BloomwireWhatsapp.vue`; `flow=coexistence` reuses the credential-free Embedded-Signup form + `useWhatsappEmbeddedSignup`; new `createBloomwireWhatsAppCoexistenceEmbeddedSignup` → `POST …/bloomwire/whatsapp/coexistence_embedded_signup`; Standard flow unchanged; Meta/SDK mocked), merged at `ea30579` (approved head `d9810b7`). Before it: PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17E.0** — Multiple WhatsApp Inbox per Account **discovery + ADR-0009**. **PR #112 is open, non-draft, and ready for review** (branch `docs/bloomwire-phase-17e0-multi-whatsapp-inbox-discovery`; head SHA advances per docs commit — see GitHub) — **docs-only; not merged, not deployed.** Locks the multiple-WhatsApp-inbox-per-account model: **verdict SUPPORTED** — services create a new `Channel::Whatsapp` + `Inbox` + `Bloomwire::WhatsappSetup` per number and block only a duplicate `phone_number`/`phone_number_id` (global), **no per-account cap**; `canSelfServeManagedWhatsapp` is a role/managed-mode guard (not count-based); the global router resolves inbound by `phone_number_id` → one setup → its own inbox (fail-closed). **Category = Team + Inbox**; agent conversation/inbox visibility is backend-scoped; **caveats:** contacts index/search is account-wide (contact-record leak, decide in 17E.2) + no multi-inbox tests yet (17E.1). Deliverables: `docs/bloomwire/whatsapp-multi-inbox-discovery.md` + `projects/bloomwire-chatwoot-platform/docs/adr/0009-multi-whatsapp-inbox-category-model.md`. **No app code / tests / route / migration / deploy.**
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Coexistence follow-ups:** **17D.3** frontend enablement is **in-flight (PR #111, open / ready for review, not merged)** — the wizard Coexistence card is now enabled and wired to the 17D.1 endpoint. Next is **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
-  2. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
-  3. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
-  4. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability, PR #87).
+  1. **Multi-WhatsApp-inbox (17E):** **17E.0** discovery + ADR-0009 is **in-flight (PR #112, docs-only, open / ready for review, not merged)** — verdict **SUPPORTED** (multi-inbox per account already works; Category = Team + Inbox). Next: **17E.1** backend contract tests (two numbers per account → two isolated inboxes; duplicate number → 422; wrong pnid → nil; agent isolation) → **17E.2** UI/permission polish + the **contacts-isolation decision** (account-wide contact list/search leak) → **17E.3** owner-operated runtime E2E (mocked Meta) before customer go-live.
+  2. **Coexistence go-live:** **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
+  3. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
+  4. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
+  5. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability, PR #87).
 
 ---
 
@@ -75,7 +76,32 @@
 
 ## C. Session journal  *(newest first — prepend new entries)*
 
-### 2026-07-03 — Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement (PR #111, open / ready for review)
+### 2026-07-03 — Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR-0009 (PR #112, docs-only, open / ready for review)
+- **Built (branch `docs/bloomwire-phase-17e0-multi-whatsapp-inbox-discovery` off `version_1` `ea30579`):** a
+  docs-only discovery + ADR that **locks the multiple-WhatsApp-inbox-per-account business model** before the 17E
+  hardening slices. No app code, tests, routes, migrations, deploy, or Meta calls.
+- **Deliverables (6 docs files):** new `docs/bloomwire/whatsapp-multi-inbox-discovery.md`; new
+  `projects/bloomwire-chatwoot-platform/docs/adr/0009-multi-whatsapp-inbox-category-model.md`; plus change-log /
+  implementation-ledger (md + html) / this SESSION-LOG (stamp 17D.3 merged + record 17E.0).
+- **Verdict — SUPPORTED (from the completed multi-inbox analysis):** one account can already own multiple WhatsApp
+  inboxes/numbers with **no code change**. `Bloomwire::WhatsappEmbeddedSignupService#persist` creates a new
+  `Channel::Whatsapp` + `Inbox` + `Bloomwire::WhatsappSetup` per call and blocks only a duplicate `phone_number`
+  (global); Coexistence inherits it. Schema has **no per-account WhatsApp uniqueness**
+  (`channel_whatsapp.phone_number` global-unique; `bloomwire_whatsapp_setups.account_id` non-unique index;
+  `phone_number_id` global-unique-partial). `canSelfServeManagedWhatsapp` is a role/managed-mode guard, **not**
+  count-based, so the Add-Inbox WhatsApp card never disappears. The global router resolves by `phone_number_id` →
+  one setup → its own inbox (fail-closed).
+- **Model:** Category = **Team + Inbox**; number = `Channel::Whatsapp` + `Inbox` + `Bloomwire::WhatsappSetup`;
+  employee = `User`/agent; staff = TeamMembers + InboxMembers; message = `Conversation`; assignment =
+  `assignee_id`/`team_id`. Agent inbox/conversation visibility is backend-scoped (`InboxPolicy::Scope`,
+  `ConversationFinder`, `Conversations::PermissionFilterService`, `ConversationPolicy`); admin sees all.
+- **Caveats recorded:** (1) **contacts** index/search is account-wide in stock Chatwoot → cross-category
+  contact-record leak (conversations stay isolated), decision deferred to **17E.2**; (2) **no multi-inbox tests**
+  yet → **17E.1**. Next: 17E.1 backend contract tests → 17E.2 UI/permission + contacts decision → 17E.3
+  owner-operated runtime E2E (mocked Meta) before customer go-live. **PR #112 — open, non-draft,
+  ready for review (not merged); docs-only** (head SHA advances per docs commit — see GitHub). No deploy · dev remains `9b09f9e`.
+
+### 2026-07-03 — Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement (PR #111, merged)
 - **Built (branch `feature/bloomwire-phase-17d3-coexistence-frontend` off `version_1` `35a1a14`):** frontend
   enablement of the Coexistence card in the customer WhatsApp setup wizard. **Product truth:** *user expects* to
   connect an **existing** WhatsApp Business App number; *system* showed the card **disabled/"Coming soon"* (17C.3);
@@ -95,8 +121,7 @@
 - **Security / boundaries:** no secrets or manual-credential UI (only the 4 non-secret fields — test-asserted);
   no live Meta/WhatsApp (SDK + `postMessage` mocked); native `/whatsapp/authorization` + `Whatsapp.vue` and the
   `canSelfServeManagedWhatsapp` role gate untouched; no backend/route/migration/schema change; no Enterprise code;
-  no duplicate chat store. **PR #111 — open, non-draft, ready for review (not merged); head
-  `2964279742ad220074831042d0209765ee1c0b72`.** No deploy · dev remains `9b09f9e`. Next: **17C.4** verify / go-live UX.
+  no duplicate chat store. **Merged: PR #111 → `version_1` `ea305792dc83f864f8e1374ce0ca832f99f7d8f9`** (approved head `d9810b7`); no deploy · dev remains `9b09f9e`. Next: **17E** multi-WhatsApp-inbox (17E.0 discovery, this session) then **17C.4** verify / go-live UX.
 
 ### 2026-07-03 — Phase 17D.2 — WhatsApp Business App Coexistence webhook proof (PR #109, merged)
 - **Built (branch `feature/bloomwire-phase-17d2-coexistence-webhook-proof` off `version_1` `5002942`):** a

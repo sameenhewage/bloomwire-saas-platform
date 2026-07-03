@@ -15,8 +15,33 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — OPEN (PR #111, ready for review, not merged)
-- **PR:** #111 · **open, non-draft, ready for review (NOT merged)** · head SHA `2964279742ad220074831042d0209765ee1c0b72` ·
+### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR — OPEN (PR #112, ready for review, not merged)
+- **PR:** #112 · **open, non-draft, ready for review (NOT merged)** ·
+  **Type:** docs-only discovery + ADR-0009. **No app code · no tests · no route · no DB migration/schema · no
+  workflow/deploy · no production · no real Meta/WhatsApp calls.**
+- **What:** locks the Bloomwire **multiple WhatsApp inbox per account** business model before the 17E hardening
+  slices — `docs/bloomwire/whatsapp-multi-inbox-discovery.md` (verdict + evidence + caveats + phased plan) and
+  `projects/bloomwire-chatwoot-platform/docs/adr/0009-multi-whatsapp-inbox-category-model.md`.
+- **Verdict:** **SUPPORTED** — one account can already own multiple WhatsApp inboxes/numbers with no code change.
+  Services create a new `Channel::Whatsapp` + `Inbox` + `Bloomwire::WhatsappSetup` per call and block only a
+  **duplicate `phone_number` / `phone_number_id`** (globally unique); there is **no per-account WhatsApp
+  uniqueness**; `canSelfServeManagedWhatsapp` is a **role/managed-mode** guard, **not** count-based, so the
+  WhatsApp card never disappears after the first inbox; the global router resolves inbound by `phone_number_id`
+  → one setup → its own inbox (fail-closed).
+- **Model:** **Category = Team + Inbox**; WhatsApp number = `Channel::Whatsapp` + `Inbox` + `Bloomwire::WhatsappSetup`;
+  employee = `User`/agent; category staff = TeamMembers + InboxMembers; message = `Conversation`; assignment =
+  `assignee_id` / `team_id`. Native teams/inbox-members/round-robin/team-filtered assignment already express it.
+- **Caveats recorded:** (1) **contacts visibility** is account-wide in stock Chatwoot (conversations/inboxes are
+  backend-scoped per agent, but the contacts list/search is not) — a cross-category contact-record leak, decision
+  deferred to 17E.2; (2) **no automated tests** yet for the multi-inbox-per-account path (17E.1).
+- **Next phases:** 17E.1 backend contract tests · 17E.2 UI/permission + contacts-isolation decision · 17E.3
+  owner-operated runtime E2E (mocked Meta) before customer go-live.
+- **Security:** no secrets exposed · no provider-credential mutation · no live Meta/WhatsApp calls · no Enterprise
+  code touched. **No deploy · no production · dev remains `9b09f9e`.**
+
+### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — MERGED
+- **PR:** #111 · **merge SHA** `ea305792dc83f864f8e1374ce0ca832f99f7d8f9` · **approved head** `d9810b72f707cf79ff0901c4babf1c95049b02c6` ·
+  **Status:** merged into `version_1` (final tip `ea30579`) ·
   **Type:** frontend enablement (Vue wizard + Vuex action + API client + i18n + Vitest). **No backend/controller/
   service change · no DB migration/schema · no real Meta/WhatsApp calls (Meta SDK + window messaging mocked) ·
   no native `/whatsapp/authorization` or `Whatsapp.vue` change · no per-channel webhook override · no app-side
