@@ -19,10 +19,10 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `096f619020a3102c404053a5a9832cd5fcbdfb1b`  (PR #117 merged — Phase 17E.4D governance docs; **runtime code unchanged since `4525bea`**)
+- **`version_1` tip:** `6c0ab8c` (PR #118 merged — Phase 17F.0 multi‑inbox/category admin UI discovery, docs‑only; **runtime code unchanged since `4525bea`**)
 - **Dev deployed SHA:** `4525bea6baf8c17315436982f0d70106508b9c57` (`4525bea`)  (public: https://dev.unecast.com · health `/health`) — deployed in **Phase 17E.4D** (dev-only via `deploy-dev.yml`, run `28684004558`; `/app/.git_sha` verified; health 200; no pending migrations; postgres/redis volumes preserved). **`BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true` is now permanently enabled on dev** (runtime resolves true; never enabled in prod). Was `3c45720`. Production untouched.
-- **Latest completed / merged:** **PR #117** — Phase **17E.4D** dev‑release governance docs (docs‑only), merged at `096f619020a3102c404053a5a9832cd5fcbdfb1b`. Before it: **PR #116** (17E.4 contact ID hardening, `4525bea`, **deployed + authenticated smoke PASS on dev in 17E.4D**); PR #115 (17E.3, `3c45720`); PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **Phase 17F.0** — **Multi‑WhatsApp‑Inbox / Category Admin UI discovery** (docs‑only PR off `version_1` `096f619`; **do not auto‑merge**). No product code. Delivers `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md`. **Key finding:** `Inbox` ↔ `Team` are independent (no FK) ⇒ Category = Team + Inbox(es) is **convention‑only** (parallel `InboxMember` + `TeamMember`; auto‑assign intersects `inbox ∩ team`); **no new Category entity**. **Recommends Option C (hybrid compose + deep‑link + guided dual‑membership add)**; **GO for 17F.1** (read‑only overview, zero schema risk). Runtime 17E.2 + 17E.4 contact isolation remains live on dev with the gate ON.
+- **Latest completed / merged:** **PR #118** — Phase **17F.0** multi‑inbox/category admin UI discovery (docs‑only), merged at `6c0ab8c`. Before it: **PR #117** (17E.4D dev‑release governance docs, `096f619`); **PR #116** (17E.4 contact ID hardening, `4525bea`, **deployed + authenticated smoke PASS on dev in 17E.4D**); PR #115 (17E.3, `3c45720`); PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17F.1** — **Read‑only "Categories & Inboxes" admin overview** (feature‑flagged; product code, gated). Branch `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`; **PR #`<pending>`; do not auto‑merge; not deployed.** New feature `BLOOMWIRE_CATEGORY_ADMIN_UI` (master‑gated; OFF ⇒ stock). Backend: admin‑only + feature‑gated `bloomwire/category_inbox_overview` → safe DTO from `Bloomwire::CategoryInboxOverview` (categories = Teams; derived WhatsApp inboxes by member overlap; standard/coexistence badge; setup status; drift; ambiguous/unlinked surfaced; **no provider_config/secrets**). Frontend: admin‑only Settings page (reuse `SettingsLayout`/`BaseSettingsHeader`/`Label`; deep‑links to Team/Inbox editors) gated by opt‑in capability `canAccessCategoryAdmin` + route guard + nav. **No schema/migration; no writes; no new Category entity.** Permissions (backend‑enforced): admin+ON 200 · agent+ON 401 (no payload) · OFF 404 (any role). **Automated:** backend 10/10 + FE 19/19 (RED→GREEN), Bloomwire RSpec 62/62, settings Vitest 162/162, RuboCop/ESLint clean, Vite build OK, no schema, secret scan clean. **LOCAL MCP runtime PASS** (admin renders all states incl. ambiguous/drift/unlinked; agent blocked; feature‑OFF removes page; 0 5xx/console‑errors/Meta/Shopify/mutations; no secrets; synthetic data + temp flags cleaned up; DEV/prod untouched). Runtime 17E.2 + 17E.4 contact isolation remains live on dev with the gate ON.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
@@ -75,6 +75,45 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-04 — Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview (feature‑flagged; product code; open, NOT merged)
+- **What:** built the administrator‑only, **read‑only** "Categories & Inboxes" overview from 17F.0 Option C, using
+  existing Chatwoot primitives only. Branch `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1`
+  `6c0ab8c`. **PR #`<pending>`.** Gated by new master‑gated feature `BLOOMWIRE_CATEGORY_ADMIN_UI` (OFF ⇒ stock: no
+  route/page/API/nav).
+- **Backend:** `Bloomwire::Features` flag + `Bloomwire::Capabilities` opt‑in `canAccessCategoryAdmin`
+  (`managed_capability(admin, Features.enabled?(:category_admin_ui))`); new service `Bloomwire::CategoryInboxOverview`
+  (safe DTO: categories = Teams; **derived** WhatsApp inboxes by member overlap — no persisted Inbox↔Team link; safe
+  staff/collaborator summaries id+name; standard/coexistence badge = only non‑secret `provider_config` field;
+  `Bloomwire::WhatsappSetup#setup_status`; per‑pair drift; ambiguous/unlinked surfaced explicitly; **never serializes
+  provider_config/tokens/secrets**); new controller `…/bloomwire/category_inbox_overview#show`
+  (`ensure_category_admin_ui!` 404 when OFF → `check_admin_authorization?` 401 for agents); singular `resource` route.
+- **Frontend:** admin‑only Settings page `categoryInboxes/Index.vue` + `InboxSummary.vue` (reuse `SettingsLayout` /
+  `BaseSettingsHeader` / `Label`; deep‑links to `settings_teams_edit` + `settings_inbox_show`; loading/empty/error);
+  API client `api/bloomwire/categoryInboxOverview.js`; capability in `useBloomwireCapabilities`; route guard
+  `redirectIfCategoryAdminDisabled`; sidebar nav entry; i18n `en/categoryInboxes.json` + `SIDEBAR.CATEGORY_INBOXES`.
+- **Permissions (backend‑enforced):** admin+ON 200 (all account teams/inboxes) · agent+ON **401 (no payload)** ·
+  OFF **404 (any role)** · account‑scoped. Frontend hiding is UX only.
+- **TDD:** backend request spec **10/10** (RED first — endpoint absent → ON tests failed → GREEN); frontend guard +
+  `InboxSummary` + `Index` **19/19** (RED first — modules absent → GREEN); `account_capabilities_spec` extended
+  (contract key + focused block).
+- **Validation:** Bloomwire RSpec regression **62/62**; settings Vitest **162/162**; RuboCop + ESLint clean; **Vite
+  production build OK**; no migration/schema (schema.rb unchanged); secret scan clean; `git diff --check` clean.
+- **Runtime proof (LOCAL full stack — Rails+Vite+PG+Redis; Chrome DevTools MCP; synthetic local‑only 2‑account
+  matrix; PHI masked):** Admin+ON — nav visible; 7 categories + 2 unlinked; Standard/Coexistence badges + setup
+  statuses; aligned / team‑drift / inbox‑drift / **ambiguous (same inbox under 2 teams)** / unlinked‑team /
+  unlinked‑inbox / non‑WhatsApp correct; deep‑links resolve to existing editors; **no write controls**; account‑B
+  absent (isolation); desktop/tablet/mobile. Agent+ON — nav absent; route → dashboard (0 rows, no data flash); API
+  401 no payload. Admin+OFF — nav absent; route redirected; endpoint 404; existing Agents/Labels/Teams/Inboxes
+  intact. One `GET …/category_inbox_overview [200]`; **0 5xx · 0 console errors · 0 graph.facebook.com · 0
+  myshopify.com · 0 overview mutations**; no secrets in DOM/payload. **Cleanup:** synthetic data + temp flag
+  overrides removed (DB back to 3 accounts / 5 users); local servers stopped; **no production; DEV untouched.**
+- **Security:** no secrets exposed; no provider‑credential mutation; no live Meta/WhatsApp/Shopify; no Enterprise.
+- **NOT changed / parked:** no schema, no writes, no new Category entity; contact visibility / inbox assignment /
+  Standard‑Coexistence setup controllers / native `/whatsapp/authorization` / global webhook router untouched. A
+  persistent Inbox↔Team mapping or data‑tag stays **out of scope** (separate owner‑approved design per 17F.0). This
+  slice is read‑only; the guided add/assign write flow is a later slice. **Do not merge / deploy / start 17F.2
+  without owner direction.**
 
 ### 2026-07-03 — Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI discovery (docs‑only, open)
 - **Delivered** `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md` (exec summary, architecture map,

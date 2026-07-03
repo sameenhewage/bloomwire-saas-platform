@@ -34,6 +34,7 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
                                          canManageNativeWhatsappSetup canDeleteManagedProviderInbox
                                          canRegisterProviderWebhook canCreateInbox canManageBots
                                          canAccessIntegrations canSelfServeManagedWhatsapp
+                                         canAccessCategoryAdmin
                                        ])
       expect(caps.values).to all(be_in([true, false]))
     end
@@ -211,6 +212,39 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
           expect(caps['canManageNativeWhatsappSetup']).to be(true)
           expect(caps['canCreateInbox']).to be(true)
         end
+      end
+    end
+  end
+
+  # Phase 17F.1 — administrator-only, READ-ONLY "Categories & Inboxes" overview. Opt-in: master-gated
+  # BLOOMWIRE_CATEGORY_ADMIN_UI (NOT privacy-dependent) AND the requester must be an administrator.
+  describe 'canAccessCategoryAdmin' do
+    context 'when Bloomwire mode + the category admin UI feature are ON' do
+      before do
+        set_toggle('BLOOMWIRE_MODE_ENABLED', true)
+        set_toggle('BLOOMWIRE_CATEGORY_ADMIN_UI', true)
+      end
+
+      it 'is true for a business administrator' do
+        expect(caps_for(administrator)['canAccessCategoryAdmin']).to be(true)
+      end
+
+      it 'is false for an agent' do
+        expect(caps_for(agent)['canAccessCategoryAdmin']).to be(false)
+      end
+    end
+
+    context 'when Bloomwire mode is ON but the category admin UI feature is OFF' do
+      before { set_toggle('BLOOMWIRE_MODE_ENABLED', true) }
+
+      it 'is false for an administrator (stock — no overview)' do
+        expect(caps_for(administrator)['canAccessCategoryAdmin']).to be(false)
+      end
+    end
+
+    context 'when Bloomwire is OFF (stock)' do
+      it 'is false for an administrator' do
+        expect(caps_for(administrator)['canAccessCategoryAdmin']).to be(false)
       end
     end
   end

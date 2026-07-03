@@ -45,7 +45,9 @@ const emit = defineEmits([
 
 const { accountScopedRoute, isOnChatwootCloud } = useAccount();
 // Bloomwire (11B.7D/11B.7E): hide Ops-managed settings entries (bots, integrations) in managed mode.
-const { canManageBots, canAccessIntegrations } = useBloomwireCapabilities();
+// Bloomwire (17F.1): show the admin-only, read-only "Categories & Inboxes" overview only when explicitly granted.
+const { canManageBots, canAccessIntegrations, canAccessCategoryAdmin } =
+  useBloomwireCapabilities();
 const store = useStore();
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
@@ -766,6 +768,17 @@ const menuItems = computed(() => {
           ],
           to: accountScopedRoute('settings_inbox_list'),
         },
+        ...(canAccessCategoryAdmin.value
+          ? [
+              {
+                name: 'Settings Categories Inboxes',
+                label: t('SIDEBAR.CATEGORY_INBOXES'),
+                icon: 'i-lucide-layout-grid',
+                activeOn: ['settings_category_inboxes'],
+                to: accountScopedRoute('settings_category_inboxes'),
+              },
+            ]
+          : []),
         {
           name: 'Settings Labels',
           label: t('SIDEBAR.LABELS'),

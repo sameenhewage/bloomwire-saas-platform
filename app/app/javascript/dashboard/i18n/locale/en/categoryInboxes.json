@@ -1,0 +1,30 @@
+{
+  "CATEGORY_INBOX_OVERVIEW": {
+    "TITLE": "Categories & Inboxes",
+    "DESCRIPTION": "A read-only overview of your categories (teams), their WhatsApp inboxes, staff, and setup status. Use the deep-links to make changes in the existing Team and Inbox editors.",
+    "LOADING": "Loading categories and inboxes…",
+    "EMPTY": "No categories or inboxes to show yet.",
+    "ERROR": "We couldn't load the categories and inboxes overview. Please try again.",
+    "CONNECTION_MODE": {
+      "STANDARD": "Standard",
+      "COEXISTENCE": "Coexistence"
+    },
+    "CATEGORY": {
+      "STAFF": "{count} staff | {count} staff | {count} staff",
+      "MANAGE_TEAM": "Manage team",
+      "NO_INBOX": "No WhatsApp inbox is derived for this category yet."
+    },
+    "INBOX": {
+      "COLLABORATORS": "{count} collaborators | {count} collaborator | {count} collaborators",
+      "MANAGE": "Manage inbox"
+    },
+    "DRIFT": {
+      "STAFF_MISSING": "{count} team member without inbox access | {count} team member without inbox access | {count} team members without inbox access",
+      "COLLABORATORS_EXTRA": "{count} inbox collaborator not on the team | {count} inbox collaborator not on the team | {count} inbox collaborators not on the team"
+    },
+    "UNLINKED": {
+      "TITLE": "Unlinked inboxes",
+      "DESCRIPTION": "These inboxes share no members with any category, so they can't be derived into one. Assign shared members in the inbox editor to link them."
+    }
+  }
+}

@@ -38,7 +38,12 @@ module Bloomwire::Capabilities
       # false. Backend enforcement (the future dedicated endpoint) remains the boundary — this only drives UI.
       canSelfServeManagedWhatsapp: managed_capability(
         admin, Bloomwire::Features.restrict_native_whatsapp_setup? && Bloomwire::Features.enabled?(:managed_whatsapp_onboarding)
-      )
+      ),
+      # Phase 17F.1: the administrator-only, READ-ONLY "Categories & Inboxes" overview. Available to a business
+      # ADMINISTRATOR only when the managed category-admin UI feature is enabled (master-gated). Agents are always
+      # false. With Bloomwire OFF or the feature OFF this is false (stock — no overview). Drives UI route/nav gating;
+      # the backend controller (admin-only + feature-gated 404) remains the enforcement boundary.
+      canAccessCategoryAdmin: managed_capability(admin, Bloomwire::Features.enabled?(:category_admin_ui))
     }
   end
 
