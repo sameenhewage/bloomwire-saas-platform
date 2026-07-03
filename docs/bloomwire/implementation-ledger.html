@@ -346,7 +346,25 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 17E.3 — Owner-operated runtime E2E (mocked Meta) <span class="badge">Open (test-only, not merged)</span> <span class="pr">PR #115 · product code NO</span></h3>
+    <div class="card"><h3>Phase 17E.4 — Contact ID hardening <span class="badge">Open (not merged)</span> <span class="pr">PR #116 · product code YES</span></h3>
+      <ul>
+        <li><b>Goal</b>: close the direct, ID-based contact-visibility gaps deferred in 17E.2/17E.3 (contact merge, conversation-create contact lookup, Shopify orders contact lookup) via the existing <code>Bloomwire::ContactVisibility.scope(account:, user:)</code> seam.</li>
+        <li><b>Fixes (one line each)</b>: <code>Actions::ContactMergesController#contacts</code> (out-of-scope base/mergee → 404); <code>ConversationsController#contact</code> → <code>seam.find(...)</code> (out-of-scope → 404; inbox authz unchanged); <code>Integrations::ShopifyController#contact</code> → <code>seam.find_by(id:)</code> (out-of-scope → nil → existing <code>validate_contact</code> 422 BEFORE any Shopify call → no egress).</li>
+        <li><b>Gate ON</b>: gated agent blocked from all three out-of-scope paths. <b>Gate OFF == stock Chatwoot.</b> <b>Admin</b> never narrowed. <b>CSAT</b> stays admin-only/protected (product code NOT touched).</li>
+        <li><b>Not changed</b>: CSAT product code; DB schema/migrations; frontend; routes; native WhatsApp; global webhook router. No new entity; no duplicate store.</li>
+        <li><b>Tests</b>: <code>hardening_followup_inventory_spec.rb</code> rewritten characterization → hardening (<b>15 ex</b>); RED-proven via <code>git stash</code> (4 out-of-scope block cases fail on stock code, incl. Shopify <code>get</code> ×2). Shopify no-egress asserted (<code>shopify_client</code> never <code>:get</code>; no <code>myshopify.com</code> request).</li>
+        <li><b>Validation</b>: new <b>15/15</b>; suite <b>73/73</b> + conversations_controller regression <b>80/80</b>; RuboCop clean; git diff --check clean; no migration/schema; secret scan clean. No deploy; no production; dev <code>3c45720</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17E.3D — Dev Validation Release <span class="badge done">Done (dev deploy)</span> <span class="pr">dev @ 3c45720</span></h3>
+      <ul>
+        <li><b>What</b>: deployed <code>version_1 @ 3c45720</code> to <b>dev only</b> via <code>deploy-dev.yml</code> (manual dispatch; prod hard-blocked; <code>run_migrations=true</code> no-op — 0 pending; <code>prune=false</code>; postgres/redis volumes preserved).</li>
+        <li><b>Result</b>: SUCCESS — <code>/app/.git_sha = 3c45720…</code>; local + public health 200; rails + sidekiq up; postgres untouched (<code>Up 6 days</code>). <b>Dev deployed SHA is now <code>3c45720204fe4c57528dfd8d1ef43f8a34674612</code> (<code>3c45720</code>)</b> (was <code>9b09f9e</code>). No production; no secrets; no real Meta.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17E.3 — Owner-operated runtime E2E (mocked Meta) <span class="badge done">Merged</span> <span class="pr">PR #115 · 3c45720 · test-only</span></h3>
       <ul>
         <li><b>Goal</b>: owner-operated runtime E2E proving the full multi-WhatsApp-inbox + customer/agent-visibility workflow end to end through the REAL runtime stack, with <b>mocked Meta only</b> (no real Meta, no production, no deploy).</li>
         <li><b>Scope</b>: TEST-ONLY — two integration specs under <code>app/spec/integration/bloomwire/</code>; no product code, no migration/schema, no frontend, no routes. Meta stubbed at the seam (<code>Whatsapp::TokenExchangeService</code>/<code>PhoneInfoService</code>/<code>FacebookApiClient</code> + <code>Bloomwire::GlobalWhatsappConfig</code>); <code>WebMock.disable_net_connect!</code> blocks egress (an example asserts no <code>graph.facebook.com</code> call).</li>

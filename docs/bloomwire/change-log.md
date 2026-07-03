@@ -15,8 +15,40 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.3 — Owner-operated runtime E2E with mocked Meta — OPEN (PR #115, test-only, not merged)
-- **PR:** #115 · **open, non-draft (NOT merged)** · **Type:** TEST-ONLY (RSpec runtime/integration E2E).
+### Phase 17E.4 — Contact ID hardening — OPEN (PR #116, product code YES, not merged)
+- **PR:** #116 · **open, non-draft (NOT merged)** · **Type:** backend permission hardening (gated) + RSpec.
+  **Product code changed: YES.** **No DB migration/schema · no frontend · no route · no workflow/deploy · no
+  production · no real Meta/WhatsApp · native `/whatsapp/authorization` + `Whatsapp.vue` + global webhook router
+  untouched.**
+- **What (closes the 17E.2/17E.3 deferred ID-based gaps):** routed 3 direct contact-by-id paths through the
+  existing seam `Bloomwire::ContactVisibility.scope(account:, user:)` (one line each):
+  1. **contact merge** — `Actions::ContactMergesController#contacts` (out-of-scope base/mergee → 404).
+  2. **conversation-create** — `ConversationsController#contact` (out-of-scope contact → 404; inbox authz unchanged).
+  3. **Shopify orders** — `Integrations::ShopifyController#contact` (out-of-scope → nil → `validate_contact` 422
+     BEFORE any Shopify call → no egress).
+- **Gate ON:** a gated agent can no longer merge/attach/fetch-orders-for an out-of-scope contact. **Gate OFF ==
+  stock Chatwoot** (agent may act on any account contact). **Admin** unchanged (never narrowed). **CSAT** remains
+  admin-only/protected — its product code is intentionally NOT touched.
+- **Tests:** rewrote `hardening_followup_inventory_spec.rb` from characterization → hardening (**15 ex**);
+  **RED-proven** — reverting the 3 controllers (git stash) fails exactly the 4 out-of-scope block cases (incl.
+  Shopify `get` called twice), re-applying is GREEN. Shopify no-egress asserted (`shopify_client` never `:get`;
+  `a_request(/myshopify\.com/)).not_to have_been_made`).
+- **Security:** no secrets · no provider-credential mutation · no live Meta/WhatsApp · no Enterprise code touched.
+- **Validation:** new **15/15**; suite (hardening + multi_inbox_runtime_e2e + contact_isolation + contact_visibility
+  + shopify_controller + contact_merges_controller) **73/73**; conversations_controller regression **80/80**; RuboCop
+  clean; `git diff --check` clean; no migration/schema; secret scan clean. **No deploy · no production · no real
+  Meta · dev is `3c45720` (deployed in 17E.3D).**
+
+### Phase 17E.3D — Dev Validation Release (dev-only deploy) — DONE
+- **Type:** dev deploy via `deploy-dev.yml` (manual dispatch; prod hard-blocked). Deployed `version_1 @ 3c45720`
+  to **dev only** (`run_migrations=true` was a no-op — 0 pending; `prune=false`; postgres/redis volumes preserved).
+- **Result:** SUCCESS — `/app/.git_sha = 3c45720204fe4c57528dfd8d1ef43f8a34674612`; local + public health 200;
+  rails + sidekiq recreated + up; postgres `Up 6 days` (untouched). **Dev deployed SHA is now
+  `3c45720204fe4c57528dfd8d1ef43f8a34674612` (`3c45720`)**, was `9b09f9e`. No production; no secrets printed; no
+  real Meta.
+
+### Phase 17E.3 — Owner-operated runtime E2E with mocked Meta — MERGED (PR #115, merge SHA `3c45720204fe4c57528dfd8d1ef43f8a34674612`)
+- **PR:** #115 · **merge SHA `3c45720204fe4c57528dfd8d1ef43f8a34674612`** · merged into `version_1` (tip `3c45720`) · **Type:** TEST-ONLY (RSpec runtime/integration E2E).
   **Product code changed: NO.** **No DB migration/schema · no frontend · no route · no workflow/deploy · no
   production · no real Meta/WhatsApp (mocked at the seam) · native `/whatsapp/authorization` + `Whatsapp.vue` +
   global webhook router untouched.**
