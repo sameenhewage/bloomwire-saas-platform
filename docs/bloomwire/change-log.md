@@ -15,8 +15,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR — OPEN (PR PRNUM_PLACEHOLDER, ready for review, not merged)
-- **PR:** PRNUM_PLACEHOLDER · **open, non-draft, ready for review (NOT merged)** · head SHA `HEADSHA_PLACEHOLDER` ·
+### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR — OPEN (PR #112, ready for review, not merged)
+- **PR:** #112 · **open, non-draft, ready for review (NOT merged)** · head SHA `a15fadd983838d728b07cc8e63bafb477727bbce` ·
   **Type:** docs-only discovery + ADR-0009. **No app code · no tests · no route · no DB migration/schema · no
   workflow/deploy · no production · no real Meta/WhatsApp calls.**
 - **What:** locks the Bloomwire **multiple WhatsApp inbox per account** business model before the 17E hardening
