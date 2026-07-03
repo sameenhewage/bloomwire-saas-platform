@@ -15,8 +15,41 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — OPEN (PR #113, ready for review, not merged)
-- **PR:** #113 · **open, non-draft, ready for review (NOT merged)** · **Type:** TEST-ONLY (RSpec).
+### Phase 17E.2 — Contact isolation & UI/permission polish — OPEN (PR PRNUM_PLACEHOLDER, ready for review, not merged)
+- **PR:** PRNUM_PLACEHOLDER · **open, non-draft, ready for review (NOT merged)** · **Type:** backend permission
+  fix (gated) + RSpec. **Product code changed: YES.** **No DB migration/schema · no frontend · no route · no
+  workflow/deploy · no production · no real Meta/WhatsApp · native `/whatsapp/authorization` + `Whatsapp.vue` +
+  global webhook router untouched.**
+- **Decision (resolves the 17E.0/17E.1 caveat):** a business **agent** may only list/search/open contacts
+  **reachable through their assigned inboxes** (via `contact_inboxes`); **admins see all**; a **shared** contact
+  (contact_inbox in ≥2 inboxes) is visible to agents of any of those inboxes; conversation isolation remains the
+  primary enforcement. **Gated** by the new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` toggle (master
+  AND-gated) — **OFF == stock Chatwoot** (agents see all contacts), so the invariant is preserved.
+- **What changed (backend, gated):**
+  1. New gate `Bloomwire::Features.restrict_agent_contact_visibility?` (+ `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY`).
+  2. New single seam `Bloomwire::ContactVisibility.scope(account:, user:)` — `account.contacts` for admin/stock;
+     for a gated agent, `where(id: contacts.joins(:contact_inboxes).where(inbox_id: assigned).select(:id))`
+     (subquery, distinct-safe, composes with sort/paginate/includes).
+  3. Routed every agent-facing contact READ path through the seam: `ContactsController#index/search/active/show`
+     (+ `update/avatar/destroy_custom_attributes` via `fetch_contact`), `Contacts::FilterService#base_relation`,
+     global `SearchService#filter_contacts`, and `contacts/base_controller#ensure_contact` (notes/labels/
+     attachments/conversations/contact_inboxes sub-resources → 404 for out-of-scope).
+- **Not changed:** admin visibility; conversation/inbox scoping; the global webhook router; native WhatsApp;
+  DB schema; frontend. **No new category entity; no duplicate contact/chat store.**
+- **Known limitation (documented, deferred):** direct ID-based access via **contact merge**, **CSAT report**
+  contact inclusion, **Shopify** integration, and the **conversation-create** contact lookup are NOT scoped in
+  this phase — they are mutations/reports/integrations requiring a known contact_id (not enumeration) and are
+  lower-risk than the list/search enumeration this phase closes. Export/import remain **admin-only** (safe).
+- **Security:** no secrets · no provider-credential mutation · no live Meta/WhatsApp · no Enterprise code touched.
+- **Validation:** new `contact_visibility_spec` 5/5 + `contact_isolation_spec` 13/13; regression
+  `contacts_controller_spec` 58/58, `multi_whatsapp_inbox_category_contract`/`conversation_finder`/
+  `permission_filter_service`/`contact_policy` 35/35, `features_spec` 18/18; RuboCop clean; `git diff --check`
+  clean. (One enterprise `companies` test fails pre-existing — proven via `git stash`, unrelated.) **No deploy ·
+  no production · dev remains `9b09f9e`.**
+
+### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — MERGED
+- **PR:** #113 · **merge SHA** `5df9f9d74a59057e099e82c1e5471bfff0c8e449` · **Status:** merged into `version_1`
+  (final tip `5df9f9d`). **Type:** TEST-ONLY (RSpec).
   **No product code · no DB migration/schema · no route · no frontend · no workflow/deploy · no production · no
   real Meta/WhatsApp calls (all stubbed).**
 - **What:** turns the 17E.0 discovery ("one account can own multiple WhatsApp inboxes") into regression-locked

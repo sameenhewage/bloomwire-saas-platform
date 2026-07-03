@@ -162,7 +162,9 @@ class SearchService
   end
 
   def filter_contacts
-    contacts_query = current_account.contacts.where(
+    # Phase 17E.2: route the global contact search through the Bloomwire contact-visibility seam so an agent
+    # can only find contacts reachable via their assigned inboxes (gate ON); admins/stock search all contacts.
+    contacts_query = Bloomwire::ContactVisibility.scope(account: current_account, user: current_user).where(
       "name ILIKE :search OR email ILIKE :search OR phone_number
       ILIKE :search OR identifier ILIKE :search", search: "%#{search_query}%"
     )

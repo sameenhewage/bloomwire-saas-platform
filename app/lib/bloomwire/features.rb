@@ -12,6 +12,9 @@ module Bloomwire::Features
     restrict_account_admin: 'BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN',
     restrict_provider_setup: 'BLOOMWIRE_RESTRICT_PROVIDER_SETUP',
     restrict_bot_management: 'BLOOMWIRE_RESTRICT_BOT_MANAGEMENT',
+    # Phase 17E.2: restrict a business AGENT's contact list/search/show to contacts reachable through their
+    # assigned inboxes (via contact_inboxes). Admins are unaffected. OFF == stock Chatwoot (agents see all).
+    restrict_agent_contact_visibility: 'BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY',
     privacy_hardening: 'BLOOMWIRE_PRIVACY_HARDENING',
     outgoing_gateway: 'BLOOMWIRE_OUTGOING_GATEWAY',
     custom_branding: 'BLOOMWIRE_CUSTOM_BRANDING'
@@ -73,6 +76,13 @@ module Bloomwire::Features
   # bot-management toggle ON. In managed mode bots are Ops/SuperAdmin-owned. The single gate the bot guard reads.
   def restrict_bot_management?
     master_enabled? && raw_enabled?(:restrict_bot_management)
+  end
+
+  # Phase 17E.2: True when a business AGENT's contact list/search/show must be scoped to contacts reachable
+  # through their assigned inboxes (multi-category/multi-inbox privacy): Bloomwire master mode ON AND the
+  # restrict toggle ON. Admins are always exempt (see Bloomwire::ContactVisibility). OFF == stock Chatwoot.
+  def restrict_agent_contact_visibility?
+    master_enabled? && raw_enabled?(:restrict_agent_contact_visibility)
   end
 
   # True when `name` is a managed-data InstallationConfig key that requires privacy hardening ON

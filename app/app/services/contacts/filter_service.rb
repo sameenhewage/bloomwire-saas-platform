@@ -30,7 +30,10 @@ class Contacts::FilterService < FilterService
   end
 
   def base_relation
-    @account.contacts.resolved_contacts(use_crm_v2: @account.feature_enabled?('crm_v2'))
+    # Phase 17E.2: route the filter base through the Bloomwire contact-visibility seam so an agent's filtered
+    # results are scoped to contacts reachable via their assigned inboxes (gate ON); admins/stock are unchanged.
+    Bloomwire::ContactVisibility.scope(account: @account, user: @user)
+                                .resolved_contacts(use_crm_v2: @account.feature_enabled?('crm_v2'))
   end
 
   def filter_config
