@@ -296,6 +296,26 @@ export const actions = {
       throw error;
     }
   },
+  // Phase 17D.3: managed self-serve WhatsApp Business App Coexistence signup. Same safe-DTO contract as the
+  // Standard flow (refresh the inbox list, return the DTO), but calls the dedicated coexistence endpoint
+  // (connection_mode=coexistence). No secrets (api_key/token/provider_config) are ever in the payload or response.
+  createBloomwireWhatsAppCoexistenceEmbeddedSignup: async (
+    { commit, dispatch },
+    params
+  ) => {
+    try {
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: true });
+      const response =
+        await WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup(params);
+      await dispatch('get');
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
+      sendAnalyticsEvent('whatsapp');
+      return response.data;
+    } catch (error) {
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
+      throw error;
+    }
+  },
   ...channelActions,
   // TODO: Extract other create channel methods to separate files to reduce file size
   // - createChannel

@@ -15,6 +15,43 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — OPEN (PR #111, ready for review, not merged)
+- **PR:** #111 · **open, non-draft, ready for review (NOT merged)** · head SHA `2964279742ad220074831042d0209765ee1c0b72` ·
+  **Type:** frontend enablement (Vue wizard + Vuex action + API client + i18n + Vitest). **No backend/controller/
+  service change · no DB migration/schema · no real Meta/WhatsApp calls (Meta SDK + window messaging mocked) ·
+  no native `/whatsapp/authorization` or `Whatsapp.vue` change · no per-channel webhook override · no app-side
+  duplicate chat storage · no secrets / no manual-credential UI · no deploy · no production.**
+- **Why:** Phase 17D.2 proved the webhook path is coexistence-safe (merged, `4a57564`); this slice flips the
+  Coexistence card in `BloomwireWhatsapp.vue` from **disabled / "Coming soon"** to a usable flow wired to the
+  dedicated Phase 17D.1 endpoint, so a customer can connect an **existing** WhatsApp Business App number.
+- **What changed (frontend only):**
+  1. **Coexistence card enabled.** Removed the disabled/"Coming soon" state; the card is now selectable (teal
+     "Available now" badge + "Connect existing number" CTA). Its prerequisites list is unchanged.
+  2. **New flow, shared form.** A `flow` = `standard | coexistence` ref reuses the same credential-free
+     Embedded-Signup form + `useWhatsappEmbeddedSignup` composable; on `FINISH` /
+     `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` it submits only the safe fields (`code`, `business_id`,
+     `waba_id`, `phone_number_id`).
+  3. **Dedicated endpoint.** New API method `WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup` →
+     `POST /api/v1/accounts/:id/bloomwire/whatsapp/coexistence_embedded_signup`, via new Vuex action
+     `inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup` (same safe-DTO contract as Standard).
+  4. **Standard unchanged.** Register New Number still posts to `…/bloomwire/whatsapp/embedded_signup` via
+     `createBloomwireWhatsAppEmbeddedSignup` (regression-locked by tests).
+  5. **i18n.** `COEXISTENCE.STATUS` → "Available now"; added `CTA`, `CONNECT_BUTTON`, `FORM_TITLE`, `FORM_DESC`.
+- **What was NOT changed:** native `/whatsapp/authorization` + `Whatsapp.vue`; role/permission guards
+  (`canSelfServeManagedWhatsapp` in `ChannelFactory` / `useBloomwireCapabilities` — agents/staff still cannot
+  reach WhatsApp setup); backend controller/service/routes; the webhook router/job; the data model. No new
+  tables, no duplicate chat/message store.
+- **Security:** **no secrets exposed** (UI never shows App Secret / Verify Token / Webhook URL / API token /
+  provider_config; the payload carries only the 4 non-secret signup fields — test-asserted) · **no
+  provider-credential mutation** · **no live Meta/WhatsApp calls** (SDK + `postMessage` mocked) · **no Enterprise
+  code touched.**
+- **Validation:** Vitest — `BloomwireWhatsapp.spec.js` 15/15, new `whatsappChannel.spec.js` 4/4, hook
+  `useWhatsappEmbeddedSignup.spec.js` 10/10; regression `store/inboxes/actions` 20/20, `ChannelFactory` 9/9,
+  `ChannelList` 8/8, `useBloomwireCapabilities` 9/9. ESLint clean (`--max-warnings=0`) on all changed JS/Vue;
+  `inboxMgmt.json` valid JSON.
+- **Residual risks / parked:** real coexistence Meta Embedded-Signup is **owner-operated E2E only** (no automated
+  real-Meta); dev remains `9b09f9e` until an explicit deploy; **17C.4** verify / go-live UX still parked.
+
 ### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — MERGED
 - **PR:** #109 · **merge SHA** `4a57564d7c1fbc54aeafbf9049f61b5b7a8b0795` · **approved head**
   `fbbbe14f06d6f49e5ff629b34788fd347718caf9` · **Status:** merged into `version_1` (final tip `4a57564`).

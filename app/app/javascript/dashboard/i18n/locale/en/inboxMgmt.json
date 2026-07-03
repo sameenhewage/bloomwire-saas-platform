@@ -336,8 +336,12 @@
             "COEXISTENCE": {
               "TITLE": "Connect Existing WhatsApp Business App",
               "BADGE": "Coexistence",
-              "STATUS": "Coming soon",
+              "STATUS": "Available now",
               "DESC": "Keep using your WhatsApp Business App while connecting the same number to Bloomwire.",
+              "CTA": "Connect existing number",
+              "FORM_TITLE": "Connect your existing WhatsApp Business App",
+              "FORM_DESC": "Link the number you already use in the WhatsApp Business App to Bloomwire and keep using both. We handle the technical setup for you — no API keys, tokens, or webhook configuration required.",
+              "CONNECT_BUTTON": "Connect existing number",
               "REQUIREMENTS_TITLE": "What you’ll need",
               "REQUIREMENTS": {
                 "APP_VERSION": "WhatsApp Business App v2.24.17 or newer",
