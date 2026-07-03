@@ -31,8 +31,23 @@ class Api::V1::Accounts::BulkActionsController < Api::V1::Accounts::BaseControll
     Contacts::BulkActionJob.perform_later(
       @current_account.id,
       current_user.id,
-      contact_params
+      scoped_contact_params
     )
+  end
+
+  # Phase 17E.2 (PR #114 review): a gated business agent may only bulk-act on contacts reachable through their
+  # assigned inboxes. Filter the requested contact IDs through the Bloomwire contact-visibility seam BEFORE
+  # enqueueing the async job, so out-of-scope IDs are never handed to the mutation (label add/remove/delete).
+  # Admins and the stock (gate OFF) state pass their IDs through unchanged — no behaviour change.
+  def scoped_contact_params
+    permitted = contact_params
+    return permitted unless Bloomwire::ContactVisibility.restricted_for?(account: @current_account, user: current_user)
+
+    # `contact_params` is a string-keyed hash, so read/write the `ids` key with a string (works for both a
+    # plain hash and ActionController::Parameters) to avoid leaving a stale, conflicting key behind.
+    visible_ids = Bloomwire::ContactVisibility.scope(account: @current_account, user: current_user)
+                                              .where(id: permitted['ids']).pluck(:id)
+    permitted.merge('ids' => visible_ids)
   end
 
   def delete_contact_action?
