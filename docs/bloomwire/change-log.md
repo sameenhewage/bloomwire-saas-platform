@@ -15,8 +15,9 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — OPEN (in-flight, not merged)
-- **PR:** _pending_ · **in-flight (NOT merged)** · **Type:** backend/webhook proof (specs + one minimal safe
+### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — OPEN (PR #109, ready for review, not merged)
+- **PR:** #109 · **open, non-draft, ready for review (NOT merged)** · head SHA
+  `8b956924d8c459a0f3fdd29f1da3d140d797bb87` · **Type:** backend/webhook proof (specs + one minimal safe
   guard) + proof doc. **No frontend enablement · no DB migration/schema · no real Meta/WhatsApp calls (fake
   payloads only) · no native `/whatsapp/authorization` carve-out · no per-channel webhook override · no app-side
   duplicate chat storage · no secrets · no deploy · no production.**

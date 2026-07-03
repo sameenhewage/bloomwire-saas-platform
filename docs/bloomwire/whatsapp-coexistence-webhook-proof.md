@@ -1,7 +1,8 @@
 # Phase 17D.2 — WhatsApp Business App Coexistence Webhook Proof
 
-Status: **open / in-flight** (PR #TBD, not merged). Backend/webhook proof only — **no frontend enablement**; the
-Coexistence card in `BloomwireWhatsapp.vue` remains **disabled / "Coming soon"** until Phase 17D.3.
+Status: **PR #109 — open, non-draft, ready for review (NOT merged)**; head SHA `8b956924d8c459a0f3fdd29f1da3d140d797bb87`.
+Backend/webhook proof only — **no frontend enablement**; the Coexistence card in `BloomwireWhatsapp.vue` remains
+**disabled / "Coming soon"** until Phase 17D.3. No deploy · no production · no migrations.
 
 Base: `version_1` @ `5002942a381ccd95dfd550afc4db4e6346c1493f`.
 
