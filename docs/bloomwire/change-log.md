@@ -15,6 +15,37 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17D.2 — WhatsApp Business App Coexistence webhook proof — OPEN (PR #109, ready for review, not merged)
+- **PR:** #109 · **open, non-draft, ready for review (NOT merged)** · head SHA
+  `8b956924d8c459a0f3fdd29f1da3d140d797bb87` · **Type:** backend/webhook proof (specs + one minimal safe
+  guard) + proof doc. **No frontend enablement · no DB migration/schema · no real Meta/WhatsApp calls (fake
+  payloads only) · no native `/whatsapp/authorization` carve-out · no per-channel webhook override · no app-side
+  duplicate chat storage · no secrets · no deploy · no production.**
+- **Why:** prove the existing global webhook router (ADR-0005) + stock `Webhooks::WhatsappEventsJob` safely handle
+  WhatsApp Business App **Coexistence** traffic before frontend enablement (17D.3). The Coexistence card stays
+  **disabled / "Coming soon"** until then.
+- **What (proven):**
+  1. **Global router routing — safe, no change.** The router keys only on `metadata.phone_number_id` + channel
+     alignment; it never inspects `connection_mode`, so a coexistence-created channel
+     (`source=bloomwire_managed`, `connection_mode=coexistence`) routes identically. Wrong `phone_number_id` fails
+     closed; routing is account-scoped.
+  2. **`smb_message_echoes` — safe, already supported (no change).** The job routes echoes to
+     `IncomingMessageWhatsappCloudService(..., outgoing_echo: true)` — the **outgoing** path — so an echo is not a
+     duplicate inbound customer message; stays account/inbox-scoped; no secrets logged.
+  3. **`smb_app_state_sync` — was unhandled → now safely ignored (minimal change).** Added an
+     `app_state_sync_event?` guard + `handle_app_state_sync` to `Webhooks::WhatsappEventsJob`: it logs one
+     redacted, content-free line and returns — **no inbound message processing, no message/conversation, no
+     crash**. Echo + inbound behavior unchanged.
+  4. **No duplicate storage** — no app-side chat/message tables; existing Chatwoot processing only.
+- **Files:** `app/app/jobs/webhooks/whatsapp_events_job.rb` (only production change — the app-state-sync guard) ·
+  `docs/bloomwire/whatsapp-coexistence-webhook-proof.md` (proof) · specs
+  (`spec/services/bloomwire/webhooks/whatsapp_router_spec.rb`, `spec/jobs/webhooks/whatsapp_events_job_spec.rb`,
+  `spec/support/bloomwire_whatsapp_e2e_helpers.rb`).
+- **Not done (future):** **17D.3** frontend enablement (Coexistence card stays disabled until then).
+- **Validation:** targeted `rspec` router + events-job = **43 examples, 0 failures**; broader webhook regression
+  (router, job, PII logging, request logging, inbound e2e) = **58 examples, 0 failures**; RuboCop clean. **No real
+  Meta calls** (fake payloads, no HTTP). Native flows unchanged; `BloomwireWhatsapp.vue` untouched (still disabled).
+
 ### Phase 17D.1 — WhatsApp Business App Coexistence backend contract — MERGED
 - **PR:** #107 · **merge SHA** `ebdcba2831fd40330eaefd5a6dfe87f97a00b867` · **approved head**
   `67b63cdf3b5cd15c1ac0ec0271cf75d992ca1fc4` · **Status:** merged into `version_1` (final tip `ebdcba2`, after

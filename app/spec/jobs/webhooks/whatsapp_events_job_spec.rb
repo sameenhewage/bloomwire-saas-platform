@@ -371,4 +371,58 @@ RSpec.describe Webhooks::WhatsappEventsJob do
       job.perform_now(wb_params)
     end
   end
+
+  # Phase 17D.2 — WhatsApp Business App Coexistence webhook proof. The channel is a normal whatsapp_cloud channel
+  # marked provider_config[source]=bloomwire_managed + [connection_mode]=coexistence.
+  describe 'WhatsApp Business App coexistence (Phase 17D.2)' do
+    before do
+      channel.update!(provider_config: channel.provider_config.merge('source' => 'bloomwire_managed',
+                                                                     'connection_mode' => 'coexistence'))
+    end
+
+    # smb_message_echoes: a reply the business sent FROM the WhatsApp Business App. `from` = business number,
+    # `to` = contact (reversed from inbound).
+    def coexistence_echo_params
+      wb_params = params.deep_dup
+      change = wb_params[:entry].first[:changes].first
+      change[:field] = 'smb_message_echoes'
+      change[:value][:message_echoes] = [
+        { from: channel.phone_number.delete('+'), to: '15559990001', id: 'wamid-echo-1',
+          text: { body: 'Reply sent from the WhatsApp Business App' }, type: 'text' }
+      ]
+      wb_params
+    end
+
+    def app_state_sync_params
+      wb_params = params.deep_dup
+      change = wb_params[:entry].first[:changes].first
+      change[:field] = 'smb_app_state_sync'
+      change[:value][:state_sync] = [{ type: 'contact', action: 'upsert' }]
+      wb_params
+    end
+
+    it 'routes an smb_message_echoes payload to the OUTGOING echo path (never inbound)' do
+      allow(Whatsapp::IncomingMessageWhatsappCloudService).to receive(:new).and_return(process_service)
+      expect(Whatsapp::IncomingMessageWhatsappCloudService).to receive(:new)
+        .with(inbox: channel.inbox, params: coexistence_echo_params, outgoing_echo: true)
+      job.perform_now(coexistence_echo_params)
+    end
+
+    it 'safely ignores an smb_app_state_sync payload — no inbound message processing, no crash' do
+      allow(Whatsapp::IncomingMessageWhatsappCloudService).to receive(:new).and_return(process_service)
+      allow(Whatsapp::IncomingMessageService).to receive(:new).and_return(process_service)
+      aggregate_failures do
+        expect(Whatsapp::IncomingMessageWhatsappCloudService).not_to receive(:new)
+        expect(Whatsapp::IncomingMessageService).not_to receive(:new)
+        expect { job.perform_now(app_state_sync_params) }.not_to raise_error
+      end
+    end
+
+    it 'creates no message or conversation for an smb_app_state_sync payload' do
+      aggregate_failures do
+        expect { job.perform_now(app_state_sync_params) }.not_to change(Message, :count)
+        expect { job.perform_now(app_state_sync_params) }.not_to change(Conversation, :count)
+      end
+    end
+  end
 end

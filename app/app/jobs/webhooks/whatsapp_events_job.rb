@@ -32,11 +32,24 @@ class Webhooks::WhatsappEventsJob < MutexApplicationJob
   end
 
   def process_events(channel, params)
+    return handle_app_state_sync if app_state_sync_event?(params)
+
     if message_echo_event?(params)
       handle_message_echo(channel, params)
     else
       handle_message_events(channel, params)
     end
+  end
+
+  # WhatsApp Business App coexistence emits `smb_app_state_sync` events (field: "smb_app_state_sync") carrying
+  # app-level sync metadata, NOT an inbound customer message. Acknowledge and ignore — never run inbound message
+  # processing — so no spurious or duplicate chat data is created. No payload content is logged (redacted).
+  def app_state_sync_event?(params)
+    params.dig(:entry, 0, :changes, 0, :field) == 'smb_app_state_sync'
+  end
+
+  def handle_app_state_sync
+    Rails.logger.info('[WHATSAPP] Ignoring smb_app_state_sync coexistence event (no inbound message)')
   end
 
   # Detects if the webhook is an SMB message echo event (message sent from WhatsApp Business app)

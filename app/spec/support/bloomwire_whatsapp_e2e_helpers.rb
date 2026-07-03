@@ -4,7 +4,7 @@
 # builder, inbound text / status webhook payload builders, an aligned whatsapp_cloud channel helper, the
 # Graph send URL, a Redis dedup cleaner, and a WebMock no-real-Meta guard. All values are deliberately fake;
 # no secret is ever a real credential.
-module BloomwireWhatsappE2EHelpers
+module BloomwireWhatsappE2EHelpers # rubocop:disable Metrics/ModuleLength
   META_GRAPH_HOST = 'graph.facebook.com'.freeze
 
   # --- fake, non-secret credentials (never real) -------------------------------------------------------
@@ -94,6 +94,45 @@ module BloomwireWhatsappE2EHelpers
     }
   end
   # rubocop:enable Metrics/ParameterLists
+
+  # Phase 17D.2 — WhatsApp Business App Coexistence "echo": a message the business sent FROM the WhatsApp
+  # Business App (field: smb_message_echoes, message_echoes[]). `from` is the business number, `to` is the
+  # contact (reversed from inbound). The existing pipeline treats this as an OUTGOING echo, not inbound.
+  def bw_echo_payload(phone_number_id:, display_phone_number: '15551230001', to: '15559990001',
+                      wamid: 'wamid.ECHO-1', body: 'reply sent from the WhatsApp Business App')
+    {
+      'object' => 'whatsapp_business_account',
+      'entry' => [{
+        'id' => 'WABA-FAKE',
+        'changes' => [{
+          'field' => 'smb_message_echoes',
+          'value' => {
+            'metadata' => { 'display_phone_number' => display_phone_number, 'phone_number_id' => phone_number_id },
+            'message_echoes' => [{ 'from' => display_phone_number, 'to' => to, 'id' => wamid,
+                                   'timestamp' => '1700000100', 'text' => { 'body' => body }, 'type' => 'text' }]
+          }
+        }]
+      }]
+    }
+  end
+
+  # Phase 17D.2 — WhatsApp Business App Coexistence app-state-sync event (field: smb_app_state_sync). Carries
+  # app-level sync metadata, NOT an inbound customer message. Must be acknowledged/ignored (no message created).
+  def bw_app_state_sync_payload(phone_number_id:, display_phone_number: '15551230001')
+    {
+      'object' => 'whatsapp_business_account',
+      'entry' => [{
+        'id' => 'WABA-FAKE',
+        'changes' => [{
+          'field' => 'smb_app_state_sync',
+          'value' => {
+            'metadata' => { 'display_phone_number' => display_phone_number, 'phone_number_id' => phone_number_id },
+            'state_sync' => [{ 'type' => 'contact', 'action' => 'upsert' }]
+          }
+        }]
+      }]
+    }
+  end
 
   # --- POST to the Bloomwire global router endpoint -----------------------------------------------------
   # signature: :valid (default) signs with `secret`; pass a String to force an exact (e.g. bad) signature;
