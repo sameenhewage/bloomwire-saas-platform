@@ -20,14 +20,14 @@
 ## A. Current State  *(keep this live — update at the end of every session)*
 
 - **`version_1` tip:** `4a57564d7c1fbc54aeafbf9049f61b5b7a8b0795`  (PR #109 merged — Phase 17D.2 Coexistence webhook proof)
-- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2 not deployed.
+- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2/17D.3 not deployed.
 - **Latest completed / merged:** **PR #109** — Phase **17D.2** WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by `phone_number_id`; `smb_message_echoes` → existing **outgoing** echo path; `smb_app_state_sync` → new **safe-ignore guard** in `Webhooks::WhatsappEventsJob`; proof doc; fake payloads), merged at `4a57564` (approved head `fbbbe14`). Before it: PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open:** **none** (17D.2 merged). Next feature milestone = **17D.3** (frontend enablement — flip the Coexistence card from **disabled/"Coming soon"** to live against the 17D.1 endpoint) — not started.
+- **In-flight / open (NOT merged):** **Phase 17D.3** — WhatsApp Business App **Coexistence frontend enablement**. **PR PRNUM_PLACEHOLDER is open, non-draft, and ready for review** (head `HEADSHA_PLACEHOLDER`; branch `feature/bloomwire-phase-17d3-coexistence-frontend`) — **frontend only; not merged, not deployed.** Enables the Coexistence card in `BloomwireWhatsapp.vue` (removes disabled/"Coming soon"; teal "Available now" + "Connect existing number" CTA); a `flow=coexistence` ref reuses the credential-free Embedded-Signup form + `useWhatsappEmbeddedSignup`, posting only `code`/`business_id`/`waba_id`/`phone_number_id` to the new `createBloomwireWhatsAppCoexistenceEmbeddedSignup` action → `WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup` → `POST …/bloomwire/whatsapp/coexistence_embedded_signup`. **Standard flow unchanged** (still `…/embedded_signup`). **No backend/controller/service/route/migration change; no native `/whatsapp/authorization` or `Whatsapp.vue` change; role gates intact; no secrets/manual-credential UI; no real Meta (SDK + postMessage mocked).** Vitest: component 15/15, new `whatsappChannel.spec.js` 4/4, hook 10/10; regression actions 20/20, ChannelFactory 9/9, ChannelList 8/8, capabilities 9/9; ESLint clean; JSON valid.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Coexistence follow-ups:** **17D.2** webhook/coexistence proof is **merged (PR #109, `4a57564`)**; next is **17D.3** frontend enablement (flip the wizard Coexistence card from disabled/"Coming soon" to live against the 17D.1 endpoint). Then **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
+  1. **Coexistence follow-ups:** **17D.3** frontend enablement is **in-flight (PR PRNUM_PLACEHOLDER, open / ready for review, not merged)** — the wizard Coexistence card is now enabled and wired to the 17D.1 endpoint. Next is **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
   2. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   3. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
   4. Owner-assisted before/after screenshots for 15F.6 + 15F.UI; **Phase 15F.5** (POST preview hardening); **Phase 15F.4** (prod email deliverability, PR #87).
@@ -74,6 +74,29 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-03 — Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement (PR PRNUM_PLACEHOLDER, open / ready for review)
+- **Built (branch `feature/bloomwire-phase-17d3-coexistence-frontend` off `version_1` `35a1a14`):** frontend
+  enablement of the Coexistence card in the customer WhatsApp setup wizard. **Product truth:** *user expects* to
+  connect an **existing** WhatsApp Business App number; *system* showed the card **disabled/"Coming soon"* (17C.3);
+  *done* = card selectable → Meta Embedded Signup → dedicated coexistence endpoint → managed inbox, Standard flow
+  untouched.
+- **Changed (frontend only, 6 files):** `BloomwireWhatsapp.vue` (enable card; `flow` ref + `startCoexistence`;
+  flow-aware form title/desc/button + dispatch), `whatsappChannel.js` (new
+  `createBloomwireCoexistenceEmbeddedSignup`), `store/modules/inboxes.js` (new action
+  `createBloomwireWhatsAppCoexistenceEmbeddedSignup`), `i18n/locale/en/inboxMgmt.json` (`STATUS`→"Available now";
+  new `CTA`/`CONNECT_BUTTON`/`FORM_TITLE`/`FORM_DESC`), `specs/BloomwireWhatsapp.spec.js` (coexistence flow +
+  card-enabled + standard-regression), new `api/specs/channel/whatsappChannel.spec.js` (endpoint URLs).
+- **Endpoint:** Coexistence → `POST /api/v1/accounts/:id/bloomwire/whatsapp/coexistence_embedded_signup`
+  (payload only `code`/`business_id`/`waba_id`/`phone_number_id`). Standard unchanged (`…/embedded_signup`).
+- **Validation:** Vitest — component **15/15**, new API client **4/4**, hook **10/10**; regression
+  `inboxes/actions` **20/20**, `ChannelFactory` **9/9**, `ChannelList` **8/8**, `useBloomwireCapabilities` **9/9**.
+  ESLint clean (`--max-warnings=0`) on all changed JS/Vue; `inboxMgmt.json` valid JSON.
+- **Security / boundaries:** no secrets or manual-credential UI (only the 4 non-secret fields — test-asserted);
+  no live Meta/WhatsApp (SDK + `postMessage` mocked); native `/whatsapp/authorization` + `Whatsapp.vue` and the
+  `canSelfServeManagedWhatsapp` role gate untouched; no backend/route/migration/schema change; no Enterprise code;
+  no duplicate chat store. **PR PRNUM_PLACEHOLDER — open, non-draft, ready for review (not merged); head
+  `HEADSHA_PLACEHOLDER`.** No deploy · dev remains `9b09f9e`. Next: **17C.4** verify / go-live UX.
 
 ### 2026-07-03 — Phase 17D.2 — WhatsApp Business App Coexistence webhook proof (PR #109, merged)
 - **Built (branch `feature/bloomwire-phase-17d2-coexistence-webhook-proof` off `version_1` `5002942`):** a

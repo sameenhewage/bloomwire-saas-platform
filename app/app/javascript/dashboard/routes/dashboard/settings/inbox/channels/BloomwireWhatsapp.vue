@@ -2,8 +2,8 @@
 // Phase 17C.3: managed self-serve customer WhatsApp connection wizard (Bloomwire). Rendered by ChannelFactory in
 // place of the native WhatsApp setup when `canSelfServeManagedWhatsapp` is true. It opens on a connection-choice
 // screen with two options:
-//   1. Connect Existing WhatsApp Business App (Coexistence) — DISABLED / "Coming soon" until backend coexistence
-//      support exists. It never calls any backend endpoint.
+//   1. Connect Existing WhatsApp Business App (Coexistence) — Phase 17D.3: enabled. Reuses the same Meta Embedded
+//      Signup + credential-free form as Standard, but posts to the dedicated coexistence endpoint (17D.1).
 //   2. Register New Number (Standard) — the WhatsApp Cloud API number-registration flow (available now).
 // The Standard flow is ONLY number registration — there is deliberately NO "Add Agents" step (Chatwoot's existing
 // inbox-agent management owns that). It asks the customer for NO credentials (no App Secret / Verify Token /
@@ -22,8 +22,11 @@ const store = useStore();
 const { t } = useI18n();
 const { isAuthenticating, runEmbeddedSignup } = useWhatsappEmbeddedSignup();
 
-// 'choose' = connection-choice screen (default); 'register' = Standard number-registration form.
+// 'choose' = connection-choice screen (default); 'register' = the number/connect form (shared by both flows).
 const mode = ref('choose');
+// 'standard' = Register New Number (Cloud API); 'coexistence' = Connect Existing WhatsApp Business App (17D.3).
+// Both reuse the same credential-free form + Meta Embedded Signup; only the target endpoint differs.
+const flow = ref('standard');
 const inboxName = ref('');
 const expectedNumber = ref('');
 const isProcessing = ref(false);
@@ -60,6 +63,14 @@ const coexistenceRequirements = computed(() => [
 
 const startRegister = () => {
   errorMessage.value = '';
+  flow.value = 'standard';
+  mode.value = 'register';
+};
+
+// Phase 17D.3: enter the same credential-free form for the Coexistence flow (existing WhatsApp Business App).
+const startCoexistence = () => {
+  errorMessage.value = '';
+  flow.value = 'coexistence';
   mode.value = 'register';
 };
 
@@ -67,6 +78,31 @@ const backToChoose = () => {
   errorMessage.value = '';
   mode.value = 'choose';
 };
+
+const isCoexistence = computed(() => flow.value === 'coexistence');
+// Flow-specific copy for the shared form: Coexistence makes it clear this connects an EXISTING number. Static
+// i18n keys only (no dynamic keys) to satisfy @intlify/vue-i18n lint.
+const formTitle = computed(() =>
+  isCoexistence.value
+    ? t(
+        'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.COEXISTENCE.FORM_TITLE'
+      )
+    : t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.TITLE')
+);
+const formDesc = computed(() =>
+  isCoexistence.value
+    ? t(
+        'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.COEXISTENCE.FORM_DESC'
+      )
+    : t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DESC')
+);
+const formButtonLabel = computed(() =>
+  isCoexistence.value
+    ? t(
+        'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.COEXISTENCE.CONNECT_BUTTON'
+      )
+    : t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REGISTER_BUTTON')
+);
 
 const showLoader = computed(() => isAuthenticating.value || isProcessing.value);
 const isComplete = computed(() => Boolean(result.value?.inbox?.id));
@@ -121,11 +157,12 @@ const register = async () => {
 
   isProcessing.value = true;
   try {
-    // Only the non-secret Meta signup credentials are sent — no typed number, no credentials.
-    const dto = await store.dispatch(
-      'inboxes/createBloomwireWhatsAppEmbeddedSignup',
-      credentials
-    );
+    // Only the non-secret Meta signup credentials are sent — no typed number, no credentials. The Coexistence
+    // flow (17D.3) posts to its own endpoint; the Standard flow is unchanged. Both return the same safe DTO.
+    const action = isCoexistence.value
+      ? 'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup'
+      : 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
+    const dto = await store.dispatch(action, credentials);
     result.value = dto;
     await maybeRenameInbox();
   } catch (_) {
@@ -231,7 +268,7 @@ const register = async () => {
       </div>
     </div>
 
-    <!-- Connection choice: two options. Coexistence is disabled/coming-soon and never calls the backend. -->
+    <!-- Connection choice: two options. Both launch Meta Embedded Signup; each posts to its own endpoint. -->
     <div v-else-if="mode === 'choose'" data-testid="bloomwire-wa-choose">
       <div class="flex flex-col items-start mb-6 text-start">
         <h3 class="mb-2 text-base font-medium text-n-slate-12">
@@ -243,10 +280,10 @@ const register = async () => {
       </div>
 
       <div class="flex flex-col gap-4">
-        <!-- Option 1: Connect Existing WhatsApp Business App (Coexistence) — DISABLED / coming soon. -->
+        <!-- Option 1: Connect Existing WhatsApp Business App (Coexistence) — Phase 17D.3: enabled. -->
         <div
           data-testid="bloomwire-wa-choice-coexistence"
-          class="rounded-xl border border-n-weak p-4 opacity-75"
+          class="rounded-xl border border-n-weak p-4"
         >
           <div class="flex flex-wrap items-center gap-2 mb-1">
             <h4 class="text-sm font-medium text-n-slate-12">
@@ -267,7 +304,7 @@ const register = async () => {
             </span>
             <span
               data-testid="bloomwire-wa-coexistence-status"
-              class="text-xs px-2 py-0.5 rounded-full bg-n-amber-3 text-n-amber-11"
+              class="text-xs px-2 py-0.5 rounded-full bg-n-teal-3 text-n-teal-11"
             >
               {{
                 $t(
@@ -301,15 +338,15 @@ const register = async () => {
             </li>
           </ul>
           <NextButton
-            disabled
-            faded
-            slate
+            solid
+            teal
             data-testid="bloomwire-wa-coexistence-cta"
             :label="
               $t(
-                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.COEXISTENCE.STATUS'
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.COEXISTENCE.CTA'
               )
             "
+            @click="startCoexistence"
           />
         </div>
 
@@ -385,11 +422,14 @@ const register = async () => {
             <Icon icon="i-woot-whatsapp" class="text-n-slate-10 size-6" />
           </div>
         </div>
-        <h3 class="mb-2 text-base font-medium text-n-slate-12">
-          {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.TITLE') }}
+        <h3
+          data-testid="bloomwire-wa-form-title"
+          class="mb-2 text-base font-medium text-n-slate-12"
+        >
+          {{ formTitle }}
         </h3>
         <p class="text-sm leading-6 text-n-slate-11">
-          {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DESC') }}
+          {{ formDesc }}
         </p>
       </div>
 
@@ -457,9 +497,7 @@ const register = async () => {
             data-testid="bloomwire-wa-register"
             :is-loading="showLoader"
             :disabled="showLoader"
-            :label="
-              $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REGISTER_BUTTON')
-            "
+            :label="formButtonLabel"
           />
         </div>
       </form>
