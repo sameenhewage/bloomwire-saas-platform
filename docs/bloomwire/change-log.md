@@ -15,6 +15,42 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — OPEN (docs‑only, not merged)
+- **Type:** DISCOVERY + PLANNING (docs‑only). **Product code changed: NO.** No migration/schema · no frontend · no
+  route · no deploy · no production · no real Meta/WhatsApp/Shopify. Base `version_1` `096f619`; DEV runtime `4525bea`.
+- **What:** new `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md` — evidence‑backed design for
+  managing multiple WhatsApp inboxes, business categories/departments, and staff using existing Chatwoot primitives.
+- **Key architecture conclusion:** **`Inbox` and `Team` are independent (no FK, no `team_id` on inboxes, no join
+  table).** "Category/Department = Team + Inbox(es)" is **convention‑only** today (parallel `InboxMember` +
+  `TeamMember`; auto‑assign already intersects `inbox ∩ team` members). **No new Category entity is needed** — DEV
+  already uses Teams ("Area 1"/"Area 2") as categories. All admin‑vs‑agent boundaries are **already backend‑enforced**.
+- **LOCKED Phase 17F permission model (backend‑enforced; §5a):** **Admin** — list/view/configure **every** inbox; start
+  & manage the Bloomwire‑approved **Standard + Coexistence** managed setup; manage inbox members, teams/categories, and
+  staff. **Agent** — list/view **only** `InboxMember`‑assigned inboxes; access only conversations/contacts reachable via
+  assigned inboxes; **cannot** create a WhatsApp inbox, **cannot** access Standard/Coexistence setup, **cannot** modify
+  provider/setup config, **cannot** bypass via direct routes/API. Verified in code: `InboxPolicy` (admin‑only writes;
+  scope = `assigned_inboxes`), managed embedded‑signup controllers enforce `check_admin_authorization?` +
+  `ensure_managed_whatsapp_self_serve!` (agent → not‑authorized even via direct API), `PermissionFilterService` +
+  `ContactVisibility`. **17F.1 UI implication:** the "Categories & Inboxes" overview is **administrator‑only** and shows
+  **all** account inboxes; agent operational selectors keep **assigned‑inbox‑only**; **no agent‑facing WhatsApp setup
+  CTA/route**. Frontend hiding alone is **not** sufficient — these are invariants for all 17F slices.
+- **Recommended UX:** **Option C (Hybrid)** — a thin Bloomwire "Categories & Inboxes" overview that **composes** and
+  **deep‑links** the existing Chatwoot inbox/team/agent editors + a guided "add WhatsApp inbox → assign to
+  category(team) → assign staff to both memberships" flow that closes the only real gap (membership drift).
+- **Proposed slices (feature‑flagged; OFF ⇒ stock):** **17F.1 admin overview — READ‑ONLY, zero‑schema** (no writes, no
+  membership sync, no orchestration; reuse existing inbox/team/agent stores + routes) · 17F.2 guided
+  add‑inbox‑to‑category · 17F.3 unified staff membership · **17F.4 category↔inbox mapping — DEFERRED & NOT authorized by
+  17F.0** · 17F.5 UI states/responsive · 17F.6 authenticated DEV E2E.
+- **Schema governance (default):** **no schema change; no new Category model/table/entity.** 17F.1–17F.3 must use
+  existing Chatwoot primitives (convention‑only). A persistent Inbox↔Team mapping or reversible data tag may be
+  **considered later only if runtime evidence proves convention‑only is insufficient**, and **any migration, schema
+  field, JSON metadata tag, or persistent mapping requires a separate design review + explicit owner approval — Phase
+  17F.0 does not authorize it.**
+- **Go/No‑Go for 17F.1:** **GO** (zero schema risk; pure composition).
+- **Method:** 4 read‑only code sub‑agents + authenticated DEV admin runtime inspection (Chrome DevTools MCP, PHI masked).
+  Runtime pages inspected: inbox list/settings, WhatsApp Standard/Coexistence setup, Teams, Agents, contacts, nav/IA.
+  All Bloomwire gates verified ON on DEV. **No product code · no deploy · production untouched · no real Meta.**
+
 ### Phase 17E.4 — Contact ID hardening — MERGED (PR #116, merge SHA `4525bea6baf8c17315436982f0d70106508b9c57`)
 - **PR:** #116 · **merged into `version_1` (tip `4525bea`)** via admin merge (branch policy required a review; CI was
   8/8 green) · **Type:** backend permission hardening (gated) + RSpec.
