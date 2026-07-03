@@ -322,6 +322,12 @@
 - **Key finding:** `Inbox` ↔ `Team` are independent (no FK / no `team_id` / no join). Category = Team + Inbox(es) is
   **convention‑only** (parallel `InboxMember` + `TeamMember`; auto‑assign intersects `inbox ∩ team`). Backend admin/agent
   isolation already enforced (policies + Bloomwire gates, all ON on DEV).
+- **Locked permission model (backend‑enforced; doc §5a):** admin manages **all** inboxes + Standard/Coexistence managed
+  setup + members/teams/staff; agent sees **only** `InboxMember` inboxes + reachable conversations/contacts and
+  **cannot** create a WhatsApp inbox / access Standard‑Coexistence setup / modify provider config / bypass via direct
+  API (managed embedded‑signup controllers enforce `check_admin_authorization?`). 17F.1 overview is admin‑only (shows all
+  inboxes); agent selectors stay assigned‑inbox‑only; no agent WhatsApp‑setup CTA/route. Frontend hiding alone is not
+  sufficient.
 - **Recommendation:** **Option C (Hybrid)** — compose + deep‑link existing editors + guided dual‑membership add flow.
   Slices 17F.1–17F.6; **Go for 17F.1** (read‑only overview, zero schema risk).
 - **Validation:** docs‑only; no product code; no migration/schema; no deploy; no real Meta/WhatsApp/Shopify; production

@@ -92,11 +92,20 @@
   Admin‑vs‑agent boundaries are already **backend‑enforced** (Inbox/Team/User/Conversation/Contact policies + Bloomwire
   gates). The **only real gap is membership drift** (staff on Team but not Inbox, or vice‑versa) + the absence of a
   unified surface.
+- **LOCKED Phase 17F permission model (backend‑enforced; doc §5a):** **Admin** lists/views/configures **every** inbox,
+  starts & manages the approved **Standard + Coexistence** managed setup, and manages inbox members/teams/staff.
+  **Agent** sees **only** `InboxMember`‑assigned inboxes + their reachable conversations/contacts, and **cannot** create
+  a WhatsApp inbox / access Standard or Coexistence setup / modify provider config / bypass via direct routes/API —
+  verified: `InboxPolicy` (admin‑only writes; scope=`assigned_inboxes`), managed embedded‑signup controllers enforce
+  `check_admin_authorization?` (agent → not‑authorized even via direct API), `PermissionFilterService` +
+  `ContactVisibility`. **17F.1**: "Categories & Inboxes" overview is **administrator‑only** (shows all account inboxes);
+  agent operational selectors stay assigned‑inbox‑only; **no agent‑facing WhatsApp setup CTA/route**. These are 17F
+  invariants; frontend hiding alone is not sufficient.
 - **Recommended UX: Option C (Hybrid)** — thin Bloomwire "Categories & Inboxes" overview that composes existing stores
   and **deep‑links** the existing Chatwoot inbox/team/agent editors + a guided "add WhatsApp inbox → assign to
   category(team) → assign staff to both memberships" flow (writes both memberships at once ⇒ closes drift). Slices:
   17F.1 read‑only overview → 17F.2 guided add → 17F.3 unified staff membership → 17F.4 category↔inbox mapping +
-  enforcement (only slice that may touch schema — a **data tag**, owner‑approved, **never a new entity**) → 17F.5 UI
+  enforcement — **DEFERRED & NOT authorized by 17F.0** (default = no schema, no new entity; any persistent mapping/data‑tag ⇒ separate design review + explicit owner approval) → 17F.5 UI
   states/responsive → 17F.6 authenticated DEV E2E. All feature‑flagged (OFF ⇒ stock Chatwoot). **Go/No‑Go for 17F.1: GO.**
 - **Docs‑only** (this doc + change‑log + ledger md/html + SESSION‑LOG). No product code · no migration/schema · no
   deploy · production untouched · no real Meta/WhatsApp/Shopify. **This ships in a docs‑only PR — do not auto‑merge.**

@@ -93,7 +93,7 @@ Legend: ✅ allowed · ❌ blocked (403/Pundit) · 🔒 backend‑enforced (not 
 |---|---|---|---|
 | List all account inboxes | n/a (platform) | ✅ (policy_scope = all) 🔒 | ✅ but **only assigned** (`assigned_inboxes`) 🔒 |
 | Create native inbox / native WhatsApp | n/a | ❌ `restrict_native_whatsapp_setup!` + `restrict_inbox_creation!` (gates ON) 🔒 | ❌ (admin‑only anyway) 🔒 |
-| **Create WhatsApp inbox via managed embedded signup (Standard/Coexistence)** | n/a | ✅ (sanctioned managed path; separate controller) 🔒 | ❌ |
+| **Create WhatsApp inbox via managed embedded signup (Standard/Coexistence)** | n/a | ✅ (sanctioned managed path) 🔒 | ❌ `check_admin_authorization?` + `ensure_managed_whatsapp_self_serve!` (agent → not‑authorized, even via direct API) 🔒 |
 | Edit / delete inbox | n/a | ✅ (admin) but managed‑provider destroy ❌ when gated 🔒 | ❌ 🔒 |
 | Manage `InboxMember` | n/a | ✅ (admin) 🔒 | ❌ 🔒 |
 | Create/edit/delete Team, manage `TeamMember` | n/a | ✅ (business‑admin‑owned, 11B.7B) 🔒 | ❌ 🔒 |
@@ -105,6 +105,32 @@ Legend: ✅ allowed · ❌ blocked (403/Pundit) · 🔒 backend‑enforced (not 
 | Merge/attach/Shopify‑orders for a contact | n/a | ✅ all 🔒 | ✅ **only in‑scope** (17E.4: 404/422) 🔒 |
 
 **Conclusion:** the admin‑vs‑agent boundary the UI needs is **already enforced in the backend**. 17F UI is a *composition of already‑authorized actions*; frontend hiding is convenience, not security.
+
+### 5a. LOCKED Phase 17F permission model (backend‑enforced — frontend hiding is NOT sufficient)
+
+This is the **authoritative, locked permission contract for all of Phase 17F**. Every rule is **enforced server‑side** (Pundit policies + Bloomwire gates + `check_admin_authorization?`), so **direct routes / API calls cannot bypass it**. No 17F slice may weaken these; changing them requires explicit owner approval.
+
+**Business Owner / Account Administrator — CAN:**
+- **List & view every inbox** in the account — `InboxPolicy#index?` + `policy_scope` (admin ⇒ `Current.account.inboxes`). 🔒
+- **Configure & manage every** account inbox — `InboxPolicy#create?/update?/destroy? => administrator?`. 🔒
+- **Start & manage the Bloomwire‑approved managed WhatsApp flows — Standard and Coexistence** — `Bloomwire::Whatsapp::EmbeddedSignupsController` + `CoexistenceEmbeddedSignupsController`, each `before_action :ensure_managed_whatsapp_self_serve!` + `:check_admin_authorization?`. 🔒
+- **Manage inbox members, teams/categories, and staff assignments** — `InboxMembersController` / `TeamsController` + `TeamMembersController` / `AgentsController` (admin‑only via `InboxPolicy` / `TeamMemberPolicy` / `UserPolicy`). 🔒
+
+**Business Staff / Agent — CAN ONLY / CANNOT:**
+- **List & view only inboxes assigned via `InboxMember`** — `InboxPolicy::Scope => user.assigned_inboxes` (agent ⇒ `inboxes` through `inbox_members`); `InboxPolicy#show? => assigned_inboxes.include?(record)`. 🔒
+- **Access only conversations & contacts reachable through assigned inboxes** — `Conversations::PermissionFilterService` (`where(inbox: user.inboxes)`) + `Bloomwire::ContactVisibility.scope` (gate ON). 🔒
+- **CANNOT create a WhatsApp inbox** — `InboxPolicy#create? => administrator?`; native path also blocked by `restrict_native_whatsapp_setup!`. 🔒
+- **CANNOT access Standard or Coexistence setup** — managed signup controllers enforce `check_admin_authorization?` (agent ⇒ Pundit not‑authorized), even via direct API. 🔒
+- **CANNOT modify WhatsApp provider/setup configuration** — `InboxPolicy#update? => administrator?` + `restrict_native_whatsapp_setup!` / `restrict_external_provider_channel_setup!`. 🔒
+- **CANNOT bypass via direct routes/API** — every rule above is controller/policy‑level (server‑side), independent of any UI gating. 🔒
+
+**Phase 17F.1 UI implications (locked):**
+- The **"Categories & Inboxes" admin overview is administrator‑only** — route `permissions:['administrator']` **and** a backend admin‑only read policy (not UI‑only).
+- The admin overview shows **all account inboxes**.
+- Agent **operational inbox selectors continue to show assigned inboxes only** (existing `assigned_inboxes` behavior — unchanged).
+- **No agent‑facing WhatsApp setup CTA or route** — and the backend rejects it regardless.
+
+These rules are **invariants for Phase 17F**; the 17F.1 read‑only overview and all later slices must preserve them, and TDD (§11) must include admin‑200 / agent‑403 request+policy specs (incl. direct‑API bypass attempts) for each.
 
 ---
 
@@ -190,7 +216,7 @@ Build a Bloomwire **"Categories & Inboxes" overview** (admin) that:
 - surfaces **drift warnings** ("staff on team but not inbox", "category without inbox").
 - **Agent** gets a read‑only "My categories/inboxes" panel driven entirely by existing scoped endpoints.
 
-**Category↔Inbox link decision (key):** avoid a new entity. Options, in order of preference — (a) **reuse an existing per‑inbox data field** to store the linked `team_id` (a *data tag*, not a new model — smallest change; if `Inbox` lacks a jsonb field, a single nullable column is a minimal, non‑entity migration deferred to 17F.4 and explicitly not a "Category table"); (b) pure **convention** (name match + membership overlap) with no storage (weakest — can't reliably answer "which inboxes are in this category"). **Recommend (a)**, decided in 17F.4; 17F.1 ships read‑only using convention/derivation so it is zero‑risk.
+**Category↔Inbox link decision (key) — DEFAULT: NO SCHEMA CHANGE.** The default architecture **remains no schema change**, and **no new Category model/table/entity may be created**. **17F.1, 17F.2, and 17F.3 must first use existing Chatwoot primitives** (`Team` + `Inbox` + `InboxMember` + `TeamMember`), deriving the category↔inbox link **by convention** (Team name + membership overlap). A **persistent Inbox↔Team mapping or reversible data tag** (e.g. a nullable field or JSON metadata) **may only be considered later if runtime evidence from 17F.1–17F.3 proves the convention‑only mapping is insufficient** — and even then, **any migration, schema field, JSON metadata tag, or persistent mapping requires a separate design review and explicit owner approval**. **Phase 17F.0 does NOT authorize that change.**
 
 ---
 
@@ -198,14 +224,15 @@ Build a Bloomwire **"Categories & Inboxes" overview** (admin) that:
 
 > Feature‑flagged under a new `BLOOMWIRE_CATEGORY_ADMIN_UI` toggle (OFF ⇒ stock Chatwoot screens unchanged). Vertical, independently reviewable.
 
-**17F.1 — Admin "Categories & Inboxes" overview (read‑only).**
-- Scope: new admin settings page composing existing stores (teams, inboxes, `Bloomwire::WhatsappSetup` status DTO) into a category→inbox(es)→staff table with badges; deep‑links to existing editors. No writes.
-- Backend: a **read‑only** DTO/serializer for setup status + (safe) inbox/team/member summaries (reuse existing indices; admin‑only policy). No schema.
-- Frontend: new Vue page + Pinia/store composition + route (`permissions:['administrator']`). Reuse `SettingsLayout`, badges, `ChannelIcon`.
+**17F.1 — Admin "Categories & Inboxes" overview (READ‑ONLY, zero‑schema).**
+- Scope: **read‑only admin overview only.** Composes **existing** inbox/team/agent stores into a category→inbox(es)→staff view with badges and **deep‑links** to the existing Chatwoot editors. **No write orchestration. No membership synchronization. No schema/migration. No mutating endpoints.**
+- Backend: **read‑only** DTO/serializer over existing indices (admin‑only policy). **No schema, no migration.**
+- Frontend: new Vue page + store composition + route (`permissions:['administrator']`), **reusing existing inbox/team/agent stores and routes** + `SettingsLayout`, badges, `ChannelIcon`.
+- Feature flag: `BLOOMWIRE_CATEGORY_ADMIN_UI` — **OFF ⇒ stock Chatwoot preserved** (page absent; existing screens unchanged).
 - Tests: request/policy spec (admin 200 / agent 403 / feature‑OFF 404); serializer safe‑DTO spec (no secrets); component + store tests.
 - Acceptance: admin sees all categories(teams) + their inboxes + staff + Standard/Coexistence + status; agent cannot load it; OFF ⇒ page absent, stock unaffected.
 - Runtime: authenticated DEV admin renders; agent blocked (403).
-- Rollback: toggle OFF removes the route/page. Exclusions: no edits, no mapping storage yet.
+- Rollback: toggle OFF removes the route/page. **Exclusions: no writes, no membership sync, no orchestration, no mapping storage, no schema/migration.**
 
 **17F.2 — Guided "Add WhatsApp inbox to a category" flow.**
 - Scope: wizard composing managed embedded signup (Standard/Coexistence) → pick/create Team → assign staff → **write both** `InboxMember` + `TeamMember` in one step.
@@ -221,11 +248,11 @@ Build a Bloomwire **"Categories & Inboxes" overview** (admin) that:
 - Tests: request/policy + drift‑detection specs; admin vs agent.
 - Acceptance: adding/removing staff updates both memberships; drift warnings resolve. Rollback: toggle OFF.
 
-**17F.4 — Category↔Inbox mapping + enforcement (the mapping decision).**
-- Scope: implement the **explicit, non‑entity** category→inbox link (recommended: store `team_id` on the inbox via an existing/added data field — NOT a Category table) so the overview is reliable; enforce admin‑only writes + agent‑scoped reads via existing policies.
-- Backend: minimal, reversible migration **only if** no reusable field exists (single nullable `inbox.category_team_id` or jsonb tag) — reviewed as a data tag, explicitly not a new entity; update overview/derivation to use it.
-- Tests: model/validation, policy, request; feature‑OFF stock behavior; migration/schema guard reviewed.
-- Acceptance: overview reflects the stored link; agents never see cross‑category data. Rollback: toggle OFF + reversible migration. **This is the only slice that may touch schema — gated + owner‑approved separately.**
+**17F.4 — Category↔Inbox mapping — DEFERRED & UNAPPROVED (evidence‑gated; separate owner approval required).**
+- **The default remains NO schema change and NO new Category model/table/entity. This slice is NOT authorized by Phase 17F.0.**
+- Trigger: consider **only if** runtime evidence from 17F.1–17F.3 **proves the convention‑only mapping is insufficient** (e.g. the overview cannot reliably answer "which inboxes belong to this category" and drift cannot be managed via membership alone).
+- Then, and only then: a **persistent Inbox↔Team mapping or reversible data tag** (nullable field / JSON metadata) may be **proposed** — but **any migration, schema field, JSON metadata tag, or persistent mapping requires a separate design review and explicit owner approval** before implementation. It is **still never a new Category entity**.
+- Until such approval, 17F.1–17F.3 operate **purely on existing Chatwoot primitives (convention‑only)**.
 
 **17F.5 — UI states, responsive, empty/error polish** (see §11 states). No backend. Tests: component/story + responsive smoke.
 
@@ -257,7 +284,7 @@ Build a Bloomwire **"Categories & Inboxes" overview** (admin) that:
 | Admin exposing cross‑category data | admin bypasses agent scope by design | overview is admin‑only; agent view uses scoped endpoints only |
 | Standard vs Coexistence lifecycle differences | `connection_mode` in `provider_config` | badge + status from `Bloomwire::WhatsappSetup`; don't assume identical readiness |
 | Upstream Chatwoot upgrade later | composition minimises fork delta | Option C deep‑links stock editors; keep Bloomwire surface thin + flagged |
-| New schema creep ("Category table") | architecture rule forbids | 17F.1–17F.3 need **no** schema; 17F.4 mapping is a **data tag**, owner‑approved, reversible |
+| New schema creep ("Category table") | architecture rule forbids | **Default = no schema; no new Category entity.** 17F.1–17F.3 use existing primitives only; any persistent mapping/data‑tag is **deferred, NOT authorized by 17F.0**, and requires a **separate design review + explicit owner approval** |
 
 ---
 
@@ -272,6 +299,6 @@ Build a Bloomwire **"Categories & Inboxes" overview** (admin) that:
 
 ## 14. Go/No‑Go for 17F.1 — **GO**
 
-Proceed with **17F.1 (read‑only admin Categories & Inboxes overview)**: zero schema risk, pure composition of existing, already‑authorized data; feature‑flagged OFF ⇒ stock. It delivers the missing unified surface and de‑risks the membership‑drift work (17F.2–17F.4) by making drift visible first. Defer any schema decision to **17F.4** (owner‑approved, reversible, data‑tag — never a new entity).
+Proceed with **17F.1 (read‑only admin Categories & Inboxes overview)**: zero schema risk, pure composition of existing, already‑authorized data; feature‑flagged OFF ⇒ stock. It delivers the missing unified surface and de‑risks the membership‑drift work (17F.2–17F.4) by making drift visible first. **The default architecture remains no schema change and no new Category entity; 17F.1–17F.3 use existing Chatwoot primitives only (convention‑only).** Any future persistent Inbox↔Team mapping or reversible data tag is **out of scope for Phase 17F.0** and requires a **separate design review with explicit owner approval** before it may be considered.
 
 *Prepared in Phase 17F.0 (discovery/planning, docs‑only). Base `096f619`; DEV runtime `4525bea`. No product code, no migration, no deploy, no real Meta/WhatsApp/Shopify.*
