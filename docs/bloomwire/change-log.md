@@ -15,8 +15,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — OPEN (PR PRNUM_PLACEHOLDER, ready for review, not merged)
-- **PR:** PRNUM_PLACEHOLDER · **open, non-draft, ready for review (NOT merged)** · head SHA `HEADSHA_PLACEHOLDER` ·
+### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — OPEN (PR #111, ready for review, not merged)
+- **PR:** #111 · **open, non-draft, ready for review (NOT merged)** · head SHA `2964279742ad220074831042d0209765ee1c0b72` ·
   **Type:** frontend enablement (Vue wizard + Vuex action + API client + i18n + Vitest). **No backend/controller/
   service change · no DB migration/schema · no real Meta/WhatsApp calls (Meta SDK + window messaging mocked) ·
   no native `/whatsapp/authorization` or `Whatsapp.vue` change · no per-channel webhook override · no app-side

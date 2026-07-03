@@ -80,7 +80,7 @@
 | 17D.0 | WhatsApp Business App **Coexistence discovery contract** (`docs/bloomwire/whatsapp-coexistence-discovery.md`; evidence/report-only — locks the `connection_mode=coexistence` contract + boundary before enabling) | #106 | Merged (`f9aeac7`) |
 | 17D.1 | WhatsApp Business App **Coexistence backend contract** (`bloomwire/whatsapp/coexistence_embedded_signup` + `WhatsappCoexistenceEmbeddedSignupService`; `connection_mode=coexistence`; inherits safe 17C.2 seam; Meta stubbed) — backend only, Coexistence UI still disabled | #107 | Merged (`ebdcba2`) |
 | 17D.2 | WhatsApp Business App **Coexistence webhook proof** (router routes coexistence by phone_number_id; `smb_message_echoes` → existing outgoing echo path; `smb_app_state_sync` → new safe-ignore guard; proof doc; fake payloads) — backend/webhook only, Coexistence UI still disabled | #109 | Merged (`4a57564`) |
-| 17D.3 | WhatsApp Business App **Coexistence frontend enablement** (enable the `BloomwireWhatsapp.vue` Coexistence card — remove disabled/"Coming soon"; `flow=coexistence` reuses the credential-free Embedded-Signup form + new `createBloomwireCoexistenceEmbeddedSignup` → `bloomwire/whatsapp/coexistence_embedded_signup`; Standard flow unchanged; Meta/SDK mocked) — frontend only, no backend/migration | PRNUM_PLACEHOLDER | Open (ready for review, not merged) |
+| 17D.3 | WhatsApp Business App **Coexistence frontend enablement** (enable the `BloomwireWhatsapp.vue` Coexistence card — remove disabled/"Coming soon"; `flow=coexistence` reuses the credential-free Embedded-Signup form + new `createBloomwireCoexistenceEmbeddedSignup` → `bloomwire/whatsapp/coexistence_embedded_signup`; Standard flow unchanged; Meta/SDK mocked) — frontend only, no backend/migration | #111 | Open (ready for review, not merged) |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -310,7 +310,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — `Open (ready for review, not merged)` — PR PRNUM_PLACEHOLDER (head `HEADSHA_PLACEHOLDER`)
+### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — `Open (ready for review, not merged)` — PR #111 (head `2964279742ad220074831042d0209765ee1c0b72`)
 - **Goal (Product Truth):** *User expects* to connect an **existing** WhatsApp Business App number from the
   customer WhatsApp setup screen. *Current system* showed the Coexistence card **disabled / "Coming soon"* (17C.3).
   *Done means* the card is selectable and drives Meta Embedded Signup → the dedicated coexistence endpoint,
