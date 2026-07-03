@@ -313,7 +313,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — `Open (feature‑flagged; PR #<pending>; head SHA <pending>; NOT merged; NOT deployed; product code: YES, gated)`
+### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — `Open (feature‑flagged; PR #119; head SHA fe0b264; NOT merged; NOT deployed; product code: YES, gated)`
 - **Goal:** ship the administrator‑only, **read‑only** "Categories & Inboxes" overview from 17F.0 Option C, using
   existing Chatwoot primitives only (**no schema, no new Category entity, no writes**), gated by a new master‑gated
   feature so OFF ⇒ stock Chatwoot.

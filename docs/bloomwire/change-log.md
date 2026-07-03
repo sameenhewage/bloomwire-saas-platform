@@ -16,8 +16,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — OPEN (feature‑flagged; not merged)
-- **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #`<pending>` ·
-  **head SHA** `<pending>` · **NOT merged · NOT deployed.** **Type:** administrator‑only READ‑ONLY UI + safe‑DTO API
+- **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 ·
+  **head SHA** `fe0b264` · **NOT merged · NOT deployed.** **Type:** administrator‑only READ‑ONLY UI + safe‑DTO API
   (feature‑gated). **Product code changed: YES (gated).** **No DB migration/schema · no writes · no new Category
   entity · no real Meta/WhatsApp/Shopify.**
 - **What:** new administrator‑only, **read‑only** "Categories & Inboxes" overview (Settings → Categories & Inboxes),
