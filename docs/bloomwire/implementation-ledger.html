@@ -346,7 +346,19 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 17E.2 — Contact isolation &amp; UI/permission polish <span class="badge">Open (ready for review, not merged)</span> <span class="pr">PR #114 · product code YES</span></h3>
+    <div class="card"><h3>Phase 17E.3 — Owner-operated runtime E2E (mocked Meta) <span class="badge">Open (test-only, not merged)</span> <span class="pr">PR #115 · product code NO</span></h3>
+      <ul>
+        <li><b>Goal</b>: owner-operated runtime E2E proving the full multi-WhatsApp-inbox + customer/agent-visibility workflow end to end through the REAL runtime stack, with <b>mocked Meta only</b> (no real Meta, no production, no deploy).</li>
+        <li><b>Scope</b>: TEST-ONLY — two integration specs under <code>app/spec/integration/bloomwire/</code>; no product code, no migration/schema, no frontend, no routes. Meta stubbed at the seam (<code>Whatsapp::TokenExchangeService</code>/<code>PhoneInfoService</code>/<code>FacebookApiClient</code> + <code>Bloomwire::GlobalWhatsappConfig</code>); <code>WebMock.disable_net_connect!</code> blocks egress (an example asserts no <code>graph.facebook.com</code> call).</li>
+        <li><b>multi_inbox_runtime_e2e_spec.rb</b> (22 ex): <b>Flow 1</b> admin creates Inbox 1 (Standard) + Inbox 2 (Coexistence) via mocked embedded signup, each mapped to its own <code>Channel::Whatsapp</code> + <code>Bloomwire::WhatsappSetup</code>, safe DTO, non-admin forbidden; <b>Flow 2</b> inbound webhook routes pnid1→Inbox 1, pnid2→Inbox 2, unknown + crossed pnid fail closed, connection_mode-agnostic; <b>Flow 3</b> category agent lists/opens only its own inbox's conversations (401 cross-open), admin both; <b>Flow 4</b> contact isolation gate ON (list/search/show + sub-resource 404 + bulk label scoped; admin + gate-OFF unaffected); <b>Flow 5</b> UI-sanity-at-API.</li>
+        <li><b>hardening_followup_inventory_spec.rb</b> (5 ex, 1 pending): CHARACTERIZES (does not fix) the KNOWN, DEFERRED 17E.2 gaps — contact <b>merge</b> + <b>conversation-create</b> are agent-reachable + unscoped (current behavior); <b>CSAT report</b> is admin-only (protected); <b>Shopify orders</b> statically reachable + unscoped but outside the mocked runtime (documented, pending). A CONTROL example proves the gate is active. No NEW leak beyond the 17E.2 set.</li>
+        <li><b>Not changed</b>: no product/app code; DB schema/migrations; frontend; routes; native WhatsApp; global webhook router. No secrets (all fake); no live Meta.</li>
+        <li><b>Owner browser E2E</b>: no Capybara/system-spec harness exists → CI coverage is the request-level runtime E2E; a browser walkthrough (Playwright/Chrome DevTools) is owner-operated (checklist in SESSION-LOG).</li>
+        <li><b>Validation</b>: new <b>27 ex, 0 failures, 1 pending</b>; regression <b>109 ex, 0 failures, 1 pending</b>; RuboCop clean; git diff --check clean; secret scan clean; migration/schema guard empty. No deploy; no production; no real Meta; dev remains <code>9b09f9e</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17E.2 — Contact isolation &amp; UI/permission polish <span class="badge done">Merged</span> <span class="pr">PR #114 · d98f7d8</span></h3>
       <ul>
         <li><b>Decision</b>: resolves the 17E.0/17E.1 caveat — a business <b>agent</b> may only list/search/open contacts <b>reachable via their assigned inboxes</b> (through <code>contact_inboxes</code>); <b>admins see all</b>; a <b>shared</b> contact (≥2 inboxes) is visible to agents of any; conversation isolation stays primary. <b>Gated</b> by <code>BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY</code> — <b>OFF == stock Chatwoot</b>.</li>
         <li><b>Seam</b>: new <code>Bloomwire::ContactVisibility.scope(account:, user:)</code> (subquery via <code>contact_inboxes</code>, distinct-safe) + gate <code>Bloomwire::Features.restrict_agent_contact_visibility?</code>.</li>
