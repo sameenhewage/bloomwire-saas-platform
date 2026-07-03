@@ -50,7 +50,10 @@ class Api::V1::Accounts::Integrations::ShopifyController < Api::V1::Accounts::Ba
   end
 
   def contact
-    @contact ||= Current.account.contacts.find_by(id: params[:contact_id])
+    # Phase 17E.4: scope by Bloomwire contact visibility so a gated agent cannot fetch Shopify orders for an
+    # out-of-scope contact. An out-of-scope id => nil => `validate_contact` renders 422 and halts before any
+    # external Shopify call (no egress). Admin / stock (gate OFF) => account.contacts, unchanged.
+    @contact ||= Bloomwire::ContactVisibility.scope(account: Current.account, user: Current.user).find_by(id: params[:contact_id])
   end
 
   def fetch_hook

@@ -202,7 +202,9 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   def contact
     return if params[:contact_id].blank?
 
-    @contact = Current.account.contacts.find(params[:contact_id])
+    # Phase 17E.4: scope by Bloomwire contact visibility so a gated agent cannot attach an out-of-scope contact
+    # (out-of-scope => RecordNotFound => 404). Admin / stock (gate OFF) => account.contacts; inbox authz unchanged.
+    @contact = Bloomwire::ContactVisibility.scope(account: Current.account, user: Current.user).find(params[:contact_id])
   end
 
   def contact_inbox
