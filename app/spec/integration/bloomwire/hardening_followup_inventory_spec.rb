@@ -1,88 +1,193 @@
 require 'rails_helper'
 
-# Phase 17E.3 — HARDENING FOLLOW-UP INVENTORY (characterization only; NOT a fix).
-#
-# Phase 17E.2 closed the contact ENUMERATION paths (index / search / show / filter / bulk) behind
-# BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY, and EXPLICITLY DEFERRED four direct, ID-based contact paths to a
-# future hardening phase: contact merge, CSAT report, Shopify integration, and the conversation-create contact
-# lookup. The 17E.3 brief asks us to VERIFY + DOCUMENT whether those deferred paths are reachable in the mocked
-# runtime with the gate ON — NOT to fix them (fixing requires separate, explicit approval).
-#
-# These examples therefore CHARACTERIZE the CURRENT behavior so the gap is visible and regression-locked. They are
-# NOT an endorsement of the gap. When a future hardening phase scopes one of these paths, its characterization
-# here will change (e.g. :success -> :not_found) and must be updated. No product code is changed in 17E.3; no real
-# Meta/WhatsApp; no production.
-RSpec.describe 'Bloomwire hardening follow-up inventory (deferred paths, characterization)', type: :request do
-  include ActiveJob::TestHelper
-
+# Phase 17E.4 — Contact ID hardening. Closes the direct, ID-based contact paths that Phase 17E.2/17E.3 deferred,
+# by routing them through Bloomwire::ContactVisibility.scope(account:, user:): contact MERGE, conversation-create
+# contact lookup, and Shopify ORDERS contact lookup. With the gate ON a business AGENT can no longer reach an
+# out-of-scope contact by id; ADMINS and the gate-OFF (stock Chatwoot) state are unchanged. CSAT stays admin-only
+# (its product code is intentionally untouched). No real Meta/WhatsApp; NO external Shopify egress for an
+# out-of-scope contact. All values are fake.
+RSpec.describe 'Bloomwire Phase 17E.4 — contact ID path hardening', type: :request do
   let(:account) { create(:account) }
   let(:admin)   { create(:user, account: account, role: :administrator) }
   let(:agent1)  { create(:user, account: account, role: :agent) }
   let(:inbox1)  { create(:inbox, account: account) }
   let(:inbox2)  { create(:inbox, account: account) }
-  let!(:contact_in_scope)     { create(:contact, :with_email, name: 'In Scope', account: account) }
-  let!(:contact_out_of_scope) { create(:contact, :with_email, name: 'Out Of Scope', account: account) }
+  let!(:in_scope)     { create(:contact, :with_email, name: 'In Scope', account: account) }
+  let!(:out_of_scope) { create(:contact, :with_email, name: 'Out Of Scope', account: account) }
 
   before do
     GlobalConfig.clear_cache
     create(:inbox_member, user: agent1, inbox: inbox1)
-    create(:contact_inbox, contact: contact_in_scope, inbox: inbox1)
-    create(:contact_inbox, contact: contact_out_of_scope, inbox: inbox2)
-    # Gate ON — identical to Flow 4 in the main E2E spec.
-    bw_set_config('BLOOMWIRE_MODE_ENABLED', true)
-    bw_set_config('BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY', true)
+    create(:contact_inbox, contact: in_scope, inbox: inbox1)
+    create(:contact_inbox, contact: out_of_scope, inbox: inbox2)
   end
 
+  # GlobalConfig cache lives in Redis (not rolled back with the DB transaction) — clear it so the enabled gate
+  # never leaks into unrelated specs.
   after { GlobalConfig.clear_cache }
 
   def auth(user) = user.create_new_auth_token
 
-  # Proves the 17E.2 gate is genuinely ON in this spec, so the "deferred gap" characterizations below are
-  # meaningful (they bypass an ACTIVE gate that already blocks the enumeration path).
-  it 'CONTROL: the 17E.2 gate is ON — an agent cannot open the out-of-scope contact via the scoped show path' do
-    get "/api/v1/accounts/#{account.id}/contacts/#{contact_out_of_scope.id}", headers: auth(agent1), as: :json
-    expect(response).to have_http_status(:not_found)
+  def enable_gate
+    bw_set_config('BLOOMWIRE_MODE_ENABLED', true)
+    bw_set_config('BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY', true)
   end
 
-  describe 'DEFERRED — contact merge (agent-reachable, NOT scoped by Bloomwire::ContactVisibility)' do
-    it 'CHARACTERIZATION: an agent can reach + merge an out-of-scope contact (gap open; hardening deferred)' do
-      post "/api/v1/accounts/#{account.id}/actions/contact_merge",
-           headers: auth(agent1),
-           params: { base_contact_id: contact_in_scope.id, mergee_contact_id: contact_out_of_scope.id }, as: :json
-      # CURRENT behavior: reachable (found via Current.account.contacts, unscoped) and merged away.
-      # When hardened, this should become :not_found — update this characterization at that time.
-      aggregate_failures do
+  def merge(user:, base:, mergee:)
+    post "/api/v1/accounts/#{account.id}/actions/contact_merge",
+         headers: auth(user), params: { base_contact_id: base.id, mergee_contact_id: mergee.id }, as: :json
+  end
+
+  def create_conversation(user:, contact:, inbox:, source_id:)
+    post "/api/v1/accounts/#{account.id}/conversations",
+         headers: auth(user), params: { inbox_id: inbox.id, contact_id: contact.id, source_id: source_id }, as: :json
+  end
+
+  def get_shopify_orders(user:, contact:)
+    get "/api/v1/accounts/#{account.id}/integrations/shopify/orders",
+        headers: auth(user), params: { contact_id: contact.id }, as: :json
+  end
+
+  # A stand-in Shopify REST response (only #body is used by the controller); class-free so this spec is standalone.
+  def shopify_response
+    Struct.new(:body).new({ 'customers' => [{ 'id' => '1' }], 'orders' => [] })
+  end
+
+  # ============================================================================
+  # Gate ON — an agent may only reach contacts within their assigned-inbox visibility
+  # ============================================================================
+  context 'with the gate ON (BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY)' do
+    before { enable_gate }
+
+    it 'CONTROL: an agent still cannot open an out-of-scope contact (17E.2 enumeration path stays closed)' do
+      get "/api/v1/accounts/#{account.id}/contacts/#{out_of_scope.id}", headers: auth(agent1), as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    describe 'contact merge' do
+      let!(:other_in_scope) do
+        contact = create(:contact, :with_email, account: account)
+        create(:contact_inbox, contact: contact, inbox: inbox1)
+        contact
+      end
+
+      it 'lets an agent merge two in-scope contacts' do
+        merge(user: agent1, base: in_scope, mergee: other_in_scope)
         expect(response).to have_http_status(:success)
-        expect(Contact.exists?(contact_out_of_scope.id)).to be(false)
+      end
+
+      it 'blocks an agent from merging an out-of-scope MERGEE (404; contact untouched)' do
+        merge(user: agent1, base: in_scope, mergee: out_of_scope)
+        aggregate_failures do
+          expect(response).to have_http_status(:not_found)
+          expect(Contact.exists?(out_of_scope.id)).to be(true)
+        end
+      end
+
+      it 'blocks an agent from using an out-of-scope BASE (404; contact untouched)' do
+        merge(user: agent1, base: out_of_scope, mergee: in_scope)
+        aggregate_failures do
+          expect(response).to have_http_status(:not_found)
+          expect(Contact.exists?(in_scope.id)).to be(true)
+        end
+      end
+
+      it 'lets an admin merge across account contacts (both inboxes)' do
+        merge(user: admin, base: in_scope, mergee: out_of_scope)
+        expect(response).to have_http_status(:success)
+      end
+    end
+
+    describe 'conversation create' do
+      it 'lets an agent create a conversation with an in-scope contact in their own inbox' do
+        create_conversation(user: agent1, contact: in_scope, inbox: inbox1, source_id: 'src-in-1')
+        expect(response).to have_http_status(:success)
+      end
+
+      it 'blocks an agent from attaching an out-of-scope contact to their own inbox (404)' do
+        create_conversation(user: agent1, contact: out_of_scope, inbox: inbox1, source_id: 'src-oos-1')
+        expect(response).to have_http_status(:not_found)
+      end
+
+      it 'lets an admin attach any account contact' do
+        create_conversation(user: admin, contact: out_of_scope, inbox: inbox1, source_id: 'src-admin-1')
+        expect(response).to have_http_status(:success)
+      end
+    end
+
+    describe 'shopify orders' do
+      let(:shopify_client) { instance_double(ShopifyAPI::Clients::Rest::Admin) }
+
+      before do
+        create(:integrations_hook, :shopify, account: account)
+        # rubocop:disable RSpec/AnyInstance
+        allow_any_instance_of(Api::V1::Accounts::Integrations::ShopifyController)
+          .to receive(:shopify_client).and_return(shopify_client)
+        # rubocop:enable RSpec/AnyInstance
+        allow(shopify_client).to receive(:get).and_return(shopify_response)
+      end
+
+      it 'lets an agent fetch orders for an in-scope contact (reaches the Shopify client)' do
+        get_shopify_orders(user: agent1, contact: in_scope)
+        aggregate_failures do
+          expect(response).to have_http_status(:ok)
+          expect(shopify_client).to have_received(:get).at_least(:once)
+        end
+      end
+
+      it 'blocks an agent for an out-of-scope contact and makes NO external Shopify request' do
+        get_shopify_orders(user: agent1, contact: out_of_scope)
+        aggregate_failures do
+          expect(response).to have_http_status(:unprocessable_entity)
+          expect(shopify_client).not_to have_received(:get)
+          expect(a_request(:any, /myshopify\.com/)).not_to have_been_made
+        end
+      end
+
+      it 'lets an admin fetch orders for any account contact' do
+        get_shopify_orders(user: admin, contact: out_of_scope)
+        expect(response).to have_http_status(:ok)
+      end
+    end
+
+    describe 'CSAT report (unchanged — admin-only/protected; product code NOT touched in 17E.4)' do
+      it 'still blocks a plain agent (admin-only policy)' do
+        get "/api/v1/accounts/#{account.id}/csat_survey_responses", headers: auth(agent1), as: :json
+        expect(response).to have_http_status(:unauthorized)
       end
     end
   end
 
-  describe 'DEFERRED — conversation-create contact lookup (agent-reachable, NOT scoped by ContactVisibility)' do
-    it 'CHARACTERIZATION: an agent can attach an out-of-scope contact to a conversation in their own inbox' do
-      post "/api/v1/accounts/#{account.id}/conversations",
-           headers: auth(agent1),
-           params: { inbox_id: inbox1.id, contact_id: contact_out_of_scope.id, source_id: 'oos-conv-src-1' },
-           as: :json
-      # CURRENT behavior: the contact lookup is unscoped, so an out-of-scope contact is attachable.
-      # When hardened, this should become :not_found / :unauthorized.
+  # ============================================================================
+  # Gate OFF — stock Chatwoot behavior is preserved (agent may act on any account contact)
+  # ============================================================================
+  context 'with the gate OFF (stock Chatwoot)' do
+    it 'contact merge: an agent can still merge any account contacts' do
+      merge(user: agent1, base: in_scope, mergee: out_of_scope)
       expect(response).to have_http_status(:success)
     end
-  end
 
-  describe 'PROTECTED — CSAT report (admin-only policy; NOT agent-reachable)' do
-    it 'blocks a plain agent from the CSAT report (admin-only — not a contact-leak vector for agents)' do
-      get "/api/v1/accounts/#{account.id}/csat_survey_responses", headers: auth(agent1), as: :json
-      expect(response).to have_http_status(:unauthorized)
+    it 'conversation create: an agent can still attach any account contact to their inbox' do
+      create_conversation(user: agent1, contact: out_of_scope, inbox: inbox1, source_id: 'src-off-1')
+      expect(response).to have_http_status(:success)
     end
-  end
 
-  describe 'DEFERRED (outside the mocked runtime) — Shopify orders contact lookup' do
-    it 'is statically agent-reachable + unscoped, but needs a Shopify hook + external stub to exercise' do
-      skip 'Documented deferred gap: Integrations::ShopifyController#orders looks up the contact via ' \
-           'Current.account.contacts.find_by (unscoped) and is reachable by a plain agent, but exercising it ' \
-           'requires an Integrations::Hook + a stubbed external Shopify API — outside the mocked-Meta WhatsApp ' \
-           'runtime. Reachability confirmed by static analysis; fix deferred to the hardening phase.'
+    describe 'shopify orders' do
+      let(:shopify_client) { instance_double(ShopifyAPI::Clients::Rest::Admin) }
+
+      before do
+        create(:integrations_hook, :shopify, account: account)
+        # rubocop:disable RSpec/AnyInstance
+        allow_any_instance_of(Api::V1::Accounts::Integrations::ShopifyController)
+          .to receive(:shopify_client).and_return(shopify_client)
+        # rubocop:enable RSpec/AnyInstance
+        allow(shopify_client).to receive(:get).and_return(shopify_response)
+      end
+
+      it 'an agent can still fetch orders for any account contact (stock)' do
+        get_shopify_orders(user: agent1, contact: out_of_scope)
+        expect(response).to have_http_status(:ok)
+      end
     end
   end
 end

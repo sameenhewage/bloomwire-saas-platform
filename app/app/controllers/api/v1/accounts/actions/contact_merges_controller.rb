@@ -22,6 +22,9 @@ class Api::V1::Accounts::Actions::ContactMergesController < Api::V1::Accounts::B
   end
 
   def contacts
-    @contacts ||= Current.account.contacts
+    # Phase 17E.4: scope by Bloomwire contact visibility so a gated agent cannot merge (base or mergee) a contact
+    # outside their assigned-inbox visibility (out-of-scope => RecordNotFound => 404). Admin / stock (gate OFF) =>
+    # account.contacts, unchanged.
+    @contacts ||= Bloomwire::ContactVisibility.scope(account: Current.account, user: Current.user)
   end
 end

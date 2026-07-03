@@ -19,15 +19,15 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `d98f7d8080fb4bd7f7e46745b7f6ac373b798ade`  (PR #114 merged — Phase 17E.2 gated contact isolation + bulk-label scoping)
-- **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2/17D.3 not deployed.
-- **Latest completed / merged:** **PR #114** — Phase **17E.2** gated agent **contact isolation** + bulk contact-label scoping (product code, gated by `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY`; OFF == stock), merged at `d98f7d8080fb4bd7f7e46745b7f6ac373b798ade`. Before it: PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **Phase 17E.3** — **Owner-operated runtime E2E with mocked Meta**. **PR #115 is open, non-draft, test-only** (branch `test/bloomwire-phase-17e3-runtime-e2e-mocked-meta`, base `version_1` `d98f7d8`) — **product code NO; not merged, not deployed.** Two integration specs under `app/spec/integration/bloomwire/` prove the full multi-inbox + customer/agent-visibility workflow end-to-end through the real runtime stack with **Meta mocked** at the seam (`Whatsapp::TokenExchangeService`/`PhoneInfoService`/`FacebookApiClient` + `Bloomwire::GlobalWhatsappConfig`; `WebMock.disable_net_connect!` blocks egress): admin 2-inbox setup (Standard + Coexistence) via mocked embedded signup; inbound webhook routing by `phone_number_id` (unknown/crossed fail closed; connection_mode-agnostic); category agent conversation isolation; contact isolation + bulk label (gate ON); UI-sanity at the API. A second spec **CHARACTERIZES (does not fix)** the KNOWN, DEFERRED 17E.2 gaps — **merge** + **conversation-create** are agent-reachable/unscoped; **CSAT** is admin-only (protected); **Shopify** is out-of-runtime (documented). Validation: new **27/0 (1 pending)** + regression **109/0 (1 pending)**; RuboCop clean; no migration/schema; no real Meta.
+- **`version_1` tip:** `3c45720204fe4c57528dfd8d1ef43f8a34674612`  (PR #115 merged — Phase 17E.3 runtime E2E with mocked Meta)
+- **Dev deployed SHA:** `3c45720204fe4c57528dfd8d1ef43f8a34674612` (`3c45720`)  (public: https://dev.unecast.com · health `/health`) — deployed in **Phase 17E.3D** (dev-only via `deploy-dev.yml`; local + public health 200; postgres/redis volumes preserved). Was `9b09f9e`. Production untouched.
+- **Latest completed / merged:** **PR #115** — Phase **17E.3** owner-operated runtime E2E with mocked Meta (test-only), merged at `3c45720204fe4c57528dfd8d1ef43f8a34674612`, and **deployed to dev in Phase 17E.3D**. Before it: PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17E.4** — **Contact ID hardening**. **PR #116 is open, non-draft** (branch `feature/bloomwire-phase-17e4-contact-id-hardening`, base `version_1` `3c45720`) — **product code YES (gated); not merged, not deployed.** Closes the 17E.2/17E.3 deferred ID-based gaps by routing 3 contact-by-id paths through `Bloomwire::ContactVisibility.scope`: **contact merge** (`Actions::ContactMergesController#contacts`), **conversation-create** (`ConversationsController#contact`), **Shopify orders** (`Integrations::ShopifyController#contact`). Gate ON → out-of-scope merge/attach → 404, Shopify → 422 before any external call (no egress); **gate OFF == stock**, **admin** unchanged, **CSAT** stays admin-only (untouched). Tests: `hardening_followup_inventory_spec.rb` rewritten characterization → hardening (15 ex; RED-proven via `git stash`). Validation: new **15/15** + suite **73/73** + conversations regression **80/80**; RuboCop clean; no migration/schema; no real Meta.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Multi-WhatsApp-inbox (17E):** **17E.0** (`83496896`) + **17E.1** (PR #113, `5df9f9d`) + **17E.2** (PR #114, `d98f7d8`) merged; **17E.3** owner-operated runtime E2E (mocked Meta) is **in-flight (PR #115, test-only, open / not merged)**. Next: a **hardening follow-up phase** (separate approval) to scope the still-deferred ID-based contact paths (**contact merge**, **conversation-create**, **Shopify orders**) through `Bloomwire::ContactVisibility` — 17E.3 verified these remain agent-reachable/unscoped with the gate ON (CSAT is admin-only/protected). Owner-operated real-Meta browser E2E remains before customer go-live.
+  1. **Multi-WhatsApp-inbox (17E):** **17E.0..17E.3** merged (17E.3 = PR #115, `3c45720`, **deployed to dev in 17E.3D**); **17E.4** contact ID hardening is **in-flight (PR #116, product code, open / not merged)** — closes the last deferred ID-based gaps (contact merge / conversation-create / Shopify orders) via `Bloomwire::ContactVisibility.scope`; CSAT stays admin-only. Next: **owner-operated real-Meta browser E2E on dev** + Coexistence go-live readiness (**17C.4**) before customer go-live.
   2. **Coexistence go-live:** **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
   3. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   4. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
@@ -75,6 +75,39 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-03 — Phase 17E.4 — Contact ID hardening (PR #116, product code, open)
+- **Built (branch `feature/bloomwire-phase-17e4-contact-id-hardening` off `version_1` `3c45720`):** closes the
+  direct, ID-based contact-visibility gaps deferred in 17E.2/17E.3 by routing 3 paths through the existing
+  `Bloomwire::ContactVisibility.scope(account:, user:)` seam (one line each). **Product code YES; gated.** No
+  migration/schema, no frontend, no routes, no real Meta.
+  1. `Actions::ContactMergesController#contacts` → seam (out-of-scope base/mergee → RecordNotFound → 404).
+  2. `ConversationsController#contact` → `seam.find(params[:contact_id])` (out-of-scope → 404; inbox authz unchanged).
+  3. `Integrations::ShopifyController#contact` → `seam.find_by(id:)` (out-of-scope → nil → existing `validate_contact`
+     renders 422 and halts BEFORE any Shopify call → NO external egress; no extra product code — an exploring
+     subagent claimed a nil-guard was needed, but it had misread the `return unless` logic; verified against source).
+- **Gate ON** blocks a gated agent on all three out-of-scope paths; **gate OFF == stock Chatwoot**; **admin** never
+  narrowed; **CSAT** stays admin-only/protected (product code NOT touched).
+- **RED→GREEN:** rewrote `hardening_followup_inventory_spec.rb` from characterization → hardening (15 ex). RED-proven:
+  reverting the 3 controllers (`git stash`) fails exactly the 4 out-of-scope block cases (merge base/mergee,
+  conversation attach, Shopify — stubbed client's `:get` called twice); re-applying is GREEN. Shopify no-egress
+  asserted (`shopify_client` never `:get`; `a_request(/myshopify\.com/)` not made).
+- **Validation:** new **15/15**; suite (hardening + multi_inbox_runtime_e2e + contact_isolation + contact_visibility
+  + shopify_controller + contact_merges_controller) **73/73**; conversations_controller regression **80/80**; RuboCop
+  clean; `git diff --check` clean; no migration/schema; secret scan clean. Files: 3 controllers + 1 spec.
+  **PR #116 — open, non-draft, NOT merged.** No deploy · no production · no real Meta · dev `3c45720`.
+
+### 2026-07-03 — Phase 17E.3D — Dev Validation Release (dev-only deploy; no PR)
+- **Deployed `version_1 @ 3c45720` to DEV only** via `deploy-dev.yml` (manual dispatch; production hard-blocked in
+  the workflow). Flags: `environment=dev`, `ref=3c45720` (exact SHA), `run_migrations=true` (no-op — 0 pending
+  migrations in `9b09f9e..3c45720`), `skip_smoke=false`, `prune=false`.
+- **Result: SUCCESS** (run 28673559748) — server smoke: local health 200, `/app/.git_sha =
+  3c45720204fe4c57528dfd8d1ef43f8a34674612`, public health 200; rails + sidekiq recreated + up; postgres `Up 6 days`
+  (never recreated → volume preserved); redis container recreated as a compose dependency but no `down -v`/prune →
+  data preserved. Independent public checks from the workstation: `/health` 200, login page 200.
+- **Dev deployed SHA is now `3c45720204fe4c57528dfd8d1ef43f8a34674612` (`3c45720`)** (was `9b09f9e`). Production
+  untouched; no secrets printed; no real Meta; no customer data exported. Authenticated UI click-through remains
+  owner-operated.
 
 ### 2026-07-03 — Phase 17E.3 — Owner-operated runtime E2E with mocked Meta (PR #115, test-only, open)
 - **Built (branch `test/bloomwire-phase-17e3-runtime-e2e-mocked-meta` off `version_1` `d98f7d8`):** two RSpec
