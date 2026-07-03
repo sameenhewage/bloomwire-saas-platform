@@ -35,7 +35,9 @@ const setupStatusLabel = computed(() =>
   setupStatus.value ? String(setupStatus.value).replace(/_/g, ' ') : ''
 );
 
-const collaboratorCount = computed(() => props.inbox.collaborators?.length ?? 0);
+const collaboratorCount = computed(
+  () => props.inbox.collaborators?.length ?? 0
+);
 
 const inboxRoute = computed(() => ({
   name: 'settings_inbox_show',
