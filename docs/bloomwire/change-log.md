@@ -16,7 +16,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ## Unreleased / Pending Merge
 
 ### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR — OPEN (PR #112, ready for review, not merged)
-- **PR:** #112 · **open, non-draft, ready for review (NOT merged)** · head SHA `a15fadd983838d728b07cc8e63bafb477727bbce` ·
+- **PR:** #112 · **open, non-draft, ready for review (NOT merged)** ·
   **Type:** docs-only discovery + ADR-0009. **No app code · no tests · no route · no DB migration/schema · no
   workflow/deploy · no production · no real Meta/WhatsApp calls.**
 - **What:** locks the Bloomwire **multiple WhatsApp inbox per account** business model before the 17E hardening
@@ -40,8 +40,8 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   code touched. **No deploy · no production · dev remains `9b09f9e`.**
 
 ### Phase 17D.3 — WhatsApp Business App Coexistence frontend enablement — MERGED
-- **PR:** #111 · **merge SHA** `ea305792dc83f864f8e1374ce0ca832f99f7d8f9` · **approved head** `d9810b7` ·
-  **Status:** merged into `version_1` (final tip `ea30579`) · head SHA `2964279742ad220074831042d0209765ee1c0b72` ·
+- **PR:** #111 · **merge SHA** `ea305792dc83f864f8e1374ce0ca832f99f7d8f9` · **approved head** `d9810b72f707cf79ff0901c4babf1c95049b02c6` ·
+  **Status:** merged into `version_1` (final tip `ea30579`) ·
   **Type:** frontend enablement (Vue wizard + Vuex action + API client + i18n + Vitest). **No backend/controller/
   service change · no DB migration/schema · no real Meta/WhatsApp calls (Meta SDK + window messaging mocked) ·
   no native `/whatsapp/authorization` or `Whatsapp.vue` change · no per-channel webhook override · no app-side

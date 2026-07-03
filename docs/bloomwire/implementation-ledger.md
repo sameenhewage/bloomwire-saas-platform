@@ -311,7 +311,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR-0009 — `Open (ready for review, not merged)` — PR #112 (head `a15fadd983838d728b07cc8e63bafb477727bbce`)
+### Phase 17E.0 — Multiple WhatsApp Inbox per Account discovery + ADR-0009 — `Open (ready for review, not merged)` — PR #112 (docs-only; head SHA advances per docs commit — see GitHub)
 - **Goal:** lock the Bloomwire **multiple WhatsApp inbox per account** business model (5 categories × 1 WhatsApp
   number × 10 agents) before the 17E hardening slices. Docs-only; no code, tests, route, migration, deploy, or Meta call.
 - **Deliverables:** `docs/bloomwire/whatsapp-multi-inbox-discovery.md` (executive verdict + evidence with file:line +
