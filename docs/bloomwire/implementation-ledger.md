@@ -327,6 +327,11 @@
   3. Wired into every agent-facing READ path: `ContactsController#index/search/active/show` (via `resolved_contacts`,
      `search`, `active`, `fetch_contact`), `Contacts::FilterService#base_relation`, global `SearchService#filter_contacts`,
      `contacts/base_controller#ensure_contact` (sub-resources → 404 out-of-scope).
+  4. **PR #114 review blocker fix — bulk contact WRITE path.** `BulkActionsController#enqueue_contact_job` now
+     filters `ids` through `Bloomwire::ContactVisibility.scope` BEFORE enqueueing `Contacts::BulkActionJob`, so a
+     gated agent cannot bulk add/remove labels on an out-of-scope `contact_id`. Out-of-scope IDs are dropped
+     (silently, matching stock `where(id:)`); admins / gate-OFF pass through unchanged; delete stays admin-only via
+     the existing `authorize(Contact, :destroy?)`. Filtered controller-side so unsafe raw IDs never reach the async job.
 - **Ownership / source-of-truth:** contact_inboxes is the existing link table (no new entity, no duplicate store).
   Admin visibility, conversation/inbox scoping, and the global webhook router are untouched.
 - **Security (Safe DTO):** agents can no longer enumerate other categories' contacts; admins unchanged; no secrets;
@@ -336,10 +341,12 @@
 - **Known limitation (deferred):** direct ID-based access via contact **merge**, **CSAT** report inclusion,
   **Shopify** integration, and **conversation-create** contact lookup are not scoped here (mutations/reports/
   integrations needing a known contact_id, not enumeration) — candidates for a hardening follow-up / 17E.3 review.
-- **Validation:** new `contact_visibility_spec` 5/5 + `contact_isolation_spec` 13/13; regression
-  `contacts_controller_spec` 58/58, `multi_whatsapp_inbox_category_contract`/`conversation_finder`/
-  `permission_filter_service`/`contact_policy` 35/35, `features_spec` 18/18; RuboCop clean; `git diff --check` clean.
-  Pre-existing enterprise `companies` failure proven via `git stash` (unrelated). No deploy · no production · dev `9b09f9e`.
+  **Bulk contact label add/remove — previously part of this gap — is now scoped (PR #114 blocker fix, item 4).**
+- **Validation:** new `contact_visibility_spec` 5/5 + `contact_isolation_spec` **20/20** (was 13/13; +7 bulk-action
+  cases); bulk-path regression `bulk_actions_controller_spec` + `contacts/bulk_action_service_spec` +
+  `contacts/bulk_action_job_spec` + `contacts_controller_spec` = **76/76**; RED proof: reverting the controller
+  (`git stash`) fails exactly the 3 "does-not-mutate-B" cases, re-applying is GREEN. RuboCop clean; `git diff --check`
+  clean; no migration/schema; secret scan clean. No deploy · no production · dev `9b09f9e`.
 
 ### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — `Merged` — PR #113 (merge SHA `5df9f9d74a59057e099e82c1e5471bfff0c8e449`; `version_1` tip `5df9f9d`; test-only)
 - **Goal:** turn the 17E.0 discovery into automated, regression-locked backend coverage of "one account owns

@@ -34,18 +34,27 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
      (+ `update/avatar/destroy_custom_attributes` via `fetch_contact`), `Contacts::FilterService#base_relation`,
      global `SearchService#filter_contacts`, and `contacts/base_controller#ensure_contact` (notes/labels/
      attachments/conversations/contact_inboxes sub-resources → 404 for out-of-scope).
+  4. **PR #114 review blocker fix** — routed the **bulk contact WRITE path** through the seam too.
+     `BulkActionsController#enqueue_contact_job` now filters `ids` through `Bloomwire::ContactVisibility.scope`
+     BEFORE enqueueing `Contacts::BulkActionJob`, so a gated agent can no longer bulk **add/remove labels** on an
+     out-of-scope `contact_id`. Out-of-scope IDs are dropped (silently ignored, matching stock `where(id:)` skip
+     behaviour); admins and gate-OFF pass IDs through unchanged; **delete stays admin-only** via the existing
+     `authorize(Contact, :destroy?)`. Unsafe raw IDs never reach the async job.
 - **Not changed:** admin visibility; conversation/inbox scoping; the global webhook router; native WhatsApp;
   DB schema; frontend. **No new category entity; no duplicate contact/chat store.**
 - **Known limitation (documented, deferred):** direct ID-based access via **contact merge**, **CSAT report**
   contact inclusion, **Shopify** integration, and the **conversation-create** contact lookup are NOT scoped in
   this phase — they are mutations/reports/integrations requiring a known contact_id (not enumeration) and are
   lower-risk than the list/search enumeration this phase closes. Export/import remain **admin-only** (safe).
+  **Bulk contact label add/remove is now scoped (PR #114 review blocker fix, item 4 above) and is no longer an
+  open gap.**
 - **Security:** no secrets · no provider-credential mutation · no live Meta/WhatsApp · no Enterprise code touched.
-- **Validation:** new `contact_visibility_spec` 5/5 + `contact_isolation_spec` 13/13; regression
-  `contacts_controller_spec` 58/58, `multi_whatsapp_inbox_category_contract`/`conversation_finder`/
-  `permission_filter_service`/`contact_policy` 35/35, `features_spec` 18/18; RuboCop clean; `git diff --check`
-  clean. (One enterprise `companies` test fails pre-existing — proven via `git stash`, unrelated.) **No deploy ·
-  no production · dev remains `9b09f9e`.**
+- **Validation:** new `contact_visibility_spec` 5/5 + `contact_isolation_spec` **20/20** (was 13/13; +7 bulk-action
+  cases); bulk-path regression `bulk_actions_controller_spec` + `contacts/bulk_action_service_spec` +
+  `contacts/bulk_action_job_spec` + `contacts_controller_spec` = **76/76**; **RED proof** for the blocker:
+  reverting the controller (via `git stash`) fails exactly the 3 "does-not-mutate-B" cases (B is mutated),
+  re-applying is GREEN. RuboCop clean; `git diff --check` clean; no migration/schema; secret scan clean.
+  **No deploy · no production · dev remains `9b09f9e`.**
 
 ### Phase 17E.1 — Multiple WhatsApp Inbox backend contract tests — MERGED
 - **PR:** #113 · **merge SHA** `5df9f9d74a59057e099e82c1e5471bfff0c8e449` · **Status:** merged into `version_1`

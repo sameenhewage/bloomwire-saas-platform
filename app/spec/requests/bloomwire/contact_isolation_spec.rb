@@ -151,4 +151,75 @@ RSpec.describe 'Bloomwire agent contact isolation', type: :request do
       end
     end
   end
+
+  # Phase 17E.2 (PR #114 review blocker): bulk contact label actions must NOT let a gated agent mutate contacts
+  # outside their assigned-inbox visibility. The label mutation runs in an async job, so we wrap the request in
+  # `perform_enqueued_jobs` to actually apply (or not) the label, then assert the contact's label_list.
+  describe 'POST /bulk_actions (Contact label actions)' do
+    include ActiveJob::TestHelper
+
+    before { create(:label, account: account, title: 'vip') }
+
+    def bulk_label(user:, ids:, add: nil, remove: nil)
+      labels = {}
+      labels[:add] = add if add
+      labels[:remove] = remove if remove
+      perform_enqueued_jobs do
+        post "/api/v1/accounts/#{account.id}/bulk_actions",
+             headers: user.create_new_auth_token,
+             params: { type: 'Contact', ids: ids, labels: labels }, as: :json
+      end
+    end
+
+    context 'with isolation ON' do
+      before { enable_contact_isolation }
+
+      it 'lets a category-1 agent bulk-add a label to their own contact A' do
+        bulk_label(user: agent1, ids: [contact_a.id], add: ['vip'])
+        aggregate_failures do
+          expect(response).to have_http_status(:success)
+          expect(contact_a.reload.label_list).to include('vip')
+        end
+      end
+
+      it 'does NOT let a category-1 agent bulk-add a label to a category-2 contact B' do
+        bulk_label(user: agent1, ids: [contact_b.id], add: ['vip'])
+        expect(contact_b.reload.label_list).not_to include('vip')
+      end
+
+      it 'does NOT let a category-1 agent bulk-remove a label from a category-2 contact B' do
+        contact_b.add_labels(['vip'])
+        bulk_label(user: agent1, ids: [contact_b.id], remove: ['vip'])
+        expect(contact_b.reload.label_list).to include('vip') # untouched — removal was blocked
+      end
+
+      it 'in a mixed bulk-add, labels only the in-scope contact A, never the out-of-scope B' do
+        bulk_label(user: agent1, ids: [contact_a.id, contact_b.id], add: ['vip'])
+        aggregate_failures do
+          expect(contact_a.reload.label_list).to include('vip')
+          expect(contact_b.reload.label_list).not_to include('vip')
+        end
+      end
+
+      it 'lets either relevant agent bulk-label the SHARED contact C' do
+        bulk_label(user: agent1, ids: [contact_c.id], add: ['vip'])
+        expect(contact_c.reload.label_list).to include('vip')
+      end
+
+      it 'lets an admin bulk-label contacts from BOTH inboxes' do
+        bulk_label(user: admin, ids: [contact_a.id, contact_b.id], add: ['vip'])
+        aggregate_failures do
+          expect(contact_a.reload.label_list).to include('vip')
+          expect(contact_b.reload.label_list).to include('vip')
+        end
+      end
+    end
+
+    context 'with isolation OFF (stock Chatwoot regression)' do
+      it 'lets an agent bulk-label any account contact (stock behavior preserved)' do
+        bulk_label(user: agent1, ids: [contact_b.id], add: ['vip'])
+        expect(contact_b.reload.label_list).to include('vip')
+      end
+    end
+  end
 end

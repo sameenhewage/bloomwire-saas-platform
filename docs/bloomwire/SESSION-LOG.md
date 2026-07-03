@@ -22,12 +22,12 @@
 - **`version_1` tip:** `5df9f9d74a59057e099e82c1e5471bfff0c8e449`  (PR #113 merged — Phase 17E.1 multi-WhatsApp-inbox backend contract tests)
 - **Dev deployed SHA:** `9b09f9e`  (public: https://dev.unecast.com · health `/health`) — dev unchanged since the 16C deploy; 17A/17B/17C.1/17C.2/17C.3/17D.0/17D.1/17D.2/17D.3 not deployed.
 - **Latest completed / merged:** **PR #113** — Phase **17E.1** Multiple WhatsApp Inbox **backend contract tests** (test-only; two numbers → two isolated inboxes per account; dup blocked; router per-pnid; category agent-isolation), merged at `5df9f9d74a59057e099e82c1e5471bfff0c8e449`. Before it: PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **Phase 17E.2** — **Contact isolation & UI/permission polish**. **PR #114 is open, non-draft, and ready for review** (branch `feature/bloomwire-phase-17e2-contact-isolation-permission-polish`) — **product code YES (gated backend fix); not merged, not deployed.** Resolves the 17E.0/17E.1 caveat: a business **agent** may only list/search/open contacts reachable via their assigned inboxes (through `contact_inboxes`); **admins see all**; **shared** contacts visible to agents of any linked inbox; conversation isolation stays primary. **Gated** by new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` (master AND-gated) — **OFF == stock Chatwoot**. Single seam `Bloomwire::ContactVisibility.scope` routed through `ContactsController#index/search/active/show`, `Contacts::FilterService`, global `SearchService#filter_contacts`, and `contacts/base_controller#ensure_contact`. **No migration/schema, no frontend, no router/native-whatsapp change.** Deferred (documented): ID-based merge/CSAT/Shopify/conversation-create. Validation: new 18/18 + regression 58/58 + 35/35 + features 18/18; RuboCop clean; enterprise `companies` failure pre-existing (proven via stash).
+- **In-flight / open (NOT merged):** **Phase 17E.2** — **Contact isolation & UI/permission polish**. **PR #114 is open, non-draft, and ready for review** (branch `feature/bloomwire-phase-17e2-contact-isolation-permission-polish`) — **product code YES (gated backend fix); not merged, not deployed.** Resolves the 17E.0/17E.1 caveat: a business **agent** may only list/search/open contacts reachable via their assigned inboxes (through `contact_inboxes`); **admins see all**; **shared** contacts visible to agents of any linked inbox; conversation isolation stays primary. **Gated** by new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` (master AND-gated) — **OFF == stock Chatwoot**. Single seam `Bloomwire::ContactVisibility.scope` routed through `ContactsController#index/search/active/show`, `Contacts::FilterService`, global `SearchService#filter_contacts`, and `contacts/base_controller#ensure_contact`. **Review round 2 — blocker fixed:** the **bulk contact WRITE path** (`BulkActionsController#enqueue_contact_job` → `Contacts::BulkActionJob`) now filters `ids` through the seam before enqueue, so a gated agent can't bulk add/remove labels on out-of-scope contacts (delete stays admin-only). **No migration/schema, no frontend, no router/native-whatsapp change.** Deferred (documented): ID-based merge/CSAT/Shopify/conversation-create. Validation: `contact_isolation_spec` 20/20 + `contact_visibility_spec` 5/5 + bulk-path regression 76/76; RuboCop clean; blocker fix RED-proven via `git stash`.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
 - **Next up (not started — pick with owner):**
-  1. **Multi-WhatsApp-inbox (17E):** **17E.0** (`83496896`) + **17E.1** (PR #113, `5df9f9d`) merged; **17E.2** contact isolation is **in-flight (PR #114, product code, open / ready for review, not merged)** — gated agent contact scoping (`BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY`), OFF == stock. Next: **17E.3** owner-operated runtime E2E (mocked Meta) — and a hardening follow-up for the deferred ID-based contact paths (merge/CSAT/Shopify/conversation-create) — before customer go-live.
+  1. **Multi-WhatsApp-inbox (17E):** **17E.0** (`83496896`) + **17E.1** (PR #113, `5df9f9d`) merged; **17E.2** contact isolation is **in-flight (PR #114, product code, open / ready for review, not merged)** — gated agent contact scoping (`BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY`), OFF == stock; **PR #114 review blocker fixed** (bulk contact label add/remove now scoped through the seam). Next: **17E.3** owner-operated runtime E2E (mocked Meta) — and a hardening follow-up for the still-deferred ID-based contact paths (merge/CSAT/Shopify/conversation-create) — before customer go-live.
   2. **Coexistence go-live:** **17C.4** verify / go-live UX (surface real-hop readiness + a "send a test message" / webhook-received confirmation), and remove the parked `WhatsappSetupRequest`. **Before real customer tokens are stored:** ensure the Meta app config (incl. `WHATSAPP_CONFIGURATION_ID`) + AR encryption keys are set in the target env (the service fails closed on encryption outside dev/test), and run owner-operated real-Meta E2E in a browser (no automated real-Meta calls).
   3. **Deferred observability:** last-webhook-received telemetry (non-secret Redis/InstallationConfig timestamp) → surface it on the Global Config page (currently "Not tracked yet").
   4. **Prod SMTP parity (important):** populate the **production** global `SMTP_*` env — the same empty-env root cause would block prod activation/reset/invite emails (dev-only fix so far).
@@ -75,6 +75,34 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-03 — Phase 17E.2 — PR #114 review blocker fix: bulk contact label actions scoped (product code, open)
+- **Review verdict `REQUEST_CHANGES`** on PR #114 (reviewed head `2cf9c09`): the bulk-action path
+  (`POST /api/v1/accounts/:id/bulk_actions`, `type=Contact`) **bypassed** the new `Bloomwire::ContactVisibility`
+  seam — a gated agent who knew an out-of-scope `contact_id` could bulk **add/remove labels** on it
+  (`Contacts::BulkActionService` → sub-services run `@account.contacts.where(id: ids)` with no visibility scoping).
+- **Root cause / owner:** the mutation runs in an async job (`Contacts::BulkActionJob`) where `Current.user` is
+  nil, but the controller `BulkActionsController#enqueue_contact_job` already has `current_user` and owns the `ids`
+  param. **Smallest safe fix = filter the ids controller-side, before enqueue**, so unsafe raw ids never reach the
+  async job. (Downstream sub-services don't receive the user, so they can't self-scope.)
+- **Fix (product code, 1 controller):** new `BulkActionsController#scoped_contact_params` — when
+  `Bloomwire::ContactVisibility.restricted_for?(account:, user:)` (gate ON + non-admin agent), replace `ids` with
+  `Bloomwire::ContactVisibility.scope(account:, user:).where(id: ids).pluck(:id)`; **admins / gate-OFF pass ids
+  through unchanged** (byte-identical params). **Delete stays admin-only** via the existing `authorize(Contact, :destroy?)`.
+- **Bug caught by the new tests:** `contact_params` returns a **string-keyed** hash, so an initial symbol-key read
+  (`permitted[:ids]`) was nil → in-scope labels silently dropped. Fixed to read/write the `'ids'` string key; the
+  new in-scope A/C cases went RED immediately and surfaced it — exactly the guard they're meant to be.
+- **Tests (+7 in `contact_isolation_spec`, async job run via `perform_enqueued_jobs`):** gated agent bulk-add label
+  to own contact A → succeeds; add to out-of-scope B → B NOT mutated; remove from B → B NOT mutated; mixed [A,B]
+  add → only A; shared C → succeeds; admin bulk-labels A+B (both inboxes) → succeeds; gate-OFF agent labels B →
+  stock succeeds. **RED proof:** reverting only the controller (`git stash`) fails exactly the 3 "does-not-mutate-B"
+  cases (B is mutated) → the tests fail if raw `@account.contacts.where(id: ids)` is used; re-applying is GREEN.
+- **Validation:** `contact_isolation_spec` **20/20** + `contact_visibility_spec` **5/5**; bulk-path regression
+  `bulk_actions_controller_spec` + `contacts/bulk_action_service_spec` + `contacts/bulk_action_job_spec` +
+  `contacts_controller_spec` = **76/76** (stock/admin/gate-OFF unchanged); RuboCop clean; `git diff --check` clean;
+  **no migration/schema · no frontend · no route**; secret-scan clean. **PR #114 — still open, non-draft, NOT
+  merged; not deployed.** Dev remains `9b09f9e`. Remaining deferred: merge / CSAT / Shopify / conversation-create
+  ID-based paths → 17E.3 hardening.
 
 ### 2026-07-03 — Phase 17E.2 — Contact isolation & UI/permission polish (PR #114, product code, open / ready for review)
 - **Built (branch `feature/bloomwire-phase-17e2-contact-isolation-permission-polish` off `version_1` `5df9f9d`):**
