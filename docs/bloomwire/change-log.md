@@ -15,6 +15,26 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — OPEN (docs‑only, not merged)
+- **Type:** DISCOVERY + PLANNING (docs‑only). **Product code changed: NO.** No migration/schema · no frontend · no
+  route · no deploy · no production · no real Meta/WhatsApp/Shopify. Base `version_1` `096f619`; DEV runtime `4525bea`.
+- **What:** new `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md` — evidence‑backed design for
+  managing multiple WhatsApp inboxes, business categories/departments, and staff using existing Chatwoot primitives.
+- **Key architecture conclusion:** **`Inbox` and `Team` are independent (no FK, no `team_id` on inboxes, no join
+  table).** "Category/Department = Team + Inbox(es)" is **convention‑only** today (parallel `InboxMember` +
+  `TeamMember`; auto‑assign already intersects `inbox ∩ team` members). **No new Category entity is needed** — DEV
+  already uses Teams ("Area 1"/"Area 2") as categories. All admin‑vs‑agent boundaries are **already backend‑enforced**.
+- **Recommended UX:** **Option C (Hybrid)** — a thin Bloomwire "Categories & Inboxes" overview that **composes** and
+  **deep‑links** the existing Chatwoot inbox/team/agent editors + a guided "add WhatsApp inbox → assign to
+  category(team) → assign staff to both memberships" flow that closes the only real gap (membership drift).
+- **Proposed slices:** 17F.1 admin overview (read‑only) · 17F.2 guided add‑inbox‑to‑category · 17F.3 unified staff
+  membership · 17F.4 category↔inbox mapping + enforcement (only slice that may touch schema — data tag, owner‑approved,
+  **never a new entity**) · 17F.5 UI states/responsive · 17F.6 authenticated DEV E2E. Feature‑flagged (OFF ⇒ stock).
+- **Go/No‑Go for 17F.1:** **GO** (zero schema risk; pure composition).
+- **Method:** 4 read‑only code sub‑agents + authenticated DEV admin runtime inspection (Chrome DevTools MCP, PHI masked).
+  Runtime pages inspected: inbox list/settings, WhatsApp Standard/Coexistence setup, Teams, Agents, contacts, nav/IA.
+  All Bloomwire gates verified ON on DEV. **No product code · no deploy · production untouched · no real Meta.**
+
 ### Phase 17E.4 — Contact ID hardening — MERGED (PR #116, merge SHA `4525bea6baf8c17315436982f0d70106508b9c57`)
 - **PR:** #116 · **merged into `version_1` (tip `4525bea`)** via admin merge (branch policy required a review; CI was
   8/8 green) · **Type:** backend permission hardening (gated) + RSpec.

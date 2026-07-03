@@ -346,6 +346,16 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery <span class="badge">Open (docs‑only, not merged)</span> <span class="pr">base 096f619 · dev 4525bea</span></h3>
+      <ul>
+        <li><b>Goal</b>: design the admin experience for multiple WhatsApp inboxes + business categories/departments + staff using existing Chatwoot primitives (no new Category entity).</li>
+        <li><b>Deliverable</b>: <code>docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md</code> (arch map, code evidence, runtime UX, permission matrix, Mermaid flows, gap analysis, UX options + recommendation, slices, TDD, risks, go/no‑go).</li>
+        <li><b>Key finding</b>: <code>Inbox</code> ↔ <code>Team</code> are independent (no FK / no <code>team_id</code> / no join). Category = Team + Inbox(es) is <b>convention‑only</b> (parallel <code>InboxMember</code> + <code>TeamMember</code>; auto‑assign intersects inbox ∩ team). Admin/agent isolation already backend‑enforced (all Bloomwire gates ON on DEV).</li>
+        <li><b>Recommendation</b>: <b>Option C (Hybrid)</b> — compose + deep‑link existing editors + guided dual‑membership add flow. Slices 17F.1–17F.6; <b>Go for 17F.1</b> (read‑only overview, zero schema risk).</li>
+        <li><b>Validation</b>: docs‑only; no product code; no migration/schema; no deploy; no real Meta/WhatsApp/Shopify; production untouched.</li>
+      </ul>
+    </div>
+
     <div class="card"><h3>Phase 17E.4D — Dev Deploy + Authenticated Runtime Validation <span class="badge done">Done (PASS)</span> <span class="pr">deploy run 28684004558 · dev @ 4525bea</span></h3>
       <ul>
         <li><b>Deploy</b>: <code>deploy-dev.yml</code> (manual; prod hard-blocked) deployed <code>version_1 @ 4525bea</code> to <b>dev only</b> (run_migrations no-op — 0 pending; prune=false; postgres/redis volumes preserved). Run <code>28684004558</code> SUCCESS. Post-deploy: <code>/app/.git_sha = 4525bea</code>, local+public health 200, login renders, rails+sidekiq up, pg/redis reachable, <b>no pending migrations</b>, no 5xx.</li>

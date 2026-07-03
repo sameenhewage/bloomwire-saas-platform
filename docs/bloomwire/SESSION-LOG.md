@@ -19,10 +19,10 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `4525bea6baf8c17315436982f0d70106508b9c57`  (PR #116 merged — Phase 17E.4 contact ID hardening)
+- **`version_1` tip:** `096f619020a3102c404053a5a9832cd5fcbdfb1b`  (PR #117 merged — Phase 17E.4D governance docs; **runtime code unchanged since `4525bea`**)
 - **Dev deployed SHA:** `4525bea6baf8c17315436982f0d70106508b9c57` (`4525bea`)  (public: https://dev.unecast.com · health `/health`) — deployed in **Phase 17E.4D** (dev-only via `deploy-dev.yml`, run `28684004558`; `/app/.git_sha` verified; health 200; no pending migrations; postgres/redis volumes preserved). **`BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true` is now permanently enabled on dev** (runtime resolves true; never enabled in prod). Was `3c45720`. Production untouched.
-- **Latest completed / merged:** **PR #116** — Phase **17E.4** contact ID hardening (product code; gated), merged at `4525bea6baf8c17315436982f0d70106508b9c57`, and **deployed + authenticated-runtime-smoke PASS on dev in Phase 17E.4D**. Before it: PR #115 (17E.3, `3c45720`); PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** none for product code — **Phase 17E.4 (PR #116) is merged + deployed to dev (17E.4D)**. The only open PR is the **17E.4D docs-only governance PR** (this change; **do not auto-merge**). Runtime 17E.2 + 17E.4 contact isolation is now **live on dev with the gate ON**, validated end-to-end by the authenticated smoke (agent out-of-scope merge/attach → 404, Shopify → 422 no-egress, contact/conversation isolation; admin unchanged).
+- **Latest completed / merged:** **PR #117** — Phase **17E.4D** dev‑release governance docs (docs‑only), merged at `096f619020a3102c404053a5a9832cd5fcbdfb1b`. Before it: **PR #116** (17E.4 contact ID hardening, `4525bea`, **deployed + authenticated smoke PASS on dev in 17E.4D**); PR #115 (17E.3, `3c45720`); PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
+- **In-flight / open (NOT merged):** **Phase 17F.0** — **Multi‑WhatsApp‑Inbox / Category Admin UI discovery** (docs‑only PR off `version_1` `096f619`; **do not auto‑merge**). No product code. Delivers `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md`. **Key finding:** `Inbox` ↔ `Team` are independent (no FK) ⇒ Category = Team + Inbox(es) is **convention‑only** (parallel `InboxMember` + `TeamMember`; auto‑assign intersects `inbox ∩ team`); **no new Category entity**. **Recommends Option C (hybrid compose + deep‑link + guided dual‑membership add)**; **GO for 17F.1** (read‑only overview, zero schema risk). Runtime 17E.2 + 17E.4 contact isolation remains live on dev with the gate ON.
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
@@ -75,6 +75,31 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-03 — Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI discovery (docs‑only, open)
+- **Delivered** `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md` (exec summary, architecture map,
+  code evidence w/ paths, runtime UX findings, permission matrix, Mermaid data‑flows, gap analysis, UX option
+  comparison, recommended UX, implementation slices, TDD plan, risks, non‑goals, go/no‑go). Branch
+  `docs/bloomwire-phase-17f0-multi-inbox-admin-ui-discovery` off `version_1` `096f619`; DEV runtime `4525bea`.
+- **Method:** 4 read‑only code sub‑agents (inbox mgmt · teams/inbox‑team mapping · staff/permissions ·
+  conversation/contact isolation + dataflow) + authenticated DEV admin runtime inspection (Chrome DevTools MCP, PHI
+  masked): inbox list/settings, WhatsApp Standard/Coexistence setup, Teams (2: "Area 1"/"Area 2"), Agents (8), contacts,
+  nav/IA. Verified **all Bloomwire gates ON on DEV**.
+- **Architecture conclusion (evidence‑backed):** `Inbox` and `Team` are **independent** — no FK, no `team_id` on
+  `inboxes`, no join table (`app/db/schema.rb`, `team.rb`, `inbox.rb`). So "Category/Department = Team + Inbox(es)" is
+  **convention‑only**: name a Team as the category + add the same staff to **both** `InboxMember` and `TeamMember`
+  (Chatwoot auto‑assign already intersects `inbox.member_ids ∩ team.member_ids`). **No new Category entity needed.**
+  Admin‑vs‑agent boundaries are already **backend‑enforced** (Inbox/Team/User/Conversation/Contact policies + Bloomwire
+  gates). The **only real gap is membership drift** (staff on Team but not Inbox, or vice‑versa) + the absence of a
+  unified surface.
+- **Recommended UX: Option C (Hybrid)** — thin Bloomwire "Categories & Inboxes" overview that composes existing stores
+  and **deep‑links** the existing Chatwoot inbox/team/agent editors + a guided "add WhatsApp inbox → assign to
+  category(team) → assign staff to both memberships" flow (writes both memberships at once ⇒ closes drift). Slices:
+  17F.1 read‑only overview → 17F.2 guided add → 17F.3 unified staff membership → 17F.4 category↔inbox mapping +
+  enforcement (only slice that may touch schema — a **data tag**, owner‑approved, **never a new entity**) → 17F.5 UI
+  states/responsive → 17F.6 authenticated DEV E2E. All feature‑flagged (OFF ⇒ stock Chatwoot). **Go/No‑Go for 17F.1: GO.**
+- **Docs‑only** (this doc + change‑log + ledger md/html + SESSION‑LOG). No product code · no migration/schema · no
+  deploy · production untouched · no real Meta/WhatsApp/Shopify. **This ships in a docs‑only PR — do not auto‑merge.**
 
 ### 2026-07-03 — Phase 17E.4D — Dev deploy + authenticated runtime validation (PASS)
 - **Merged PR #116** (17E.4 contact ID hardening) at **`4525bea6baf8c17315436982f0d70106508b9c57`** (admin merge; branch
