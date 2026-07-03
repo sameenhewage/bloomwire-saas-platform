@@ -62,6 +62,7 @@ describe('useBloomwireCapabilities', () => {
       'canManageBots',
       'canAccessIntegrations',
       'canSelfServeManagedWhatsapp',
+      'canAccessCategoryAdmin',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
   });
@@ -85,6 +86,28 @@ describe('useBloomwireCapabilities', () => {
       mockGetters({ capabilities: { canSelfServeManagedWhatsapp: true } });
       const { canSelfServeManagedWhatsapp } = useBloomwireCapabilities();
       expect(canSelfServeManagedWhatsapp.value).toBe(true);
+    });
+  });
+
+  // Phase 17F.1: opt-in managed capability for the admin-only, read-only "Categories & Inboxes" overview —
+  // defaults to FALSE (stays hidden in stock / older backend / agent) and only appears on an explicit server `true`.
+  describe('canAccessCategoryAdmin (opt-in, default false)', () => {
+    it('defaults to false when the capability map is absent', () => {
+      mockGetters({ capabilities: undefined });
+      const { canAccessCategoryAdmin } = useBloomwireCapabilities();
+      expect(canAccessCategoryAdmin.value).toBe(false);
+    });
+
+    it('defaults to false when the specific key is missing (other caps present)', () => {
+      mockGetters({ capabilities: { canManageProviderSetup: true } });
+      const { canAccessCategoryAdmin } = useBloomwireCapabilities();
+      expect(canAccessCategoryAdmin.value).toBe(false);
+    });
+
+    it('is true only on an explicit server true', () => {
+      mockGetters({ capabilities: { canAccessCategoryAdmin: true } });
+      const { canAccessCategoryAdmin } = useBloomwireCapabilities();
+      expect(canAccessCategoryAdmin.value).toBe(true);
     });
   });
 });
