@@ -15,6 +15,60 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — DISCOVERY & CONTRACT only — OPEN (docs‑only, not merged)
+- **Type:** DISCOVERY + IMPLEMENTATION CONTRACT (docs‑only). **Product code changed: NO.** No schema/migration · no
+  frontend · no route · no workflow/env · no deploy · no production · no real Meta/WhatsApp/Shopify · **no
+  implementation.** Branch `docs/bloomwire-phase-17f2-guided-inbox-discovery` off `version_1` `bb2a3d7` (verified tip).
+- **What:** new `docs/bloomwire/phase-17f2-guided-inbox-category-flow-discovery.md` — a complete, code‑evidenced map of
+  the existing flows (Standard + Coexistence Embedded Signup, inbox/channel creation, `Bloomwire::WhatsappSetup`,
+  Team/`TeamMember`, `InboxMember`, the 17F.1 overview + Team/Inbox/Agents deep‑links, admin‑vs‑agent policies, account
+  isolation, feature flags/capabilities, transaction boundaries, validation/rollback) plus a failure/rollback matrix, a
+  security/authorization matrix, feature ON/OFF behavior, recommended UX/backend/frontend orchestration, the flow‑shape
+  decision, partial‑completion handling, proposed slices, RED→GREEN tests, risks and non‑goals.
+- **CORRECTION (owner‑observed DEV blocker — §0 of the doc):** an owner test on authenticated DEV
+  (`/settings/inboxes/list`) found **NO "New Inbox" button**, and `/settings/inboxes/new` renders a **blank channel
+  list** ⇒ a real business admin **cannot add a second WhatsApp inbox via the normal UI on DEV**. **Multi‑inbox backend
+  support alone is NOT a product PASS**, and 17F.1 MCP validation did **not** cover the click journey *Inbox list → New
+  Inbox → WhatsApp card → Standard/Coexistence*. **The managed onboarding entry journey is NOT DEV PASS.** Root cause
+  (verified in source): `settings/inbox/Index.vue` gates the New Inbox entry on `isAdmin && canCreateInbox` (managed
+  mode ⇒ `canCreateInbox=false`; `canSelfServeManagedWhatsapp` not even considered), and `settings/inbox/ChannelList.vue`
+  filters **all** cards when `canCreateInbox=false && canSelfServeManagedWhatsapp=false` **with no safe empty state** ⇒
+  blank. Effective managed capability needs admin + `BLOOMWIRE_MODE_ENABLED` + `PRIVACY_HARDENING` +
+  `RESTRICT_NATIVE_WHATSAPP_SETUP` + `MANAGED_WHATSAPP_ONBOARDING` — **do not assume which DEV flag is missing; inspect
+  server‑side in the later deploy phase.**
+- **Key finding:** the *category launcher* can be built **without a new mapping and without a transaction that spans an
+  external Meta operation** (setup runs Meta **before** one `ActiveRecord::Base.transaction`; membership is admin‑only,
+  transactional, idempotent, reversible; overview surfaces partial completion). **But** the launcher is **not** the first
+  slice — the onboarding **entry** must be restored first.
+- **Recommendation (revised — staged, strictly ordered):** **PROCEED** with **17F.2A → 17F.2B → 17F.3**:
+  **17F.2A** = managed WhatsApp onboarding **entry restoration** (New Inbox entry becomes `isAdmin && (canCreateInbox ||
+  canSelfServeManagedWhatsapp)`; non‑blank `/settings/inboxes/new` with a safe unavailable state; agents denied;
+  stock/native preserved; no schema/mapping). **17F.2B** = category thin launcher (deep‑link the now‑operable wizard).
+  **17F.3** = guided TeamMember + InboxMember alignment (explicit, reversible, local‑only). A persistent `Inbox↔Team`
+  mapping/data‑tag stays **out of scope** (owner‑approved ADR required — 17F.0).
+- **17F.2A acceptance is TWO LOCKED deployed‑DEV gates (doc §13A), in order — LOCAL/component/API is supporting only:**
+  **Gate A** = deployed‑DEV navigation regression (no real Meta): normal‑nav Settings→Inboxes, New Inbox button visible,
+  non‑blank `/settings/inboxes/new`, WhatsApp Business card → Standard+Coexistence, safe unavailable state, agent denied,
+  feature‑OFF stock, cancel with no writes. **Gate B** = **owner‑assisted real Meta Coexistence E2E** using a
+  **controlled DEV WhatsApp Business account** (masked, e.g. `*******3273`; never full phone/`phone_number_id`/WABA):
+  complete Embedded Signup → exactly one `Channel::Whatsapp` + `Inbox` + encrypted credential + `Bloomwire::WhatsappSetup`
+  (correct masked ids) → webhook‑ready → **app subscribed to customer WABA, NO per‑customer callback (global webhook is
+  the single inbound endpoint)** → inbound routes to the **new** inbox (not the pre‑existing one) via global webhook →
+  `phone_number_id` → Channel → Inbox → outbound reply delivered → status events → **no cross‑tenant leakage / no
+  duplicate storage or processing / no secrets** → operational checks (rails+sidekiq `/app/.git_sha`=merge SHA, health
+  200, no pending migrations, containers recreated, pg/redis preserved, 5xx=0, console errors=0, prod untouched) →
+  **pre‑decided data‑retention** (retain as named DEV fixture **or** remove with zero‑orphan proof). **Acceptance order:
+  17F.2A impl → exact‑head review → merge → DEV deploy → Gate A PASS → Gate B PASS → only then 17F.2B.** A navigation‑only
+  PASS is **not** a customer‑onboarding PASS.
+- **Governance corrections in this PR:** Phase **17F.0** relabelled from "OPEN/not merged" to **Merged (PR #118, merge
+  SHA `6c0ab8c`, docs‑only)** here and in the implementation ledger (md + html). SESSION‑LOG "Current State" now
+  distinguishes the **repository `version_1` tip `bb2a3d7`** from the **DEV deployed runtime SHA `7bc59c7`**. Historical
+  evidence unchanged.
+- **Security:** no secrets exposed · no provider‑credential mutation · no live Meta/WhatsApp/Shopify calls · no
+  Enterprise code touched · docs‑only.
+- **Validation:** docs governance + secret scan + `git diff --check` + docs‑only diff check + normal CI (expected green;
+  no product code to test). **Do not merge · do not deploy · do not start implementation — awaiting GPT‑5.5 review.**
+
 ### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — MERGED (PR #119, merge SHA `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`) + DEV‑validated
 - **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 · approved
   head `024b35a56776ce4a50f7cd72137ffd79b68c9803` · **merged into `version_1` at `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`**
@@ -101,7 +155,9 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   untouched.**
 - **Phase 17F.1 is COMPLETE. Phase 17F.2 NOT started.**
 
-### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — OPEN (docs‑only, not merged)
+### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — MERGED (PR #118, merge SHA `6c0ab8c`, docs‑only)
+- **Status correction (17F.2):** this entry previously read "OPEN (not merged)"; it was in fact **merged via PR #118 at
+  `6c0ab8c`** (docs‑only; no deploy). Corrected here for accuracy; historical details below are unchanged.
 - **Type:** DISCOVERY + PLANNING (docs‑only). **Product code changed: NO.** No migration/schema · no frontend · no
   route · no deploy · no production · no real Meta/WhatsApp/Shopify. Base `version_1` `096f619`; DEV runtime `4525bea`.
 - **What:** new `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md` — evidence‑backed design for
