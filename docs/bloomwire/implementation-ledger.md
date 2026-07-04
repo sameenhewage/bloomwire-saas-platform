@@ -313,7 +313,7 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — `Open (feature‑flagged; PR #119; head advances by correction commit; NOT merged; NOT deployed; product code: YES, gated)`
+### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — `Merged` — PR #119 (approved head `024b35a`; merge SHA `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`; `version_1` tip `7bc59c7`; deployed to DEV in 17F.1D; product code: YES, gated)
 - **Goal:** ship the administrator‑only, **read‑only** "Categories & Inboxes" overview from 17F.0 Option C, using
   existing Chatwoot primitives only (**no schema, no new Category entity, no writes**), gated by a new master‑gated
   feature so OFF ⇒ stock Chatwoot.
@@ -359,6 +359,29 @@
 - **Security:** no secrets exposed; no provider‑credential mutation; **no live Meta/WhatsApp/Shopify**; no Enterprise.
 - **Residual / parked:** Category↔Inbox is derived (convention‑only); a persistent Inbox↔Team mapping/data‑tag is
   **out of scope** and needs a separate owner‑approved design (17F.0). Read‑only slice; guided add/assign flow later.
+
+### Phase 17F.1D — DEV deploy + authenticated runtime validation — `Done (PASS)` — deploy run `28694180364`
+- **Merge:** PR #119 approved head `024b35a` → **merge SHA `7bc59c7`** (2‑parent merge; parents `6c0ab8c` + `024b35a`;
+  admin merge, branch policy `REVIEW_REQUIRED` only, CI 8/8 green; self‑approve blocked → pinned approval comment).
+  `version_1` tip = `7bc59c7`.
+- **Deploy:** `deploy-dev.yml` (manual; prod hard‑blocked), `env=dev ref=version_1 run_migrations=true skip_smoke=false
+  prune=false`. Run `28694180364` SUCCESS. Rails + sidekiq `/app/.git_sha = 7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`
+  (SSH‑verified); local + public health 200; rails+sidekiq recreated; postgres/redis preserved (not recreated); no
+  pending migrations; no 5xx. Dev deployed SHA now `7bc59c7`.
+- **DEV flags (dev only):** `BLOOMWIRE_MODE_ENABLED=true` + `BLOOMWIRE_CATEGORY_ADMIN_UI=true`; capability admin=true /
+  agent=false. Never touched in prod.
+- **Admin+ON (PASS):** real account 1 (2 categories + ambiguous, deep‑links, read‑only, 1 overview GET, 0 console, no
+  secrets, DTO secret‑scan false) + synthetic account (full matrix: 7 categories, ambiguous+unlinked sections, 2 drift,
+  3 Standard/2 Coexistence badges, statuses pending/configured/ready_for_webhook/blocked/not_configured, Team+Inbox+Agents
+  deep‑links, read‑only, isolation, desktop/tablet/mobile). Masked screenshots.
+- **Agent+ON (PASS):** curl agent token → own‑account 401 + cross‑account 401 (0 overview keys; labels control 200);
+  browser → nav absent, route redirect (0 rows, no flash), overview fetch 401. Existing agent paths unchanged (untouched).
+- **Feature OFF (PASS):** admin overview 404; existing labels/inboxes/teams/agents 200; browser nav absent + redirect +
+  existing screens render; restored ON + re‑verified.
+- **Counts:** 5xx=0 · console errors=0 (only the deliberate agent 401 probe) · graph.facebook.com=0 · myshopify.com=0 ·
+  overview mutations=0 · secrets=0.
+- **Cleanup:** synthetic account+users+tokens removed (0 left); real account 1 + admin preserved; DEV feature left ON;
+  browser session cleared; no real Meta/WhatsApp/Shopify; production untouched. **Phase 17F.1 COMPLETE; 17F.2 NOT started.**
 
 ### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — `Open (docs‑only, not merged)`
 - **Goal:** design the Bloomwire admin experience for multiple WhatsApp inboxes + business categories/departments +

@@ -15,11 +15,13 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — OPEN (feature‑flagged; not merged)
-- **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 ·
-  head advances by correction commit · **NOT merged · NOT deployed.** **Type:** administrator‑only READ‑ONLY UI +
-  safe‑DTO API (feature‑gated). **Product code changed: YES (gated).** **No DB migration/schema · no writes · no new
-  Category entity · no real Meta/WhatsApp/Shopify.**
+### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — MERGED (PR #119, merge SHA `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`) + DEV‑validated
+- **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 · approved
+  head `024b35a56776ce4a50f7cd72137ffd79b68c9803` · **merged into `version_1` at `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`**
+  (normal 2‑parent merge; parents `6c0ab8c` + `024b35a`; admin merge — branch policy `REVIEW_REQUIRED` was the only
+  blocker, CI 8/8 green; self‑approve blocked by GitHub → pinned approval comment recorded) · **deployed to DEV in
+  17F.1D (below).** **Type:** administrator‑only READ‑ONLY UI + safe‑DTO API (feature‑gated). **Product code changed:
+  YES (gated).** **No DB migration/schema · no writes · no new Category entity · no real Meta/WhatsApp/Shopify.**
 - **What:** new administrator‑only, **read‑only** "Categories & Inboxes" overview (Settings → Categories & Inboxes),
   gated by the new master‑gated feature `BLOOMWIRE_CATEGORY_ADMIN_UI` (OFF ⇒ stock: no route/page/API/nav). Composes
   **existing Chatwoot primitives only**:
@@ -60,6 +62,44 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 - **Residual risks / parked:** Category↔Inbox is **derived (convention‑only)** by member overlap; a persistent
   Inbox↔Team mapping or reversible data tag remains **out of scope** and requires a separate owner‑approved design
   (per 17F.0). This slice is **read‑only**; the guided add/assign write flow is a later slice.
+
+### Phase 17F.1D — DEV deploy + authenticated runtime validation — DONE (PASS) — deploy run `28694180364`
+- **Deploy:** `deploy-dev.yml` (manual; prod hard‑blocked) deployed `version_1 @ 7bc59c7` to **dev only**
+  (`env=dev`, `ref=version_1`, `run_migrations=true` — clean, 0 pending; `skip_smoke=false`; `prune=false`; postgres/redis
+  volumes preserved). Run **`28694180364` SUCCESS**. Post‑deploy (independently re‑verified over SSH): rails
+  `/app/.git_sha = 7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`, sidekiq `/app/.git_sha = 7bc59c7`; **local health 200 +
+  public health 200** (`{"status":"woot"}`); **rails + sidekiq Recreated** ("Up 2 minutes"); **postgres "Up 7 days" +
+  redis "Up 11 hours" — NOT recreated (volumes preserved)**; no pending migrations; no 5xx. **Dev deployed SHA now
+  `7bc59c7`** (was `4525bea`).
+- **DEV flags (dev only):** `BLOOMWIRE_MODE_ENABLED=true` (already set) + `BLOOMWIRE_CATEGORY_ADMIN_UI=true` (new row).
+  Runtime capability: **administrator → `canAccessCategoryAdmin=true`; agent → `false`**. Never enabled/modified in prod.
+- **Authenticated DEV MCP — Admin + ON (PASS):** **Real account 1** — nav visible; page renders 2 categories + the
+  ambiguous "Bloomwire WA Dev" (ready_for_webhook) in a dedicated explained section; deep‑links to Team/Inbox editors;
+  **no write controls**; exactly one `GET …/category_inbox_overview [200]`; **0 console messages**; no secrets in DOM;
+  service DTO secret‑scan `false`. **Synthetic DEV account (full matrix; cleaned up after)** — 7 categories, ambiguous
+  section, unlinked section, **2 drift blocks**, 3 no‑inbox warnings, all 7 team names, **3 Standard / 2 Coexistence**
+  badges, **all setup statuses (pending / configured / ready_for_webhook / blocked / not_configured)**, deep‑links to
+  Team + Inbox + Agents editors, **read‑only (no create/edit/delete/sync)**, **isolation (no account‑1 data)**, and
+  **desktop/tablet/mobile** with no horizontal overflow. Masked screenshots captured.
+- **Authenticated DEV MCP — Agent + ON (PASS):** authoritative curl with a synthetic agent token → own account **401**
+  `"You are not authorized to do this action"` and cross‑account **401** `"You are not authorized to access this
+  account"` (both **0 overview keys**; a control request to `labels` returned 200, proving the token is valid);
+  browser as agent → nav **absent**, direct route **redirected to dashboard** (0 rows, **no data flash**), in‑browser
+  overview fetch **401** (no payload). Existing agent contact/inbox/setup behaviour is **unchanged** (17F.1 touches none
+  of those paths).
+- **Authenticated DEV MCP — Admin + feature OFF (PASS):** with `BLOOMWIRE_CATEGORY_ADMIN_UI=false` — admin overview
+  endpoint **404** (empty); existing `labels/inboxes/teams/agents` endpoints **200**; browser nav **absent**, route
+  **redirected**, existing Inboxes settings screen renders; **0 console errors**. Flag then **restored to `true`** and
+  re‑verified at runtime (capability true; page renders 7 categories; nav visible).
+- **Security / network counts (across admin, agent, feature‑OFF):** HTTP **5xx = 0** · console errors = 0 (the only
+  console 401 was a deliberate agent probe fetch — the correct denial) · `graph.facebook.com` = 0 · `myshopify.com` = 0
+  · overview mutation requests = 0 · `provider_config`/token/secret exposure = 0.
+- **Cleanup:** synthetic DEV account + all synthetic users + temporary auth tokens removed (`SYNTH_*` counts all **0**);
+  real account 1 + real admin **preserved**; DEV feature left **ON** (intended state); browser synthetic session
+  cleared; **no real Meta/WhatsApp/Shopify setup created** (synthetic WhatsApp channels used `source=embedded_signup`,
+  no `api_key`, `save(validate:false)` — no external calls); screenshots masked (names/emails/IDs). **Production
+  untouched.**
+- **Phase 17F.1 is COMPLETE. Phase 17F.2 NOT started.**
 
 ### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — OPEN (docs‑only, not merged)
 - **Type:** DISCOVERY + PLANNING (docs‑only). **Product code changed: NO.** No migration/schema · no frontend · no

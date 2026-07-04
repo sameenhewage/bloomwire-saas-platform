@@ -346,7 +346,7 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 17F.1 — Read‑only "Categories &amp; Inboxes" admin overview <span class="badge">Open (feature‑flagged; not merged)</span> <span class="pr">branch feature/bloomwire-phase-17f1-category-inbox-overview · base version_1 6c0ab8c · PR #119 · head advances by correction commit · NOT merged/deployed</span></h3>
+    <div class="card"><h3>Phase 17F.1 — Read‑only "Categories &amp; Inboxes" admin overview <span class="badge done">Merged</span> <span class="pr">PR #119 · approved head 024b35a · merge SHA 7bc59c7 · version_1 tip 7bc59c7 · deployed to DEV (17F.1D)</span></h3>
       <ul>
         <li><b>Goal</b>: administrator‑only, <b>read‑only</b> "Categories &amp; Inboxes" overview (17F.0 Option C) using existing Chatwoot primitives only — <b>no schema, no new Category entity, no writes</b> — gated by <code>BLOOMWIRE_CATEGORY_ADMIN_UI</code> (master‑gated; OFF ⇒ stock: no route/page/API/nav).</li>
         <li><b>Backend</b>: <code>GET /api/v1/accounts/:id/bloomwire/category_inbox_overview</code> → <code>Api::V1::Accounts::Bloomwire::CategoryInboxOverviewController#show</code> (feature‑gated <code>head :not_found</code> when OFF; <code>check_admin_authorization?</code> ⇒ Pundit not‑authorized for agents). Safe DTO from <code>Bloomwire::CategoryInboxOverview</code>: categories = Teams; every WhatsApp inbox is classified exactly once as <b>linked</b>, <b>ambiguous</b>, or <b>unlinked</b> by member overlap — <b>no persisted Inbox↔Team link</b>. DTO fields stay safe: staff/collaborator id+name, matched team metadata, relationship status, <code>connection_mode</code>, <code>Bloomwire::WhatsappSetup#setup_status</code>, safe <code>not_configured</code> fallback, and linked-row drift. <b>provider_config/tokens/secrets never serialized.</b></li>
@@ -357,6 +357,19 @@
         <li><b>Runtime (LOCAL full stack; Chrome DevTools MCP; synthetic local‑only account)</b>: Admin+ON page rendered Categories &amp; Inboxes nav, linked row with drift, ambiguous section with matched teams, unlinked section, Standard/Coexistence labels, setup statuses including <b>Not configured</b>, Team/Inbox editor links, and the Agents deep‑link. Network proof: <code>GET …/category_inbox_overview</code> returned <b>200</b> with safe DTO fields only. Agents link navigated to <code>/settings/agents/list</code>. Console had no application errors. Screenshot saved locally at <code>/tmp/pr119-category-inboxes-runtime.png</code>. Cleanup: synthetic account/users/inboxes/teams/setups/sessions verified zero; local Rails/Vite stopped; no production; DEV untouched.</li>
         <li><b>Security</b>: no secrets exposed; no provider‑credential mutation; no live Meta/WhatsApp/Shopify; no Enterprise.</li>
         <li><b>Residual/parked</b>: Category↔Inbox is derived (convention‑only); persistent Inbox↔Team mapping/data‑tag out of scope (separate owner‑approved design per 17F.0). Read‑only slice; guided add/assign flow later.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 17F.1D — DEV deploy + authenticated runtime validation <span class="badge done">Done (PASS)</span> <span class="pr">deploy run 28694180364 · dev @ 7bc59c7</span></h3>
+      <ul>
+        <li><b>Merge</b>: PR #119 approved head <code>024b35a</code> → merge SHA <code>7bc59c7</code> (2‑parent merge; parents <code>6c0ab8c</code> + <code>024b35a</code>; admin merge, branch policy REVIEW_REQUIRED only, CI 8/8 green; self‑approve blocked → pinned approval comment). <code>version_1</code> tip = <code>7bc59c7</code>.</li>
+        <li><b>Deploy</b>: <code>deploy-dev.yml</code> (prod hard‑blocked), env=dev ref=version_1 run_migrations=true skip_smoke=false prune=false. Run <code>28694180364</code> SUCCESS. Rails + sidekiq <code>/app/.git_sha = 7bc59c7</code> (SSH‑verified); local + public health 200; rails+sidekiq recreated; postgres/redis preserved; no pending migrations; no 5xx.</li>
+        <li><b>DEV flags (dev only)</b>: <code>BLOOMWIRE_MODE_ENABLED=true</code> + <code>BLOOMWIRE_CATEGORY_ADMIN_UI=true</code>; capability admin=true / agent=false. Prod untouched.</li>
+        <li><b>Admin+ON (PASS)</b>: real account 1 (2 categories + ambiguous, deep‑links, read‑only, 1 overview GET, 0 console, no secrets) + synthetic account full matrix (7 categories, ambiguous+unlinked, 2 drift, 3 Standard/2 Coexistence, statuses pending/configured/ready_for_webhook/blocked/not_configured, Team+Inbox+Agents deep‑links, read‑only, isolation, desktop/tablet/mobile). Masked screenshots.</li>
+        <li><b>Agent+ON (PASS)</b>: curl agent token → own‑account 401 + cross‑account 401 (0 overview keys; labels control 200); browser → nav absent, route redirect (0 rows, no flash), overview fetch 401.</li>
+        <li><b>Feature OFF (PASS)</b>: admin overview 404; existing labels/inboxes/teams/agents 200; browser nav absent + redirect + existing screens render; restored ON + re‑verified.</li>
+        <li><b>Counts</b>: 5xx=0 · console errors=0 (only deliberate agent 401 probe) · graph.facebook.com=0 · myshopify.com=0 · overview mutations=0 · secrets=0.</li>
+        <li><b>Cleanup</b>: synthetic account+users+tokens removed (0 left); real account 1 + admin preserved; DEV feature ON; browser session cleared; no real Meta/WhatsApp/Shopify; production untouched. <b>Phase 17F.1 COMPLETE; 17F.2 NOT started.</b></li>
       </ul>
     </div>
 
