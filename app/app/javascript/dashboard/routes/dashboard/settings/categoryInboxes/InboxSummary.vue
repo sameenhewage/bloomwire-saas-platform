@@ -30,10 +30,28 @@ const connectionModeLabel = computed(() => {
     : t('CATEGORY_INBOX_OVERVIEW.CONNECTION_MODE.STANDARD');
 });
 
-const setupStatus = computed(() => props.inbox.whatsapp?.setup_status || '');
-const setupStatusLabel = computed(() =>
-  setupStatus.value ? String(setupStatus.value).replace(/_/g, ' ') : ''
+const setupStatusLabel = computed(() => {
+  if (!isWhatsapp.value) return '';
+  const status = props.inbox.whatsapp?.setup_status || 'not_configured';
+  return t(`CATEGORY_INBOX_OVERVIEW.SETUP_STATUS.${status.toUpperCase()}`);
+});
+
+const relationshipStatus = computed(
+  () => props.inbox.relationship_status || ''
 );
+
+const relationshipStatusLabel = computed(() => {
+  if (!relationshipStatus.value) return '';
+  return t(
+    `CATEGORY_INBOX_OVERVIEW.RELATIONSHIP.${relationshipStatus.value.toUpperCase()}`
+  );
+});
+
+const relationshipColor = computed(() => {
+  if (relationshipStatus.value === 'ambiguous') return 'amber';
+  if (relationshipStatus.value === 'unlinked') return 'ruby';
+  return 'teal';
+});
 
 const collaboratorCount = computed(
   () => props.inbox.collaborators?.length ?? 0
@@ -68,6 +86,12 @@ const hasDrift = computed(
         </span>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
+        <Label
+          v-if="relationshipStatusLabel"
+          :label="relationshipStatusLabel"
+          :color="relationshipColor"
+          compact
+        />
         <Label
           v-if="isWhatsapp"
           :label="connectionModeLabel"

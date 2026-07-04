@@ -18,6 +18,7 @@ class Bloomwire::CategoryInboxOverview
   def build
     {
       categories: teams.map { |team| category_dto(team) },
+      ambiguous_inboxes: ambiguous_inboxes.map { |inbox| inbox_dto(inbox) },
       unlinked_inboxes: unlinked_inboxes.map { |inbox| inbox_dto(inbox) },
       derivation: { method: 'membership_overlap', note: DERIVATION_NOTE }
     }
@@ -45,9 +46,22 @@ class Bloomwire::CategoryInboxOverview
     record.members.map(&:id)
   end
 
+  def team_matches_for(inbox)
+    team_matches_by_inbox[inbox.id] || []
+  end
+
+  def team_matches_by_inbox
+    @team_matches_by_inbox ||= inboxes.to_h do |inbox|
+      inbox_set = member_ids(inbox).to_set
+      [inbox.id, teams.select { |team| member_ids(team).to_set.intersect?(inbox_set) }]
+    end
+  end
+
   def derived_inboxes_for(team)
-    team_set = member_ids(team).to_set
-    inboxes.select { |inbox| member_ids(inbox).to_set.intersect?(team_set) }
+    inboxes.select do |inbox|
+      matches = team_matches_for(inbox)
+      matches.one? && matches.first.id == team.id
+    end
   end
 
   def category_dto(team)
@@ -61,25 +75,42 @@ class Bloomwire::CategoryInboxOverview
     }
   end
 
+  def ambiguous_inboxes
+    @ambiguous_inboxes ||= inboxes.select { |inbox| team_matches_for(inbox).many? }
+  end
+
   # Inboxes with no membership overlap with ANY team => cannot derive a category. Shown explicitly (not guessed).
   def unlinked_inboxes
-    @unlinked_inboxes ||= inboxes - teams.flat_map { |team| derived_inboxes_for(team) }.uniq
+    @unlinked_inboxes ||= inboxes.select { |inbox| team_matches_for(inbox).empty? }
   end
 
   def inbox_dto(inbox)
+    matches = team_matches_for(inbox)
     {
       id: inbox.id,
       name: inbox.name,
       channel_type: inbox.channel_type,
+      relationship_status: relationship_status(matches),
+      derivation_method: 'membership_overlap',
+      matched_team_count: matches.length,
+      matched_team_ids: matches.map(&:id),
+      matched_teams: people(matches),
       whatsapp: whatsapp_summary(inbox),
       collaborators: people(inbox.members)
     }
   end
 
+  def relationship_status(matches)
+    return 'unlinked' if matches.empty?
+    return 'linked' if matches.one?
+
+    'ambiguous'
+  end
+
   def whatsapp_summary(inbox)
     return nil unless inbox.channel.is_a?(Channel::Whatsapp)
 
-    { connection_mode: connection_mode(inbox.channel), setup_status: setup_status_by_inbox[inbox.id] }
+    { connection_mode: connection_mode(inbox.channel), setup_status: setup_status_by_inbox.fetch(inbox.id, 'not_configured') }
   end
 
   # Only the non-secret 'connection_mode' badge value is read from provider_config; the config is NEVER exposed.

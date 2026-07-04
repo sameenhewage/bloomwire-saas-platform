@@ -12,6 +12,9 @@ const baseInbox = {
   id: 42,
   name: 'Sales WhatsApp',
   channel_type: 'Channel::Whatsapp',
+  relationship_status: 'linked',
+  matched_team_count: 1,
+  matched_team_ids: [10],
   whatsapp: {
     connection_mode: 'coexistence',
     setup_status: 'ready_for_webhook',
@@ -53,7 +56,7 @@ describe('InboxSummary.vue (17F.1 read-only inbox row)', () => {
   it('shows a Standard badge for a standard whatsapp inbox', () => {
     const inbox = {
       ...baseInbox,
-      whatsapp: { connection_mode: 'standard', setup_status: null },
+      whatsapp: { connection_mode: 'standard', setup_status: 'not_configured' },
       drift: null,
     };
     const labels = mountRow(inbox)
@@ -61,6 +64,53 @@ describe('InboxSummary.vue (17F.1 read-only inbox row)', () => {
       .map(n => n.text())
       .join(' ');
     expect(labels).toMatch(/standard/i);
+  });
+
+  it('shows an explicit setup fallback label when setup is missing', () => {
+    const inbox = {
+      ...baseInbox,
+      whatsapp: { connection_mode: 'standard', setup_status: 'not_configured' },
+      drift: null,
+    };
+    const labels = mountRow(inbox)
+      .findAll('.label-stub')
+      .map(n => n.text())
+      .join(' ');
+    expect(labels).toContain(
+      'CATEGORY_INBOX_OVERVIEW.SETUP_STATUS.NOT_CONFIGURED'
+    );
+  });
+
+  it('shows the linked relationship label', () => {
+    const labels = mountRow()
+      .findAll('.label-stub')
+      .map(n => n.text())
+      .join(' ');
+    expect(labels).toContain('CATEGORY_INBOX_OVERVIEW.RELATIONSHIP.LINKED');
+  });
+
+  it('shows the ambiguous relationship label', () => {
+    const labels = mountRow({
+      ...baseInbox,
+      relationship_status: 'ambiguous',
+      matched_team_count: 2,
+    })
+      .findAll('.label-stub')
+      .map(n => n.text())
+      .join(' ');
+    expect(labels).toContain('CATEGORY_INBOX_OVERVIEW.RELATIONSHIP.AMBIGUOUS');
+  });
+
+  it('shows the unlinked relationship label', () => {
+    const labels = mountRow({
+      ...baseInbox,
+      relationship_status: 'unlinked',
+      matched_team_count: 0,
+    })
+      .findAll('.label-stub')
+      .map(n => n.text())
+      .join(' ');
+    expect(labels).toContain('CATEGORY_INBOX_OVERVIEW.RELATIONSHIP.UNLINKED');
   });
 
   it('renders a deep-link to the inbox settings editor', () => {

@@ -14,11 +14,15 @@ import Icon from 'dashboard/components-next/icon/Icon.vue';
 const isLoading = ref(false);
 const hasError = ref(false);
 const categories = ref([]);
+const ambiguousInboxes = ref([]);
 const unlinkedInboxes = ref([]);
 const derivationNote = ref('');
 
 const isEmpty = computed(
-  () => !categories.value.length && !unlinkedInboxes.value.length
+  () =>
+    !categories.value.length &&
+    !ambiguousInboxes.value.length &&
+    !unlinkedInboxes.value.length
 );
 
 const teamRoute = id => ({
@@ -26,12 +30,20 @@ const teamRoute = id => ({
   params: { teamId: id },
 });
 
+const agentsRoute = { name: 'agent_list' };
+
+const matchedTeamNames = inbox =>
+  (inbox.matched_teams ?? []).map(team => team.name).join(', ');
+
 const fetchOverview = async () => {
+  if (isLoading.value) return;
+
   isLoading.value = true;
   hasError.value = false;
   try {
     const { data } = await categoryInboxOverviewAPI.get();
     categories.value = data.categories ?? [];
+    ambiguousInboxes.value = data.ambiguous_inboxes ?? [];
     unlinkedInboxes.value = data.unlinked_inboxes ?? [];
     derivationNote.value = data.derivation?.note ?? '';
   } catch {
@@ -61,12 +73,22 @@ onBeforeMount(fetchOverview);
       <div
         v-if="hasError"
         data-testid="overview-error"
-        class="flex items-center gap-2 p-3 rounded-lg bg-n-ruby-2 text-n-ruby-11"
+        class="flex items-center justify-between gap-3 p-3 rounded-lg bg-n-ruby-2 text-n-ruby-11"
       >
-        <Icon icon="i-lucide-triangle-alert" class="size-4 flex-shrink-0" />
-        <span class="text-body-main">
-          {{ $t('CATEGORY_INBOX_OVERVIEW.ERROR') }}
-        </span>
+        <div class="flex items-center gap-2">
+          <Icon icon="i-lucide-triangle-alert" class="size-4 flex-shrink-0" />
+          <span class="text-body-main">
+            {{ $t('CATEGORY_INBOX_OVERVIEW.ERROR') }}
+          </span>
+        </div>
+        <button
+          type="button"
+          data-testid="overview-retry"
+          class="text-label-small font-medium text-n-ruby-12 hover:underline"
+          @click="fetchOverview"
+        >
+          {{ $t('CATEGORY_INBOX_OVERVIEW.RETRY') }}
+        </button>
       </div>
 
       <template v-else>
@@ -77,6 +99,16 @@ onBeforeMount(fetchOverview);
         >
           {{ derivationNote }}
         </p>
+
+        <div class="flex justify-end mb-4">
+          <router-link
+            :to="agentsRoute"
+            data-testid="agents-link"
+            class="text-label-small text-n-blue-11 hover:underline"
+          >
+            {{ $t('CATEGORY_INBOX_OVERVIEW.MANAGE_AGENTS') }}
+          </router-link>
+        </div>
 
         <section
           v-for="category in categories"
@@ -124,6 +156,41 @@ onBeforeMount(fetchOverview);
               :key="inbox.id"
               :inbox="inbox"
             />
+          </div>
+        </section>
+
+        <section
+          v-if="ambiguousInboxes.length"
+          data-testid="ambiguous-section"
+          class="flex flex-col gap-3 mb-4 p-4 border border-n-amber-6 rounded-xl bg-n-amber-1"
+        >
+          <div class="flex items-center gap-2">
+            <Icon
+              icon="i-lucide-triangle-alert"
+              class="size-4 text-n-amber-11 flex-shrink-0"
+            />
+            <h3 class="text-heading-2 text-n-slate-12">
+              {{ $t('CATEGORY_INBOX_OVERVIEW.AMBIGUOUS.TITLE') }}
+            </h3>
+          </div>
+          <p class="text-label-small text-n-slate-11">
+            {{ $t('CATEGORY_INBOX_OVERVIEW.AMBIGUOUS.DESCRIPTION') }}
+          </p>
+          <div class="grid gap-2">
+            <div
+              v-for="inbox in ambiguousInboxes"
+              :key="inbox.id"
+              class="grid gap-2"
+            >
+              <InboxSummary :inbox="inbox" />
+              <p class="text-label-small text-n-amber-11 px-3">
+                {{
+                  $t('CATEGORY_INBOX_OVERVIEW.AMBIGUOUS.MATCHES', {
+                    teams: matchedTeamNames(inbox),
+                  })
+                }}
+              </p>
+            </div>
           </div>
         </section>
 

@@ -5,9 +5,23 @@
     "LOADING": "Loading categories and inboxes…",
     "EMPTY": "No categories or inboxes to show yet.",
     "ERROR": "We couldn't load the categories and inboxes overview. Please try again.",
+    "RETRY": "Retry",
+    "MANAGE_AGENTS": "Manage agents",
     "CONNECTION_MODE": {
       "STANDARD": "Standard",
       "COEXISTENCE": "Coexistence"
+    },
+    "SETUP_STATUS": {
+      "PENDING": "Pending",
+      "CONFIGURED": "Configured",
+      "READY_FOR_WEBHOOK": "Ready for webhook",
+      "BLOCKED": "Blocked",
+      "NOT_CONFIGURED": "Not configured"
+    },
+    "RELATIONSHIP": {
+      "LINKED": "Linked",
+      "AMBIGUOUS": "Ambiguous",
+      "UNLINKED": "Unlinked"
     },
     "CATEGORY": {
       "STAFF": "{count} staff | {count} staff | {count} staff",
@@ -21,6 +35,11 @@
     "DRIFT": {
       "STAFF_MISSING": "{count} team member without inbox access | {count} team member without inbox access | {count} team members without inbox access",
       "COLLABORATORS_EXTRA": "{count} inbox collaborator not on the team | {count} inbox collaborator not on the team | {count} inbox collaborators not on the team"
+    },
+    "AMBIGUOUS": {
+      "TITLE": "Ambiguous inboxes",
+      "DESCRIPTION": "These inboxes share members with more than one category, so the overview will not guess a single category. Review the overlapping teams before making changes.",
+      "MATCHES": "Matches: {teams}"
     },
     "UNLINKED": {
       "TITLE": "Unlinked inboxes",
