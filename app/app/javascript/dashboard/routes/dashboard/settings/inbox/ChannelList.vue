@@ -148,6 +148,12 @@ const initChannelAuth = channel => {
   router.push({ name: 'settings_inboxes_page_channel', params });
 };
 
+// Bloomwire (17F.2A): when no channel card is permitted (e.g. managed mode with self-serve not granted) the list is
+// empty. Never render a blank surface — show a safe, non-secret "managed for you" state with a usable Back action.
+const goBack = () => {
+  router.push({ name: 'settings_inbox_list' });
+};
+
 onMounted(() => {
   initializeEnabledFeatures();
 });
@@ -155,6 +161,7 @@ onMounted(() => {
 
 <template>
   <div
+    v-if="visibleChannelList.length"
     class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 mx-0 gap-6 sm:grid-cols-3 p-8"
   >
     <ChannelItem
@@ -164,5 +171,25 @@ onMounted(() => {
       :enabled-features="enabledFeatures"
       @channel-item-click="initChannelAuth"
     />
+  </div>
+  <div
+    v-else
+    data-testid="channel-unavailable"
+    class="flex flex-col items-center justify-center w-full max-w-lg gap-2 p-8 mx-auto text-center"
+  >
+    <h3 class="text-heading-2 text-n-slate-12">
+      {{ $t('INBOX_MGMT.MANAGED_BY_OPS.TITLE') }}
+    </h3>
+    <p class="text-body-main text-n-slate-11">
+      {{ $t('INBOX_MGMT.MANAGED_BY_OPS.BODY') }}
+    </p>
+    <button
+      type="button"
+      data-testid="channel-unavailable-back"
+      class="mt-2 text-label-small font-medium text-n-blue-11 hover:underline"
+      @click="goBack"
+    >
+      {{ $t('GENERAL_SETTINGS.BACK') }}
+    </button>
   </div>
 </template>

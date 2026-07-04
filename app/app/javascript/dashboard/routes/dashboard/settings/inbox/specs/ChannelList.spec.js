@@ -5,8 +5,10 @@ import { useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
+const pushMock = vi.fn();
+
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: key => key }) }));
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: pushMock }) }));
 vi.mock('dashboard/composables/store');
 vi.mock('dashboard/composables/useAccount');
 vi.mock('dashboard/composables/useBloomwireCapabilities');
@@ -17,6 +19,7 @@ const mountList = ({
   canCreateInbox = true,
   canSelfServeManagedWhatsapp = false,
 } = {}) => {
+  pushMock.mockClear();
   useMapGetter.mockReturnValue(ref({ apiChannelName: 'API' }));
   useAccount.mockReturnValue({
     accountId: ref(1),
@@ -124,5 +127,77 @@ describe('ChannelList.vue (Bloomwire provider/whatsapp setup hiding)', () => {
       })
     );
     expect(keys).not.toContain('whatsapp');
+  });
+});
+
+describe('ChannelList.vue (Bloomwire 17F.2A — no blank Add Inbox surface)', () => {
+  const findUnavailable = wrapper =>
+    wrapper.find('[data-testid="channel-unavailable"]');
+  const findBack = wrapper =>
+    wrapper.find('[data-testid="channel-unavailable-back"]');
+  const whatsappItem = wrapper =>
+    wrapper
+      .findAllComponents({ name: 'ChannelItem' })
+      .find(c => c.props('channel').key === 'whatsapp');
+
+  it('renders a safe unavailable state (never blank) with a usable Back action when no channel is permitted', () => {
+    const wrapper = mountList({
+      canManageProviderSetup: false,
+      canManageNativeWhatsappSetup: false,
+      canCreateInbox: false,
+      canSelfServeManagedWhatsapp: false,
+    });
+    // no cards permitted
+    expect(channelKeys(wrapper)).toHaveLength(0);
+    // but the surface is NOT blank: an explicit unavailable state is shown
+    expect(findUnavailable(wrapper).exists()).toBe(true);
+    // and a usable Back action is present
+    expect(findBack(wrapper).exists()).toBe(true);
+  });
+
+  it('does NOT render the unavailable state when at least one channel is permitted', () => {
+    const wrapper = mountList({
+      canManageNativeWhatsappSetup: false,
+      canManageProviderSetup: false,
+      canCreateInbox: false,
+      canSelfServeManagedWhatsapp: true,
+    });
+    expect(channelKeys(wrapper)).toContain('whatsapp');
+    expect(findUnavailable(wrapper).exists()).toBe(false);
+  });
+
+  it('Back action navigates to the inbox list without creating records', async () => {
+    const wrapper = mountList({
+      canManageProviderSetup: false,
+      canManageNativeWhatsappSetup: false,
+      canCreateInbox: false,
+      canSelfServeManagedWhatsapp: false,
+    });
+    await findBack(wrapper).trigger('click');
+    expect(pushMock).toHaveBeenCalledWith({ name: 'settings_inbox_list' });
+  });
+
+  it('routes the WhatsApp card to the existing managed wizard (settings_inboxes_page_channel, sub_page=whatsapp)', () => {
+    const wrapper = mountList({
+      canManageNativeWhatsappSetup: false,
+      canManageProviderSetup: false,
+      canCreateInbox: false,
+      canSelfServeManagedWhatsapp: true,
+    });
+    whatsappItem(wrapper).vm.$emit('channelItemClick', 'whatsapp');
+    expect(pushMock).toHaveBeenCalledWith({
+      name: 'settings_inboxes_page_channel',
+      params: { sub_page: 'whatsapp', accountId: 1 },
+    });
+  });
+
+  it('creates no records / navigation on mount (no side effects entering the launcher)', () => {
+    mountList({
+      canManageProviderSetup: false,
+      canManageNativeWhatsappSetup: false,
+      canCreateInbox: false,
+      canSelfServeManagedWhatsapp: false,
+    });
+    expect(pushMock).not.toHaveBeenCalled();
   });
 });
