@@ -26,8 +26,18 @@ const { isAdmin } = useAdmin();
 // (backend PR #48 still 403s the destroy). Self-service web_widget/api delete stays.
 // Bloomwire (11B.7C): hide the New Inbox entry point when ALL inbox creation is Ops-owned
 // (backend restrict_inbox_creation! still 403s create). List/read/settings stay visible.
-const { canDeleteManagedProviderInbox, canCreateInbox } =
-  useBloomwireCapabilities();
+// Bloomwire (17F.2A): in managed mode canCreateInbox is false, but an admin may still self-serve a managed
+// WhatsApp inbox — so the New Inbox entry must also appear for canSelfServeManagedWhatsapp. The backend
+// (admin-only + feature-gated managed-signup endpoint) remains the enforcement boundary; this is UX only.
+const {
+  canDeleteManagedProviderInbox,
+  canCreateInbox,
+  canSelfServeManagedWhatsapp,
+} = useBloomwireCapabilities();
+
+const canAddInbox = computed(
+  () => canCreateInbox.value || canSelfServeManagedWhatsapp.value
+);
 
 // Mirrors the backend SELF_SERVICE_CHANNEL_TYPES (InboxesController): every other channel type
 // is an Ops-owned managed/provider inbox in managed mode.
@@ -118,7 +128,7 @@ const openDelete = inbox => {
         </template>
         <template #actions>
           <router-link
-            v-if="isAdmin && canCreateInbox"
+            v-if="isAdmin && canAddInbox"
             :to="{ name: 'settings_inbox_new' }"
           >
             <Button :label="$t('SETTINGS.INBOXES.NEW_INBOX')" size="sm" />

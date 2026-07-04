@@ -21,20 +21,26 @@ const inboxOf = channelType => ({
   channel_type: channelType,
 });
 
+const dispatchMock = vi.fn();
+
 const mountList = (
   channelType,
   canDeleteManagedProviderInbox = false,
-  canCreateInbox = true
+  canCreateInbox = true,
+  canSelfServeManagedWhatsapp = false,
+  isAdmin = true
 ) => {
+  dispatchMock.mockClear();
   useMapGetter.mockReturnValue(ref([inboxOf(channelType)]));
   useStoreGetters.mockReturnValue({
     'inboxes/getUIFlags': ref({ isFetching: false }),
   });
-  useStore.mockReturnValue({ dispatch: vi.fn() });
-  useAdmin.mockReturnValue({ isAdmin: ref(true) });
+  useStore.mockReturnValue({ dispatch: dispatchMock });
+  useAdmin.mockReturnValue({ isAdmin: ref(isAdmin) });
   useBloomwireCapabilities.mockReturnValue({
     canDeleteManagedProviderInbox: ref(canDeleteManagedProviderInbox),
     canCreateInbox: ref(canCreateInbox),
+    canSelfServeManagedWhatsapp: ref(canSelfServeManagedWhatsapp),
   });
 
   return shallowMount(InboxIndex, {
@@ -65,17 +71,39 @@ const hasNewInboxButton = wrapper =>
     .findAllComponents({ name: 'Button' })
     .some(b => b.props('label') === 'SETTINGS.INBOXES.NEW_INBOX');
 
-describe('Inbox Index.vue (Bloomwire 11B.7C — New Inbox hiding)', () => {
+describe('Inbox Index.vue (Bloomwire 11B.7C / 17F.2A — New Inbox entry gating)', () => {
   it('shows the New Inbox button when inbox creation is allowed (stock/managed-off)', () => {
     expect(
       hasNewInboxButton(mountList('Channel::WebWidget', false, true))
     ).toBe(true);
   });
 
-  it('hides the New Inbox button when inbox creation is Ops-managed', () => {
+  it('hides the New Inbox button when BOTH inbox creation and managed WhatsApp self-serve are unavailable', () => {
     expect(
-      hasNewInboxButton(mountList('Channel::WebWidget', false, false))
+      hasNewInboxButton(mountList('Channel::WebWidget', false, false, false))
     ).toBe(false);
+  });
+
+  // Phase 17F.2A: in managed mode canCreateInbox=false, but the admin can still self-serve a managed WhatsApp inbox.
+  it('shows the New Inbox button for an admin with managed WhatsApp self-serve even when canCreateInbox is false', () => {
+    expect(
+      hasNewInboxButton(mountList('Channel::Whatsapp', false, false, true))
+    ).toBe(true);
+  });
+
+  // Phase 17F.2A: agents never get the New Inbox entry, regardless of the supplied frontend capability data.
+  it('hides the New Inbox button for an agent even when managed WhatsApp self-serve is true', () => {
+    expect(
+      hasNewInboxButton(
+        mountList('Channel::Whatsapp', false, true, true, false)
+      )
+    ).toBe(false);
+  });
+
+  // Phase 17F.2A: rendering the inbox list does not create/mutate any records (read-only screen).
+  it('does not dispatch any write action on mount (no records created)', () => {
+    mountList('Channel::WebWidget', false, false, true);
+    expect(dispatchMock).not.toHaveBeenCalled();
   });
 });
 

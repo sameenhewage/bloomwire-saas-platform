@@ -313,7 +313,27 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — Discovery & Contract — `Open (docs‑only, not merged; NO implementation)`
+### Phase 17F.2A — Managed WhatsApp onboarding entry restoration — `Open (product code; not merged; Gate A/B NOT run)`
+- **Branch:** `fix/bloomwire-phase-17f2a-whatsapp-onboarding-entry` off `version_1` `ada23bc`. Frontend‑only. **Product
+  code: YES · schema/migration: NO · backend endpoint: NO · real Meta: NO · DEV deploy: NO · production: untouched.**
+- **Root cause (owner‑observed DEV blocker, source‑verified):** `settings/inbox/Index.vue` New Inbox entry gated on
+  `isAdmin && canCreateInbox` (managed ⇒ false; `canSelfServeManagedWhatsapp` not imported); `settings/inbox/ChannelList.vue`
+  filtered all cards with **no empty state** when both caps false ⇒ blank `/settings/inboxes/new`.
+- **Fix (minimal):** `Index.vue` entry now `isAdmin && (canCreateInbox || canSelfServeManagedWhatsapp)` (stock/native
+  unchanged; agents denied). `ChannelList.vue` renders a **safe unavailable state** (reused `INBOX_MGMT.MANAGED_BY_OPS`)
+  + **Back** action (`goBack` → `settings_inbox_list`) instead of blank; managed WhatsApp card still routes to the
+  existing wizard (`settings_inboxes_page_channel`/`whatsapp`); no other provider cards in managed mode; no secrets.
+- **No new:** Category model · `Inbox↔Team` mapping · backend orchestration endpoint · duplicate wizard · per‑customer
+  webhook · Enterprise code.
+- **Validation (supporting only):** RED→GREEN Vitest 22 passed (Index 9 + ChannelList 13; 3 RED pre‑fix); inbox‑settings
+  regression 8 files/76 tests; ESLint clean; `git diff --check` clean; no secrets.
+- **Acceptance (LOCKED, discovery §13A):** **Gate A + Gate B NOT run.** Final PASS = deployed‑DEV Gate A (navigation, no
+  real Meta) → owner‑assisted real‑Meta Gate B (Coexistence E2E, controlled DEV WhatsApp Business account). LOCAL is
+  supporting only. Do not merge/deploy/modify DEV/Meta — awaiting GPT‑5.5 exact‑head review.
+- **DEV config (later deploy phase only):** inspect effective booleans for `MODE_ENABLED` / `PRIVACY_HARDENING` /
+  `RESTRICT_NATIVE_WHATSAPP_SETUP` / `MANAGED_WHATSAPP_ONBOARDING` (presence only; never print secrets; do not assume).
+
+### Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — Discovery & Contract — `Merged` — PR #121 (merge SHA `ada23bc`, docs‑only; NO implementation)
 - **Goal:** evaluate + define the contract for the guided "admin picks a category → Add WhatsApp Inbox (Standard/Coex)
   → reuse existing wizard → assign staff → return to overview" journey, using existing primitives only.
 - **Deliverable:** `docs/bloomwire/phase-17f2-guided-inbox-category-flow-discovery.md` (architecture map w/ file:line
