@@ -355,6 +355,9 @@ Rails.application.routes.draw do
               resource :embedded_signup, only: [:create]
               resource :coexistence_embedded_signup, only: [:create]
             end
+            # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
+            # BLOOMWIRE_CATEGORY_ADMIN_UI feature is enabled. Safe DTO only; no writes; no schema; account-scoped.
+            resource :category_inbox_overview, only: [:show], controller: :category_inbox_overview
           end
 
           resources :webhooks, only: [:index, :create, :update, :destroy]

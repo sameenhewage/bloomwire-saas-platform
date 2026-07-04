@@ -17,7 +17,10 @@ module Bloomwire::Features
     restrict_agent_contact_visibility: 'BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY',
     privacy_hardening: 'BLOOMWIRE_PRIVACY_HARDENING',
     outgoing_gateway: 'BLOOMWIRE_OUTGOING_GATEWAY',
-    custom_branding: 'BLOOMWIRE_CUSTOM_BRANDING'
+    custom_branding: 'BLOOMWIRE_CUSTOM_BRANDING',
+    # Phase 17F.1: gate the administrator-only, READ-ONLY "Categories & Inboxes" overview (page + API). OFF ==
+    # stock Chatwoot (no overview route/page/API). Admin-only + account-scoped; no schema, no writes, no mapping.
+    category_admin_ui: 'BLOOMWIRE_CATEGORY_ADMIN_UI'
   }.freeze
 
   # Managed-data sub-features that are inert unless privacy hardening is ON (architecture plan §4.1).

@@ -15,6 +15,52 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — OPEN (feature‑flagged; not merged)
+- **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 ·
+  head advances by correction commit · **NOT merged · NOT deployed.** **Type:** administrator‑only READ‑ONLY UI +
+  safe‑DTO API (feature‑gated). **Product code changed: YES (gated).** **No DB migration/schema · no writes · no new
+  Category entity · no real Meta/WhatsApp/Shopify.**
+- **What:** new administrator‑only, **read‑only** "Categories & Inboxes" overview (Settings → Categories & Inboxes),
+  gated by the new master‑gated feature `BLOOMWIRE_CATEGORY_ADMIN_UI` (OFF ⇒ stock: no route/page/API/nav). Composes
+  **existing Chatwoot primitives only**:
+  - **Backend:** `GET /api/v1/accounts/:id/bloomwire/category_inbox_overview` →
+    `Api::V1::Accounts::Bloomwire::CategoryInboxOverviewController#show` (admin‑only via `check_admin_authorization?`;
+    feature‑gated `head :not_found` when OFF). Safe DTO from `Bloomwire::CategoryInboxOverview`: categories (Teams) +
+    their **derived** WhatsApp inboxes (by member overlap — there is **no persisted Inbox↔Team link**), safe
+    staff/collaborator summaries (id + name only), relationship status, matched teams metadata, a WhatsApp badge
+    (`connection_mode` standard/coexistence — the only non‑secret value read from `provider_config`) +
+    `Bloomwire::WhatsappSetup#setup_status`, safe `not_configured` fallback, and per‑pair membership **drift** for
+    linked rows. Ambiguous (inbox overlapping >1 team), unlinked teams, and unlinked inboxes are shown **explicitly,
+    never guessed**. **Never exposes `provider_config`/tokens/secrets.**
+  - **Frontend:** admin‑only Settings page (`categoryInboxes/Index.vue` + `InboxSummary.vue`) reusing
+    `SettingsLayout`/`BaseSettingsHeader`/`Label`; **deep‑links** to the existing Team, Inbox, and Agents pages;
+    loading / empty / error+retry states; explicit ambiguous + unlinked sections; new **opt‑in** capability
+    `canAccessCategoryAdmin` (`Bloomwire::Capabilities` + `useBloomwireCapabilities`, default false), route guard
+    `redirectIfCategoryAdminDisabled`, and a sidebar nav entry — all gated on the capability (feature OFF / agent ⇒ nav
+    hidden + route redirects to the dashboard).
+- **Permissions (backend‑enforced boundary):** admin + feature ON ⇒ 200 (all account teams/inboxes); agent ⇒ **401
+  not‑authorized (no payload)**; feature OFF ⇒ **404 (any role)**. Account‑scoped (no cross‑account). Frontend hiding
+  is UX only; the controller is the enforcement boundary.
+- **What was NOT changed:** no schema/migration; no writes/mutation/membership‑sync/persistent mapping/new Category
+  entity; no changes to contact visibility, inbox assignment, Standard/Coexistence setup controllers, native
+  `/whatsapp/authorization`, or the global webhook router; Enterprise untouched.
+- **Security:** **no secrets exposed** (DOM + API payload scanned clean); **no provider‑credential mutation**; **no
+  live Meta/WhatsApp/Shopify calls**; **no Enterprise code touched.**
+- **Validation (automated):** backend overview spec **15/15**; frontend targeted specs **24/24**; scoped
+  category/capability Vitest **39/39**; curated Bloomwire RSpec **627 examples, 0 failures, 1 pending**; full Vitest
+  **3661 passed**; full RuboCop **2700 files inspected, no offenses**; full ESLint **0 errors** (existing warnings
+  only); docs governance + secret scan + migration/schema diff guard clean; `git diff --check` clean.
+- **Runtime proof (LOCAL full stack — Rails+Vite; Chrome DevTools MCP; synthetic local‑only account):** **Admin+ON** —
+  nav visible; page renders linked row with drift, ambiguous section with matched teams, unlinked section,
+  Standard/Coexistence badges, setup statuses including **Not configured**, Team/Inbox editor links, and the Agents
+  deep‑link. Network proof: `GET …/category_inbox_overview` returned **200** with safe DTO fields only. Agents link
+  navigated to `/settings/agents/list`. Console had no application errors. Screenshot saved locally at
+  `/tmp/pr119-category-inboxes-runtime.png`. **Cleanup:** synthetic account/users/inboxes/teams/setups/sessions verified
+  zero; local Rails/Vite stopped; **no production · DEV untouched.**
+- **Residual risks / parked:** Category↔Inbox is **derived (convention‑only)** by member overlap; a persistent
+  Inbox↔Team mapping or reversible data tag remains **out of scope** and requires a separate owner‑approved design
+  (per 17F.0). This slice is **read‑only**; the guided add/assign write flow is a later slice.
+
 ### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — OPEN (docs‑only, not merged)
 - **Type:** DISCOVERY + PLANNING (docs‑only). **Product code changed: NO.** No migration/schema · no frontend · no
   route · no deploy · no production · no real Meta/WhatsApp/Shopify. Base `version_1` `096f619`; DEV runtime `4525bea`.
