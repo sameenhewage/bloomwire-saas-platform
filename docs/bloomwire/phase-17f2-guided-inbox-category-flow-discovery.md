@@ -18,6 +18,73 @@
 
 ---
 
+## 0. CORRECTION (2026-07-04) — Owner-observed DEV baseline defect (supersedes the initial "thin-launcher-first" framing)
+
+> An owner-operated test on the **real DEV site** (authenticated,
+> `https://dev.unecast.com/app/accounts/1/settings/inboxes/list`) exposed a missing **baseline prerequisite** that
+> the initial version of this discovery did not record. The initial recommendation ("17F.2 = thin launcher that
+> deep-links the existing wizard") assumed the managed WhatsApp onboarding **entry** is reachable/operable on DEV. **It
+> is not.** This section is authoritative and supersedes the optimistic parts of §1/§7/§10/§13/§16 below; those
+> sections have been revised to match.
+
+### 0.1 Owner-observed DEV baseline defect (runtime truth)
+- DEV account administrator at **`/settings/inboxes/list`** → there is **NO "New Inbox" button**.
+- Navigating directly to **`/settings/inboxes/new`** → the wizard shell renders but the **channel list area is
+  completely blank**.
+- Therefore a **real business administrator cannot add a second WhatsApp inbox through the normal UI** on DEV today.
+- The **multiple-inbox backend may exist** (ADR-0009 / 17E), but the **customer onboarding journey is NOT currently
+  user-operable on DEV**.
+- **Existing multi-inbox backend support alone is not sufficient for a product PASS.**
+- **Phase 17F.1 MCP validation did NOT cover the full customer click journey** *Inbox list → New Inbox → WhatsApp card
+  → Standard/Coexistence choice*. **Local/component/API evidence must not be treated as runtime acceptance for this
+  journey.** **The current managed onboarding entry journey must NOT be represented as DEV PASS.**
+
+### 0.2 Code root cause (verified against source on this branch)
+1. **`app/app/javascript/dashboard/routes/dashboard/settings/inbox/Index.vue`** — the "New Inbox" entry is gated by
+   **`isAdmin && canCreateInbox`** (line 121: `<router-link v-if="isAdmin && canCreateInbox" :to="{ name:
+   'settings_inbox_new' }">`). In managed Bloomwire mode **`canCreateInbox` is `false`**, even when managed WhatsApp
+   self-service is separately allowed via **`canSelfServeManagedWhatsapp`**. Note the component **does not even import**
+   `canSelfServeManagedWhatsapp` (line 29 destructures only `canDeleteManagedProviderInbox, canCreateInbox`). ⇒ the
+   button is hidden. **Future product correction (17F.2A) must evaluate the entry as
+   `isAdmin && (canCreateInbox || canSelfServeManagedWhatsapp)`** (and import the capability), preserving stock/native
+   behavior.
+2. **`app/app/javascript/dashboard/routes/dashboard/settings/inbox/ChannelList.vue`** — `visibleChannelList`
+   (lines 135-137) filters every card via `isChannelSetupAllowed` (lines 123-133): the WhatsApp card needs
+   `canSelfServeManagedWhatsapp` (line 126); **every other card needs `canCreateInbox`** (line 128 `if
+   (!canCreateInbox.value) return false`). When **`canCreateInbox=false` AND `canSelfServeManagedWhatsapp=false`**,
+   the filtered list is **empty**, and the template (lines 156-167) renders **only** `<ChannelItem v-for=...>` with
+   **no `v-else` / empty / blocked state** ⇒ the **blank screen**. (Contrast: `ChannelFactory.vue`, the per-channel
+   page reached *after* a card click, *does* have a safe "managed by Ops" state; `ChannelList.vue` does not.) **17F.2A
+   must add a safe explicit unavailable/blocked state (or redirect) so `/settings/inboxes/new` is never blank.**
+
+### 0.3 Effective managed WhatsApp capability (why the DEV screen is blank today)
+`canSelfServeManagedWhatsapp` is derived by `Bloomwire::Capabilities.for` as
+`managed_capability(admin, restrict_native_whatsapp_setup? && Features.enabled?(:managed_whatsapp_onboarding))`, and
+`managed_whatsapp_onboarding` is **master-gated + privacy-dependent**. So the effective capability requires **all** of:
+- administrator role;
+- `BLOOMWIRE_MODE_ENABLED=true`;
+- `BLOOMWIRE_PRIVACY_HARDENING=true`;
+- `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP=true`;
+- `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING=true`.
+
+If any is missing on DEV, `canSelfServeManagedWhatsapp=false` ⇒ (given `canCreateInbox=false` in managed mode) the
+card list is empty ⇒ blank. **Do NOT assume which DEV flag is missing.** The exact DEV config must be **inspected on
+the server during the later DEV correction/deployment phase** (not in this docs-only PR). The blank screen is a **code
+defect regardless** (missing entry condition + missing empty state); the DEV config is a **separate, second cause** to
+be verified then.
+
+### 0.4 Revised slice contract (supersedes the single "thin launcher")
+The initial "17F.2 = thin launcher" is **replaced** by a staged contract — see **§13** for the full definition:
+- **17F.2A — Managed WhatsApp onboarding entry restoration** (prerequisite product correction; the New Inbox entry +
+  non-blank channel surface + safe unavailable state).
+- **17F.2B — Category thin launcher** (only *after* 17F.2A is **DEV PASS**).
+- **17F.3 — Guided TeamMember + InboxMember alignment** (separate later slice).
+- The **mandatory DEV acceptance gate for 17F.2A** is locked in **§13A**. **LOCAL browser testing is NOT accepted as
+  the runtime gate**; component/unit tests + CI remain mandatory, but final product PASS requires the deployed,
+  authenticated DEV journey.
+
+---
+
 ## 1. Executive summary + final recommendation
 
 **Question posed:** can the guided "Administrator opens Categories & Inboxes → picks a category (Team) → Add WhatsApp
@@ -37,19 +104,30 @@ account-scoped, backend-enforced primitive:
 - The 17F.1 overview already **surfaces partial completion explicitly** (unlinked inbox, category-with-no-inbox,
   ambiguous, drift) — so an interrupted flow is never corrupt or hidden; it is visible and recoverable.
 
-**Final recommendation: PROCEED, with a scope revision — implement 17F.2 as a HYBRID "thin launcher", and split the
-guided staff/dual-membership assist into a separate 17F.3 slice.** Concretely:
+**Final recommendation (REVISED per §0): PROCEED, but with a STAGED contract that adds a mandatory prerequisite. The
+guided category launcher must NOT be built until the managed WhatsApp onboarding *entry* is restored and DEV-verified.**
+Concretely (full definitions in §13; DEV gate in §13A):
 
-- **17F.2 = frontend-only thin launcher** (feature-gated, admin-only) that adds an **"Add WhatsApp Inbox"** affordance
-  to each category in the existing 17F.1 overview and **deep-links into the existing Add-Inbox → WhatsApp wizard**
-  (`settings_inboxes_page_channel` / `whatsapp` → `BloomwireWhatsapp.vue`). It introduces **no new backend endpoint,
-  no new mapping, no writes of its own** beyond what the existing wizard already performs. On return, the existing
-  overview shows the new inbox's relationship/drift state.
-- **17F.3 = guided dual-membership assist** (separate slice): an **explicit, reversible, backend-enforced** step that
-  helps the admin align the *same* staff across the selected **Team** (`TeamMember`) and the new **Inbox**
-  (`InboxMember`) so the derived category↔inbox link forms with no drift — composing the existing membership
-  endpoints (optionally behind one tiny **local-only** transaction helper; **never** a transaction that spans a Meta
-  call).
+- **17F.2A = managed WhatsApp onboarding entry restoration (prerequisite product correction).** Restore the "New
+  Inbox" entry for an administrator with `canSelfServeManagedWhatsapp=true` (evaluate `isAdmin && (canCreateInbox ||
+  canSelfServeManagedWhatsapp)`), preserve stock/native `canCreateInbox` behavior, do **not** surface other
+  provider/channel cards in managed mode, and give `/settings/inboxes/new` a **safe explicit unavailable state (or
+  redirect)** instead of a blank screen. Agents stay denied; backend authorization remains authoritative. No
+  schema/migration/new mapping. **Final acceptance is DEV-only after merge + deployment.**
+- **17F.2B = frontend-only category thin launcher — ONLY after 17F.2A is DEV PASS.** Adds an **"Add WhatsApp Inbox"**
+  affordance to each category in the 17F.1 overview and **deep-links into the (now-operable) Add-Inbox → WhatsApp
+  wizard** (`settings_inboxes_page_channel` / `whatsapp` → `BloomwireWhatsapp.vue`). **No new backend/endpoint/mapping;
+  no writes of its own.** On return, the overview shows the new inbox's relationship/drift state.
+- **17F.3 = guided dual-membership assist** (separate later slice): an **explicit, reversible, backend-enforced** step
+  aligning the *same* staff across the selected **Team** (`TeamMember`) and the new **Inbox** (`InboxMember`) —
+  composing the existing membership endpoints (optionally behind one tiny **local-only** transaction helper; **never** a
+  transaction that spans a Meta call).
+
+**Correction of the earlier claim:** the initial draft said 17F.2 "requires essentially no new backend" and framed the
+thin launcher as the first slice. That remains true for the *category launcher* (17F.2B), **but it was incomplete** —
+it missed that the managed onboarding **entry itself is currently non-operable on DEV** (§0). The corrected first slice
+is therefore a **product fix (17F.2A)**, not the launcher. The "no new backend" property still holds (17F.2A and
+17F.2B are frontend/capability corrections; the only optional backend is the 17F.3 local-only membership helper).
 
 **Why not one big guided screen with its own orchestration service?** Because a single backend orchestration that
 created the inbox *and* assigned staff would either (a) wrap the Meta-bound setup and the membership writes in the
@@ -320,20 +398,100 @@ RED→GREEN + review.
 
 ---
 
-## 13. Proposed implementation slices
-- **17F.2 — Guided launcher (frontend-only).** Capability-gated "Add WhatsApp Inbox" from a category → deep-link to the
-  existing WhatsApp wizard. No backend, no writes, no schema. Feature OFF ⇒ absent.
-- **17F.3 — Guided dual-membership assist.** Explicit, reversible alignment of the same staff across Team + Inbox via
-  existing endpoints; optional thin **local-only** transaction helper. No schema, no new mapping.
-- **17F.4 (parked, owner-approval-gated) — persistence, if and only if runtime proves convention-only insufficient.**
-  A reversible `Inbox↔Team` mapping/data-tag remains **out of scope** and requires a **separate owner-approved design +
-  ADR** (per 17F.0). **Not authorized here.**
+## 13. Proposed implementation slices (REVISED per §0 — staged; strictly ordered)
+
+### 13.1 — Phase 17F.2A — Managed WhatsApp onboarding entry restoration (prerequisite product correction)
+The **first** slice. It is a **product fix**, not the category launcher. Scope:
+- **Restore the "New Inbox" entry** for an administrator who has `canSelfServeManagedWhatsapp=true` — evaluate the
+  `Index.vue` entry as **`isAdmin && (canCreateInbox || canSelfServeManagedWhatsapp)`** (and import the capability).
+- **Preserve stock/native `canCreateInbox` behavior** (non-managed installs are unchanged).
+- **Do not expose other provider/channel cards in managed mode** (only the managed WhatsApp card should appear when
+  only `canSelfServeManagedWhatsapp` is true).
+- **Prevent `/settings/inboxes/new` (`ChannelList.vue`) from rendering blank**: when `visibleChannelList` is empty, show
+  a **safe explicit unavailable/blocked state or redirect** (mirroring the `ChannelFactory.vue` "managed by Ops" state).
+- **Keep agents denied** (New Inbox absent; direct route cannot expose the managed wizard). **Backend authorization
+  remains authoritative** (the managed embedded-signup endpoints keep their admin + feature gate).
+- **No schema/migration/new mapping. No production changes.** **DEV feature configuration is inspected and corrected
+  only where required** (server-side, in the deploy phase — do not assume which flag is missing).
+- **Final acceptance is DEV-only after merge + deployment** (see **§13A**).
+
+### 13.2 — Phase 17F.2B — Category thin launcher (ONLY after 17F.2A is DEV PASS)
+- Add an **"Add WhatsApp Inbox"** affordance from **Categories & Inboxes** that **deep-links** to the (now-operable)
+  managed WhatsApp wizard. **No new backend / write / mapping.** Capability-gated (`canAccessCategoryAdmin` +
+  `canSelfServeManagedWhatsapp`); feature OFF ⇒ absent.
+
+### 13.3 — Phase 17F.3 — Guided TeamMember + InboxMember alignment (separate later slice)
+- Explicit, reversible alignment of the same staff across the selected **Team** and new **Inbox** via existing
+  endpoints; optional thin **local-only** transaction helper. No schema, no new mapping.
+
+### 13.4 — Phase 17F.4 (parked, owner-approval-gated)
+- A reversible persistent `Inbox↔Team` mapping/data-tag remains **out of scope** and requires a **separate
+  owner-approved design + ADR** (per 17F.0). **Not authorized here.**
+
+---
+
+## 13A. Mandatory DEV acceptance gate for 17F.2A (LOCKED)
+
+**LOCAL browser testing is NOT accepted as the runtime gate.** Component/unit tests and CI remain **mandatory**, but the
+**final product PASS requires the deployed, authenticated DEV journey below.** After exact-head review, merge, and DEV
+deployment, use an **authenticated fresh browser session** on `dev.unecast.com`.
+
+**Administrator + feature ON — the click journey (do NOT type a direct URL as the primary proof):**
+1. Open **Settings → Inboxes** using **normal navigation**.
+2. Confirm the **New Inbox button is visible**.
+3. **Click it** (normal navigation, not a typed URL).
+4. Confirm `/settings/inboxes/new` renders a **non-blank channel surface**.
+5. Confirm the **WhatsApp Business card is visible**.
+6. **Click** the WhatsApp Business card.
+7. Confirm **Standard and Coexistence** options are visible.
+8. Confirm **no provider secret fields** are exposed.
+9. **Cancel / back without creating records.**
+10. Confirm **no unexpected records were created.**
+
+**Administrator + feature/config unavailable (e.g. a required managed flag OFF):**
+- **No blank screen** — a safe explicit unavailable state or safe redirect.
+- **No secret / config leakage.**
+
+**Agent:**
+- New Inbox button **absent**.
+- Direct route **cannot expose the managed wizard**.
+- Direct backend managed-signup endpoints return **unauthorized / no payload**.
+
+**Feature OFF regression:**
+- Managed onboarding entry **absent**; **stock-compatible behavior preserved**.
+- **Restore the intended DEV feature state after testing.**
+
+**Operational checks (same rigor as 17E.4D / 17F.1D):**
+- Rails **and** Sidekiq `/app/.git_sha` **equal the deployed product merge SHA**.
+- Local **and** public health **200**; **no pending migrations**; **rails + sidekiq recreated**; **postgres + redis
+  preserved**; **5xx = 0**; **console application errors = 0**.
+- **Real Meta/WhatsApp/Shopify calls = 0** for the navigation/cancel regression.
+- **Synthetic records created = 0, or fully cleaned to 0.**
+- **Production untouched.**
 
 ---
 
 ## 14. Proposed RED→GREEN tests (per future slice)
-**17F.2 (frontend, Vitest):**
-- RED: launcher button hidden when `canAccessCategoryAdmin=false` (agent / feature OFF) → GREEN when true.
+> **Note:** these unit/component + backend specs are **mandatory but not sufficient** — the 17F.2A **product PASS** is
+> the deployed authenticated DEV journey in **§13A** (LOCAL browser testing is not accepted as the runtime gate).
+
+**17F.2A (frontend Vitest + backend request specs):**
+- RED: `Index.vue` — with `canCreateInbox=false, canSelfServeManagedWhatsapp=true, isAdmin=true`, the **New Inbox
+  button is hidden** (reproduces the defect) → GREEN after the entry becomes `isAdmin && (canCreateInbox ||
+  canSelfServeManagedWhatsapp)`.
+- RED: `Index.vue` — stock/native (`canCreateInbox=true`) still shows the button; agent never shows it → GREEN
+  (no regression / agents denied).
+- RED: `ChannelList.vue` — with `canCreateInbox=false, canSelfServeManagedWhatsapp=true`, **only** the WhatsApp card is
+  visible (no other provider cards) → GREEN.
+- RED: `ChannelList.vue` — with `canCreateInbox=false, canSelfServeManagedWhatsapp=false`, the rendered output is a
+  **safe explicit unavailable/blocked state (not blank)** → GREEN (reproduces the blank-screen defect first).
+- RED: backend — agent → managed embedded-signup endpoints **401 / no payload**; feature-gated **404** when the managed
+  gate is off → GREEN (authorization stays authoritative; unchanged, asserted as a guard).
+- RED: **no provider secret fields / provider_config** in any rendered surface or response → GREEN.
+
+**17F.2B (frontend, Vitest) — after 17F.2A DEV PASS:**
+- RED: launcher button hidden when `canAccessCategoryAdmin=false` or `canSelfServeManagedWhatsapp=false` (agent /
+  feature OFF) → GREEN when both true.
 - RED: clicking launcher navigates to `settings_inboxes_page_channel` (`sub_page='whatsapp'`) with the account context
   → GREEN.
 - RED: launcher renders **no** write control and issues **no** overview mutation → GREEN (read-only preserved).
@@ -353,7 +511,15 @@ RED→GREEN + review.
 ## 15. Risks, parked items, explicit non-goals
 - **Risks:** (a) tempting scope-creep into a spanning orchestration — mitigated by the thin-launcher decision; (b)
   ambiguity/drift are inherent to convention-only mapping — mitigated by explicit overview surfacing (already shipped);
-  (c) round-robin queue callbacks fire on `InboxMember` changes — expected, existing behavior.
+  (c) round-robin queue callbacks fire on `InboxMember` changes — expected, existing behavior;
+  (d) **[owner-observed, §0] the managed onboarding entry is non-operable on DEV** (missing `Index.vue` entry
+  condition + `ChannelList.vue` blank state, plus a possibly-missing DEV managed flag) — mitigated by making **17F.2A**
+  the ordered prerequisite with a DEV acceptance gate (§13A);
+  (e) **treating LOCAL/component/API evidence as runtime acceptance** — mitigated by the locked "LOCAL is not the gate"
+  rule; product PASS = deployed authenticated DEV journey;
+  (f) **DEV feature-flag drift** (which of `MODE_ENABLED`/`PRIVACY_HARDENING`/`RESTRICT_NATIVE_WHATSAPP_SETUP`/
+  `MANAGED_WHATSAPP_ONBOARDING` is off is unknown) — mitigated by inspecting/correcting server-side during the deploy
+  phase (**do not assume**), never in this docs-only PR.
 - **Parked (owner-approval + ADR required):** any persistent `Inbox↔Team` mapping, data tag, `team_id` on inboxes, join
   table, or automatic membership sync.
 - **Explicit non-goals:** new `Category` entity/model/table; replacing Standard/Coexistence setup services; duplicating
@@ -362,10 +528,21 @@ RED→GREEN + review.
 
 ---
 
-## 16. Final recommendation
-**PROCEED — with the revised scope:** implement **17F.2 as a frontend-only thin launcher** (deep-linking the existing
-WhatsApp wizard from a category, capability-gated, no writes, no backend, no schema), and **defer guided
-dual-membership to 17F.3** (explicit, reversible, backend-enforced, local-only). This satisfies the intended user
-journey, stays entirely within the locked architecture boundaries (no new mapping, no Meta-spanning transaction, no
-schema), preserves stock-compatible behavior when the feature is OFF, and keeps every write admin-enforced and
-account-isolated. **No blocker.** Implementation remains **not started** pending review.
+## 16. Final recommendation (REVISED per §0)
+**PROCEED — with a STAGED, strictly-ordered scope, and an explicit correction to the current status:**
+1. **17F.2A first (prerequisite product fix):** restore the managed WhatsApp onboarding **entry** (New Inbox button for
+   `canSelfServeManagedWhatsapp` admins; non-blank `/settings/inboxes/new` with a safe unavailable state; agents denied;
+   stock/native preserved). **No schema/mapping/backend rewrite.** **Product PASS = the deployed authenticated DEV
+   journey in §13A** (LOCAL is not accepted).
+2. **17F.2B (thin launcher) — only after 17F.2A is DEV PASS:** capability-gated "Add WhatsApp Inbox" from a category →
+   deep-link the now-operable wizard. No backend/write/mapping.
+3. **17F.3 (guided dual-membership) — separate later slice:** explicit, reversible, backend-enforced, local-only.
+
+This stays entirely within the locked architecture boundaries (no new mapping, no Meta-spanning transaction, no schema),
+preserves stock-compatible behavior when the feature is OFF, and keeps every write admin-enforced and account-isolated.
+
+**Status correction:** the managed onboarding *entry* journey is **NOT DEV PASS today** (owner-observed blocker, §0);
+17F.1 remains a valid, separately-scoped read-only overview, but its MCP validation did **not** cover this
+create-a-second-WhatsApp-inbox click journey. **This is a real, owner-observed blocker for the 17F.2 journey** —
+recorded here; the fix (17F.2A) is **not started** (this PR is docs-only). Implementation remains **not started** pending
+GPT-5.5 review.

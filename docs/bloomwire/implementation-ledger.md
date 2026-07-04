@@ -320,13 +320,25 @@
   evidence, request/response contracts, transaction boundaries, failure/rollback matrix, security/authz matrix, feature
   ON/OFF, UX + backend + frontend orchestration, flow‑shape decision, partial‑completion handling, slices, RED→GREEN
   tests, risks, non‑goals, final recommendation).
-- **Key finding:** feasible **without a new mapping and without a Meta‑spanning transaction**. Existing WhatsApp setup =
-  Meta calls **before** one `ActiveRecord::Base.transaction` (channel→inbox→credential→`WhatsappSetup`), clean rollback;
-  `TeamMember`/`InboxMember` = admin‑only, transactional, idempotent, reversible; 17F.1 overview already surfaces
-  partial completion (unlinked/drift/not_configured/ambiguous).
-- **Recommendation:** PROCEED, revised scope — 17F.2 = frontend‑only thin launcher (deep‑link existing wizard;
-  capability‑gated; no backend/writes/schema/mapping); defer guided dual‑membership to **17F.3** (explicit, reversible,
-  local‑only). Persistent `Inbox↔Team` mapping remains parked (owner‑approved ADR required).
+- **CORRECTION (owner‑observed DEV blocker — doc §0):** authenticated DEV `/settings/inboxes/list` shows **NO New Inbox
+  button**; `/settings/inboxes/new` renders a **blank channel list** ⇒ a business admin **cannot add a second WhatsApp
+  inbox via the normal UI on DEV**. Multi‑inbox backend alone is **not** a product PASS; 17F.1 MCP did not cover the
+  *Inbox list → New Inbox → WhatsApp card → Standard/Coexistence* click journey; **managed onboarding entry is NOT DEV
+  PASS**. Root cause (source‑verified): `settings/inbox/Index.vue` gates New Inbox on `isAdmin && canCreateInbox`
+  (ignores `canSelfServeManagedWhatsapp`), and `settings/inbox/ChannelList.vue` filters all cards with **no safe empty
+  state** when both caps are false. Effective managed cap needs admin + `MODE_ENABLED` + `PRIVACY_HARDENING` +
+  `RESTRICT_NATIVE_WHATSAPP_SETUP` + `MANAGED_WHATSAPP_ONBOARDING` (do not assume which DEV flag is missing; inspect
+  server‑side in deploy phase).
+- **Key finding:** the *category launcher* is feasible **without a new mapping and without a Meta‑spanning transaction**
+  (setup = Meta **before** one `ActiveRecord::Base.transaction`; membership admin‑only/transactional/idempotent/
+  reversible; overview surfaces partial completion) — **but** the launcher is **not** the first slice; the onboarding
+  **entry** must be restored first.
+- **Recommendation (revised — staged, ordered):** PROCEED with **17F.2A → 17F.2B → 17F.3**. **17F.2A** = onboarding
+  entry restoration (New Inbox = `isAdmin && (canCreateInbox || canSelfServeManagedWhatsapp)`; non‑blank
+  `/settings/inboxes/new` safe unavailable state; agents denied; stock/native preserved; no schema/mapping) — **product
+  PASS = deployed authenticated DEV journey (LOCKED gate; LOCAL NOT accepted)**. **17F.2B** = category thin launcher
+  **only after 17F.2A DEV PASS**. **17F.3** = guided dual‑membership (explicit, reversible, local‑only). Persistent
+  `Inbox↔Team` mapping parked (owner‑approved ADR).
 - **Governance corrections:** 17F.0 relabelled Merged (PR #118, `6c0ab8c`); SESSION‑LOG distinguishes `version_1` tip
   `bb2a3d7` vs DEV runtime SHA `7bc59c7`.
 - **Validation:** docs‑only; no product code/tests/schema/deploy; no real Meta/WhatsApp/Shopify; production untouched.

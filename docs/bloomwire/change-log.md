@@ -25,17 +25,28 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   isolation, feature flags/capabilities, transaction boundaries, validation/rollback) plus a failure/rollback matrix, a
   security/authorization matrix, feature ON/OFF behavior, recommended UX/backend/frontend orchestration, the flow‑shape
   decision, partial‑completion handling, proposed slices, RED→GREEN tests, risks and non‑goals.
-- **Key finding:** the candidate journey can be built **without a new mapping and without a transaction that spans an
-  external Meta operation.** The existing WhatsApp setup services already run all Meta calls **before** a single
-  `ActiveRecord::Base.transaction` (channel→inbox→credential→`WhatsappSetup`) with clean rollback (no orphans); staff
-  assignment is already admin‑only, account‑scoped, transactional, idempotent and reversible (`TeamMember` +
-  `InboxMember`); and the 17F.1 overview already surfaces partial completion (unlinked / drift / not_configured /
-  ambiguous).
-- **Recommendation:** **PROCEED with revised scope** — 17F.2 = **frontend‑only thin launcher** (capability‑gated "Add
-  WhatsApp Inbox" on a category → deep‑link the existing WhatsApp wizard; **no backend, no writes, no schema, no new
-  mapping**); defer the guided **dual‑membership** assist (explicit, reversible, backend‑enforced, **local‑only**;
-  optional tiny local‑transaction helper) to a separate **17F.3**. A persistent `Inbox↔Team` mapping/data‑tag remains
-  **out of scope** and requires a separate owner‑approved design/ADR (17F.0).
+- **CORRECTION (owner‑observed DEV blocker — §0 of the doc):** an owner test on authenticated DEV
+  (`/settings/inboxes/list`) found **NO "New Inbox" button**, and `/settings/inboxes/new` renders a **blank channel
+  list** ⇒ a real business admin **cannot add a second WhatsApp inbox via the normal UI on DEV**. **Multi‑inbox backend
+  support alone is NOT a product PASS**, and 17F.1 MCP validation did **not** cover the click journey *Inbox list → New
+  Inbox → WhatsApp card → Standard/Coexistence*. **The managed onboarding entry journey is NOT DEV PASS.** Root cause
+  (verified in source): `settings/inbox/Index.vue` gates the New Inbox entry on `isAdmin && canCreateInbox` (managed
+  mode ⇒ `canCreateInbox=false`; `canSelfServeManagedWhatsapp` not even considered), and `settings/inbox/ChannelList.vue`
+  filters **all** cards when `canCreateInbox=false && canSelfServeManagedWhatsapp=false` **with no safe empty state** ⇒
+  blank. Effective managed capability needs admin + `BLOOMWIRE_MODE_ENABLED` + `PRIVACY_HARDENING` +
+  `RESTRICT_NATIVE_WHATSAPP_SETUP` + `MANAGED_WHATSAPP_ONBOARDING` — **do not assume which DEV flag is missing; inspect
+  server‑side in the later deploy phase.**
+- **Key finding:** the *category launcher* can be built **without a new mapping and without a transaction that spans an
+  external Meta operation** (setup runs Meta **before** one `ActiveRecord::Base.transaction`; membership is admin‑only,
+  transactional, idempotent, reversible; overview surfaces partial completion). **But** the launcher is **not** the first
+  slice — the onboarding **entry** must be restored first.
+- **Recommendation (revised — staged, strictly ordered):** **PROCEED** with **17F.2A → 17F.2B → 17F.3**:
+  **17F.2A** = managed WhatsApp onboarding **entry restoration** (New Inbox entry becomes `isAdmin && (canCreateInbox ||
+  canSelfServeManagedWhatsapp)`; non‑blank `/settings/inboxes/new` with a safe unavailable state; agents denied;
+  stock/native preserved; no schema/mapping) — **product PASS = deployed authenticated DEV journey (LOCKED gate §13A);
+  LOCAL browser testing is NOT accepted**. **17F.2B** = category thin launcher (deep‑link the now‑operable wizard) **only
+  after 17F.2A is DEV PASS**. **17F.3** = guided TeamMember + InboxMember alignment (explicit, reversible, local‑only). A
+  persistent `Inbox↔Team` mapping/data‑tag stays **out of scope** (owner‑approved ADR required — 17F.0).
 - **Governance corrections in this PR:** Phase **17F.0** relabelled from "OPEN/not merged" to **Merged (PR #118, merge
   SHA `6c0ab8c`, docs‑only)** here and in the implementation ledger (md + html). SESSION‑LOG "Current State" now
   distinguishes the **repository `version_1` tip `bb2a3d7`** from the **DEV deployed runtime SHA `7bc59c7`**. Historical
