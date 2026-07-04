@@ -15,6 +15,36 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — DISCOVERY & CONTRACT only — OPEN (docs‑only, not merged)
+- **Type:** DISCOVERY + IMPLEMENTATION CONTRACT (docs‑only). **Product code changed: NO.** No schema/migration · no
+  frontend · no route · no workflow/env · no deploy · no production · no real Meta/WhatsApp/Shopify · **no
+  implementation.** Branch `docs/bloomwire-phase-17f2-guided-inbox-discovery` off `version_1` `bb2a3d7` (verified tip).
+- **What:** new `docs/bloomwire/phase-17f2-guided-inbox-category-flow-discovery.md` — a complete, code‑evidenced map of
+  the existing flows (Standard + Coexistence Embedded Signup, inbox/channel creation, `Bloomwire::WhatsappSetup`,
+  Team/`TeamMember`, `InboxMember`, the 17F.1 overview + Team/Inbox/Agents deep‑links, admin‑vs‑agent policies, account
+  isolation, feature flags/capabilities, transaction boundaries, validation/rollback) plus a failure/rollback matrix, a
+  security/authorization matrix, feature ON/OFF behavior, recommended UX/backend/frontend orchestration, the flow‑shape
+  decision, partial‑completion handling, proposed slices, RED→GREEN tests, risks and non‑goals.
+- **Key finding:** the candidate journey can be built **without a new mapping and without a transaction that spans an
+  external Meta operation.** The existing WhatsApp setup services already run all Meta calls **before** a single
+  `ActiveRecord::Base.transaction` (channel→inbox→credential→`WhatsappSetup`) with clean rollback (no orphans); staff
+  assignment is already admin‑only, account‑scoped, transactional, idempotent and reversible (`TeamMember` +
+  `InboxMember`); and the 17F.1 overview already surfaces partial completion (unlinked / drift / not_configured /
+  ambiguous).
+- **Recommendation:** **PROCEED with revised scope** — 17F.2 = **frontend‑only thin launcher** (capability‑gated "Add
+  WhatsApp Inbox" on a category → deep‑link the existing WhatsApp wizard; **no backend, no writes, no schema, no new
+  mapping**); defer the guided **dual‑membership** assist (explicit, reversible, backend‑enforced, **local‑only**;
+  optional tiny local‑transaction helper) to a separate **17F.3**. A persistent `Inbox↔Team` mapping/data‑tag remains
+  **out of scope** and requires a separate owner‑approved design/ADR (17F.0).
+- **Governance corrections in this PR:** Phase **17F.0** relabelled from "OPEN/not merged" to **Merged (PR #118, merge
+  SHA `6c0ab8c`, docs‑only)** here and in the implementation ledger (md + html). SESSION‑LOG "Current State" now
+  distinguishes the **repository `version_1` tip `bb2a3d7`** from the **DEV deployed runtime SHA `7bc59c7`**. Historical
+  evidence unchanged.
+- **Security:** no secrets exposed · no provider‑credential mutation · no live Meta/WhatsApp/Shopify calls · no
+  Enterprise code touched · docs‑only.
+- **Validation:** docs governance + secret scan + `git diff --check` + docs‑only diff check + normal CI (expected green;
+  no product code to test). **Do not merge · do not deploy · do not start implementation — awaiting GPT‑5.5 review.**
+
 ### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — MERGED (PR #119, merge SHA `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`) + DEV‑validated
 - **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 · approved
   head `024b35a56776ce4a50f7cd72137ffd79b68c9803` · **merged into `version_1` at `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`**
@@ -101,7 +131,9 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   untouched.**
 - **Phase 17F.1 is COMPLETE. Phase 17F.2 NOT started.**
 
-### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — OPEN (docs‑only, not merged)
+### Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery — MERGED (PR #118, merge SHA `6c0ab8c`, docs‑only)
+- **Status correction (17F.2):** this entry previously read "OPEN (not merged)"; it was in fact **merged via PR #118 at
+  `6c0ab8c`** (docs‑only; no deploy). Corrected here for accuracy; historical details below are unchanged.
 - **Type:** DISCOVERY + PLANNING (docs‑only). **Product code changed: NO.** No migration/schema · no frontend · no
   route · no deploy · no production · no real Meta/WhatsApp/Shopify. Base `version_1` `096f619`; DEV runtime `4525bea`.
 - **What:** new `docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md` — evidence‑backed design for

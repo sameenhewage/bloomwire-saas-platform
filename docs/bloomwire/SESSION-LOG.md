@@ -19,10 +19,10 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
-- **`version_1` tip:** `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529` (`7bc59c7`) — PR #119 merged (Phase **17F.1** read‑only "Categories & Inboxes" admin overview; approved head `024b35a`; 2‑parent merge, parents `6c0ab8c` + `024b35a`). **This is the first runtime‑code change deployed to dev since `4525bea`.**
-- **Dev deployed SHA:** `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529` (`7bc59c7`)  (public: https://dev.unecast.com · health `/health`) — deployed in **Phase 17F.1D** (dev-only via `deploy-dev.yml`, run `28694180364`; rails+sidekiq `/app/.git_sha` SSH‑verified = `7bc59c7`; local+public health 200; no pending migrations; rails+sidekiq recreated; postgres/redis volumes preserved; no 5xx). **`BLOOMWIRE_CATEGORY_ADMIN_UI=true` and `BLOOMWIRE_MODE_ENABLED=true` on dev** (capability admin=true/agent=false); `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true` remains enabled on dev. Was `4525bea`. Production untouched.
+- **`version_1` tip (repository HEAD):** `bb2a3d7d6c22b52627b6b17f747b64972e6ea609` (`bb2a3d7`) — PR #120 merged (Phase **17F.1** closure docs, docs‑only) on top of PR #119 (Phase 17F.1 product code, merge `7bc59c7`, approved head `024b35a`). **`bb2a3d7` differs from the deployed runtime SHA only by documentation** (the closure PR was docs‑only, not deployed).
+- **Dev deployed runtime SHA:** `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529` (`7bc59c7`) — **distinct from the `version_1` tip above**; this is the last *runtime code* deployed to dev (PR #119). The later docs‑only `bb2a3d7` requires no deploy.  (public: https://dev.unecast.com · health `/health`) — deployed in **Phase 17F.1D** (dev-only via `deploy-dev.yml`, run `28694180364`; rails+sidekiq `/app/.git_sha` SSH‑verified = `7bc59c7`; local+public health 200; no pending migrations; rails+sidekiq recreated; postgres/redis volumes preserved; no 5xx). **`BLOOMWIRE_CATEGORY_ADMIN_UI=true` and `BLOOMWIRE_MODE_ENABLED=true` on dev** (capability admin=true/agent=false); `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY=true` remains enabled on dev. Was `4525bea`. Production untouched.
 - **Latest completed / merged:** **PR #119** — Phase **17F.1** read‑only "Categories & Inboxes" admin overview (product code, gated), merged at `7bc59c7` and **DEV‑deployed + authenticated MCP validated (PASS) in 17F.1D**. Before it: **PR #118** (17F.0 multi‑inbox/category discovery docs, `6c0ab8c`); **PR #117** (17E.4D dev‑release governance docs, `096f619`); **PR #116** (17E.4 contact ID hardening, `4525bea`, **deployed + authenticated smoke PASS on dev in 17E.4D**); PR #115 (17E.3, `3c45720`); PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
-- **In-flight / open (NOT merged):** **none** — Phase **17F.1 is COMPLETE** (PR #119 merged at `7bc59c7`; DEV‑deployed + authenticated MCP validated in 17F.1D; see journal). A **docs‑only closure PR** (this change) records the merge/deploy/runtime evidence. **Phase 17F.2 is NOT started** (awaiting owner direction). The 17F.1 feature is live on DEV with `BLOOMWIRE_CATEGORY_ADMIN_UI=true` (OFF ⇒ stock Chatwoot; not in prod).
+- **In-flight / open (NOT merged):** **Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — DISCOVERY & CONTRACT only** (docs‑only PR off `version_1` `bb2a3d7`; branch `docs/bloomwire-phase-17f2-guided-inbox-discovery`; **do not auto‑merge; not deployed; NO implementation**). Delivers `docs/bloomwire/phase-17f2-guided-inbox-category-flow-discovery.md`. **Recommendation: PROCEED with revised scope** — 17F.2 = **frontend‑only thin launcher** (capability‑gated "Add WhatsApp Inbox" on a category → deep‑link the existing WhatsApp wizard; **no backend, no writes, no schema, no new mapping**); defer guided **dual‑membership** (Team + Inbox alignment via existing endpoints, explicit/reversible/local‑only) to **17F.3**. Confirmed the existing WhatsApp setup is already atomic (Meta calls **before** a single DB txn; rollback safe) and membership is already admin‑only/transactional/idempotent, so **no Meta‑spanning transaction and no new mapping are needed**; partial completion is already surfaced by the 17F.1 overview (unlinked/drift/not_configured/ambiguous). Phase **17F.1 is COMPLETE** (PR #119, `7bc59c7`; DEV‑validated). 17F.1 feature live on DEV `BLOOMWIRE_CATEGORY_ADMIN_UI=true` (OFF ⇒ stock; not in prod).
 - **17B secret-storage decision (owner-approved):** no encrypted global-secret store exists (InstallationConfig is plaintext; App Secret + verify token are **ENV/ops-managed**, read via `GlobalConfigService`). PR B is **read-only presence-only** — never displays/saves secret values; **no plaintext storage, no migration, no new store**. Editable secrets = parked (future encrypted `Bloomwire::PlatformConfig` design/ADR).
 - **Architecture (ADR-0008):** SuperAdmin WhatsApp = **Global WhatsApp Platform Config only** (17B builds it); account/user creation stays **native**; customers set up WhatsApp via **Account Settings → Inboxes → Add Inbox** (PR C, Embedded Signup first); the internal mapping is created by the wizard, not Ops UI. `Bloomwire::WhatsappSetupRequest` **deprecated/parked** (removed after PR C).
 - **Working tree:** clean.
@@ -75,6 +75,31 @@
 ---
 
 ## C. Session journal  *(newest first — prepend new entries)*
+
+### 2026-07-04 — Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — DISCOVERY & CONTRACT only (docs‑only, open)
+- **Scope:** discovery + implementation contract ONLY. **No product code / tests / schema / migration / workflow / env
+  changes; no implementation; no deploy.** Branch `docs/bloomwire-phase-17f2-guided-inbox-discovery` off `version_1`
+  `bb2a3d7` (verified the remote tip still equals `bb2a3d7d6c22b52627b6b17f747b64972e6ea609`).
+- **Deliverable:** `docs/bloomwire/phase-17f2-guided-inbox-category-flow-discovery.md` — full current‑architecture map
+  (Standard + Coexistence setup, inbox/channel creation, `Bloomwire::WhatsappSetup`, Team/`TeamMember`,
+  `InboxMember`, the 17F.1 overview, deep‑links, policies, isolation, feature flags/capabilities, transaction
+  boundaries, validation/rollback), a failure/rollback matrix, a security/authz matrix, feature ON/OFF behavior, and
+  the recommended UX/backend/frontend orchestration + slices + RED→GREEN tests + risks/non‑goals.
+- **Key findings (code‑evidenced):** the existing WhatsApp setup services do all Meta calls **before** a single
+  `ActiveRecord::Base.transaction` (channel→inbox→credential→`WhatsappSetup`) that rolls back cleanly (no orphans) — so
+  the Meta step is **not** inside a DB transaction. `TeamMember` + `InboxMember` writes are already admin‑only,
+  account‑scoped, transactional, idempotent and reversible. The 17F.1 overview already surfaces partial completion
+  (unlinked / drift / not_configured / ambiguous). Therefore the guided flow needs **no new mapping and no
+  Meta‑spanning transaction**.
+- **Recommendation: PROCEED, revised scope.** 17F.2 = **frontend‑only thin launcher** (capability‑gated "Add WhatsApp
+  Inbox" on a category → deep‑link the existing wizard `settings_inboxes_page_channel`/`whatsapp` →
+  `BloomwireWhatsapp.vue`; no backend/writes/schema/mapping). Defer guided **dual‑membership** (align the same staff
+  across Team + Inbox via existing endpoints; explicit, reversible, local‑only; optional tiny local‑transaction helper)
+  to **17F.3**. Any persistent `Inbox↔Team` mapping stays **out of scope** (owner‑approved ADR required — 17F.0).
+- **Governance corrections in this PR:** 17F.0 relabelled **Merged (PR #118, `6c0ab8c`)** in change‑log + ledger
+  (md/html); SESSION‑LOG now distinguishes **repository `version_1` tip `bb2a3d7`** from **DEV deployed runtime SHA
+  `7bc59c7`**. Historical evidence preserved. **Product code / DB / DEV / production untouched. Do not merge/deploy;
+  do not start 17F.2 implementation — awaiting GPT‑5.5 review.**
 
 ### 2026-07-04 — Phase 17F.1D — Merge + DEV deploy + authenticated DEV validation (PASS) — Phase 17F.1 COMPLETE
 - **Final gate + merge:** verified PR #119 head was still the reviewed `024b35a56776ce4a50f7cd72137ffd79b68c9803`, CI

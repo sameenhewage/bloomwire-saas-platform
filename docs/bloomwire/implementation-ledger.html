@@ -346,6 +346,17 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — Discovery &amp; Contract <span class="badge">Open (docs‑only, not merged; NO implementation)</span> <span class="pr">branch docs/bloomwire-phase-17f2-guided-inbox-discovery · base version_1 bb2a3d7</span></h3>
+      <ul>
+        <li><b>Goal</b>: evaluate + contract the guided "admin picks a category → Add WhatsApp Inbox (Standard/Coexistence) → reuse existing wizard → assign staff → return to overview" journey, using existing primitives only. No implementation.</li>
+        <li><b>Deliverable</b>: <code>docs/bloomwire/phase-17f2-guided-inbox-category-flow-discovery.md</code> — architecture map (file:line evidence), request/response contracts, transaction boundaries, failure/rollback matrix, security/authz matrix, feature ON/OFF, UX + backend + frontend orchestration, flow‑shape decision, partial‑completion handling, slices, RED→GREEN tests, risks, non‑goals, final recommendation.</li>
+        <li><b>Key finding</b>: feasible <b>without a new mapping and without a Meta‑spanning transaction</b>. Existing WhatsApp setup runs Meta calls <b>before</b> one <code>ActiveRecord::Base.transaction</code> (channel→inbox→credential→<code>WhatsappSetup</code>) with clean rollback; <code>TeamMember</code>/<code>InboxMember</code> are admin‑only, transactional, idempotent, reversible; the 17F.1 overview already surfaces partial completion (unlinked/drift/not_configured/ambiguous).</li>
+        <li><b>Recommendation</b>: PROCEED, revised scope — 17F.2 = frontend‑only thin launcher (deep‑link existing wizard; capability‑gated; no backend/writes/schema/mapping); defer guided dual‑membership to <b>17F.3</b> (explicit, reversible, local‑only). Persistent <code>Inbox↔Team</code> mapping parked (owner‑approved ADR required).</li>
+        <li><b>Governance corrections</b>: 17F.0 relabelled Merged (PR #118, 6c0ab8c); SESSION‑LOG distinguishes version_1 tip bb2a3d7 vs DEV runtime SHA 7bc59c7.</li>
+        <li><b>Validation</b>: docs‑only; no product code/tests/schema/deploy; no real Meta/WhatsApp/Shopify; production untouched. Do not merge/deploy; do not start implementation — awaiting GPT‑5.5 review.</li>
+      </ul>
+    </div>
+
     <div class="card"><h3>Phase 17F.1 — Read‑only "Categories &amp; Inboxes" admin overview <span class="badge done">Merged</span> <span class="pr">PR #119 · approved head 024b35a · merge SHA 7bc59c7 · version_1 tip 7bc59c7 · deployed to DEV (17F.1D)</span></h3>
       <ul>
         <li><b>Goal</b>: administrator‑only, <b>read‑only</b> "Categories &amp; Inboxes" overview (17F.0 Option C) using existing Chatwoot primitives only — <b>no schema, no new Category entity, no writes</b> — gated by <code>BLOOMWIRE_CATEGORY_ADMIN_UI</code> (master‑gated; OFF ⇒ stock: no route/page/API/nav).</li>
@@ -373,7 +384,7 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery <span class="badge">Open (docs‑only, not merged)</span> <span class="pr">base 096f619 · dev 4525bea</span></h3>
+    <div class="card"><h3>Phase 17F.0 — Multi‑WhatsApp‑Inbox / Category Admin UI Discovery <span class="badge done">Merged</span> <span class="pr">PR #118 · merge SHA 6c0ab8c · docs‑only · base 096f619 · dev 4525bea</span></h3>
       <ul>
         <li><b>Goal</b>: design the admin experience for multiple WhatsApp inboxes + business categories/departments + staff using existing Chatwoot primitives (no new Category entity).</li>
         <li><b>Deliverable</b>: <code>docs/bloomwire/phase-17f0-multi-inbox-category-admin-ui-discovery.md</code> (arch map, code evidence, runtime UX, permission matrix, Mermaid flows, gap analysis, UX options + recommendation, slices, TDD, risks, go/no‑go).</li>
