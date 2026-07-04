@@ -77,11 +77,15 @@ be verified then.
 The initial "17F.2 = thin launcher" is **replaced** by a staged contract — see **§13** for the full definition:
 - **17F.2A — Managed WhatsApp onboarding entry restoration** (prerequisite product correction; the New Inbox entry +
   non-blank channel surface + safe unavailable state).
-- **17F.2B — Category thin launcher** (only *after* 17F.2A is **DEV PASS**).
+- **17F.2B — Category thin launcher** (only *after* 17F.2A passes **both** deployed-DEV gates).
 - **17F.3 — Guided TeamMember + InboxMember alignment** (separate later slice).
-- The **mandatory DEV acceptance gate for 17F.2A** is locked in **§13A**. **LOCAL browser testing is NOT accepted as
-  the runtime gate**; component/unit tests + CI remain mandatory, but final product PASS requires the deployed,
-  authenticated DEV journey.
+- The **mandatory DEV acceptance gates for 17F.2A** are locked in **§13A** as **two ordered gates**: **Gate A** =
+  deployed-DEV navigation regression (no real Meta); **Gate B** = **owner-assisted real Meta Coexistence E2E** (create
+  a real inbox from the **controlled DEV WhatsApp Business account**, prove inbound routing via the global webhook +
+  `phone_number_id` mapping, outbound reply, isolation, no duplication, no secrets, operational checks, and a
+  pre-decided data-retention outcome). **LOCAL browser testing is NOT accepted as the runtime gate**, and a
+  **navigation-only PASS is NOT a customer-onboarding PASS** — 17F.2B may start **only after both Gate A and Gate B
+  PASS**.
 
 ---
 
@@ -113,8 +117,9 @@ Concretely (full definitions in §13; DEV gate in §13A):
   canSelfServeManagedWhatsapp)`), preserve stock/native `canCreateInbox` behavior, do **not** surface other
   provider/channel cards in managed mode, and give `/settings/inboxes/new` a **safe explicit unavailable state (or
   redirect)** instead of a blank screen. Agents stay denied; backend authorization remains authoritative. No
-  schema/migration/new mapping. **Final acceptance is DEV-only after merge + deployment.**
-- **17F.2B = frontend-only category thin launcher — ONLY after 17F.2A is DEV PASS.** Adds an **"Add WhatsApp Inbox"**
+  schema/migration/new mapping. **Final acceptance is DEV-only after merge + deployment, and requires BOTH §13A Gate A
+  (navigation regression, no real Meta) AND §13A Gate B (owner-assisted real Meta Coexistence E2E).**
+- **17F.2B = frontend-only category thin launcher — ONLY after 17F.2A passes both DEV gates (§13A Gate A + Gate B).** Adds an **"Add WhatsApp Inbox"**
   affordance to each category in the 17F.1 overview and **deep-links into the (now-operable) Add-Inbox → WhatsApp
   wizard** (`settings_inboxes_page_channel` / `whatsapp` → `BloomwireWhatsapp.vue`). **No new backend/endpoint/mapping;
   no writes of its own.** On return, the overview shows the new inbox's relationship/drift state.
@@ -415,10 +420,13 @@ The **first** slice. It is a **product fix**, not the category launcher. Scope:
   only where required** (server-side, in the deploy phase — do not assume which flag is missing).
 - **Final acceptance is DEV-only after merge + deployment** (see **§13A**).
 
-### 13.2 — Phase 17F.2B — Category thin launcher (ONLY after 17F.2A is DEV PASS)
+### 13.2 — Phase 17F.2B — Category thin launcher (ONLY after 17F.2A passes BOTH DEV gates — §13A Gate A **and** Gate B)
 - Add an **"Add WhatsApp Inbox"** affordance from **Categories & Inboxes** that **deep-links** to the (now-operable)
   managed WhatsApp wizard. **No new backend / write / mapping.** Capability-gated (`canAccessCategoryAdmin` +
   `canSelfServeManagedWhatsapp`); feature OFF ⇒ absent.
+- **May not start** until **17F.2A** has been reviewed at exact head, merged, DEV-deployed, and has passed **both**
+  §13A **Gate A** (deployed-DEV navigation regression, no real Meta) **and** §13A **Gate B** (owner-assisted real Meta
+  Coexistence E2E). A navigation-only PASS is **not** a customer-onboarding PASS.
 
 ### 13.3 — Phase 17F.3 — Guided TeamMember + InboxMember alignment (separate later slice)
 - Explicit, reversible alignment of the same staff across the selected **Team** and new **Inbox** via existing
@@ -430,44 +438,78 @@ The **first** slice. It is a **product fix**, not the category launcher. Scope:
 
 ---
 
-## 13A. Mandatory DEV acceptance gate for 17F.2A (LOCKED)
+## 13A. Mandatory DEV acceptance gates for 17F.2A (LOCKED — TWO gates: A then B)
 
-**LOCAL browser testing is NOT accepted as the runtime gate.** Component/unit tests and CI remain **mandatory**, but the
-**final product PASS requires the deployed, authenticated DEV journey below.** After exact-head review, merge, and DEV
-deployment, use an **authenticated fresh browser session** on `dev.unecast.com`.
+**LOCAL browser testing is NOT accepted as the runtime gate.** Component/unit tests and CI remain **mandatory** but are
+**supporting evidence only**. **Final acceptance requires TWO deployed-DEV gates, in order: Gate A (no-real-Meta
+navigation regression) then Gate B (owner-assisted real Meta Coexistence E2E).** Both run on **deployed, authenticated
+`dev.unecast.com`** using a **fresh authenticated business-administrator session**. **A navigation-only PASS (Gate A) is
+NOT a customer-onboarding PASS; Gate B is required before any 17F.2B work.**
 
-**Administrator + feature ON — the click journey (do NOT type a direct URL as the primary proof):**
+**Secret-handling rule for these gates (LOCKED):** the test uses a **controlled DEV WhatsApp Business account** (an
+existing WhatsApp Business App account/number the owner controls). **Never record or repeat the full phone number,
+full `phone_number_id`, or full WABA ID** in logs, screenshots, or docs — refer to it only as the **"controlled DEV
+WhatsApp Business account"** or a **masked** value such as `*******3273`. No secrets/tokens/`provider_config` anywhere.
+
+### Gate A — Deployed DEV navigation regression (no real Meta)
+After 17F.2A exact-head review, merge, and DEV deploy — on the deployed authenticated DEV site:
 1. Open **Settings → Inboxes** using **normal navigation**.
-2. Confirm the **New Inbox button is visible**.
-3. **Click it** (normal navigation, not a typed URL).
+2. Confirm the **New Inbox button is visible** for the authorized administrator.
+3. **Click it** (normal navigation, not a typed URL as the primary proof).
 4. Confirm `/settings/inboxes/new` renders a **non-blank channel surface**.
 5. Confirm the **WhatsApp Business card is visible**.
-6. **Click** the WhatsApp Business card.
-7. Confirm **Standard and Coexistence** options are visible.
-8. Confirm **no provider secret fields** are exposed.
-9. **Cancel / back without creating records.**
-10. Confirm **no unexpected records were created.**
+6. **Click** the WhatsApp Business card; confirm **Standard and Coexistence** options are visible.
+7. Confirm **no provider secret fields** are exposed.
+8. **Cancel / back without creating records**; confirm **no unexpected records were created**.
+- **Administrator + feature/config unavailable:** **no blank screen** — safe explicit unavailable state or safe
+  redirect; **no secret/config leakage**.
+- **Agent:** New Inbox button **absent**; direct route **cannot expose** the managed wizard; direct backend
+  managed-signup endpoints return **unauthorized / no payload**.
+- **Feature OFF regression:** managed onboarding entry **absent**; **stock-compatible behavior preserved**; **restore
+  the intended DEV feature state after testing**.
+- **Real Meta/WhatsApp/Shopify calls = 0** for this navigation/cancel regression. Local/component/API evidence is
+  **supporting only**; final acceptance is the deployed authenticated DEV run.
 
-**Administrator + feature/config unavailable (e.g. a required managed flag OFF):**
-- **No blank screen** — a safe explicit unavailable state or safe redirect.
-- **No secret / config leakage.**
+### Gate B — Owner-assisted real Meta Coexistence E2E (mandatory, after Gate A)
+Runs **only after** Gate A PASS, on the deployed DEV site, in a **fresh authenticated business-administrator session**,
+**with the owner** driving the Meta Embedded Signup using the **controlled DEV WhatsApp Business account**:
+1. Navigate the **normal UI**: Settings → Inboxes → New Inbox → WhatsApp Business → **Coexistence**.
+2. Complete **Meta Embedded Signup** using the controlled DEV WhatsApp Business account.
+3. Verify creation of **exactly one** of each: `Channel::Whatsapp`; `Inbox`; **encrypted** customer credential state;
+   `Bloomwire::WhatsappSetup` mapping; and the **correct returned `phone_number_id` + WABA identifiers** (verified
+   **masked** — never full values).
+4. Verify the setup reaches the expected **webhook-ready / readiness** state.
+5. Verify Bloomwire **subscribes the Meta App to the customer WABA** (app-to-WABA subscription).
+6. Verify it does **NOT** override or create a **per-customer webhook callback** — the **Bloomwire global webhook
+   remains the single inbound endpoint**.
+7. Send an **inbound WhatsApp message from a separate sender**.
+8. Verify the message reaches the **newly created correct Inbox** via **global webhook → `phone_number_id` mapping →
+   Channel → Inbox**.
+9. Verify the inbound message **does NOT route to the pre-existing Inbox**.
+10. Send an **agent reply from Bloomwire** and verify **delivery to WhatsApp**.
+11. Verify **sent/delivered/read** status processing where Meta provides those events.
+12. Verify **no** cross-account/cross-tenant leakage; **no** duplicate conversation/message storage; **no** duplicate
+    processing; **no** secrets/tokens/full phone numbers/full `phone_number_id`/WABA IDs in logs/screenshots/docs.
+13. **Operational verification:** Rails **and** Sidekiq `/app/.git_sha` **equal the deployed merge SHA**; local **and**
+    public health **200**; **no pending migrations**; **Rails + Sidekiq recreated**; **PostgreSQL + Redis preserved**;
+    **5xx = 0**; **browser console application errors = 0**; **production untouched**.
+14. **Data-retention decision (decide BEFORE running):** **either** retain the created Inbox/Setup as the **named
+    controlled DEV fixture**, **or** safely remove it and **prove no orphan** `Channel`, `Inbox`, `Setup`, credential,
+    conversation, or message remains. **The test-data status must not be left ambiguous.**
 
-**Agent:**
-- New Inbox button **absent**.
-- Direct route **cannot expose the managed wizard**.
-- Direct backend managed-signup endpoints return **unauthorized / no payload**.
-
-**Feature OFF regression:**
-- Managed onboarding entry **absent**; **stock-compatible behavior preserved**.
-- **Restore the intended DEV feature state after testing.**
-
-**Operational checks (same rigor as 17E.4D / 17F.1D):**
-- Rails **and** Sidekiq `/app/.git_sha` **equal the deployed product merge SHA**.
-- Local **and** public health **200**; **no pending migrations**; **rails + sidekiq recreated**; **postgres + redis
-  preserved**; **5xx = 0**; **console application errors = 0**.
-- **Real Meta/WhatsApp/Shopify calls = 0** for the navigation/cancel regression.
-- **Synthetic records created = 0, or fully cleaned to 0.**
-- **Production untouched.**
+### Acceptance ordering (LOCKED)
+```
+17F.2A implementation
+  → exact-head review
+  → merge
+  → DEV deploy
+  → Gate A (deployed-DEV navigation regression) PASS
+  → Gate B (owner-assisted real Meta Coexistence E2E) PASS
+  → ONLY THEN permit 17F.2B implementation
+```
+- **A navigation-only PASS is NOT a customer-onboarding PASS.**
+- **A local/component/API PASS is NOT a deployed-runtime PASS.**
+- **17F.3** (guided dual-membership) remains a separate later slice after 17F.2B.
 
 ---
 
@@ -529,13 +571,20 @@ deployment, use an **authenticated fresh browser session** on `dev.unecast.com`.
 ---
 
 ## 16. Final recommendation (REVISED per §0)
-**PROCEED — with a STAGED, strictly-ordered scope, and an explicit correction to the current status:**
+**PROCEED — with a STAGED, strictly-ordered scope, and an explicit correction to the current status. Locked sequence:**
+```
+17F.2A implementation → exact-head review → merge → DEV deploy
+  → §13A Gate A (deployed-DEV navigation regression, no real Meta) PASS
+  → §13A Gate B (owner-assisted real Meta Coexistence E2E) PASS
+  → ONLY THEN 17F.2B → later 17F.3
+```
 1. **17F.2A first (prerequisite product fix):** restore the managed WhatsApp onboarding **entry** (New Inbox button for
    `canSelfServeManagedWhatsapp` admins; non-blank `/settings/inboxes/new` with a safe unavailable state; agents denied;
-   stock/native preserved). **No schema/mapping/backend rewrite.** **Product PASS = the deployed authenticated DEV
-   journey in §13A** (LOCAL is not accepted).
-2. **17F.2B (thin launcher) — only after 17F.2A is DEV PASS:** capability-gated "Add WhatsApp Inbox" from a category →
-   deep-link the now-operable wizard. No backend/write/mapping.
+   stock/native preserved). **No schema/mapping/backend rewrite.** **Product PASS requires BOTH deployed-DEV gates —
+   §13A Gate A (navigation regression) AND §13A Gate B (owner-assisted real Meta Coexistence E2E)**; LOCAL/component/API
+   is supporting only, and a **navigation-only PASS is not a customer-onboarding PASS**.
+2. **17F.2B (thin launcher) — only after 17F.2A passes BOTH Gate A and Gate B:** capability-gated "Add WhatsApp Inbox"
+   from a category → deep-link the now-operable wizard. No backend/write/mapping.
 3. **17F.3 (guided dual-membership) — separate later slice:** explicit, reversible, backend-enforced, local-only.
 
 This stays entirely within the locked architecture boundaries (no new mapping, no Meta-spanning transaction, no schema),

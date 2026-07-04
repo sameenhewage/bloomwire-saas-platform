@@ -43,10 +43,23 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 - **Recommendation (revised — staged, strictly ordered):** **PROCEED** with **17F.2A → 17F.2B → 17F.3**:
   **17F.2A** = managed WhatsApp onboarding **entry restoration** (New Inbox entry becomes `isAdmin && (canCreateInbox ||
   canSelfServeManagedWhatsapp)`; non‑blank `/settings/inboxes/new` with a safe unavailable state; agents denied;
-  stock/native preserved; no schema/mapping) — **product PASS = deployed authenticated DEV journey (LOCKED gate §13A);
-  LOCAL browser testing is NOT accepted**. **17F.2B** = category thin launcher (deep‑link the now‑operable wizard) **only
-  after 17F.2A is DEV PASS**. **17F.3** = guided TeamMember + InboxMember alignment (explicit, reversible, local‑only). A
-  persistent `Inbox↔Team` mapping/data‑tag stays **out of scope** (owner‑approved ADR required — 17F.0).
+  stock/native preserved; no schema/mapping). **17F.2B** = category thin launcher (deep‑link the now‑operable wizard).
+  **17F.3** = guided TeamMember + InboxMember alignment (explicit, reversible, local‑only). A persistent `Inbox↔Team`
+  mapping/data‑tag stays **out of scope** (owner‑approved ADR required — 17F.0).
+- **17F.2A acceptance is TWO LOCKED deployed‑DEV gates (doc §13A), in order — LOCAL/component/API is supporting only:**
+  **Gate A** = deployed‑DEV navigation regression (no real Meta): normal‑nav Settings→Inboxes, New Inbox button visible,
+  non‑blank `/settings/inboxes/new`, WhatsApp Business card → Standard+Coexistence, safe unavailable state, agent denied,
+  feature‑OFF stock, cancel with no writes. **Gate B** = **owner‑assisted real Meta Coexistence E2E** using a
+  **controlled DEV WhatsApp Business account** (masked, e.g. `*******3273`; never full phone/`phone_number_id`/WABA):
+  complete Embedded Signup → exactly one `Channel::Whatsapp` + `Inbox` + encrypted credential + `Bloomwire::WhatsappSetup`
+  (correct masked ids) → webhook‑ready → **app subscribed to customer WABA, NO per‑customer callback (global webhook is
+  the single inbound endpoint)** → inbound routes to the **new** inbox (not the pre‑existing one) via global webhook →
+  `phone_number_id` → Channel → Inbox → outbound reply delivered → status events → **no cross‑tenant leakage / no
+  duplicate storage or processing / no secrets** → operational checks (rails+sidekiq `/app/.git_sha`=merge SHA, health
+  200, no pending migrations, containers recreated, pg/redis preserved, 5xx=0, console errors=0, prod untouched) →
+  **pre‑decided data‑retention** (retain as named DEV fixture **or** remove with zero‑orphan proof). **Acceptance order:
+  17F.2A impl → exact‑head review → merge → DEV deploy → Gate A PASS → Gate B PASS → only then 17F.2B.** A navigation‑only
+  PASS is **not** a customer‑onboarding PASS.
 - **Governance corrections in this PR:** Phase **17F.0** relabelled from "OPEN/not merged" to **Merged (PR #118, merge
   SHA `6c0ab8c`, docs‑only)** here and in the implementation ledger (md + html). SESSION‑LOG "Current State" now
   distinguishes the **repository `version_1` tip `bb2a3d7`** from the **DEV deployed runtime SHA `7bc59c7`**. Historical

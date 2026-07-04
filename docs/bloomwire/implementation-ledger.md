@@ -335,10 +335,20 @@
   **entry** must be restored first.
 - **Recommendation (revised — staged, ordered):** PROCEED with **17F.2A → 17F.2B → 17F.3**. **17F.2A** = onboarding
   entry restoration (New Inbox = `isAdmin && (canCreateInbox || canSelfServeManagedWhatsapp)`; non‑blank
-  `/settings/inboxes/new` safe unavailable state; agents denied; stock/native preserved; no schema/mapping) — **product
-  PASS = deployed authenticated DEV journey (LOCKED gate; LOCAL NOT accepted)**. **17F.2B** = category thin launcher
-  **only after 17F.2A DEV PASS**. **17F.3** = guided dual‑membership (explicit, reversible, local‑only). Persistent
-  `Inbox↔Team` mapping parked (owner‑approved ADR).
+  `/settings/inboxes/new` safe unavailable state; agents denied; stock/native preserved; no schema/mapping). **17F.2B**
+  = category thin launcher **only after 17F.2A passes both DEV gates**. **17F.3** = guided dual‑membership (explicit,
+  reversible, local‑only). Persistent `Inbox↔Team` mapping parked (owner‑approved ADR).
+- **17F.2A acceptance = TWO LOCKED deployed‑DEV gates (doc §13A); LOCAL/component/API supporting only:** **Gate A** =
+  deployed‑DEV navigation regression (no real Meta — New Inbox visible, non‑blank `/new`, WhatsApp card → Standard+Coex,
+  safe unavailable state, agent denied, feature‑OFF stock, cancel no writes). **Gate B** = **owner‑assisted real Meta
+  Coexistence E2E** with a **controlled DEV WhatsApp Business account** (masked, e.g. `*******3273`; never full
+  phone/`phone_number_id`/WABA): Embedded Signup → exactly one Channel::Whatsapp + Inbox + encrypted credential +
+  WhatsappSetup → webhook‑ready → app subscribed to customer WABA, **no per‑customer callback (global webhook is sole
+  inbound)** → inbound routes to the **new** inbox (not the old one) → outbound reply delivered → status events → no
+  cross‑tenant leakage/dupe storage/dupe processing/secrets → operational checks (git_sha=merge SHA, health 200, no
+  pending migrations, recreated, pg/redis preserved, 5xx=0, console=0, prod untouched) → **pre‑decided data‑retention
+  (named fixture OR zero‑orphan removal)**. **Order: 17F.2A impl → exact‑head review → merge → DEV deploy → Gate A PASS
+  → Gate B PASS → only then 17F.2B.** Navigation‑only PASS ≠ customer‑onboarding PASS.
 - **Governance corrections:** 17F.0 relabelled Merged (PR #118, `6c0ab8c`); SESSION‑LOG distinguishes `version_1` tip
   `bb2a3d7` vs DEV runtime SHA `7bc59c7`.
 - **Validation:** docs‑only; no product code/tests/schema/deploy; no real Meta/WhatsApp/Shopify; production untouched.
