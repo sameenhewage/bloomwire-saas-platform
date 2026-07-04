@@ -15,37 +15,46 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Phase 17F.2A — Managed WhatsApp onboarding entry restoration — OPEN (product code; not merged; Gate A/B NOT run)
-- **Branch:** `fix/bloomwire-phase-17f2a-whatsapp-onboarding-entry` off `version_1` `ada23bc`. **Type:** frontend‑only
-  capability/UX correction. **Product code changed: YES.** **Schema/migration: NO. Backend endpoint change: NO. Real
-  Meta calls: NO (implementation/CI). DEV deploy: NO. Production: untouched.** No new Category model · no persistent
-  `Inbox↔Team` mapping · no new backend orchestration endpoint · no duplicate wizard · no per‑customer webhook · no
-  Enterprise code.
-- **Root cause (owner‑observed DEV blocker; verified in source):** the managed WhatsApp onboarding **entry** was
-  non‑operable — `settings/inbox/Index.vue` gated the "New Inbox" button on `isAdmin && canCreateInbox` (managed mode ⇒
-  `canCreateInbox=false`; `canSelfServeManagedWhatsapp` not even imported), and `settings/inbox/ChannelList.vue`
-  filtered **all** cards when `canCreateInbox=false && canSelfServeManagedWhatsapp=false` with **no empty state** ⇒ a
-  **blank** `/settings/inboxes/new`.
-- **Fix (minimal):** `Index.vue` — import `canSelfServeManagedWhatsapp`; New Inbox entry now `isAdmin &&
-  (canCreateInbox || canSelfServeManagedWhatsapp)` (stock/native `canCreateInbox` behavior unchanged; agents still
-  denied). `ChannelList.vue` — when `visibleChannelList` is empty, render a **safe explicit unavailable state** (reusing
-  existing `INBOX_MGMT.MANAGED_BY_OPS.TITLE`/`.BODY`) with a **usable Back action** (`goBack` → `settings_inbox_list`)
-  instead of a blank surface; the managed WhatsApp card still routes to the existing wizard
-  (`settings_inboxes_page_channel`, `sub_page=whatsapp`); no other provider cards appear in managed mode; **no secrets
-  exposed.**
-- **Validation (automated, supporting only):** RED→GREEN Vitest — targeted `Index.spec.js` (9) + `ChannelList.spec.js`
-  (13) = **22 passed** (3 were RED before the fix: managed‑WA New Inbox entry, ChannelList unavailable state, Back
-  action); inbox‑settings directory regression **8 files / 76 tests passed**; ESLint clean on changed files. No
-  schema/migration; `git diff --check` clean; no secrets.
-- **Acceptance boundary (LOCKED — see discovery §13A):** **Gate A and Gate B have NOT yet run.** Local/component/API
-  tests are **supporting evidence only**. **Final acceptance requires deployed‑DEV Gate A (navigation regression, no
-  real Meta) then owner‑assisted real‑Meta Gate B (Coexistence E2E with the controlled DEV WhatsApp Business account).**
-  A navigation‑only PASS is not a customer‑onboarding PASS. **Do not merge · do not deploy · do not modify DEV · do not
-  perform Meta Embedded Signup — awaiting GPT‑5.5 exact‑head code review.**
-- **DEV configuration note (later deploy phase only — do NOT change in this PR):** the deploy phase must inspect the
-  effective server‑side booleans for `BLOOMWIRE_MODE_ENABLED`, `BLOOMWIRE_PRIVACY_HARDENING`,
-  `BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP`, `BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING` (presence/effective booleans only;
-  never print secret values) — do not assume which is missing.
+### Phase 17F.2A — Managed WhatsApp onboarding entry restoration — MERGED + DEV PASS for UI/runtime scope (PR #122, merge SHA `6894d93459cdba0fbc503a7d68b4f54b42a54571`)
+- **Branch / merge / deploy:** product branch `fix/bloomwire-phase-17f2a-whatsapp-onboarding-entry` merged into
+  `version_1` via PR #122 at `6894d93459cdba0fbc503a7d68b4f54b42a54571` after exact-head review of
+  `eb01e0f44c9b5c96f905dfb37230a72d830c3853`. DEV deploy run `28699117487` completed successfully for
+  `version_1` / `6894d93459cdba0fbc503a7d68b4f54b42a54571`. Production untouched.
+- **Scope accepted as PASS:** Phase 17F.2A product implementation = **PASS**; DEV deployment = **PASS**; Gate A =
+  **PASS**; Phase 17F.2A UI/runtime scope = **DEV PASS**. This PASS is limited to restoring the managed WhatsApp
+  **New Inbox** entry, eliminating the blank Add Inbox surface, preserving admin/agent authorization behavior, and
+  preserving feature-OFF / stock-compatible behavior.
+- **Root cause fixed:** `settings/inbox/Index.vue` previously gated the "New Inbox" button on `isAdmin && canCreateInbox`
+  (managed mode ⇒ `canCreateInbox=false`, ignoring `canSelfServeManagedWhatsapp`), and `settings/inbox/ChannelList.vue`
+  could render a blank `/settings/inboxes/new` surface when no channel card was permitted.
+- **Fix shipped:** `Index.vue` now gates the entry as `isAdmin && (canCreateInbox || canSelfServeManagedWhatsapp)`;
+  `ChannelList.vue` renders a safe explicit unavailable state plus Back action instead of blank; managed WhatsApp still
+  routes to the existing wizard; agents remain denied; stock/native behavior remains compatible. No schema/migration,
+  backend endpoint, mapping, duplicate wizard, per-customer webhook, Enterprise, workflow, or environment change.
+- **Gate A deployed DEV evidence (owner-approved):** authenticated DEV normal navigation confirmed Settings → Inboxes,
+  **New Inbox** visible for the authorized administrator, click-through to a non-blank `/settings/inboxes/new`, WhatsApp
+  Business card visible, Standard + Coexistence options visible, no provider secret fields exposed, cancel/back without
+  creating records, safe unavailable state instead of blank when applicable, agent denied, feature-OFF/stock-compatible
+  behavior preserved, and real Meta/WhatsApp calls = **0**.
+- **Real Meta Coexistence onboarding certification:** renamed/reclassified from Gate B to **Real Meta Coexistence
+  onboarding certification**. Status = **BLOCKED / DEFERRED** because no second distinct controlled WhatsApp Business
+  number is available; the only controlled DEV number is already connected to the existing **“Bloomwire WA Dev”** inbox.
+  This is a test-fixture limitation, **not a confirmed product defect**. Do not delete, migrate, rename, detach, modify,
+  or re-onboard the existing inbox/channel/setup/credentials/conversations/messages/contacts/routing mapping; do not
+  bypass the unique phone-number constraint.
+- **Gate B / certification resource deltas:** no Meta calls made; no fixture created; no records changed; no
+  `Channel::Whatsapp`, `Inbox`, `Bloomwire::WhatsappSetup`, credential, conversation, message, contact, or routing
+  mapping changed; existing fixture untouched; production untouched.
+- **Future certification hard gate:** Real Meta Coexistence onboarding certification remains mandatory before production
+  enablement of customer Coexistence onboarding, before the first real customer Coexistence onboarding, and before any
+  claim that Bloomwire Coexistence onboarding is end-to-end certified. Preferred prerequisite: a second distinct
+  controlled WhatsApp Business number.
+- **Existing Standard inbox supporting smoke:** optional only and **not run in this docs-only correction**. If run later,
+  it must be labelled **“Existing Standard inbox global-router supporting evidence only”** and must not be represented as
+  Coexistence signup PASS, new inbox creation PASS, Gate B PASS, or new-inbox isolation PASS.
+- **17F.2B dependency correction:** 17F.2B may begin only after this docs-only acceptance correction is reviewed and
+  merged. 17F.2B remains a frontend-only thin launcher and must not claim Coexistence onboarding certification or change
+  backend onboarding, mapping, credentials, webhooks, schema, or Meta behavior.
 
 ### Phase 17F.2 — Guided "Add WhatsApp Inbox to Category" — DISCOVERY & CONTRACT only — MERGED (PR #121, merge SHA `ada23bc`, docs‑only)
 - **Type:** DISCOVERY + IMPLEMENTATION CONTRACT (docs‑only). **Product code changed: NO.** No schema/migration · no
@@ -72,34 +81,22 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   external Meta operation** (setup runs Meta **before** one `ActiveRecord::Base.transaction`; membership is admin‑only,
   transactional, idempotent, reversible; overview surfaces partial completion). **But** the launcher is **not** the first
   slice — the onboarding **entry** must be restored first.
-- **Recommendation (revised — staged, strictly ordered):** **PROCEED** with **17F.2A → 17F.2B → 17F.3**:
-  **17F.2A** = managed WhatsApp onboarding **entry restoration** (New Inbox entry becomes `isAdmin && (canCreateInbox ||
-  canSelfServeManagedWhatsapp)`; non‑blank `/settings/inboxes/new` with a safe unavailable state; agents denied;
-  stock/native preserved; no schema/mapping). **17F.2B** = category thin launcher (deep‑link the now‑operable wizard).
-  **17F.3** = guided TeamMember + InboxMember alignment (explicit, reversible, local‑only). A persistent `Inbox↔Team`
-  mapping/data‑tag stays **out of scope** (owner‑approved ADR required — 17F.0).
-- **17F.2A acceptance is TWO LOCKED deployed‑DEV gates (doc §13A), in order — LOCAL/component/API is supporting only:**
-  **Gate A** = deployed‑DEV navigation regression (no real Meta): normal‑nav Settings→Inboxes, New Inbox button visible,
-  non‑blank `/settings/inboxes/new`, WhatsApp Business card → Standard+Coexistence, safe unavailable state, agent denied,
-  feature‑OFF stock, cancel with no writes. **Gate B** = **owner‑assisted real Meta Coexistence E2E** using a
-  **controlled DEV WhatsApp Business account** (masked, e.g. `*******3273`; never full phone/`phone_number_id`/WABA):
-  complete Embedded Signup → exactly one `Channel::Whatsapp` + `Inbox` + encrypted credential + `Bloomwire::WhatsappSetup`
-  (correct masked ids) → webhook‑ready → **app subscribed to customer WABA, NO per‑customer callback (global webhook is
-  the single inbound endpoint)** → inbound routes to the **new** inbox (not the pre‑existing one) via global webhook →
-  `phone_number_id` → Channel → Inbox → outbound reply delivered → status events → **no cross‑tenant leakage / no
-  duplicate storage or processing / no secrets** → operational checks (rails+sidekiq `/app/.git_sha`=merge SHA, health
-  200, no pending migrations, containers recreated, pg/redis preserved, 5xx=0, console errors=0, prod untouched) →
-  **pre‑decided data‑retention** (retain as named DEV fixture **or** remove with zero‑orphan proof). **Acceptance order:
-  17F.2A impl → exact‑head review → merge → DEV deploy → Gate A PASS → Gate B PASS → only then 17F.2B.** A navigation‑only
-  PASS is **not** a customer‑onboarding PASS.
-- **Governance corrections in this PR:** Phase **17F.0** relabelled from "OPEN/not merged" to **Merged (PR #118, merge
-  SHA `6c0ab8c`, docs‑only)** here and in the implementation ledger (md + html). SESSION‑LOG "Current State" now
-  distinguishes the **repository `version_1` tip `bb2a3d7`** from the **DEV deployed runtime SHA `7bc59c7`**. Historical
-  evidence unchanged.
-- **Security:** no secrets exposed · no provider‑credential mutation · no live Meta/WhatsApp/Shopify calls · no
-  Enterprise code touched · docs‑only.
-- **Validation:** docs governance + secret scan + `git diff --check` + docs‑only diff check + normal CI (expected green;
-  no product code to test). **Do not merge · do not deploy · do not start implementation — awaiting GPT‑5.5 review.**
+- **Recommendation (superseded by owner-approved acceptance correction):** the staged direction remains **17F.2B →
+  17F.3**, but the 17F.2B dependency is now the reviewed+merged docs-only acceptance correction above, not Real Meta
+  Coexistence certification. 17F.2B remains a frontend-only thin launcher and must not claim certification or change
+  backend onboarding, mapping, credentials, webhooks, schema, or Meta behavior. Real Meta Coexistence onboarding
+  certification remains a separate production/first-customer hard gate.
+- **17F.2A / certification split:** deployed DEV Gate A validates the 17F.2A UI/runtime scope; former Gate B is renamed
+  **Real Meta Coexistence onboarding certification** and is **BLOCKED / DEFERRED** until a second distinct controlled
+  WhatsApp Business number is available. A navigation-only PASS is **not** customer-onboarding certification.
+- **Governance corrections in PR #121:** Phase **17F.0** relabelled from "OPEN/not merged" to **Merged (PR #118, merge
+  SHA `6c0ab8c`, docs-only)** here and in the implementation ledger (md + html). SESSION-LOG distinguished the
+  repository `version_1` tip `bb2a3d7` from the DEV deployed runtime SHA `7bc59c7` at that time. Historical evidence
+  unchanged.
+- **Security:** no secrets exposed · no provider-credential mutation · no live Meta/WhatsApp/Shopify calls · no
+  Enterprise code touched · docs-only.
+- **Validation:** docs governance + secret scan + `git diff --check` + docs-only diff check + normal CI passed on PR #121;
+  this historical entry is now superseded by the 17F.2A acceptance split above.
 
 ### Phase 17F.1 — Read‑only "Categories & Inboxes" admin overview — MERGED (PR #119, merge SHA `7bc59c74ba5f96fc7ed394b0335dc216d4ab6529`) + DEV‑validated
 - **Branch:** `feature/bloomwire-phase-17f1-category-inbox-overview` off `version_1` `6c0ab8c`. **PR:** #119 · approved
