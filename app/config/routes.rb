@@ -358,6 +358,9 @@ Rails.application.routes.draw do
             # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
             # BLOOMWIRE_CATEGORY_ADMIN_UI feature is enabled. Safe DTO only; no writes; no schema; account-scoped.
             resource :category_inbox_overview, only: [:show], controller: :category_inbox_overview
+            # Phase 17F.3: administrator-only, feature-gated guided TeamMember+InboxMember alignment. Inert (404)
+            # unless BLOOMWIRE_CATEGORY_ADMIN_UI is enabled. Additive, transactional, local-only; no schema/mapping.
+            resource :category_inbox_alignment, only: [:create], controller: :category_inbox_alignments
           end
 
           resources :webhooks, only: [:index, :create, :update, :destroy]

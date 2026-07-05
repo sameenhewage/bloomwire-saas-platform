@@ -42,18 +42,15 @@ class Bloomwire::CategoryInboxOverview
                                                        .pluck(:inbox_id, :setup_status).to_h
   end
 
-  def member_ids(record)
-    record.members.map(&:id)
-  end
-
   def team_matches_for(inbox)
     team_matches_by_inbox[inbox.id] || []
   end
 
+  # Delegates to the SINGLE shared derivation algorithm (also used by Bloomwire::CategoryInboxAlignment) so the
+  # read-only overview and the write-side alignment can never diverge on what "linked / ambiguous / unlinked" means.
   def team_matches_by_inbox
     @team_matches_by_inbox ||= inboxes.to_h do |inbox|
-      inbox_set = member_ids(inbox).to_set
-      [inbox.id, teams.select { |team| member_ids(team).to_set.intersect?(inbox_set) }]
+      [inbox.id, Bloomwire::CategoryInboxDerivation.matched_teams(inbox, teams)]
     end
   end
 
@@ -118,12 +115,14 @@ class Bloomwire::CategoryInboxOverview
     channel.provider_config.to_h['connection_mode'].to_s == 'coexistence' ? 'coexistence' : 'standard'
   end
 
+  # Reuses the shared additive-drift primitive (same one the alignment applies) so what the overview SHOWS as drift
+  # is exactly what the alignment would ADD. inbox_additions = team members missing inbox access;
+  # team_additions = inbox collaborators not on the team.
   def drift(team, inbox)
-    team_set = member_ids(team).to_set
-    inbox_set = member_ids(inbox).to_set
+    diff = Bloomwire::CategoryInboxDerivation.additive_drift(team, inbox)
     {
-      staff_missing_inbox_access: people(team.members.reject { |user| inbox_set.include?(user.id) }),
-      collaborators_not_in_team: people(inbox.members.reject { |user| team_set.include?(user.id) })
+      staff_missing_inbox_access: people(diff[:inbox_additions]),
+      collaborators_not_in_team: people(diff[:team_additions])
     }
   end
 

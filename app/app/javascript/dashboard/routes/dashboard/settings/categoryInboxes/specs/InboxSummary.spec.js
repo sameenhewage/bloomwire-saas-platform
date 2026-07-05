@@ -26,9 +26,9 @@ const baseInbox = {
   },
 };
 
-const mountRow = (inbox = baseInbox) =>
+const mountRow = (inbox = baseInbox, props = {}) =>
   mount(InboxSummary, {
-    props: { inbox },
+    props: { inbox, ...props },
     global: {
       mocks: { $t: key => key },
       stubs: {
@@ -149,5 +149,38 @@ describe('InboxSummary.vue (17F.1 read-only inbox row)', () => {
 
   it('never renders provider secrets', () => {
     expect(mountRow().html()).not.toMatch(/provider_config|api_key|token/i);
+  });
+
+  describe('17F.3 align-staff action', () => {
+    const alignAction = wrapper => wrapper.find('[data-testid="align-staff"]');
+
+    it('shows the align action when alignment is permitted and there is drift', () => {
+      expect(
+        alignAction(mountRow(baseInbox, { canAlign: true })).exists()
+      ).toBe(true);
+    });
+
+    it('hides the align action by default (canAlign not granted)', () => {
+      expect(alignAction(mountRow(baseInbox)).exists()).toBe(false);
+    });
+
+    it('hides the align action when there is no drift even if permitted', () => {
+      const aligned = {
+        ...baseInbox,
+        drift: {
+          staff_missing_inbox_access: [],
+          collaborators_not_in_team: [],
+        },
+      };
+      expect(alignAction(mountRow(aligned, { canAlign: true })).exists()).toBe(
+        false
+      );
+    });
+
+    it('emits align when the action is clicked', async () => {
+      const wrapper = mountRow(baseInbox, { canAlign: true });
+      await alignAction(wrapper).trigger('click');
+      expect(wrapper.emitted('align')).toBeTruthy();
+    });
   });
 });

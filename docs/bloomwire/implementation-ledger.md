@@ -314,7 +314,40 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher — `Open (product code, frontend-only; not merged)`
+### Phase 17F.3 — Guided TeamMember + InboxMember alignment — `Open (product code; not merged)`
+- **Branch:** `feature/bloomwire-phase-17f3-guided-membership-alignment` off `version_1` `e9fcef9` (PR #125; base
+  fail-closed verified). **Scope: staff-access alignment only.** **Schema/migration: NO · persistent Inbox↔Team mapping:
+  NO · new Category model: NO · WhatsApp onboarding/credentials/callbacks/subscriptions/global-router/routing: UNCHANGED
+  · Meta/external call: NONE · Enterprise: NO · DEV deploy: NO · production untouched.**
+- **Recorded — Phase 17F.2B DEV runtime PASS:** deployed SHA `e9fcef9`; run `28732366110`; authenticated account-1 admin;
+  launcher visible on both eligible rows; account-scoped existing WhatsApp wizard reached (no team/category param);
+  Standard + Coexistence reused; zero membership/inbox/channel/setup/contact/conversation/message deltas; no Meta signup;
+  **not Gate B PASS**.
+- **Server-authoritative (GPT‑5.5 CHANGES REQUIRED fix):** endpoint is **identity-only** — request carries only
+  `team_id` + `inbox_id` (`user_ids` removed from strong params + FE payload). Server **recomputes eligibility +
+  additive drift from fresh DB state inside the transaction** and adds only server-computed diffs; **never** trusts
+  client membership IDs (preview is display-only). Fails closed (422) for **unrelated / ambiguous / unlinked / stale**;
+  cross-account → 404. One shared algorithm extracted to `Bloomwire::CategoryInboxDerivation` (used by BOTH overview +
+  alignment; overview output unchanged).
+- **Helper decision:** existing `team_members` + `inbox_members` are independent HTTP calls (separate transactions) →
+  partial completion possible → local-only, admin-only, feature-gated helper `Bloomwire::CategoryInboxAlignment`
+  (`POST /bloomwire/category_inbox_alignment`) wraps both additive `TeamMember` + `InboxMember` writes in ONE
+  `ActiveRecord::Base.transaction`; additive, idempotent, account-scoped, no schema, no persisted mapping.
+- **Atomicity boundary (corrected):** membership writes are **database-atomic** (full rollback on failure). The stock
+  `InboxMember after_create` round-robin (local Redis `LPUSH`) is **outside the DB transaction** and can survive a
+  rollback; it self-heals from `inbox.inbox_members` via `InboxRoundRobinService` (`reset_queue unless validate_queue?`).
+  Upstream callback **not modified**. No Meta/HTTP/external call.
+- **Frontend:** "Align staff access" only on a linked/derived inbox with drift for a category-admin (agents/feature-OFF/
+  ambiguous → fail closed). `MembershipAlignmentDialog.vue` previews current + additive diff (display-only); Cancel = no
+  write; **Confirm sends only `{team_id, inbox_id}`** with a double-submit guard; success refreshes overview; failure safe.
+- **Validation (RED→GREEN):** backend request spec **19/0** (no client-user_ids authority; server recompute; bidirectional;
+  stale-safe; unrelated/ambiguous/unlinked fail-closed; cross-account 404; database-atomic rollback; Redis boundary; no
+  mapping; no external); overview regression **15** unchanged; RuboCop clean; Vitest categoryInboxes **4 files/54** (incl.
+  double-submit); ESLint clean; `git diff --check` clean; no secrets; no schema. Safe DTO `{id,name}` only.
+- **Status: 17F.3 IMPLEMENTED (staff-access alignment only).** Not customer-onboarding cert; full Gate B still required
+  before production/customer go-live. Do not merge/deploy/run Meta/onboard/touch fixture — awaiting GPT-5.5 review.
+
+### Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher — `Merged (PR #125, merge SHA e9fcef9) + DEV runtime PASS`
 - **Branch:** `feature/bloomwire-phase-17f2b-category-add-whatsapp-launcher` off `version_1` `0c3f32d` (PR #124; base
   verified fail-closed). Frontend-only. **Product code: YES (frontend) · schema/migration: NO · backend endpoint: NO ·
   new Category model/mapping: NO · membership writes: NO · duplicate wizard: NO · per-customer webhook: NO · credential
