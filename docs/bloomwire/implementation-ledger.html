@@ -347,6 +347,17 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher <span class="badge">Open (product code, frontend-only; not merged)</span> <span class="pr">branch feature/bloomwire-phase-17f2b-category-add-whatsapp-launcher · base version_1 0c3f32d (PR #124)</span></h3>
+      <ul>
+        <li><b>Type</b>: frontend-only UI launcher. <b>Product code: YES (frontend) · schema/migration: NO · backend endpoint: NO · new Category model/mapping: NO · membership writes: NO · duplicate wizard: NO · per-customer webhook: NO · credential mutation: NO · Enterprise: NO · real Meta: NO · DEV deploy: NO · production untouched.</b></li>
+        <li><b>Owner-approved dependency change (recorded in this implementation PR)</b>: 17F.2B may begin <b>before</b> full Gate B; <b>full Gate B / real Meta Coexistence certification remains mandatory before production/customer go-live and before any end-to-end customer-onboarding certification claim.</b></li>
+        <li><b>What</b>: <code>categoryInboxes/Index.vue</code> — each Category/Team row shows an <b>"Add WhatsApp Inbox"</b> <code>router-link</code> deep-linking to the existing wizard (<code>settings_inboxes_page_channel</code>/<code>sub_page=whatsapp</code>) via <code>useAccount().accountScopedRoute</code>. No writes, no backend call, no Category↔Inbox mapping (alignment = 17F.3).</li>
+        <li><b>Gating</b>: <code>canAccessCategoryAdmin &amp;&amp; canSelfServeManagedWhatsapp</code> (agents + feature-OFF hidden); route guard + backend remain authoritative. Return refreshes the overview via the existing <code>onBeforeMount</code> fetch.</li>
+        <li><b>Validation (supporting only; Gate B still required for customer cert)</b>: RED→GREEN Vitest <code>categoryInboxes/Index.spec.js</code> <b>20 passed</b> (8 new; 4 RED pre-fix); categoryInboxes regression 3 files/35; ESLint clean; <code>git diff --check</code> clean; no secrets. Files: <code>categoryInboxes/Index.vue</code>, <code>categoryInboxes/specs/Index.spec.js</code>, <code>i18n/locale/en/categoryInboxes.json</code>.</li>
+        <li><b>Status: 17F.2B IMPLEMENTED (frontend launcher).</b> Not a customer-onboarding certification. Do not merge/deploy/run Meta/start 17F.3 — awaiting GPT-5.5 exact-head review.</li>
+      </ul>
+    </div>
+
     <div class="card"><h3>Phase 17F.2A — DEV secure config + Meta Embedded Signup launch/cancel preflight <span class="badge pending">Pending docs-only PR</span></h3>
       <ul>
         <li><b>Base</b>: current latest <code>version_1</code> = <code>9fe522fbd5221ae301b7b133276c6c193eb65019</code> (PR #123 docs-only merge). This ledger update is docs-only and must not deploy. It does not change product code, tests, schema, workflows, runtime config, DEV, production, roles, memberships, inboxes, channels, setups, credentials, or the existing WhatsApp fixture.</li>
