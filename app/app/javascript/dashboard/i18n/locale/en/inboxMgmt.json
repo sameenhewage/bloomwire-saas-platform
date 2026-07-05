@@ -521,6 +521,12 @@
         "DESC": "Chatwoot supports live-chat widgets, Facebook Messenger, WhatsApp, Emails, etc., as channels. If you want to build a custom channel, you can create it using the API channel. To get started, choose one of the channels below.",
         "TITLE_NEXT": "Complete the setup",
         "TITLE_FINISH": "Voilà!",
+        "LOADING_CHANNELS": "Loading available channels…",
+        "LOAD_ERROR": {
+          "TITLE": "Couldn't load available channels",
+          "BODY": "We couldn't load the channels for this account. Please check your connection and try again.",
+          "RETRY": "Try again"
+        },
         "CHANNEL": {
           "WEBSITE": {
             "TITLE": "Website",

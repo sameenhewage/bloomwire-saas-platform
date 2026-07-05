@@ -53,6 +53,7 @@ describe('useBloomwireCapabilities', () => {
     mockGetters({ capabilities: { canManageProviderSetup: false } });
     const caps = useBloomwireCapabilities();
     expect(Object.keys(caps)).toEqual([
+      'capabilitiesLoaded',
       'canManageAccountControlPlane',
       'canManageProviderSetup',
       'canManageNativeWhatsappSetup',
@@ -65,6 +66,37 @@ describe('useBloomwireCapabilities', () => {
       'canAccessCategoryAdmin',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
+  });
+
+  // Deterministic-tile fix: `capabilitiesLoaded` must distinguish "the account-show payload has hydrated" from
+  // "not loaded yet", so consumers show a loading state instead of treating a not-yet-loaded control as denied.
+  describe('capabilitiesLoaded', () => {
+    it('is true once the account payload carries a bloomwire_capabilities map', () => {
+      mockGetters({ capabilities: { canSelfServeManagedWhatsapp: true } });
+      const { capabilitiesLoaded } = useBloomwireCapabilities();
+      expect(capabilitiesLoaded.value).toBe(true);
+    });
+
+    it('is true even for an empty capability map (payload present, all-default)', () => {
+      mockGetters({ capabilities: {} });
+      const { capabilitiesLoaded } = useBloomwireCapabilities();
+      expect(capabilitiesLoaded.value).toBe(true);
+    });
+
+    it('is false when the account record has no bloomwire_capabilities (not hydrated)', () => {
+      mockGetters({ capabilities: undefined });
+      const { capabilitiesLoaded } = useBloomwireCapabilities();
+      expect(capabilitiesLoaded.value).toBe(false);
+    });
+
+    it('is false when the account record is not loaded at all', () => {
+      useStoreGetters.mockReturnValue({
+        getCurrentAccountId: ref(1),
+        'accounts/getAccount': ref(() => undefined),
+      });
+      const { capabilitiesLoaded } = useBloomwireCapabilities();
+      expect(capabilitiesLoaded.value).toBe(false);
+    });
   });
 
   // Phase 17C.3: opt-in managed capability — defaults to FALSE (must stay hidden in stock / older backend), and

@@ -15,6 +15,48 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### WhatsApp channel tile intermittently disappears (deterministic-state fix) — OPEN (product code; not merged)
+- **Branch:** `fix/bloomwire-whatsapp-tile-race` off `version_1` `8fabfc331b7f62d5c64197fe020e563140d3239f`
+  (base verified). **Frontend-only; no backend / DB / router / auth / config change.**
+- **Symptom:** on `/app/accounts/:id/settings/inboxes/new`, same user/account/URL/build, the WhatsApp channel
+  tile appeared on one refresh and was absent on another (demo-blocking, non-deterministic).
+- **RCA (proven):** the tile is gated by the server capability `canSelfServeManagedWhatsapp`; for a managed
+  account it is the **only** permitted tile (all others need `canCreateInbox`, which is `false`). The backend is
+  **deterministic** (verified on deployed `8fabfc33`: `Bloomwire::Capabilities.for` → `canSelfServeManagedWhatsapp=true`,
+  `canCreateInbox=false`, 10/10; all feature flags resolve true; capabilities live **only** on the account-show
+  payload — `_account.json.jbuilder` emits them `if @current_account_user.present?`, and the lighter bootstrap
+  `_user` accounts array omits them). The **frontend** was the fault: `useBloomwireCapabilities` returns
+  `canSelfServeManagedWhatsapp=false` as a **fallback whenever the account payload has not (fully) hydrated** and
+  **cannot distinguish "loading" from "denied"**; `ChannelList.vue` had **no loading state** and rendered the
+  terminal "MANAGED_BY_OPS" empty state whenever the filtered list was momentarily empty (the anti-pattern
+  "loading state shown as no-channels-available"); `initializeEnabledFeatures` also dereferenced
+  `currentAccount.value.features` unguarded; and the stock `accounts/get` action **swallows failures silently**
+  (no retry / no error), so an un-hydrated / failed account-show left the tile hidden until the next refresh.
+- **Fix (smallest root fix, deterministic):** `useBloomwireCapabilities` now exposes `capabilitiesLoaded`
+  (account payload carries a `bloomwire_capabilities` map). `ChannelList.vue` ensures the authoritative account
+  payload is hydrated on mount (dispatches `accounts/get`) and renders: **loading skeleton** while capabilities
+  hydrate (never the empty surface) → **recoverable error + retry** if the authoritative request fails / caps
+  never arrive → the channel tiles once loaded → the managed empty state **only** when genuinely loaded with no
+  permitted channel. `initializeEnabledFeatures` guards `currentAccount`. Agents stay blocked (real caps drive
+  `isChannelSetupAllowed`); account context and the Standard/Coexistence WhatsApp wizard entry are unchanged.
+- **Not changed:** backend authorization / `Bloomwire::Capabilities` / feature flags / webhook router / DB /
+  config; the Standard & Coexistence flows; Enterprise. **No secrets / Meta identifiers** in code, tests, or logs.
+- **`custom_roles` 500 (separate, unrelated):** `GET /api/v1/accounts/:id/custom_roles` → 500
+  `NoMethodError: undefined method 'custom_roles' for Account` is the **Enterprise** controller calling
+  `Current.account.custom_roles` (the `has_many :custom_roles` lives only in the enterprise Account concern) on a
+  non-enterprise build. It is **not** requested on the inbox-new page (verified via the browser Network tab) and
+  does **not** contribute to the tile defect → **tracked as a separate focused follow-up** (frontend should not
+  fetch custom_roles when the enterprise custom-roles capability is absent); not fixed here (would touch
+  Enterprise-gating, out of this PR's scope). Not ignored.
+- **TDD / validation:** `ChannelList.spec.js` **24/24** (14 existing logic tests intact + 10 new: delayed
+  hydration→tile, single fetch/tile, already-hydrated fast path, transient failure→error not empty, rejected
+  request→error, retry→tile, eligible admin→tile, agent→blocked, repeated-mount determinism, account-switch no
+  stale, Standard/Coexistence route unchanged); `useBloomwireCapabilities.spec.js` adds `capabilitiesLoaded`
+  cases. Focused FE suites **58/58**; ESLint clean; `vite build` ok. **Runtime:** case A (tile visible) + the
+  account-show **304-cache** + "no custom_roles on inbox-new" captured on the deployed build via an authenticated
+  session; case B (tile missing) + the mandatory 20-hard-refresh check require the **account-1 admin** session
+  (the session provided was account-21/amaya, which cannot access account 1) — pending.
+
 ### WhatsApp / Meta Graph API version contract → v25.0 — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-whatsapp-graph-api-v25` off `version_1` `e8717b059759da7b090b172c291ad2a33ea08794`
   (base verified). **Version-only change; no API behavior changed beyond v25.0 compatibility.**
