@@ -1,6 +1,9 @@
+import { ref } from 'vue';
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils';
 import Index from '../Index.vue';
 import categoryInboxOverviewAPI from 'dashboard/api/bloomwire/categoryInboxOverview';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
+import { useAccount } from 'dashboard/composables/useAccount';
 
 const t = (key, params = {}) => (params.teams ? `${key} ${params.teams}` : key);
 
@@ -8,6 +11,30 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t }) }));
 vi.mock('dashboard/api/bloomwire/categoryInboxOverview', () => ({
   default: { get: vi.fn() },
 }));
+vi.mock('dashboard/composables/useBloomwireCapabilities');
+vi.mock('dashboard/composables/useAccount');
+
+// 17F.2B launcher capability + account context. Defaults: authorized admin with managed WhatsApp on account 7.
+const setCaps = ({
+  canAccessCategoryAdmin = true,
+  canSelfServeManagedWhatsapp = true,
+} = {}) => {
+  useBloomwireCapabilities.mockReturnValue({
+    canAccessCategoryAdmin: ref(canAccessCategoryAdmin),
+    canSelfServeManagedWhatsapp: ref(canSelfServeManagedWhatsapp),
+  });
+};
+
+const setAccount = (accountId = 7) => {
+  useAccount.mockReturnValue({
+    accountId: ref(accountId),
+    accountScopedRoute: (name, params = {}, query = {}) => ({
+      name,
+      params: { accountId, ...params },
+      query: { ...query },
+    }),
+  });
+};
 
 const overview = {
   categories: [
@@ -106,7 +133,11 @@ const mountPage = () =>
   });
 
 describe('Categories & Inboxes overview page (17F.1)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setCaps();
+    setAccount();
+  });
 
   it('fetches the overview on mount', async () => {
     categoryInboxOverviewAPI.get.mockResolvedValue({ data: overview });
@@ -244,5 +275,103 @@ describe('Categories & Inboxes overview page (17F.1)', () => {
     const wrapper = mountPage();
     await flushPromises();
     expect(wrapper.html()).not.toMatch(/provider_config|api_key|token/i);
+  });
+});
+
+describe('Add WhatsApp Inbox launcher (17F.2B)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setCaps();
+    setAccount();
+    categoryInboxOverviewAPI.get.mockResolvedValue({ data: overview });
+  });
+
+  const launchers = wrapper =>
+    wrapper.findAll('[data-testid="add-whatsapp-inbox"]');
+  const launcherRoute = wrapper =>
+    wrapper
+      .findAllComponents(RouterLinkStub)
+      .find(l => l.props('to')?.name === 'settings_inboxes_page_channel')
+      ?.props('to');
+
+  it('shows the launcher for an authorized administrator (category-admin + managed WhatsApp)', async () => {
+    setCaps({
+      canAccessCategoryAdmin: true,
+      canSelfServeManagedWhatsapp: true,
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(launchers(wrapper).length).toBeGreaterThan(0);
+  });
+
+  it('hides the launcher for an agent (no category-admin, no managed WhatsApp)', async () => {
+    setCaps({
+      canAccessCategoryAdmin: false,
+      canSelfServeManagedWhatsapp: false,
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(launchers(wrapper).length).toBe(0);
+  });
+
+  it('hides the launcher when managed WhatsApp onboarding capability is OFF', async () => {
+    setCaps({
+      canAccessCategoryAdmin: true,
+      canSelfServeManagedWhatsapp: false,
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(launchers(wrapper).length).toBe(0);
+  });
+
+  it('hides the launcher when the category-admin capability is OFF (feature OFF)', async () => {
+    setCaps({
+      canAccessCategoryAdmin: false,
+      canSelfServeManagedWhatsapp: true,
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(launchers(wrapper).length).toBe(0);
+  });
+
+  it('deep-links to the existing WhatsApp wizard with the correct account context', async () => {
+    setAccount(7);
+    const wrapper = mountPage();
+    await flushPromises();
+    const to = launcherRoute(wrapper);
+    expect(to).toBeTruthy();
+    expect(to.name).toBe('settings_inboxes_page_channel');
+    expect(to.params).toMatchObject({ accountId: 7, sub_page: 'whatsapp' });
+  });
+
+  it('does not fabricate a Category↔Inbox relationship (no team/category param on the launcher route)', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    const to = launcherRoute(wrapper);
+    expect(to.params).not.toHaveProperty('teamId');
+    expect(to.params).not.toHaveProperty('categoryId');
+    expect(to.params).not.toHaveProperty('category_id');
+  });
+
+  it('is declarative navigation and triggers no backend write when clicked', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(categoryInboxOverviewAPI.get).toHaveBeenCalledTimes(1); // mount fetch only
+    await launchers(wrapper)[0].trigger('click');
+    await flushPromises();
+    // clicking the launcher performs no extra API/overview call (router-link only)
+    expect(categoryInboxOverviewAPI.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the existing read-only overview intact (no write controls added)', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    const writeButtons = wrapper
+      .findAll('button')
+      .map(b => b.text())
+      .filter(txt =>
+        /save|create|delete|remove|sync|assign|connect/i.test(txt)
+      );
+    expect(writeButtons).toEqual([]);
   });
 });

@@ -15,6 +15,37 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher — OPEN (product code, frontend-only; not merged)
+- **Branch:** `feature/bloomwire-phase-17f2b-category-add-whatsapp-launcher` off `version_1`
+  `0c3f32d2e02d7d8d6d980b556614d31d9cfd4de6` (PR #124 merge; base verified, fail-closed passed). **Type:** frontend-only
+  UI launcher. **Product code changed: YES (frontend only).** **Schema/migration: NO · backend endpoint: NO · new
+  Category model/table/entity: NO · persistent Inbox↔Team mapping: NO · membership (TeamMember/InboxMember) writes: NO ·
+  duplicate wizard: NO · per-customer webhook: NO · credential mutation: NO · Enterprise: NO · real Meta calls: NO ·
+  DEV deploy: NO · production: untouched.**
+- **OWNER-APPROVED DEPENDENCY CHANGE (recorded per owner decision):** 17F.2B implementation **may now begin before full
+  Gate B certification.** **Full Gate B / Real Meta Coexistence certification remains MANDATORY before production /
+  customer go-live and before claiming end-to-end customer-onboarding certification.** This entry records that explicit
+  decision in the implementation PR (no separate docs-only contract-change PR was created).
+- **What:** in the existing **Categories & Inboxes** admin overview (`categoryInboxes/Index.vue`), each Category/Team
+  row now shows an **"Add WhatsApp Inbox"** action that **deep-links** to the existing normal Add-Inbox flow
+  (`settings_inboxes_page_channel`, `sub_page=whatsapp` → the existing Standard/Coexistence managed wizard) via
+  `useAccount().accountScopedRoute(...)`. It is a `router-link` (declarative navigation) — **it performs no writes,
+  triggers no backend call, and creates no Category↔Inbox relationship** (membership alignment is deferred to 17F.3).
+- **Authorization / gating:** launcher shown only when `canAccessCategoryAdmin && canSelfServeManagedWhatsapp` (existing
+  category-admin + managed-WhatsApp-onboarding capabilities). Agents (both false) and feature-OFF never see it; the
+  route guard (`redirectIfCategoryAdminDisabled`) + backend controllers remain the authoritative enforcement boundary.
+- **Return behavior:** cancelling/completing the existing wizard returns via normal navigation; the overview refreshes
+  through its existing data source (`onBeforeMount → categoryInboxOverviewAPI.get`) on re-entry; no fabricated mapping.
+- **Validation (automated; supporting evidence — Gate B still required for customer cert):** RED→GREEN Vitest —
+  `categoryInboxes/Index.spec.js` **20 passed** (8 new launcher tests; 4 were RED pre-implementation: admin sees it,
+  correct account-scoped wizard route, no team/category param, declarative no-write click); categoryInboxes directory
+  regression **3 files / 35 tests passed**; ESLint clean on changed files; `git diff --check` clean; no secrets in
+  diff. Changed files: `categoryInboxes/Index.vue`, `categoryInboxes/specs/Index.spec.js`,
+  `i18n/locale/en/categoryInboxes.json` (frontend only — no schema/migration/backend/workflow/Enterprise).
+- **Status:** **17F.2B IMPLEMENTED (frontend launcher).** This is **not** a claim of customer-onboarding certification —
+  that remains gated on full Gate B (real Meta Coexistence E2E) before production/customer go-live. Do not merge · do
+  not deploy · do not run Meta Embedded Signup · do not start 17F.3 — awaiting GPT-5.5 exact-head review.
+
 ### Phase 17F.2A — DEV secure config + Meta Embedded Signup launch/cancel preflight — PENDING DOCS-ONLY PR
 - **Base:** current latest `version_1` = `9fe522fbd5221ae301b7b133276c6c193eb65019` (PR #123 docs-only merge). No
   product code, tests, schema, workflows, runtime config, DEV, production, roles, memberships, inboxes, channels, setups,

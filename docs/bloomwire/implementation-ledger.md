@@ -314,6 +314,25 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher — `Open (product code, frontend-only; not merged)`
+- **Branch:** `feature/bloomwire-phase-17f2b-category-add-whatsapp-launcher` off `version_1` `0c3f32d` (PR #124; base
+  verified fail-closed). Frontend-only. **Product code: YES (frontend) · schema/migration: NO · backend endpoint: NO ·
+  new Category model/mapping: NO · membership writes: NO · duplicate wizard: NO · per-customer webhook: NO · credential
+  mutation: NO · Enterprise: NO · real Meta: NO · DEV deploy: NO · production: untouched.**
+- **Owner-approved dependency change (recorded here in the implementation PR):** 17F.2B may begin **before** full Gate B;
+  **full Gate B / real Meta Coexistence certification remains mandatory before production/customer go-live and before
+  any end-to-end customer-onboarding certification claim.**
+- **What:** `categoryInboxes/Index.vue` — each Category/Team row shows an **"Add WhatsApp Inbox"** `router-link` that
+  deep-links to the existing wizard (`settings_inboxes_page_channel`/`sub_page=whatsapp`) via
+  `useAccount().accountScopedRoute`. No writes, no backend call, no Category↔Inbox mapping (alignment = 17F.3).
+- **Gating:** `canAccessCategoryAdmin && canSelfServeManagedWhatsapp` (agents + feature-OFF hidden); route guard +
+  backend remain authoritative. Return refreshes the overview via the existing `onBeforeMount` fetch.
+- **Validation (supporting only; Gate B still required for customer cert):** RED→GREEN Vitest `categoryInboxes/Index.spec.js`
+  **20 passed** (8 new; 4 RED pre-fix); categoryInboxes regression 3 files/35; ESLint clean; `git diff --check` clean;
+  no secrets. Files: `categoryInboxes/Index.vue`, `categoryInboxes/specs/Index.spec.js`, `i18n/.../categoryInboxes.json`.
+- **Status: 17F.2B IMPLEMENTED (frontend launcher).** Not a customer-onboarding certification. Do not merge/deploy/run
+  Meta/start 17F.3 — awaiting GPT-5.5 exact-head review.
+
 ### Phase 17F.2A — DEV secure config + Meta Embedded Signup launch/cancel preflight — `Pending docs-only PR`
 - **Base:** current latest `version_1` = `9fe522fbd5221ae301b7b133276c6c193eb65019` (PR #123 docs-only merge). This
   ledger update is docs-only and must not deploy. It does not change product code, tests, schema, workflows, runtime

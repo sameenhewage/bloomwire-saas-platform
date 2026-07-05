@@ -26,6 +26,7 @@
     "CATEGORY": {
       "STAFF": "{count} staff | {count} staff | {count} staff",
       "MANAGE_TEAM": "Manage team",
+      "ADD_WHATSAPP_INBOX": "Add WhatsApp Inbox",
       "NO_INBOX": "No WhatsApp inbox is derived for this category yet."
     },
     "INBOX": {

@@ -6,6 +6,8 @@
 // backend controller (admin-only + feature-gated 404) remains the enforcement boundary.
 import { computed, onBeforeMount, ref } from 'vue';
 import categoryInboxOverviewAPI from 'dashboard/api/bloomwire/categoryInboxOverview';
+import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
+import { useAccount } from 'dashboard/composables/useAccount';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import InboxSummary from './InboxSummary.vue';
@@ -17,6 +19,23 @@ const categories = ref([]);
 const ambiguousInboxes = ref([]);
 const unlinkedInboxes = ref([]);
 const derivationNote = ref('');
+
+// Phase 17F.2B: frontend-only "Add WhatsApp Inbox" launcher. It deep-links to the EXISTING managed WhatsApp
+// onboarding wizard (Settings → Inboxes → Add Inbox → WhatsApp Business → Standard/Coexistence). It performs NO
+// writes, creates NO Category↔Inbox mapping, and reuses the existing wizard (no duplicate wizard, no backend
+// orchestration). Gated by the category-admin capability AND the managed WhatsApp onboarding capability, so agents
+// and feature-OFF never see it; the backend controllers remain the authoritative enforcement boundary.
+const { canAccessCategoryAdmin, canSelfServeManagedWhatsapp } =
+  useBloomwireCapabilities();
+const { accountScopedRoute } = useAccount();
+
+const canAddWhatsappInbox = computed(
+  () => canAccessCategoryAdmin.value && canSelfServeManagedWhatsapp.value
+);
+
+const addWhatsappInboxRoute = computed(() =>
+  accountScopedRoute('settings_inboxes_page_channel', { sub_page: 'whatsapp' })
+);
 
 const isEmpty = computed(
   () =>
@@ -133,12 +152,22 @@ onBeforeMount(fetchOverview);
                 }}
               </span>
             </div>
-            <router-link
-              :to="teamRoute(category.id)"
-              class="text-label-small text-n-blue-11 hover:underline flex-shrink-0"
-            >
-              {{ $t('CATEGORY_INBOX_OVERVIEW.CATEGORY.MANAGE_TEAM') }}
-            </router-link>
+            <div class="flex items-center gap-3 flex-shrink-0">
+              <router-link
+                v-if="canAddWhatsappInbox"
+                :to="addWhatsappInboxRoute"
+                data-testid="add-whatsapp-inbox"
+                class="text-label-small font-medium text-n-blue-11 hover:underline"
+              >
+                {{ $t('CATEGORY_INBOX_OVERVIEW.CATEGORY.ADD_WHATSAPP_INBOX') }}
+              </router-link>
+              <router-link
+                :to="teamRoute(category.id)"
+                class="text-label-small text-n-blue-11 hover:underline"
+              >
+                {{ $t('CATEGORY_INBOX_OVERVIEW.CATEGORY.MANAGE_TEAM') }}
+              </router-link>
+            </div>
           </div>
 
           <div
