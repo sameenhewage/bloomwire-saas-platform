@@ -16,13 +16,24 @@ const STOCK_SAFE_DEFAULT = true;
 export function useBloomwireCapabilities() {
   const getters = useStoreGetters();
 
-  const capabilities = computed(() => {
+  const currentAccount = computed(() => {
     const accountId = getters.getCurrentAccountId?.value;
     const getAccount = getters['accounts/getAccount']?.value;
-    const account =
-      typeof getAccount === 'function' ? getAccount(accountId) : undefined;
-    return account?.bloomwire_capabilities ?? {};
+    return typeof getAccount === 'function' ? getAccount(accountId) : undefined;
   });
+
+  const capabilities = computed(
+    () => currentAccount.value?.bloomwire_capabilities ?? {}
+  );
+
+  // Whether the authoritative account payload (the ONLY source of `bloomwire_capabilities`) has hydrated for
+  // the current account. Consumers MUST treat `false` as "still loading" — NOT as "denied" — so a control is
+  // never hidden merely because initialization is incomplete (e.g. the managed WhatsApp card, which would
+  // otherwise vanish while the account-show request is in flight / was overwritten by the lighter bootstrap
+  // account payload that omits capabilities). Only the explicit server booleans (once loaded) hide a control.
+  const capabilitiesLoaded = computed(
+    () => currentAccount.value?.bloomwire_capabilities != null
+  );
 
   // `fallback` is the value used when the key is absent. Stock-hiding capabilities default TRUE (preserve stock
   // Chatwoot); opt-in managed capabilities MUST pass `false` so they stay hidden in stock / older-backend / not-
@@ -34,6 +45,7 @@ export function useBloomwireCapabilities() {
     });
 
   return {
+    capabilitiesLoaded,
     canManageAccountControlPlane: buildCapability(
       'canManageAccountControlPlane'
     ),

@@ -2,19 +2,24 @@
 import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 import { useMapGetter } from 'dashboard/composables/store';
 
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 import ChannelItem from 'dashboard/components/widgets/ChannelItem.vue';
+import LoadingState from 'dashboard/components/widgets/LoadingState.vue';
+import NextButton from 'next/button/Button.vue';
 
 const { t } = useI18n();
 const router = useRouter();
+const store = useStore();
 const { accountId, currentAccount } = useAccount();
 // Bloomwire (11B.6C/11B.7C): hide channel setup entries when Ops-managed (backend still enforces the 403).
 // 11B.7C: in managed mode ALL inbox creation is Ops-owned, so even self-service website/api cards are hidden.
 const {
+  capabilitiesLoaded,
   canManageProviderSetup,
   canManageNativeWhatsappSetup,
   canCreateInbox,
@@ -136,8 +141,33 @@ const visibleChannelList = computed(() =>
   channelList.value.filter(channel => isChannelSetupAllowed(channel.key))
 );
 
-const initializeEnabledFeatures = async () => {
-  enabledFeatures.value = currentAccount.value.features;
+// Loading = the server-derived capabilities (which live ONLY on the account-show payload) have not hydrated yet
+// for the current account. While loading we render a skeleton — never the empty "managed by Ops" state — so the
+// WhatsApp card cannot momentarily disappear on refresh. `loadError` drives a recoverable retry surface.
+const isLoadingCapabilities = ref(!capabilitiesLoaded.value);
+const loadError = ref(false);
+
+const initializeEnabledFeatures = () => {
+  enabledFeatures.value = currentAccount.value?.features ?? {};
+};
+
+// Ensure the authoritative account payload (the only source of `bloomwire_capabilities`) is hydrated BEFORE we
+// decide what to render. The stock `accounts/get` action swallows failures, so after awaiting it we treat
+// still-missing capabilities as a recoverable error rather than silently painting an empty channel list.
+const loadCapabilities = async () => {
+  loadError.value = false;
+  isLoadingCapabilities.value = !capabilitiesLoaded.value;
+  try {
+    if (!capabilitiesLoaded.value) {
+      await store.dispatch('accounts/get', {});
+    }
+    initializeEnabledFeatures();
+    loadError.value = !capabilitiesLoaded.value;
+  } catch (error) {
+    loadError.value = true;
+  } finally {
+    isLoadingCapabilities.value = false;
+  }
 };
 
 const initChannelAuth = channel => {
@@ -154,14 +184,43 @@ const goBack = () => {
   router.push({ name: 'settings_inbox_list' });
 };
 
-onMounted(() => {
-  initializeEnabledFeatures();
-});
+onMounted(loadCapabilities);
 </script>
 
 <template>
+  <!-- Capabilities still hydrating: render a loading state, NEVER the empty channel surface, so the WhatsApp
+       card cannot momentarily disappear while the account-show payload is in flight. -->
   <div
-    v-if="visibleChannelList.length"
+    v-if="isLoadingCapabilities"
+    data-testid="channel-loading"
+    class="flex items-center justify-center w-full p-8"
+  >
+    <LoadingState :message="$t('INBOX_MGMT.ADD.AUTH.LOADING_CHANNELS')" />
+  </div>
+  <!-- Authoritative capability/account request failed: recoverable error with retry — never silently hide. -->
+  <div
+    v-else-if="loadError"
+    data-testid="channel-load-error"
+    class="flex flex-col items-center justify-center w-full max-w-lg gap-2 p-8 mx-auto text-center"
+  >
+    <h3 class="text-heading-2 text-n-slate-12">
+      {{ $t('INBOX_MGMT.ADD.AUTH.LOAD_ERROR.TITLE') }}
+    </h3>
+    <p class="text-body-main text-n-slate-11">
+      {{ $t('INBOX_MGMT.ADD.AUTH.LOAD_ERROR.BODY') }}
+    </p>
+    <NextButton
+      type="button"
+      solid
+      blue
+      data-testid="channel-load-retry"
+      :label="$t('INBOX_MGMT.ADD.AUTH.LOAD_ERROR.RETRY')"
+      class="mt-2"
+      @click="loadCapabilities"
+    />
+  </div>
+  <div
+    v-else-if="visibleChannelList.length"
     class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 mx-0 gap-6 sm:grid-cols-3 p-8"
   >
     <ChannelItem
