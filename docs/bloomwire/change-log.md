@@ -15,6 +15,34 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### WhatsApp / Meta Graph API version contract → v25.0 — OPEN (product code; not merged)
+- **Branch:** `fix/bloomwire-whatsapp-graph-api-v25` off `version_1` `e8717b059759da7b090b172c291ad2a33ea08794`
+  (base verified). **Version-only change; no API behavior changed beyond v25.0 compatibility.**
+- **Why:** the approved Meta Graph API version for this project is **v25.0**, but the Coexistence flow inherited
+  older/implicit versions: the **frontend Embedded Signup SDK** silently used **v22.0** (the `WHATSAPP_API_VERSION`
+  config was never passed to the browser, so `utils.js` fell back to a hard-coded `v22.0`); the **outbound
+  message/media** path defaulted to **v24.0** (`WHATSAPP_CLOUD_API_VERSION` unset); backend code fallbacks were `v22.0`.
+- **Centralized fix:** new single source of truth `Whatsapp::GraphApi::DEFAULT_VERSION = 'v25.0'` (backend) +
+  `DEFAULT_WHATSAPP_GRAPH_API_VERSION = 'v25.0'` (frontend `utils.js`). All Coexistence-flow defaults now reference it:
+  `Whatsapp::FacebookApiClient` (token exchange, WABA + phone-number queries, token debug, register, webhook
+  subscribe/override/unsubscribe), `Whatsapp::HealthService`, `Whatsapp::Providers::WhatsappCloudService`
+  (message + media paths), and the FB JS SDK init (`initializeFacebook` / `setupFacebookSdk`). `dashboard_controller`
+  now passes `WHATSAPP_API_VERSION` (default v25.0) into `window.chatwootConfig.whatsappApiVersion` so the popup is
+  config-driven with a v25.0 safety net. Per-surface ops overrides (`WHATSAPP_API_VERSION`, `WHATSAPP_CLOUD_API_VERSION`)
+  are preserved. Runtime DB `WHATSAPP_API_VERSION` is already `v25.0`.
+- **Explicitly NOT changed:** the global Meta webhook router (version-independent — routes by `phone_number_id`, unchanged);
+  the Bloomwire WA Dev fixture; **Enterprise** WhatsApp calling (its own `WHATSAPP_CALLING_API_VERSION_FALLBACK`,
+  untouched); the **template-management** surface (`business_account_path` + `Whatsapp::CsatTemplateService` remain on the
+  pre-existing `v14.0` — not part of the Coexistence onboarding or message/status path; flagged as a separate follow-up);
+  unrelated Instagram/Messenger/Shopify/reports versions.
+- **TDD (RED→GREEN):** frontend `whatsapp/specs/utils.spec.js` **RED-proven** (4/5 failed on the old v22.0 fallback) → v25.0
+  SDK init + no older/implicit version + override preserved; backend `facebook_api_client_spec` asserts every generated
+  Graph URL is `/v25.0/` and never `/v1x|20–24/`; `whatsapp_cloud_service_spec` message/media default `/v25.0/` (+ ops
+  override still works); `dashboard_controller_spec` asserts `whatsappApiVersion: 'v25.0'` reaches the window config.
+  WhatsApp backend regression **278 examples, 0 failures** (Enterprise call-flow spec fails 6/6 **pre-existing** on clean
+  `version_1`, unrelated). RuboCop + ESLint clean; vite build ok; `git diff --check` clean; no secret in diff (no App ID /
+  Configuration ID / token / WABA ID / phone_number_id / phone number in code, tests, or logs).
+
 ### Phase 17F.3 — Guided TeamMember + InboxMember alignment — OPEN (product code; not merged)
 - **Branch:** `feature/bloomwire-phase-17f3-guided-membership-alignment` off `version_1`
   `e9fcef99705eee792cf99c04baa9edc24eee880e` (PR #125 merge; base verified, fail-closed passed). **Scope: staff-access

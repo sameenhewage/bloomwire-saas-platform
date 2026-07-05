@@ -1,5 +1,12 @@
 import { loadScript } from 'dashboard/helper/DOMHelpers';
 
+// Approved Meta Graph API version for the WhatsApp Embedded Signup / Coexistence popup. The frontend
+// normally receives the version from the WHATSAPP_API_VERSION global config (window.chatwootConfig
+// .whatsappApiVersion); this is the safety default so the Facebook JS SDK never silently initializes on an
+// older Graph API version when that config value is absent. Keep this in step with
+// Whatsapp::GraphApi::DEFAULT_VERSION on the backend.
+export const DEFAULT_WHATSAPP_GRAPH_API_VERSION = 'v25.0';
+
 export const loadFacebookSdk = async () => {
   return loadScript('https://connect.facebook.net/en_US/sdk.js', {
     async: true,
@@ -9,7 +16,7 @@ export const loadFacebookSdk = async () => {
 };
 
 export const initializeFacebook = (appId, apiVersion) => {
-  const version = apiVersion || 'v22.0';
+  const version = apiVersion || DEFAULT_WHATSAPP_GRAPH_API_VERSION;
   return new Promise(resolve => {
     const init = () => {
       window.FB.init({
@@ -83,7 +90,7 @@ export const initWhatsAppEmbeddedSignup = configId => {
 };
 
 export const setupFacebookSdk = async (appId, apiVersion) => {
-  const version = apiVersion || 'v22.0';
+  const version = apiVersion || DEFAULT_WHATSAPP_GRAPH_API_VERSION;
   await loadFacebookSdk();
   await initializeFacebook(appId, version);
 };
