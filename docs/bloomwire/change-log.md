@@ -15,6 +15,37 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Coexistence onboarding callback fix — Stage-B transition hang — OPEN (product code; not merged)
+- **Branch:** `fix/bloomwire-coexistence-callback-transition` off `version_1`
+  `e8717b059759da7b090b172c291ad2a33ea08794` (base verified, fail-closed passed). **Frontend-only.**
+- **Incident (root cause, proven):** during the first live Coexistence onboarding for account 21, the wizard reached
+  "Registering your WhatsApp number…" and hung; **zero** backend create requests arrived (no
+  `POST …/bloomwire/whatsapp/coexistence_embedded_signup`), account 21 stayed at 0 Inbox/Channel/Setup, and Meta sent
+  two webhook events for the new number (global router fail-closed 200, existing fixture untouched). **Owner:**
+  `useWhatsappEmbeddedSignup.js`. **Why:** the run's Promise settled only when **both** the FB.login `authCode` **and**
+  the postMessage `businessData` were present (`resolveIfReady`); if exactly one Meta signal arrived and the other
+  never did, the Promise **never settled**, so `isAuthenticating` stayed `true`, `BloomwireWhatsapp.vue`'s
+  `await runEmbeddedSignup()` never returned, the `PROCESSING` loader showed forever, and the create POST was never
+  dispatched. **Stage B** (browser received a Meta response, entered registering, but the create request never reached
+  the backend).
+- **Smallest root fix:** a **bounded completion timeout** in the composable, armed only **once the first** of the two
+  signals arrives (never limits time spent in the Meta popup). If the second signal doesn't arrive within `timeoutMs`
+  (default 60s), the run **fails closed** with a safe error instead of hanging. Both arrival orders still resolve
+  exactly once; the existing `settled` guard keeps **duplicate** Meta events/callbacks to **one** resolution → **one**
+  create POST; on reject/timeout the caller shows the sanitized generic error, ends the spinner, and leaves the form
+  **retryable**; account context is preserved (unchanged account-scoped store/API). No Meta/WhatsApp/HTTP call added;
+  no backend/DB/config/schema change; no secrets logged (auth code / token / phone / phone_number_id / WABA ID /
+  Configuration ID / App ID never touched).
+- **TDD (RED→GREEN):** `useWhatsappEmbeddedSignup.spec.js` +4 (auth-only→timeout reject **RED-proven** hang, business-only
+  →timeout reject **RED-proven** hang, no-spurious-timeout-after-resolve, duplicate FINISH→one resolution) → **14/14**;
+  `BloomwireWhatsapp.spec.js` +1 (signup reject → safe error + **no** create dispatch + retryable) → **16/16**. ESLint
+  clean; `git diff --check` clean; no secret in diff. **Not changed:** the Meta event names/shape (no guessing), the
+  backend coexistence endpoint/contract, the global webhook router, `WHATSAPP_CONFIGURATION_ID` (stays `0643fcdbad9c`).
+- **Follow-up (separate slice, NOT in this PR):** `GET /api/v1/accounts/:id/custom_roles` → 500
+  `NoMethodError: undefined method 'custom_roles' for Account` on non-enterprise accounts (surfaced on account‑21
+  settings). It does not block the onboarding component (the create POST path is independent), so it is reported as a
+  small separate follow-up rather than mixed into this fix.
+
 ### Phase 17F.3 — Guided TeamMember + InboxMember alignment — OPEN (product code; not merged)
 - **Branch:** `feature/bloomwire-phase-17f3-guided-membership-alignment` off `version_1`
   `e9fcef99705eee792cf99c04baa9edc24eee880e` (PR #125 merge; base verified, fail-closed passed). **Scope: staff-access

@@ -342,4 +342,36 @@ describe('BloomwireWhatsapp.vue — Coexistence flow (Phase 17D.3)', () => {
       false
     );
   });
+
+  // Stage-B incident coverage: when the embedded-signup run fails/aborts (e.g.
+  // the bounded timeout because one Meta signal never arrived), the wizard must
+  // surface a safe recoverable error and NEVER dispatch the create request — no
+  // infinite spinner, no partial Inbox/Channel/Setup POST.
+  it('shows a safe error and never dispatches the create request when embedded signup rejects (timeout/incomplete)', async () => {
+    runEmbeddedSignup.mockRejectedValue(new Error('Embedded signup timed out'));
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    await submit(wrapper);
+
+    expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
+    // no create POST of any kind reached the store (matches the incident: zero backend create requests)
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup',
+      expect.anything()
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/createBloomwireWhatsAppEmbeddedSignup',
+      expect.anything()
+    );
+    // spinner ended with a safe, recoverable error (form still shown → retryable); raw error never leaked
+    const error = wrapper.find('[data-testid="bloomwire-wa-error"]');
+    expect(error.text()).toBe(`${B}.ERROR`);
+    expect(wrapper.html()).not.toContain('timed out');
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      true
+    );
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      false
+    );
+  });
 });

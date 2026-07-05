@@ -205,4 +205,78 @@ describe('useWhatsappEmbeddedSignup', () => {
     expect(removeSpy).toHaveBeenCalledWith('message', registeredListener);
     removeSpy.mockRestore();
   });
+
+  // Regression for the Stage-B incident: Meta delivered one signal (the auth
+  // code) but the business-data postMessage never arrived, so the composable
+  // waited forever, isAuthenticating stayed true, and the caller's create POST
+  // was never dispatched (infinite "Registering..." spinner). A bounded timeout
+  // must settle the run with a safe error instead of hanging.
+  it('rejects with a bounded timeout when only the auth code arrives and business data never does', async () => {
+    vi.useFakeTimers();
+    initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
+
+    const { isAuthenticating, runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ timeoutMs: 1000 });
+    const assertion = expect(result).rejects.toThrow(/timed out/i);
+
+    await vi.advanceTimersByTimeAsync(0); // SDK + FB.login resolve the code (arms the bounded wait)
+    await vi.advanceTimersByTimeAsync(1000); // business data never arrives → timeout fires
+
+    await assertion;
+    expect(isAuthenticating.value).toBe(false); // spinner can end; a retry is possible
+    vi.useRealTimers();
+  });
+
+  it('rejects with a bounded timeout when only the business data arrives and the auth code never does', async () => {
+    vi.useFakeTimers();
+    initWhatsAppEmbeddedSignup.mockReturnValue(createDeferred().promise); // code never resolves
+
+    const { isAuthenticating, runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ timeoutMs: 1000 });
+    const assertion = expect(result).rejects.toThrow(/timed out/i);
+
+    emit({ event: 'FINISH', data: VALID_BUSINESS }); // business data arrives, arms the bounded wait
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await assertion;
+    expect(isAuthenticating.value).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('does not fire the bounded timeout once both signals have resolved the run', async () => {
+    vi.useFakeTimers();
+    initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
+
+    const { runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ timeoutMs: 1000 });
+
+    await vi.advanceTimersByTimeAsync(0); // code arrives (arms the bounded wait)
+    emit({ event: 'FINISH', data: VALID_BUSINESS }); // both present → resolve + clear timer
+
+    await expect(result).resolves.toMatchObject({ code: 'auth-code' });
+    await vi.advanceTimersByTimeAsync(5000); // past the (cleared) timeout — must not settle again / throw
+    vi.useRealTimers();
+  });
+
+  it('resolves exactly once when duplicate Meta FINISH events arrive (no duplicate create request)', async () => {
+    initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
+    const resolved = vi.fn();
+
+    const { runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup().then(resolved);
+
+    await flushPromises();
+    emit({ event: 'FINISH', data: VALID_BUSINESS });
+    emit({ event: 'FINISH', data: VALID_BUSINESS }); // duplicate event
+    emit({
+      event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING',
+      data: VALID_BUSINESS,
+    }); // duplicate (coexistence alias)
+
+    await result;
+    expect(resolved).toHaveBeenCalledTimes(1);
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'auth-code' })
+    );
+  });
 });

@@ -314,6 +314,26 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Coexistence onboarding callback fix — Stage-B transition hang — `Open (product code; not merged)`
+- **Branch** `fix/bloomwire-coexistence-callback-transition` off `version_1` `e8717b059759da7b090b172c291ad2a33ea08794`
+  (base verified). **Frontend-only.** Schema/migration: NO · backend/endpoint/router change: NO · Meta/WhatsApp/HTTP call
+  added: NO · Enterprise: NO · `WHATSAPP_CONFIGURATION_ID`: unchanged (`0643fcdbad9c`) · DEV deploy: pending review.
+- **Root cause (proven):** owner `useWhatsappEmbeddedSignup.js`. Its run Promise settled only when BOTH the FB.login
+  `authCode` and the postMessage `businessData` were present; if exactly one Meta signal arrived and the other never
+  did, it **never settled** → `isAuthenticating` stayed true → `BloomwireWhatsapp.vue`'s `await runEmbeddedSignup()`
+  hung → `PROCESSING` loader forever → **no** create POST (matches the incident: 0 backend create requests, account 21
+  at 0 Inbox/Channel/Setup, Meta sent 2 webhooks, router fail-closed 200). **Stage B.**
+- **Smallest fix:** a **bounded completion timeout** armed only once the FIRST signal arrives (does not limit time in the
+  Meta popup); if the second never arrives within `timeoutMs` (default 60s) the run rejects safely instead of hanging.
+  Both arrival orders still resolve once; the `settled` guard keeps duplicate Meta events → one resolution → **one**
+  create POST; reject/timeout → caller shows sanitized error, spinner ends, form retryable; account context preserved.
+- **TDD (RED→GREEN):** composable spec **14/14** (auth-only + business-only timeouts RED-proven as 5s hangs pre-fix;
+  no-spurious-timeout; duplicate→one); caller spec **16/16** (signup reject → safe error + no create dispatch +
+  retryable). Backend coexistence specs **20/0** (contract unaffected). ESLint clean; `git diff --check` clean; no
+  secret in diff (auth code / token / phone / phone_number_id / WABA ID / Configuration ID / App ID never touched).
+- **Follow-up (separate slice, NOT here):** `GET /api/v1/accounts/:id/custom_roles` → 500 `NoMethodError` on
+  non-enterprise accounts; independent of the create-POST path, reported separately.
+
 ### Phase 17F.3 — Guided TeamMember + InboxMember alignment — `Open (product code; not merged)`
 - **Branch:** `feature/bloomwire-phase-17f3-guided-membership-alignment` off `version_1` `e9fcef9` (PR #125; base
   fail-closed verified). **Scope: staff-access alignment only.** **Schema/migration: NO · persistent Inbox↔Team mapping:
