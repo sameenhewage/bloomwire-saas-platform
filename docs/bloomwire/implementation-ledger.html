@@ -347,6 +347,15 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Coexistence onboarding callback fix — Stage-B transition hang <span class="badge">Open (product code; not merged)</span> <span class="pr">branch fix/bloomwire-coexistence-callback-transition · base version_1 e8717b0</span></h3>
+      <ul>
+        <li><b>Frontend-only.</b> Schema/migration: NO · backend/endpoint/router change: NO · Meta/WhatsApp/HTTP call added: NO · Enterprise: NO · <code>WHATSAPP_CONFIGURATION_ID</code> unchanged (<code>0643fcdbad9c</code>) · DEV deploy: pending review.</li>
+        <li><b>Root cause (proven)</b>: owner <code>useWhatsappEmbeddedSignup.js</code>. The run Promise settled only when BOTH the FB.login <code>authCode</code> and the postMessage <code>businessData</code> were present; if exactly one Meta signal arrived and the other never did, it <b>never settled</b> → <code>isAuthenticating</code> stayed true → <code>BloomwireWhatsapp.vue</code>'s <code>await runEmbeddedSignup()</code> hung → <code>PROCESSING</code> loader forever → <b>no</b> create POST. Matches the incident (0 backend create requests, account 21 at 0 Inbox/Channel/Setup, Meta sent 2 webhooks, router fail-closed 200). <b>Stage B.</b></li>
+        <li><b>Smallest fix</b>: a <b>bounded completion timeout</b> armed only once the FIRST signal arrives (never limits time inside the Meta popup); if the second never arrives within <code>timeoutMs</code> (default 60s) the run rejects safely instead of hanging. Both arrival orders still resolve once; the <code>settled</code> guard keeps duplicate Meta events → one resolution → <b>one</b> create POST; reject/timeout → caller shows sanitized error, spinner ends, form retryable; account context preserved.</li>
+        <li><b>TDD (RED→GREEN)</b>: composable spec <b>14/14</b> (auth-only + business-only timeouts RED-proven as 5s hangs pre-fix; no-spurious-timeout; duplicate→one); caller spec <b>16/16</b> (signup reject → safe error + no create dispatch + retryable); backend coexistence specs <b>20/0</b> (contract unaffected). ESLint clean; <code>git diff --check</code> clean; no secret in diff (auth code / token / phone / phone_number_id / WABA ID / Configuration ID / App ID never touched).</li>
+        <li><b>Follow-up (separate slice, NOT here)</b>: <code>GET /api/v1/accounts/:id/custom_roles</code> → 500 <code>NoMethodError</code> on non-enterprise accounts; independent of the create-POST path, reported separately.</li>
+      </ul>
+    </div>
     <div class="card"><h3>Phase 17F.3 — Guided TeamMember + InboxMember alignment <span class="badge">Open (product code; not merged)</span> <span class="pr">branch feature/bloomwire-phase-17f3-guided-membership-alignment · base version_1 e9fcef9 (PR #125)</span></h3>
       <ul>
         <li><b>Scope: staff-access alignment only.</b> <b>Schema/migration: NO · persistent Inbox↔Team mapping: NO · new Category model/table/entity: NO · WhatsApp onboarding/credentials/callbacks/subscriptions/global-router/message-routing: UNCHANGED · Meta/external call during alignment: NONE · Enterprise: NO · DEV deploy: NO · production untouched.</b></li>
