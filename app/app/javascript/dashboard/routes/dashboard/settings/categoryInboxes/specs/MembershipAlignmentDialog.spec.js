@@ -80,7 +80,7 @@ describe('MembershipAlignmentDialog.vue (17F.3 guided alignment preview)', () =>
     expect(wrapper.emitted('close')).toBeTruthy();
   });
 
-  it('confirm invokes ONLY the alignment API with the additive union and emits aligned on success', async () => {
+  it('confirm sends ONLY Team + Inbox identity (no client user_ids) and emits aligned on success', async () => {
     categoryInboxAlignmentAPI.create.mockResolvedValue({
       data: { aligned: true },
     });
@@ -92,9 +92,31 @@ describe('MembershipAlignmentDialog.vue (17F.3 guided alignment preview)', () =>
     expect(categoryInboxAlignmentAPI.create).toHaveBeenCalledWith({
       team_id: 10,
       inbox_id: 100,
-      user_ids: [2, 3],
     });
+    // the request payload must NOT carry a client-controlled membership list
+    expect(
+      categoryInboxAlignmentAPI.create.mock.calls[0][0]
+    ).not.toHaveProperty('user_ids');
     expect(wrapper.emitted('aligned')).toBeTruthy();
+  });
+
+  it('issues only one request on double-submit (isSubmitting guard)', async () => {
+    let resolvePromise;
+    categoryInboxAlignmentAPI.create.mockReturnValue(
+      new Promise(resolve => {
+        resolvePromise = resolve;
+      })
+    );
+    const wrapper = mountDialog();
+    const confirmButton = wrapper.find('[data-testid="align-confirm"]');
+
+    await confirmButton.trigger('click');
+    await confirmButton.trigger('click'); // second click while the first request is still in-flight
+
+    expect(categoryInboxAlignmentAPI.create).toHaveBeenCalledTimes(1);
+
+    resolvePromise({ data: { aligned: true } });
+    await flushPromises();
   });
 
   it('shows a safe error and does NOT emit aligned when the alignment fails', async () => {

@@ -29,13 +29,6 @@ const willAddToTeam = computed(
   () => props.inbox.drift?.collaborators_not_in_team ?? []
 );
 
-// Additive union of the drift: exactly the users who must be added on one or both sides to remove the drift.
-const userIds = computed(() => [
-  ...new Set(
-    [...willAddToInbox.value, ...willAddToTeam.value].map(user => user.id)
-  ),
-]);
-
 const nameList = people =>
   people.length
     ? people.map(person => person.name).join(', ')
@@ -48,10 +41,11 @@ const confirm = async () => {
   isSubmitting.value = true;
   hasError.value = false;
   try {
+    // Identity only. The server independently recomputes eligibility + the additive diff from fresh state; the
+    // preview above is display-only and never the write authority.
     await categoryInboxAlignmentAPI.create({
       team_id: props.category.id,
       inbox_id: props.inbox.id,
-      user_ids: userIds.value,
     });
     emit('aligned');
   } catch {

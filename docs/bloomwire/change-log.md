@@ -34,25 +34,42 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   (`derived_inboxes[].drift.staff_missing_inbox_access` + `.collaborators_not_in_team`), so **no overview DTO change was
   needed**. `Current.account.teams.find` / `.inboxes.find` reject cross-account ids (404); admin via
   `check_admin_authorization?`; feature via `BLOOMWIRE_CATEGORY_ADMIN_UI` (404 when off).
+- **Server-authoritative (GPT‑5.5 CHANGES REQUIRED fix):** the endpoint is **identity-only** — the request carries
+  **only** `team_id` + `inbox_id` (`user_ids` removed from strong params **and** the frontend payload). The server
+  **independently recomputes**, from **fresh DB state**, (a) that the pair is a **currently-derived, unambiguous,
+  actionable** pair and (b) the additive drift, then adds **only** those server-computed differences. It **never**
+  accepts client-selected membership IDs as authority; any client preview is **display-only**. Eligibility + drift are
+  recomputed **inside the transaction** (association caches reset), so a **stale preview** (memberships changed after
+  the UI rendered) is handled from fresh state. Fails closed (422) for **unrelated / ambiguous / unlinked / stale**
+  pairs; cross-account team/inbox → 404 (`Current.account.teams/.inboxes.find`).
+- **One derivation algorithm:** extracted the authoritative membership-overlap logic into
+  `Bloomwire::CategoryInboxDerivation` (`matched_teams` / `derived_pair?` / `additive_drift`); **both** the read-only
+  overview and the write-side alignment now use it, so they cannot diverge (overview output unchanged — 15 specs green).
 - **Helper decision (existing APIs vs local helper):** the existing `team_members` + `inbox_members` endpoints are
-  **two independent HTTP calls / two transactions**, so sequential FE composition can leave **partial completion**
-  (one side updated, the other not). Per the atomicity requirement + the permitted 17F.3 contract, a **local-only,
-  admin-only, feature-gated transactional helper** was implemented: `Bloomwire::CategoryInboxAlignment` wraps BOTH
-  additive `TeamMember` + `InboxMember` writes in **one `ActiveRecord::Base.transaction`** — additive only (never
-  removes staff), idempotent (diff-based; re-run is a no-op), account-scoped, rolls back fully on failure, and makes
-  **no external/Meta call**. Endpoint: `POST /bloomwire/category_inbox_alignment` (admin + feature-gated; cross-account
-  team/inbox → 404; unknown member → 422). **No new schema; no persisted Team↔Inbox mapping.**
+  **two independent HTTP calls / two transactions**, so sequential FE composition can leave **partial completion**.
+  The **local-only, admin-only, feature-gated** helper `Bloomwire::CategoryInboxAlignment`
+  (`POST /bloomwire/category_inbox_alignment`) wraps both additive `TeamMember` + `InboxMember` writes in **one
+  `ActiveRecord::Base.transaction`** — additive only (never removes staff), idempotent (diff-based no-op),
+  account-scoped. **No new schema; no persisted Team↔Inbox mapping.**
+- **Atomicity boundary (corrected — no overstatement):** the membership writes are **database-atomic** (a mid-write
+  failure rolls back **all** rows). The stock `InboxMember after_create` round-robin (a **local Redis `LPUSH`** via
+  `AutoAssignment::InboxRoundRobinService`) is **NOT part of the DB transaction** and can survive a later DB rollback;
+  it is upstream behavior and **self-heals** from the DB source of truth (`available_agent` runs
+  `reset_queue unless validate_queue?`, rebuilding the queue from `inbox.inbox_members`). The upstream callback was
+  **not modified**. No Meta/WhatsApp/HTTP/email/webhook/external call occurs during alignment.
 - **Frontend:** the Categories & Inboxes overview surfaces an **"Align staff access"** action only on a **linked**
   derived inbox that has drift and only for a category-admin (agents / feature-OFF / ambiguous → no action → fail
-  closed). A preview dialog (`MembershipAlignmentDialog.vue`) shows the selected Team + Inbox, current team staff,
-  current inbox collaborators, and the **additive** diff (who will be added to each side) with an explicit
-  "no staff will be removed" note; Cancel writes nothing; Confirm calls only the alignment endpoint; success refreshes
-  the existing overview data source (no fabricated mapping); failure shows a safe error and never falsely shows aligned.
-- **Validation (RED→GREEN):** backend `spec/requests/bloomwire/category_inbox_alignment_spec.rb` **13 examples, 0
-  failures** (admin/agent/feature-OFF; cross-account team + inbox; invalid member; same-account; idempotent; no-op when
-  aligned; transaction rollback; no Meta/external; no persistent mapping); overview regression **15** unchanged.
-  Frontend Vitest categoryInboxes suite **4 files / 53 tests** (new: `MembershipAlignmentDialog.spec.js` + align-action
-  + wiring tests). RuboCop + ESLint clean; `git diff --check` clean; no secrets; **no schema/migration**. Safe DTO only
+  closed). `MembershipAlignmentDialog.vue` previews the selected Team + Inbox, current staff on each side, and the
+  **additive** diff (display-only) with a "no staff will be removed" note; Cancel writes nothing; **Confirm sends only
+  `{team_id, inbox_id}`** (a double-submit guard ensures a single in-flight request); success refreshes the existing
+  overview data source (no fabricated mapping); failure shows a safe error and never falsely shows aligned.
+- **Validation (RED→GREEN):** backend `spec/requests/bloomwire/category_inbox_alignment_spec.rb` **19 examples, 0
+  failures** (client `user_ids` ignored / no write authority ×2; server-side recompute; bidirectional additive;
+  stale-safe fresh recompute; unrelated / ambiguous / unlinked / stale-ambiguous fail closed; cross-account team +
+  inbox → 404; agent → 401; **database-atomic rollback**; **round-robin Redis boundary reconcilable**; no persistent
+  mapping; no external call; feature-OFF → 404); overview regression **15** unchanged. Frontend Vitest categoryInboxes
+  **4 files / 54 tests** (new dialog identity-only payload + **double-submit** test; align-action + wiring; 17F.1/17F.2B
+  intact). RuboCop + ESLint clean; `git diff --check` clean; no secrets; **no schema/migration**. Safe DTO only
   (`{id,name}`) — no email/phone/secrets in responses, tests, logs, or docs.
 - **Status:** **17F.3 IMPLEMENTED (staff-access alignment only).** Not customer-onboarding certification; **full Gate B /
   real Meta Coexistence certification remains required before production/customer go-live.** Do not merge · do not deploy
