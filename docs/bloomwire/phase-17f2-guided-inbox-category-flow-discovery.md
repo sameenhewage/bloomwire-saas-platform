@@ -78,13 +78,17 @@ The initial "17F.2 = thin launcher" is **replaced** by a staged contract — see
 - **17F.2A — Managed WhatsApp onboarding entry restoration** (prerequisite product correction; the New Inbox entry +
   non-blank channel surface + safe unavailable state). **Acceptance split corrected 2026-07-04:** deployed DEV Gate A
   validates the 17F.2A UI/runtime scope; Real Meta Coexistence onboarding certification is separate.
-- **17F.2B — Category thin launcher** (only *after* this docs-only status-evidence correction is reviewed and merged).
-- **17F.3 — Guided TeamMember + InboxMember alignment** (separate later slice).
+- **17F.2B — Category thin launcher** remains **NOT STARTED** and must not begin until the existing full Gate B / Real Meta
+  Coexistence certification passes.
+- **17F.3 — Guided TeamMember + InboxMember alignment** remains a separate later slice and is not authorized by this
+  status-evidence correction.
 - **Real Meta Coexistence onboarding certification** (formerly Gate B) remains **BLOCKED / DEFERRED** because
   `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` remain absent, `platform_ready` is false, and no second distinct
   controlled WhatsApp Business number is available for the original new-inbox isolation contract. It remains mandatory
-  before production enablement, before the first real customer Coexistence onboarding, and before any end-to-end
-  Coexistence certification claim. A navigation-only PASS is **not** customer-onboarding certification.
+  before production enablement, before the first real customer Coexistence onboarding, before any end-to-end Coexistence
+  certification claim, and before 17F.2B can start. A navigation-only PASS is **not** customer-onboarding certification.
+- **Contract-change rule:** any future change to the 17F.2B dependency requires a separate explicit owner-approved
+  contract-change decision and GPT-5.5 review.
 
 ---
 
@@ -107,10 +111,11 @@ account-scoped, backend-enforced primitive:
 - The 17F.1 overview already **surfaces partial completion explicitly** (unlinked inbox, category-with-no-inbox,
   ambiguous, drift) — so an interrupted flow is never corrupt or hidden; it is visible and recoverable.
 
-**Final recommendation (REVISED per §0 and the 2026-07-04 owner status-evidence correction): PROCEED, but with a staged
-contract and a separated certification gate. The managed WhatsApp onboarding entry has been restored by 17F.2A and
-accepted for its UI/runtime scope by deployed DEV Gate A; Real Meta Coexistence onboarding certification remains a
-separate deferred hard gate.** Concretely (full definitions in §13; acceptance split in §13A):
+**Current status (REVISED per §0 and the 2026-07-04 owner status-evidence correction): record the 17F.2A DEV pass and
+supporting Standard inbox smoke only. The managed WhatsApp onboarding entry has been restored by 17F.2A and accepted for
+its UI/runtime scope by deployed DEV Gate A; Real Meta Coexistence onboarding certification remains a deferred hard gate;
+17F.2B remains NOT STARTED and is not authorized by this status correction.** Concretely (full definitions in §13;
+acceptance split in §13A):
 
 - **17F.2A = managed WhatsApp onboarding entry restoration (prerequisite product correction).** Restore the "New
   Inbox" entry for an administrator with `canSelfServeManagedWhatsapp=true` (evaluate `isAdmin && (canCreateInbox ||
@@ -120,12 +125,11 @@ separate deferred hard gate.** Concretely (full definitions in §13; acceptance 
   schema/migration/new mapping. **Acceptance wording:** Phase 17F.2A product implementation: PASS. DEV deployment: PASS.
   Gate A: PASS. Phase 17F.2A UI/runtime scope: DEV PASS. This is **not** real Meta customer onboarding PASS and **not**
   Coexistence certification.
-- **17F.2B = frontend-only category thin launcher — only after this docs-only status-evidence correction is reviewed and
-  merged.** Adds an **"Add WhatsApp Inbox"** affordance to each category in the 17F.1 overview and **deep-links into the
-  (now-operable) Add-Inbox → WhatsApp wizard** (`settings_inboxes_page_channel` / `whatsapp` → `BloomwireWhatsapp.vue`).
-  **No new backend/endpoint/mapping; no writes of its own; no claim that Coexistence onboarding is certified.** On
-  return, the overview shows the new inbox's relationship/drift state.
-- **17F.3 = guided dual-membership assist** (separate later slice): an **explicit, reversible, backend-enforced** step
+- **17F.2B = frontend-only category thin launcher — NOT STARTED.** It must not begin until the existing full Gate B / Real
+  Meta Coexistence certification passes. If authorized later, it would add an **"Add WhatsApp Inbox"** affordance to each
+  category in the 17F.1 overview and deep-link into the Add-Inbox → WhatsApp wizard (`settings_inboxes_page_channel` /
+  `whatsapp` → `BloomwireWhatsapp.vue`) without claiming Coexistence onboarding certification.
+- **17F.3 = guided dual-membership assist** (separate later slice, not authorized by this status correction): an **explicit, reversible, backend-enforced** step
   aligning the *same* staff across the selected **Team** (`TeamMember`) and the new **Inbox** (`InboxMember`) —
   composing the existing membership endpoints (optionally behind one tiny **local-only** transaction helper; **never** a
   transaction that spans a Meta call).
@@ -422,13 +426,15 @@ The **first** slice. It is a **product fix**, not the category launcher. Scope:
   only where required** (server-side, in the deploy phase — do not assume which flag is missing).
 - **Final acceptance is DEV-only after merge + deployment** (see **§13A**).
 
-### 13.2 — Phase 17F.2B — Category thin launcher (after this docs-only status-evidence correction is reviewed and merged)
-- Add an **"Add WhatsApp Inbox"** affordance from **Categories & Inboxes** that **deep-links** to the (now-operable)
-  managed WhatsApp wizard. **No new backend / write / mapping.** Capability-gated (`canAccessCategoryAdmin` +
-  `canSelfServeManagedWhatsapp`); feature OFF ⇒ absent.
-- **May not start** until this docs-only status-evidence correction is reviewed and merged. 17F.2B remains frontend-only and
-  must not claim Real Meta Coexistence onboarding certification, change backend onboarding, change mappings or
-  credentials, alter webhooks, add schema, or perform Meta behavior.
+### 13.2 — Phase 17F.2B — Category thin launcher — NOT STARTED
+- **Status:** **NOT STARTED**.
+- **Dependency:** must not begin until the existing full Gate B / Real Meta Coexistence certification passes. The current
+  docs-only status-evidence correction does **not** change this dependency.
+- **Contract-change rule:** any future change to this dependency requires a separate explicit owner-approved
+  contract-change decision and GPT-5.5 review.
+- **If authorized later:** the launcher remains frontend-only, must not claim Real Meta Coexistence onboarding
+  certification, change backend onboarding, change mappings or credentials, alter webhooks, add schema, or perform Meta
+  behavior.
 
 ### 13.3 — Phase 17F.3 — Guided TeamMember + InboxMember alignment (separate later slice)
 - Explicit, reversible alignment of the same staff across the selected **Team** and new **Inbox** via existing
@@ -511,7 +517,8 @@ in logs, screenshots, or docs. No secrets/tokens/`provider_config` anywhere.
   → DEV deploy
   → Gate A (deployed-DEV navigation regression) PASS
   → docs-only status-evidence correction reviewed + merged
-  → 17F.2B may begin as a frontend-only thin launcher
+  → 17F.2B remains NOT STARTED
+  → 17F.2B starts only after full Gate B / Real Meta Coexistence certification passes
 ```
 Separately:
 ```
@@ -521,7 +528,9 @@ Real Meta Coexistence onboarding certification
 ```
 - **A navigation-only PASS is NOT a customer-onboarding certification PASS.**
 - **A local/component/API PASS is NOT a deployed-runtime PASS.**
-- **17F.3** (guided dual-membership) remains a separate later slice after 17F.2B.
+- **17F.2B remains NOT STARTED** under this correction.
+- **17F.3** (guided dual-membership) remains a separate later slice after 17F.2B and is not authorized here.
+- **Any future change to the 17F.2B dependency requires a separate explicit owner-approved contract-change decision and GPT-5.5 review.**
 
 ---
 
@@ -544,7 +553,7 @@ Real Meta Coexistence onboarding certification
   gate is off → GREEN (authorization stays authoritative; unchanged, asserted as a guard).
 - RED: **no provider secret fields / provider_config** in any rendered surface or response → GREEN.
 
-**17F.2B (frontend, Vitest) — after 17F.2A DEV PASS:**
+**17F.2B (frontend, Vitest) — NOT STARTED; only after full Gate B / Real Meta Coexistence certification passes unless a separate explicit owner-approved contract-change decision + GPT-5.5 review changes the dependency:**
 - RED: launcher button hidden when `canAccessCategoryAdmin=false` or `canSelfServeManagedWhatsapp=false` (agent /
   feature OFF) → GREEN when both true.
 - RED: clicking launcher navigates to `settings_inboxes_page_channel` (`sub_page='whatsapp'`) with the account context
@@ -583,31 +592,37 @@ Real Meta Coexistence onboarding certification
 ---
 
 ## 16. Final recommendation (REVISED per §0 and owner-approved 17F.2A status-evidence correction)
-**PROCEED — with the acceptance split recorded and the certification gate separated. Revised sequence:**
+**RECORD STATUS ONLY — the acceptance split is recorded and the certification gate remains authoritative. Revised sequence:**
 ```
 17F.2A implementation → exact-head review → merge → DEV deploy
   → §13A Gate A (deployed-DEV navigation regression, no real Meta) PASS
-  → docs-only status-evidence correction reviewed + merged
-  → 17F.2B may begin as a frontend-only thin launcher → later 17F.3
+  → existing Standard inbox global-router smoke PASS as supporting evidence only
+  → Real Meta Coexistence certification / Gate B remains BLOCKED / DEFERRED
+  → 17F.2B remains NOT STARTED
+  → 17F.2B must not begin until full Gate B / Real Meta Coexistence certification passes
 ```
-Separately:
+Gate B remains:
 ```
 Real Meta Coexistence onboarding certification
   → BLOCKED / DEFERRED until `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` are restored, `platform_ready=true`, and a second distinct controlled WhatsApp Business number exists
   → mandatory before production Coexistence enablement / first real customer Coexistence onboarding / certification claims
+  → mandatory before 17F.2B can begin unless a separate explicit owner-approved contract-change decision + GPT-5.5 review changes that dependency
 ```
 1. **17F.2A product implementation: PASS. DEV deployment: PASS. Gate A: PASS. Phase 17F.2A UI/runtime scope: DEV PASS.**
    This covers the managed WhatsApp New Inbox entry, non-blank `/settings/inboxes/new`, admin/agent authorization, and
    feature-OFF / stock-compatible behavior. It is **not** real Meta customer onboarding PASS and **not** Coexistence
    certification.
-2. **17F.2B (thin launcher) — only after this docs-only status-evidence correction is reviewed and merged:** capability-gated
-   "Add WhatsApp Inbox" from a category → deep-link the now-operable wizard. No backend/write/mapping/schema/webhook/
-   credential/Meta behavior change and no certification claim.
+2. **Existing Standard inbox global-router supporting evidence: PASS as supporting evidence only.** This is not
+   Coexistence signup PASS, Embedded Signup PASS, new inbox creation PASS, new-inbox isolation PASS, Real Meta
+   Coexistence onboarding certification, full Gate B PASS, or platform/customer readiness proof.
 3. **Real Meta Coexistence onboarding certification (formerly Gate B):** BLOCKED / DEFERRED until
    `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` are restored, `platform_ready=true`, and a second distinct controlled
    WhatsApp Business number is available. Do not touch the existing **“Bloomwire WA Dev”** fixture and do not bypass the
    unique phone-number constraint.
-4. **17F.3 (guided dual-membership) — separate later slice:** explicit, reversible, backend-enforced, local-only.
+4. **17F.2B:** **NOT STARTED**. It must not begin until the existing full Gate B / Real Meta Coexistence certification
+   passes. Any future change to that dependency requires a separate explicit owner-approved contract-change decision and
+   GPT-5.5 review.
+5. **17F.3 (guided dual-membership):** separate later slice after 17F.2B and not authorized here.
 
-This stays entirely within the locked architecture boundaries (no new mapping, no Meta-spanning transaction, no schema),
-preserves stock-compatible behavior when the feature is OFF, and keeps every write admin-enforced and account-isolated.
+This status correction changes documentation only. It does not change product code, tests, schema, workflows, config,
+DEV, production, runtime data, smoke evidence, or the existing 17F.2B dependency contract.
