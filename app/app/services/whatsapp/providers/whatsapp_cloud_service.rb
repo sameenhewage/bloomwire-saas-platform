@@ -1,8 +1,9 @@
 class Whatsapp::Providers::WhatsappCloudService < Whatsapp::Providers::BaseService
   # Default Meta Graph API version for the outbound message + media paths. Overridable via
   # WHATSAPP_CLOUD_API_VERSION so the version can be bumped without a code change (Bloomwire Phase 13B.3).
-  # Standardized on the version already used for attachments to retire the legacy hard-coded v13.0.
-  DEFAULT_API_VERSION = 'v24.0'.freeze
+  # Centralized on Whatsapp::GraphApi::DEFAULT_VERSION (v25.0) so no WhatsApp surface inherits an older
+  # Graph API version.
+  DEFAULT_API_VERSION = Whatsapp::GraphApi::DEFAULT_VERSION
 
   def send_message(phone_number, message)
     @message = message

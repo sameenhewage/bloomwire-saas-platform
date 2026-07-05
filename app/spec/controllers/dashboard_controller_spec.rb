@@ -18,6 +18,18 @@ describe '/app/login', type: :request do
     end
   end
 
+  context 'with the WhatsApp Embedded Signup Graph API version' do
+    it 'exposes the approved v25.0 WhatsApp Graph API version to the frontend window config' do
+      get '/app/login'
+      expect(response).to have_http_status(:success)
+      # The Embedded Signup / Coexistence popup reads window.chatwootConfig.whatsappApiVersion to initialize
+      # the Facebook SDK; it must be the approved v25.0 (was previously absent -> empty -> older SDK default).
+      expect(response.body).to include("whatsappApiVersion: '#{Whatsapp::GraphApi::DEFAULT_VERSION}'")
+      expect(response.body).to include("whatsappApiVersion: 'v25.0'")
+      expect(response.body).not_to include("whatsappApiVersion: ''")
+    end
+  end
+
   context 'with non-HTML format' do
     it 'returns not acceptable for JSON with error message' do
       get '/app/login', headers: { 'Accept' => 'application/json' }

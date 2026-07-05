@@ -158,7 +158,7 @@ module BloomwireWhatsappE2EHelpers # rubocop:disable Metrics/ModuleLength
   end
 
   # --- misc --------------------------------------------------------------------------------------------
-  def bw_graph_messages_url(phone_number_id, version: 'v24.0')
+  def bw_graph_messages_url(phone_number_id, version: 'v25.0')
     "https://#{META_GRAPH_HOST}/#{version}/#{phone_number_id}/messages"
   end
 
@@ -169,7 +169,7 @@ module BloomwireWhatsappE2EHelpers # rubocop:disable Metrics/ModuleLength
   # WebMock guard: with disable_net_connect!(allow_localhost: true) any non-localhost host (Meta Graph)
   # is blocked unless explicitly stubbed — this is the no-real-Meta guarantee.
   def bw_meta_net_connect_blocked?
-    !WebMock.net_connect_allowed?("https://#{META_GRAPH_HOST}/v24.0/whatever/messages")
+    !WebMock.net_connect_allowed?("https://#{META_GRAPH_HOST}/v25.0/whatever/messages")
   end
 end
 

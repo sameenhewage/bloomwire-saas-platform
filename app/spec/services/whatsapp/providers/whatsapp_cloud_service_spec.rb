@@ -25,7 +25,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
   describe '#send_message' do
     context 'when called' do
       it 'calls message endpoints for normal messages' do
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp',
@@ -40,7 +40,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
       end
 
       it 'calls message endpoints for a reply to messages' do
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp',
@@ -60,7 +60,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
         attachment = message.attachments.new(account_id: message.account_id, file_type: :image)
         attachment.file.attach(io: Rails.root.join('spec/assets/avatar.png').open, filename: 'avatar.png', content_type: 'image/png')
 
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: hash_including({
                                    messaging_product: 'whatsapp',
@@ -79,7 +79,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
 
         # ref: https://github.com/bblimke/webmock/issues/900
         # reason for Webmock::API.hash_including
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: hash_including({
                                    messaging_product: 'whatsapp',
@@ -96,7 +96,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
         attachment = message.attachments.new(account_id: message.account_id, file_type: :audio, meta: { 'is_voice_message' => true })
         attachment.file.attach(io: Rails.root.join('spec/assets/sample.ogg').open, filename: 'voice.ogg', content_type: 'audio/ogg')
 
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: hash_including({
                                    messaging_product: 'whatsapp',
@@ -113,7 +113,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
         attachment = message.attachments.new(account_id: message.account_id, file_type: :audio)
         attachment.file.attach(io: Rails.root.join('spec/assets/sample.ogg').open, filename: 'audio.ogg', content_type: 'audio/ogg')
 
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: hash_including({
                                    messaging_product: 'whatsapp',
@@ -141,7 +141,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
                                        { title: 'Sushi', value: 'Sushi' }
                                      ]
                                    })
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp', to: '+123456789',
@@ -168,7 +168,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
           sections: [{ rows: %w[Burito Pasta Sushi Salad].map { |i| { id: i, title: i } } }]
         }.to_json
 
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: {
               messaging_product: 'whatsapp', to: '+123456789',
@@ -216,7 +216,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
 
     context 'when called' do
       it 'calls message endpoints with template params for template messages' do
-        stub_request(:post, 'https://graph.facebook.com/v24.0/123456789/messages')
+        stub_request(:post, 'https://graph.facebook.com/v25.0/123456789/messages')
           .with(
             body: template_body.to_json
           )
@@ -300,25 +300,26 @@ describe Whatsapp::Providers::WhatsappCloudService do
     let(:phone_number_id) { whatsapp_channel.provider_config['phone_number_id'] }
 
     context 'when WHATSAPP_CLOUD_API_VERSION is not set' do
-      it 'uses the default api version for the message path' do
-        expect(subject.send(:phone_id_path)).to eq("https://graph.facebook.com/v24.0/#{phone_number_id}")
+      it 'defaults the message path to the approved shared v25.0 version' do
+        expect(Whatsapp::GraphApi::DEFAULT_VERSION).to eq('v25.0')
+        expect(subject.send(:phone_id_path)).to eq("https://graph.facebook.com/v25.0/#{phone_number_id}")
       end
 
       it 'uses the default api version for the media path' do
-        expect(subject.media_url('MEDIA-1')).to eq('https://graph.facebook.com/v24.0/MEDIA-1')
+        expect(subject.media_url('MEDIA-1')).to eq('https://graph.facebook.com/v25.0/MEDIA-1')
       end
     end
 
     context 'when WHATSAPP_CLOUD_API_VERSION is set' do
-      it 'overrides the default for the message path' do
-        with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v25.0' do
-          expect(subject.send(:phone_id_path)).to eq("https://graph.facebook.com/v25.0/#{phone_number_id}")
+      it 'still lets ops override the default for the message path' do
+        with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v23.0' do
+          expect(subject.send(:phone_id_path)).to eq("https://graph.facebook.com/v23.0/#{phone_number_id}")
         end
       end
 
-      it 'overrides the default for the media path' do
-        with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v25.0' do
-          expect(subject.media_url('MEDIA-1')).to eq('https://graph.facebook.com/v25.0/MEDIA-1')
+      it 'still lets ops override the default for the media path' do
+        with_modified_env WHATSAPP_CLOUD_API_VERSION: 'v23.0' do
+          expect(subject.media_url('MEDIA-1')).to eq('https://graph.facebook.com/v23.0/MEDIA-1')
         end
       end
     end
@@ -332,7 +333,7 @@ describe Whatsapp::Providers::WhatsappCloudService do
   end
 
   describe 'transient vs terminal send failures (Bloomwire Phase 13B.2)' do
-    let(:graph_url) { "https://graph.facebook.com/v24.0/#{whatsapp_channel.provider_config['phone_number_id']}/messages" }
+    let(:graph_url) { "https://graph.facebook.com/v25.0/#{whatsapp_channel.provider_config['phone_number_id']}/messages" }
 
     it 'raises a TransientError on HTTP 429 and does not mark the message failed' do
       stub_request(:post, graph_url).to_return(status: 429, body: '{}', headers: response_headers)

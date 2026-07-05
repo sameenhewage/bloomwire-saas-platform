@@ -3,14 +3,41 @@ require 'rails_helper'
 describe Whatsapp::FacebookApiClient do
   let(:access_token) { 'test_access_token' }
   let(:api_client) { described_class.new(access_token) }
-  let(:api_version) { 'v22.0' }
+  # Approved Meta Graph API version contract: the client must default to v25.0 (the shared source of truth),
+  # not an older inherited version. We stub the load with the NEW default arg so the version the client
+  # actually requests is asserted through every generated Graph URL below.
+  let(:api_version) { Whatsapp::GraphApi::DEFAULT_VERSION }
   let(:app_id) { 'test_app_id' }
   let(:app_secret) { 'test_app_secret' }
 
   before do
-    allow(GlobalConfigService).to receive(:load).with('WHATSAPP_API_VERSION', 'v22.0').and_return(api_version)
+    allow(GlobalConfigService).to receive(:load).with('WHATSAPP_API_VERSION', Whatsapp::GraphApi::DEFAULT_VERSION).and_return(api_version)
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_APP_ID', '').and_return(app_id)
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_APP_SECRET', '').and_return(app_secret)
+  end
+
+  it 'defaults to the approved v25.0 Graph API version' do
+    expect(Whatsapp::GraphApi::DEFAULT_VERSION).to eq('v25.0')
+    expect(api_version).to eq('v25.0')
+  end
+
+  describe 'generated Meta Graph URLs use the approved v25.0 version' do
+    let(:waba_id) { 'waba-x' }
+
+    it 'builds the token-exchange, WABA, phone, debug, register and webhook-subscription URLs on /v25.0/' do
+      stub = stub_request(:any, %r{https://graph\.facebook\.com/v25\.0/.*}).to_return(
+        status: 200, body: { data: [], success: true, code_verification_status: 'VERIFIED' }.to_json,
+        headers: { 'Content-Type' => 'application/json' }
+      )
+      api_client.exchange_code_for_token('c')
+      api_client.fetch_phone_numbers(waba_id)
+      api_client.debug_token('t')
+      api_client.register_phone_number('pnid', '123456')
+      api_client.phone_number_verified?('pnid')
+      api_client.subscribe_app_to_waba(waba_id)
+      expect(stub).to have_been_requested.at_least_once
+      expect(a_request(:any, %r{https://graph\.facebook\.com/v(1[0-9]|2[0-4])\.0/})).not_to have_been_made
+    end
   end
 
   describe '#exchange_code_for_token' do

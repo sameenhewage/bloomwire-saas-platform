@@ -314,6 +314,25 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### WhatsApp / Meta Graph API version contract → v25.0 — `Open (product code; not merged)`
+- **Branch** `fix/bloomwire-whatsapp-graph-api-v25` off `version_1` `e8717b059759da7b090b172c291ad2a33ea08794`.
+  Version-only; no behavior change beyond v25.0. Schema: NO · Enterprise: NO (untouched) · webhook router: UNCHANGED.
+- **Audit finding:** the Coexistence flow inherited older/implicit Graph API versions — frontend Embedded Signup SDK
+  silently used **v22.0** (`WHATSAPP_API_VERSION` never reached the browser → `utils.js` hard-coded fallback); outbound
+  message/media used **v24.0**; backend code fallbacks were **v22.0**.
+- **Centralization:** new `Whatsapp::GraphApi::DEFAULT_VERSION = 'v25.0'` (BE) + `DEFAULT_WHATSAPP_GRAPH_API_VERSION`
+  (FE). Referenced by `Whatsapp::FacebookApiClient` (token exchange, WABA/phone queries, debug_token, register,
+  subscribed_apps), `Whatsapp::HealthService`, `Whatsapp::Providers::WhatsappCloudService` (message + media),
+  `initializeFacebook`/`setupFacebookSdk`. `dashboard_controller` now feeds `WHATSAPP_API_VERSION` (default v25.0) to
+  `window.chatwootConfig.whatsappApiVersion`. Ops overrides preserved; runtime DB `WHATSAPP_API_VERSION` already v25.0.
+- **NOT changed:** webhook router (routes by `phone_number_id`, version-independent); Enterprise calling
+  (`WHATSAPP_CALLING_API_VERSION_FALLBACK`); template-management surface (`business_account_path` + CSAT stay `v14.0`,
+  separate follow-up); Instagram/Messenger/Shopify/reports.
+- **TDD (RED→GREEN):** FE `whatsapp/specs/utils.spec.js` RED-proven (4/5 on old v22.0) → v25.0; BE
+  `facebook_api_client_spec` asserts all Graph URLs `/v25.0/` and never `/v1x|20–24/`; `whatsapp_cloud_service_spec`
+  message/media `/v25.0/` (+ override); `dashboard_controller_spec` asserts `whatsappApiVersion: 'v25.0'`. WhatsApp
+  backend regression **278/0** (Enterprise call-flow **pre-existing** 6/6 fail on clean base, unrelated). RuboCop +
+  ESLint clean; vite build ok; no secret in diff.
 ### Coexistence onboarding callback fix — Stage-B transition hang — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-coexistence-callback-transition` off `version_1` `e8717b059759da7b090b172c291ad2a33ea08794`
   (base verified). **Frontend-only.** Schema/migration: NO · backend/endpoint/router change: NO · Meta/WhatsApp/HTTP call

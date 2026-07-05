@@ -77,6 +77,10 @@ class DashboardController < ActionController::Base
       FACEBOOK_API_VERSION: GlobalConfigService.load('FACEBOOK_API_VERSION', 'v18.0'),
       WHATSAPP_APP_ID: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
       WHATSAPP_CONFIGURATION_ID: GlobalConfigService.load('WHATSAPP_CONFIGURATION_ID', ''),
+      # Drive the WhatsApp Embedded Signup SDK version from the same config as the backend clients, defaulting
+      # to the approved v25.0 so the popup never inherits an older Graph API version (the frontend previously
+      # received no value and silently fell back to an older default).
+      WHATSAPP_API_VERSION: GlobalConfigService.load('WHATSAPP_API_VERSION', Whatsapp::GraphApi::DEFAULT_VERSION),
       IS_ENTERPRISE: ChatwootApp.enterprise?,
       AZURE_APP_ID: GlobalConfigService.load('AZURE_APP_ID', ''),
       GIT_SHA: GIT_HASH,
