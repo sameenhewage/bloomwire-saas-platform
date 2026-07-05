@@ -13,7 +13,15 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  // Phase 17F.3: when true (admin + category-admin capability, decided by the parent), an "Align staff access"
+  // action is offered for an actionable drift. Default false keeps the row read-only (17F.1 behavior).
+  canAlign: {
+    type: Boolean,
+    default: false,
+  },
 });
+
+defineEmits(['align']);
 
 const { t } = useI18n();
 
@@ -71,6 +79,9 @@ const collaboratorsNotInTeam = computed(
 const hasDrift = computed(
   () => staffMissing.value.length > 0 || collaboratorsNotInTeam.value.length > 0
 );
+
+// The align action is offered only for an actionable drift AND when the parent permits it (admin + capability).
+const showAlignAction = computed(() => props.canAlign && hasDrift.value);
 </script>
 
 <template>
@@ -140,6 +151,15 @@ const hasDrift = computed(
           })
         }}
       </span>
+      <button
+        v-if="showAlignAction"
+        type="button"
+        data-testid="align-staff"
+        class="self-start mt-1 text-label-small font-medium text-n-blue-11 hover:underline"
+        @click="$emit('align')"
+      >
+        {{ $t('CATEGORY_INBOX_OVERVIEW.ALIGN.ACTION') }}
+      </button>
     </div>
   </div>
 </template>

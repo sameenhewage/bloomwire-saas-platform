@@ -11,6 +11,7 @@ import { useAccount } from 'dashboard/composables/useAccount';
 import BaseSettingsHeader from '../components/BaseSettingsHeader.vue';
 import SettingsLayout from '../SettingsLayout.vue';
 import InboxSummary from './InboxSummary.vue';
+import MembershipAlignmentDialog from './MembershipAlignmentDialog.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 
 const isLoading = ref(false);
@@ -70,6 +71,32 @@ const fetchOverview = async () => {
   } finally {
     isLoading.value = false;
   }
+};
+
+// Phase 17F.3: guided staff-access alignment. The action is offered only for an ACTIONABLE drift on an
+// unambiguous (linked / derived) inbox and only to a category-admin. Ambiguous inboxes are shown in their own
+// section and never receive the action (fail closed — the admin must resolve the ambiguity first). The dialog owns
+// the additive write; on success we refresh the overview from its existing data source (no fabricated mapping).
+const inboxHasDrift = inbox =>
+  (inbox.drift?.staff_missing_inbox_access?.length ?? 0) > 0 ||
+  (inbox.drift?.collaborators_not_in_team?.length ?? 0) > 0;
+
+const canAlignInbox = inbox =>
+  canAccessCategoryAdmin.value && inboxHasDrift(inbox);
+
+const alignTarget = ref(null);
+
+const openAlign = (category, inbox) => {
+  alignTarget.value = { category, inbox };
+};
+
+const closeAlign = () => {
+  alignTarget.value = null;
+};
+
+const onAligned = () => {
+  closeAlign();
+  fetchOverview();
 };
 
 onBeforeMount(fetchOverview);
@@ -184,6 +211,8 @@ onBeforeMount(fetchOverview);
               v-for="inbox in category.derived_inboxes"
               :key="inbox.id"
               :inbox="inbox"
+              :can-align="canAlignInbox(inbox)"
+              @align="openAlign(category, inbox)"
             />
           </div>
         </section>
@@ -248,6 +277,14 @@ onBeforeMount(fetchOverview);
             />
           </div>
         </section>
+
+        <MembershipAlignmentDialog
+          v-if="alignTarget"
+          :category="alignTarget.category"
+          :inbox="alignTarget.inbox"
+          @close="closeAlign"
+          @aligned="onAligned"
+        />
       </template>
     </template>
   </SettingsLayout>

@@ -54,8 +54,8 @@ const overview = {
           whatsapp: { connection_mode: 'standard', setup_status: 'configured' },
           collaborators: [{ id: 1, name: 'Alice' }],
           drift: {
-            staff_missing_inbox_access: [],
-            collaborators_not_in_team: [],
+            staff_missing_inbox_access: [{ id: 2, name: 'Bob' }],
+            collaborators_not_in_team: [{ id: 3, name: 'Carol' }],
           },
         },
       ],
@@ -124,9 +124,16 @@ const mountPage = () =>
         Icon: true,
         ChannelIcon: true,
         InboxSummary: {
-          props: ['inbox'],
+          props: ['inbox', 'canAlign'],
+          emits: ['align'],
           template:
-            '<div class="inbox-summary-stub">{{ inbox.name }} {{ inbox.relationship_status }}</div>',
+            '<div class="inbox-summary-stub" :data-can-align="canAlign ? \'yes\' : \'no\'"><span>{{ inbox.name }} {{ inbox.relationship_status }}</span><button class="stub-align-btn" @click="$emit(\'align\')" /></div>',
+        },
+        MembershipAlignmentDialog: {
+          props: ['category', 'inbox'],
+          emits: ['close', 'aligned'],
+          template:
+            '<div data-testid="align-dialog"><button class="stub-dialog-aligned" @click="$emit(\'aligned\')" /><button class="stub-dialog-close" @click="$emit(\'close\')" /></div>',
         },
       },
     },
@@ -373,5 +380,85 @@ describe('Add WhatsApp Inbox launcher (17F.2B)', () => {
         /save|create|delete|remove|sync|assign|connect/i.test(txt)
       );
     expect(writeButtons).toEqual([]);
+  });
+});
+
+describe('17F.3 guided membership alignment wiring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setCaps();
+    setAccount();
+    categoryInboxOverviewAPI.get.mockResolvedValue({ data: overview });
+  });
+
+  const summaryFor = (wrapper, name) =>
+    wrapper.findAll('.inbox-summary-stub').find(n => n.text().includes(name));
+
+  it('offers alignment (canAlign) on a drifted derived inbox for an administrator', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(summaryFor(wrapper, 'Sales WA').attributes('data-can-align')).toBe(
+      'yes'
+    );
+  });
+
+  it('does not offer alignment to an agent (capability OFF)', async () => {
+    setCaps({
+      canAccessCategoryAdmin: false,
+      canSelfServeManagedWhatsapp: false,
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(summaryFor(wrapper, 'Sales WA').attributes('data-can-align')).toBe(
+      'no'
+    );
+  });
+
+  it('fails closed for ambiguous inboxes (never offers alignment)', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(summaryFor(wrapper, 'Shared WA').attributes('data-can-align')).toBe(
+      'no'
+    );
+  });
+
+  it('opens the alignment dialog when a row requests alignment', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="align-dialog"]').exists()).toBe(false);
+
+    await summaryFor(wrapper, 'Sales WA')
+      .find('.stub-align-btn')
+      .trigger('click');
+    expect(wrapper.find('[data-testid="align-dialog"]').exists()).toBe(true);
+  });
+
+  it('refreshes the overview from its existing data source and closes after a successful alignment', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(categoryInboxOverviewAPI.get).toHaveBeenCalledTimes(1);
+
+    await summaryFor(wrapper, 'Sales WA')
+      .find('.stub-align-btn')
+      .trigger('click');
+    await wrapper.find('.stub-dialog-aligned').trigger('click');
+    await flushPromises();
+
+    expect(categoryInboxOverviewAPI.get).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="align-dialog"]').exists()).toBe(false);
+  });
+
+  it('closes the dialog without refetching when cancelled', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await summaryFor(wrapper, 'Sales WA')
+      .find('.stub-align-btn')
+      .trigger('click');
+    await wrapper.find('.stub-dialog-close').trigger('click');
+    await flushPromises();
+
+    expect(categoryInboxOverviewAPI.get).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="align-dialog"]').exists()).toBe(false);
   });
 });

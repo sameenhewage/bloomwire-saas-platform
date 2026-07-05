@@ -45,6 +45,22 @@
     "UNLINKED": {
       "TITLE": "Unlinked inboxes",
       "DESCRIPTION": "These inboxes share no members with any category, so they can't be derived into one. Assign shared members in the inbox editor to link them."
+    },
+    "ALIGN": {
+      "ACTION": "Align staff access",
+      "TITLE": "Align staff access",
+      "DESCRIPTION": "Give the same staff access to this category's team and its inbox. This only adds access — no one is removed.",
+      "TEAM": "Category / Team:",
+      "INBOX": "Inbox:",
+      "CURRENT_TEAM_STAFF": "Currently in the team:",
+      "CURRENT_INBOX_STAFF": "Currently in the inbox:",
+      "WILL_ADD_TO_INBOX": "Will be added to the inbox:",
+      "WILL_ADD_TO_TEAM": "Will be added to the team:",
+      "NONE": "None",
+      "NO_REMOVAL": "No staff will be removed.",
+      "CANCEL": "Cancel",
+      "CONFIRM": "Align staff access",
+      "ERROR": "We couldn't align staff access. Please try again."
     }
   }
 }

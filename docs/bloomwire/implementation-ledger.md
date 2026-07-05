@@ -314,7 +314,31 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher — `Open (product code, frontend-only; not merged)`
+### Phase 17F.3 — Guided TeamMember + InboxMember alignment — `Open (product code; not merged)`
+- **Branch:** `feature/bloomwire-phase-17f3-guided-membership-alignment` off `version_1` `e9fcef9` (PR #125; base
+  fail-closed verified). **Scope: staff-access alignment only.** **Schema/migration: NO · persistent Inbox↔Team mapping:
+  NO · new Category model: NO · WhatsApp onboarding/credentials/callbacks/subscriptions/global-router/routing: UNCHANGED
+  · Meta/external call: NONE · Enterprise: NO · DEV deploy: NO · production untouched.**
+- **Recorded — Phase 17F.2B DEV runtime PASS:** deployed SHA `e9fcef9`; run `28732366110`; authenticated account-1 admin;
+  launcher visible on both eligible rows; account-scoped existing WhatsApp wizard reached (no team/category param);
+  Standard + Coexistence reused; zero membership/inbox/channel/setup/contact/conversation/message deltas; no Meta signup;
+  **not Gate B PASS**.
+- **Helper decision:** existing `team_members` + `inbox_members` endpoints are independent HTTP calls (separate
+  transactions) → sequential FE composition can leave partial completion → per the atomicity requirement + the permitted
+  contract, implemented a **local-only, admin-only, feature-gated transactional helper** `Bloomwire::CategoryInboxAlignment`
+  (`POST /bloomwire/category_inbox_alignment`) wrapping both additive `TeamMember` + `InboxMember` writes in ONE
+  `ActiveRecord::Base.transaction` — additive (never removes), idempotent, account-scoped, rolls back on failure, no
+  external/Meta call, no schema, no persisted mapping. Overview DTO already exposed the drift, so **it was not changed**.
+- **Frontend:** overview surfaces "Align staff access" only on a linked/derived inbox with drift for a category-admin
+  (agents / feature-OFF / ambiguous → fail closed). `MembershipAlignmentDialog.vue` previews current + additive diff
+  ("no staff removed"); Cancel = no write; Confirm = alignment endpoint only; success refreshes existing overview; failure
+  shows safe error (never falsely aligned).
+- **Validation (RED→GREEN):** backend request spec **13/0**; overview regression **15** unchanged; RuboCop clean; Vitest
+  categoryInboxes **4 files/53**; ESLint clean; `git diff --check` clean; no secrets; no schema. Safe DTO `{id,name}` only.
+- **Status: 17F.3 IMPLEMENTED (staff-access alignment only).** Not customer-onboarding cert; full Gate B still required
+  before production/customer go-live. Do not merge/deploy/run Meta/onboard/touch fixture — awaiting GPT-5.5 review.
+
+### Phase 17F.2B — Category → "Add WhatsApp Inbox" launcher — `Merged (PR #125, merge SHA e9fcef9) + DEV runtime PASS`
 - **Branch:** `feature/bloomwire-phase-17f2b-category-add-whatsapp-launcher` off `version_1` `0c3f32d` (PR #124; base
   verified fail-closed). Frontend-only. **Product code: YES (frontend) · schema/migration: NO · backend endpoint: NO ·
   new Category model/mapping: NO · membership writes: NO · duplicate wizard: NO · per-customer webhook: NO · credential
