@@ -82,11 +82,12 @@ The initial "17F.2 = thin launcher" is **replaced** by a staged contract — see
   Coexistence certification passes.
 - **17F.3 — Guided TeamMember + InboxMember alignment** remains a separate later slice and is not authorized by this
   status-evidence correction.
-- **Real Meta Coexistence onboarding certification** (formerly Gate B) remains **BLOCKED / DEFERRED** because
-  `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` remain absent, `platform_ready` is false, and no second distinct
-  controlled WhatsApp Business number is available for the original new-inbox isolation contract. It remains mandatory
-  before production enablement, before the first real customer Coexistence onboarding, before any end-to-end Coexistence
-  certification claim, and before 17F.2B can start. A navigation-only PASS is **not** customer-onboarding certification.
+- **Real Meta Coexistence onboarding certification** (formerly Gate B) remains **BLOCKED / DEFERRED**. After the
+  secure DEV config update, `WHATSAPP_APP_ID` present = true, `WHATSAPP_CONFIGURATION_ID` present = true, and
+  `platform_ready=true`; the remaining blocker is that no second distinct controlled WhatsApp Business number is available
+  for the original new-inbox isolation contract. It remains mandatory before production enablement, before the first real
+  customer Coexistence onboarding, before any end-to-end Coexistence certification claim, and before 17F.2B can start. A
+  navigation-only PASS or launch/cancel preflight PASS is **not** customer-onboarding certification.
 - **Contract-change rule:** any future change to the 17F.2B dependency requires a separate explicit owner-approved
   contract-change decision and GPT-5.5 review.
 
@@ -111,11 +112,14 @@ account-scoped, backend-enforced primitive:
 - The 17F.1 overview already **surfaces partial completion explicitly** (unlinked inbox, category-with-no-inbox,
   ambiguous, drift) — so an interrupted flow is never corrupt or hidden; it is visible and recoverable.
 
-**Current status (REVISED per §0 and the 2026-07-04 owner status-evidence correction): record the 17F.2A DEV pass and
-supporting Standard inbox smoke only. The managed WhatsApp onboarding entry has been restored by 17F.2A and accepted for
-its UI/runtime scope by deployed DEV Gate A; Real Meta Coexistence onboarding certification remains a deferred hard gate;
-17F.2B remains NOT STARTED and is not authorized by this status correction.** Concretely (full definitions in §13;
-acceptance split in §13A):
+**Current status (REVISED per §0, the 2026-07-04 owner status-evidence correction, and the 2026-07-05 DEV
+launch/cancel preflight record): record the 17F.2A DEV pass, supporting Standard inbox smoke, secure public-identifier
+config update, and Meta Embedded Signup launch/cancel preflight only. The managed WhatsApp onboarding entry has been
+restored by 17F.2A and accepted for its UI/runtime scope by deployed DEV Gate A; `WHATSAPP_APP_ID` and
+`WHATSAPP_CONFIGURATION_ID` are present and `platform_ready=true`; Real Meta Coexistence onboarding certification remains
+BLOCKED / DEFERRED because no second distinct controlled WhatsApp Business number is available; 17F.2B remains NOT
+STARTED and is not authorized by this status correction.** Concretely (full definitions in §13; acceptance split in
+§13A):
 
 - **17F.2A = managed WhatsApp onboarding entry restoration (prerequisite product correction).** Restore the "New
   Inbox" entry for an administrator with `canSelfServeManagedWhatsapp=true` (evaluate `isAdmin && (canCreateInbox ||
@@ -136,8 +140,8 @@ acceptance split in §13A):
 
 **Correction of the earlier claim:** the initial draft said 17F.2 "requires essentially no new backend" and framed the
 thin launcher as the first slice. That remains true for the *category launcher* (17F.2B), **but it was incomplete** —
-it missed that the managed onboarding **entry itself is currently non-operable on DEV** (§0). The corrected first slice
-is therefore a **product fix (17F.2A)**, not the launcher. The "no new backend" property still holds (17F.2A and
+it missed that the managed onboarding **entry itself was non-operable on DEV before 17F.2A** (§0). The corrected first
+slice was therefore a **product fix (17F.2A)**, not the launcher. The "no new backend" property still holds (17F.2A and
 17F.2B are frontend/capability corrections; the only optional backend is the 17F.3 local-only membership helper).
 
 **Why not one big guided screen with its own orchestration service?** Because a single backend orchestration that
@@ -473,23 +477,44 @@ in logs, screenshots, or docs. No secrets/tokens/`provider_config` anywhere.
 
 ### Real Meta Coexistence onboarding certification (formerly Gate B) — BLOCKED / DEFERRED
 - **Status:** **BLOCKED / DEFERRED**.
-- **Current blockers:** `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` remain absent, `platform_ready` is false, and no
-  second distinct controlled WhatsApp Business number is available for the original new-inbox isolation contract. The
-  only controlled DEV number is already connected to the existing **“Bloomwire WA Dev”** inbox; the same number cannot
-  create a second `Channel::Whatsapp` because of the unique phone-number constraint; destructive removal/migration of the
-  existing inbox is not approved.
+- **Current blockers:** `WHATSAPP_APP_ID` present = true, `WHATSAPP_CONFIGURATION_ID` present = true, and
+  `platform_ready=true` after the secure DEV config update. Full certification remains blocked because no second distinct
+  controlled WhatsApp Business number is available for the original new-inbox isolation contract. The only controlled DEV
+  number is already connected to the existing **“Bloomwire WA Dev”** inbox; the same number cannot create a second
+  `Channel::Whatsapp` because of the unique phone-number constraint; destructive removal/migration of the existing inbox
+  is not approved.
 - **Classification:** this is a readiness/test-fixture limitation, **not a confirmed product defect**.
 - **Do-not-touch rule:** do **not** delete, migrate, rename, detach, modify, or re-onboard the existing **“Bloomwire WA
   Dev”** inbox, `Channel::Whatsapp`, `WhatsappSetup`, credentials, conversations, messages, contacts, or routing
   mapping. Do **not** bypass the unique phone-number constraint.
-- **Zero certification resource deltas:** no Coexistence onboarding, Embedded Signup, new fixture creation, or
-  certification Meta flow was run; no `Channel::Whatsapp`, `Inbox`, `Bloomwire::WhatsappSetup`, credential, role,
-  membership, routing mapping, schema, config, DEV environment, or production change was made for certification.
+- **Zero certification resource deltas:** the two existing blank DEV public-identifier `InstallationConfig` rows were
+  updated securely and no duplicate rows were created. The launch/cancel preflight made no credential, subscription,
+  callback, routing mapping, contact, conversation, message, inbox, channel, or setup mutation; no new fixture was
+  created; production was untouched.
 - **Future hard gate:** Real Meta Coexistence onboarding certification remains mandatory before production enablement of
   customer Coexistence onboarding, before the first real customer Coexistence onboarding, and before any claim that
-  Bloomwire Coexistence onboarding is end-to-end certified. It remains blocked until `WHATSAPP_APP_ID` and
-  `WHATSAPP_CONFIGURATION_ID` are restored, `platform_ready=true`, and a second distinct controlled WhatsApp Business
-  number is available.
+  Bloomwire Coexistence onboarding is end-to-end certified. It remains blocked until a second distinct controlled WhatsApp
+  Business number is available; restored public identifiers and `platform_ready=true` are necessary evidence, not Gate B
+  PASS.
+
+### Meta Embedded Signup launch/cancel preflight PASS — account 1
+- **Secure DEV config prerequisite:** `WHATSAPP_APP_ID` present = true; `WHATSAPP_CONFIGURATION_ID` present = true;
+  `platform_ready=true`. The two existing blank DEV `InstallationConfig` rows were updated securely; no duplicate rows
+  were created; values were never printed, logged, or exposed. Rails and Sidekiq SHA remained
+  `6894d93459cdba0fbc503a7d68b4f54b42a54571`; PostgreSQL and Redis were preserved; production was untouched.
+- **Browser evidence:** authenticated legitimate account-1 administrator; `canCreateInbox=false`;
+  `canSelfServeManagedWhatsapp=true`; normal UI path Settings → Inboxes → Add Inbox → WhatsApp Business → Coexistence;
+  real Facebook OAuth popup launched for WhatsApp Business App onboarding; popup was cancelled before any number selection
+  or onboarding completion; no onboarding persistence POST occurred.
+- **Zero-delta evidence:** account-scoped `Channel::Whatsapp` 1 → 1, `Inbox` 1 → 1, `Bloomwire::WhatsappSetup` 1 → 1;
+  global counts remained 1 / 1 / 1; Contact 6 → 6; Conversation 6 → 6; Message 116 → 116; Sidekiq retry 0 → 0; Sidekiq
+  dead 49 → 49; relevant application requests had no 5xx.
+- **No mutation / no exposure:** no credential, subscription, callback, routing mapping, contact, conversation, message,
+  inbox, channel, or setup mutation occurred; no secret or full identifier was recorded.
+- **Boundary:** this is **not Gate B PASS**, not Embedded Signup completion PASS, not new Coexistence inbox creation or
+  routing proof. Full Gate B / Real Meta Coexistence certification remains **BLOCKED / DEFERRED** because no second
+  distinct controlled WhatsApp Business number is available. **17F.2B remains NOT STARTED**. Do not modify the existing
+  WhatsApp fixture and do not rerun the popup preflight for this docs-only record.
 
 ### Existing Standard inbox global-router supporting evidence only — COMPLETED as supporting evidence
 - **Evidence classification:** **Existing Standard inbox global-router supporting evidence only**. Captured on DEV against
@@ -517,16 +542,21 @@ in logs, screenshots, or docs. No secrets/tokens/`provider_config` anywhere.
   → DEV deploy
   → Gate A (deployed-DEV navigation regression) PASS
   → docs-only status-evidence correction reviewed + merged
+  → secure DEV public-identifier config update (`platform_ready=true`)
+  → Meta Embedded Signup launch/cancel preflight PASS — account 1
+  → docs-only preflight record reviewed + merged
   → 17F.2B remains NOT STARTED
   → 17F.2B starts only after full Gate B / Real Meta Coexistence certification passes
 ```
 Separately:
 ```
 Real Meta Coexistence onboarding certification
-  → requires restored `WHATSAPP_APP_ID` + `WHATSAPP_CONFIGURATION_ID`, `platform_ready=true`, and a second distinct controlled WhatsApp Business number
+  → public identifiers restored and `platform_ready=true`
+  → still requires a second distinct controlled WhatsApp Business number
   → mandatory before production Coexistence enablement / first real customer Coexistence onboarding / certification claims
 ```
 - **A navigation-only PASS is NOT a customer-onboarding certification PASS.**
+- **A launch/cancel preflight PASS is NOT an Embedded Signup completion PASS or Gate B PASS.**
 - **A local/component/API PASS is NOT a deployed-runtime PASS.**
 - **17F.2B remains NOT STARTED** under this correction.
 - **17F.3** (guided dual-membership) remains a separate later slice after 17F.2B and is not authorized here.
@@ -578,25 +608,29 @@ Real Meta Coexistence onboarding certification
   (c) round-robin queue callbacks fire on `InboxMember` changes — expected, existing behavior;
   (d) **[resolved for 17F.2A UI/runtime scope] the managed onboarding entry was non-operable on DEV** — mitigated by
   PR #122 plus deployed DEV Gate A PASS; (e) **treating LOCAL/component/API evidence as runtime acceptance** — mitigated
-  by keeping deployed DEV Gate A as the 17F.2A UI/runtime gate; (f) **readiness + test-fixture availability for real Meta
-  Coexistence certification** — currently BLOCKED/DEFERRED because `WHATSAPP_APP_ID` and
-  `WHATSAPP_CONFIGURATION_ID` remain absent, `platform_ready` is false, and no second distinct controlled WhatsApp
-  Business number is available; this remains a production/first-customer hard gate, not a confirmed product defect.
+  by keeping deployed DEV Gate A as the 17F.2A UI/runtime gate; (f) **test-fixture availability for real Meta
+  Coexistence certification** — currently BLOCKED/DEFERRED because no second distinct controlled WhatsApp Business number
+  is available; `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` are present and `platform_ready=true`, but restored
+  public identifiers are necessary evidence only, not Gate B PASS; this remains a production/first-customer hard gate,
+  not a confirmed product defect.
 - **Parked (owner-approval + ADR required):** any persistent `Inbox↔Team` mapping, data tag, `team_id` on inboxes, join
   table, or automatic membership sync.
 - **Explicit non-goals:** new `Category` entity/model/table; replacing Standard/Coexistence setup services; duplicating
   conversations/messages/contacts/channels; agent-accessible inbox/WhatsApp creation; any additional real Meta/WhatsApp/
-  Shopify call outside the captured supporting smoke; any schema/migration; any production deploy/config change;
+  Shopify call outside the captured supporting smoke and captured launch/cancel preflight; any schema/migration; any
+  production deploy/config change;
   exposing/logging provider secrets.
 
 ---
 
-## 16. Final recommendation (REVISED per §0 and owner-approved 17F.2A status-evidence correction)
-**RECORD STATUS ONLY — the acceptance split is recorded and the certification gate remains authoritative. Revised sequence:**
+## 16. Final recommendation (REVISED per §0, owner-approved 17F.2A status-evidence correction, and launch/cancel preflight record)
+**RECORD STATUS ONLY — the acceptance split, supporting evidence, launch/cancel preflight, and certification gate remain authoritative. Revised sequence:**
 ```
 17F.2A implementation → exact-head review → merge → DEV deploy
   → §13A Gate A (deployed-DEV navigation regression, no real Meta) PASS
   → existing Standard inbox global-router smoke PASS as supporting evidence only
+  → secure DEV public-identifier config update (`platform_ready=true`)
+  → Meta Embedded Signup launch/cancel preflight PASS — account 1
   → Real Meta Coexistence certification / Gate B remains BLOCKED / DEFERRED
   → 17F.2B remains NOT STARTED
   → 17F.2B must not begin until full Gate B / Real Meta Coexistence certification passes
@@ -604,7 +638,8 @@ Real Meta Coexistence onboarding certification
 Gate B remains:
 ```
 Real Meta Coexistence onboarding certification
-  → BLOCKED / DEFERRED until `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` are restored, `platform_ready=true`, and a second distinct controlled WhatsApp Business number exists
+  → public identifiers restored and `platform_ready=true`
+  → BLOCKED / DEFERRED until a second distinct controlled WhatsApp Business number exists
   → mandatory before production Coexistence enablement / first real customer Coexistence onboarding / certification claims
   → mandatory before 17F.2B can begin unless a separate explicit owner-approved contract-change decision + GPT-5.5 review changes that dependency
 ```
@@ -615,14 +650,16 @@ Real Meta Coexistence onboarding certification
 2. **Existing Standard inbox global-router supporting evidence: PASS as supporting evidence only.** This is not
    Coexistence signup PASS, Embedded Signup PASS, new inbox creation PASS, new-inbox isolation PASS, Real Meta
    Coexistence onboarding certification, full Gate B PASS, or platform/customer readiness proof.
-3. **Real Meta Coexistence onboarding certification (formerly Gate B):** BLOCKED / DEFERRED until
-   `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` are restored, `platform_ready=true`, and a second distinct controlled
-   WhatsApp Business number is available. Do not touch the existing **“Bloomwire WA Dev”** fixture and do not bypass the
-   unique phone-number constraint.
-4. **17F.2B:** **NOT STARTED**. It must not begin until the existing full Gate B / Real Meta Coexistence certification
+3. **Meta Embedded Signup launch/cancel preflight PASS — account 1.** This is not Gate B PASS, not Embedded Signup
+   completion PASS, not new Coexistence inbox creation, and not routing proof.
+4. **Real Meta Coexistence onboarding certification (formerly Gate B):** BLOCKED / DEFERRED until a second distinct
+   controlled WhatsApp Business number is available. `WHATSAPP_APP_ID` and `WHATSAPP_CONFIGURATION_ID` are present and
+   `platform_ready=true`, but restored public identifiers are necessary evidence only, not Gate B PASS. Do not touch the
+   existing **“Bloomwire WA Dev”** fixture and do not bypass the unique phone-number constraint.
+5. **17F.2B:** **NOT STARTED**. It must not begin until the existing full Gate B / Real Meta Coexistence certification
    passes. Any future change to that dependency requires a separate explicit owner-approved contract-change decision and
    GPT-5.5 review.
-5. **17F.3 (guided dual-membership):** separate later slice after 17F.2B and not authorized here.
+6. **17F.3 (guided dual-membership):** separate later slice after 17F.2B and not authorized here.
 
 This status correction changes documentation only. It does not change product code, tests, schema, workflows, config,
 DEV, production, runtime data, smoke evidence, or the existing 17F.2B dependency contract.
