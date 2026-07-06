@@ -14,11 +14,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   # Bloomwire (Phase 11B.7C): block business admins from creating ANY inbox/channel (incl. self-service
   # web_widget/api) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON. List/read/update + self-service delete untouched.
   before_action :restrict_inbox_creation!, only: [:create]
-  # Bloomwire (Phase 11B.5B): block business admins from DESTROYING Ops-owned managed/provider inboxes
-  # (WhatsApp/email/sms/line/telegram/social) when BLOOMWIRE_RESTRICT_PROVIDER_SETUP is ON; self-service
-  # web_widget/api deletion stays allowed (scoped via managed_provider_inbox_destroy?). OFF => stock.
-  # (register_webhook re-registration is guarded inside WhatsappHealthManagement, where that action is defined.)
-  before_action :restrict_managed_provider_inbox_destroy!, only: [:destroy]
+  # Bloomwire: Account Administrators may remove ANY of their own account's inboxes (universal "Remove inbox").
+  # The former Phase 11B.5B managed/provider destroy restriction is intentionally LIFTED; #destroy routes a
+  # WhatsApp delete through the Meta-safe async deprovision and every other type through the stock DeleteObjectJob.
   # Bloomwire (Phase 11B.7D): inbox-level bot management is Ops-owned in managed mode. Block the bot read
   # (renders access_token/secret/bot_config) and set/disconnect when BLOOMWIRE_RESTRICT_BOT_MANAGEMENT is ON.
   before_action :restrict_bot_management!, only: [:agent_bot, :set_agent_bot]
@@ -96,7 +94,23 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def destroy
-    ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip) if @inbox.present?
+    return head :not_found if @inbox.blank?
+
+    # Bloomwire: a WhatsApp inbox delete (any source) runs through the Meta-safe async deprovision — it blocks the
+    # global router, removes the setup mapping, and skips Channel::Whatsapp webhook teardown so NO Meta call is
+    # made (never unsubscribe a shared/global WABA webhook). Every other inbox type uses the stock DeleteObjectJob.
+    # OFF (Bloomwire master mode off) => stock DeleteObjectJob for all types.
+    if bloomwire_whatsapp_local_delete?
+      result = ::Bloomwire::WhatsappInboxDeprovisionService.new(
+        account: Current.account, inbox: @inbox, actor: Current.user
+      ).prepare
+      if result.error == :enqueue_failed
+        return render status: :service_unavailable,
+                      json: { error: 'Could not start inbox removal right now. Please try again.', code: 'enqueue_failed' }
+      end
+    else
+      ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip)
+    end
     render status: :ok, json: { message: I18n.t('messages.inbox_deletetion_response') }
   end
 
@@ -134,14 +148,11 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     end
   end
 
-  # Channel STI types that are self-service (the business owns these). Every OTHER inbox channel type is a
-  # managed/provider channel whose lifecycle is owned by Bloomwire Ops in managed mode.
-  SELF_SERVICE_CHANNEL_TYPES = %w[Channel::WebWidget Channel::Api].freeze
-
-  # Bloomwire (Phase 11B.5B): a DESTROY targets a managed/provider inbox when the inbox's channel is NOT one of
-  # the self-service types. Drives restrict_managed_provider_inbox_destroy! (admin-gated + toggle-gated). OFF => stock.
-  def managed_provider_inbox_destroy?
-    @inbox.present? && SELF_SERVICE_CHANNEL_TYPES.exclude?(@inbox.channel_type)
+  # Bloomwire: route a WhatsApp inbox delete through the Meta-safe async deprovision when Bloomwire mode is ON
+  # (the global webhook router owns WhatsApp; per-channel teardown must never fire on a local delete). OFF => stock
+  # DeleteObjectJob for every type, unchanged.
+  def bloomwire_whatsapp_local_delete?
+    Bloomwire::Features.master_enabled? && @inbox.channel.is_a?(Channel::Whatsapp)
   end
 
   def fetch_agent_bot

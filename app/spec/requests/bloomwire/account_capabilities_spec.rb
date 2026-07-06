@@ -34,7 +34,7 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
                                          canManageNativeWhatsappSetup canDeleteManagedProviderInbox
                                          canRegisterProviderWebhook canCreateInbox canManageBots
                                          canAccessIntegrations canSelfServeManagedWhatsapp
-                                         canAccessCategoryAdmin
+                                         canAccessCategoryAdmin canRemoveInbox
                                        ])
       expect(caps.values).to all(be_in([true, false]))
     end
@@ -245,6 +245,29 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
     context 'when Bloomwire is OFF (stock)' do
       it 'is false for an administrator' do
         expect(caps_for(administrator)['canAccessCategoryAdmin']).to be(false)
+      end
+    end
+  end
+
+  # Universal "Remove inbox": an administrator may delete ANY of their own inboxes from the inbox Settings page
+  # whenever Bloomwire mode is ON (the former managed/provider destroy restriction is lifted; WhatsApp deletes are
+  # Meta-safe). OFF == stock (the inbox-list delete remains the path). Agents are always false.
+  describe 'canRemoveInbox' do
+    context 'when Bloomwire mode is ON' do
+      before { set_toggle('BLOOMWIRE_MODE_ENABLED', true) }
+
+      it 'is true for a business administrator' do
+        expect(caps_for(administrator)['canRemoveInbox']).to be(true)
+      end
+
+      it 'is false for an agent' do
+        expect(caps_for(agent)['canRemoveInbox']).to be(false)
+      end
+    end
+
+    context 'when Bloomwire is OFF (stock)' do
+      it 'is false for an administrator (stock — the inbox-list delete is the path)' do
+        expect(caps_for(administrator)['canRemoveInbox']).to be(false)
       end
     end
   end

@@ -58,6 +58,7 @@ describe('useBloomwireCapabilities', () => {
       'canManageProviderSetup',
       'canManageNativeWhatsappSetup',
       'canDeleteManagedProviderInbox',
+      'canRemoveInbox',
       'canRegisterProviderWebhook',
       'canCreateInbox',
       'canManageBots',
@@ -66,6 +67,20 @@ describe('useBloomwireCapabilities', () => {
       'canAccessCategoryAdmin',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
+  });
+
+  // Universal "Remove inbox" is opt-in (default FALSE) — hidden in stock / older-backend / not-loaded, shown only
+  // on an explicit server `true`.
+  describe('canRemoveInbox (opt-in, default false)', () => {
+    it('defaults to false when the capability map is absent', () => {
+      mockGetters({ capabilities: undefined });
+      expect(useBloomwireCapabilities().canRemoveInbox.value).toBe(false);
+    });
+
+    it('is true only on an explicit server true', () => {
+      mockGetters({ capabilities: { canRemoveInbox: true } });
+      expect(useBloomwireCapabilities().canRemoveInbox.value).toBe(true);
+    });
   });
 
   // Deterministic-tile fix: `capabilitiesLoaded` must distinguish "the account-show payload has hydrated" from

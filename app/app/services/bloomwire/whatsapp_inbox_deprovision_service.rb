@@ -1,9 +1,9 @@
-# Admin-facing "Remove WhatsApp Inbox" deprovision for Bloomwire managed mode. Permanently removes ALL Bloomwire
-# database data owned by a managed WhatsApp inbox — WITHOUT touching Meta (no WABA delete, no number deregister, no
-# webhook unsubscribe) and WITHOUT deleting shared Contact records.
+# Admin-facing "Remove inbox" deprovision for a Bloomwire WhatsApp inbox of ANY source (managed, embedded_signup,
+# legacy/manual, or missing). Permanently removes ALL Bloomwire database data owned by the WhatsApp inbox — WITHOUT
+# touching Meta (no WABA delete, no number deregister, no webhook unsubscribe) and WITHOUT deleting shared Contacts.
 #
 # Two phases:
-#   `#prepare` (SYNCHRONOUS, request path): authorize/verify account + managed source, BLOCK ROUTING (commit
+#   `#prepare` (SYNCHRONOUS, request path): authorize/verify account + WhatsApp, BLOCK ROUTING (commit
 #     Bloomwire::WhatsappSetup.setup_status -> 'blocked' so the global router — which routes only ready_for_webhook
 #     rows — stops immediately), then ENQUEUE the deletion job and VERIFY the enqueue was accepted before returning
 #     success. If the enqueue is NOT accepted, routing is RESTORED to its prior status (deterministic: nothing was
@@ -16,9 +16,10 @@
 #     (only ContactInbox join rows are removed). The historical purge is done in SMALL BATCHES — there is NO single
 #     giant transaction over the whole message/conversation history.
 #
-# Meta boundary: only channels created by the managed flow (`provider_config['source'] == 'bloomwire_managed'`) are
-# deprovisioned. Those channels SKIP `Channel::Whatsapp#teardown_webhooks` (which only fires for `embedded_signup`
-# source), so destroying them makes NO Meta call. A non-managed channel is refused (:not_managed).
+# Meta boundary: a local delete makes NO Meta call for ANY source. The channel is flagged
+# `skip_webhook_teardown = true` before destroy so `Channel::Whatsapp#teardown_webhooks` is skipped entirely — even
+# an `embedded_signup` channel with live-looking creds (which would otherwise unsubscribe a shared WABA webhook)
+# and a legacy channel whose Meta assets are already gone are removed cleanly.
 #
 # Errors / retries: `.purge!` no-ops when the target inbox is already gone (a concurrent/duplicate/retried job). BOTH
 # `ActiveRecord::RecordNotFound` and `ActiveRecord::RecordNotDestroyed` are swallowed as idempotent success ONLY when
@@ -27,7 +28,6 @@
 # RE-RAISED so Sidekiq retries — a surviving inbox is never marked "removed". All state transitions emit sanitized
 # audit events.
 class Bloomwire::WhatsappInboxDeprovisionService
-  MANAGED_SOURCE = 'bloomwire_managed'.freeze
   BLOCKED_STATUS = 'blocked'.freeze
   BATCH_SIZE = 500
 
@@ -72,10 +72,11 @@ class Bloomwire::WhatsappInboxDeprovisionService
     return if inbox.nil? || inbox.account_id != account_id
 
     channel = inbox.channel
-    # Defense in depth: never deprovision (and never Meta-call for) a non-managed channel.
-    return unless channel.is_a?(Channel::Whatsapp) && managed?(channel)
+    # Handles ANY Bloomwire WhatsApp inbox (managed, embedded_signup, legacy/manual, or missing source); the delete
+    # is always Meta-safe (webhook teardown is skipped). Non-WhatsApp inboxes never reach here.
+    return unless channel.is_a?(Channel::Whatsapp)
 
-    delete_managed_inbox!(inbox, channel)
+    delete_inbox!(inbox, channel)
     audit(:removal_succeeded, account_id: account_id, inbox_id: inbox_id, channel_id: channel.id, actor_id: actor_id)
   rescue ActiveRecord::RecordNotFound, ActiveRecord::RecordNotDestroyed => e
     # Neither exception is proof that another job removed the TARGET inbox — either can come from a vanished child,
@@ -91,18 +92,27 @@ class Bloomwire::WhatsappInboxDeprovisionService
     raise
   end
 
-  def self.delete_managed_inbox!(inbox, channel)
-    setup = Bloomwire::WhatsappSetup.find_by(channel_whatsapp_id: channel.id)
-    block_routing!(setup) # keep routing blocked even if a retry lands after the setup was re-created
-    setup&.destroy!
+  def self.delete_inbox!(inbox, channel)
+    # Remove EVERY routing/setup row that references this inbox or its channel so no orphan survives (a legacy
+    # mapping may be keyed by inbox_id only). Keep routing blocked first (a retry may land after a re-create).
+    setups_for(inbox, channel).each do |setup|
+      block_routing!(setup)
+      setup.destroy!
+    end
     # Batched purge — each record destroy! is its own small transaction (no single transaction over the whole
     # history). Ordered by FK dependency; shared Contacts are never touched (only ContactInbox joins).
     purge_heavy_children(inbox)
-    inbox.destroy! # cascades remaining owned dependents + the Channel::Whatsapp
+    # Meta safety: a Bloomwire local delete must NEVER call Meta (no shared/global WABA webhook unsubscribe), for
+    # ANY source, even if the Meta assets are already gone — so skip Channel::Whatsapp#teardown_webhooks entirely.
+    channel.skip_webhook_teardown = true
+    inbox.destroy! # cascades remaining owned dependents + the (teardown-skipped) Channel::Whatsapp
   end
 
-  def self.managed?(channel)
-    (channel.provider_config || {})['source'] == MANAGED_SOURCE
+  # Every routing/setup row referencing this inbox or its channel (either key may be set, or both). Destroying all
+  # matches guarantees no orphaned Bloomwire::WhatsappSetup survives a legacy/partial mapping.
+  def self.setups_for(inbox, channel)
+    Bloomwire::WhatsappSetup.where(channel_whatsapp_id: channel.id)
+                            .or(Bloomwire::WhatsappSetup.where(inbox_id: inbox.id)).distinct
   end
 
   # Commit the routing block immediately (its own statement). The row is still valid at block time, so update!
@@ -151,8 +161,6 @@ class Bloomwire::WhatsappInboxDeprovisionService
 
     channel = @inbox.channel
     return :not_whatsapp unless channel.is_a?(Channel::Whatsapp)
-    # Meta safety: only managed-source channels (they skip the Meta webhook teardown on destroy).
-    return :not_managed unless self.class.managed?(channel)
 
     nil
   end

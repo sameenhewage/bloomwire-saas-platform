@@ -56,6 +56,10 @@ export function useBloomwireCapabilities() {
     canDeleteManagedProviderInbox: buildCapability(
       'canDeleteManagedProviderInbox'
     ),
+    // Universal "Remove inbox" (Bloomwire): an administrator may permanently delete ANY of their own inboxes from
+    // the inbox Settings page when Bloomwire mode is ON. Opt-in (default FALSE) — hidden in stock / older-backend /
+    // not-loaded states, shown only on an explicit server `true`. The backend destroy is the enforcement boundary.
+    canRemoveInbox: buildCapability('canRemoveInbox', false),
     canRegisterProviderWebhook: buildCapability('canRegisterProviderWebhook'),
     canCreateInbox: buildCapability('canCreateInbox'),
     canManageBots: buildCapability('canManageBots'),

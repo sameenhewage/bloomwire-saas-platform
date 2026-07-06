@@ -1,13 +1,12 @@
 require 'rails_helper'
 
-# Phase 11B.5B: when Bloomwire mode + BLOOMWIRE_RESTRICT_PROVIDER_SETUP are ON, business account ADMINISTRATORS
-# cannot DESTROY Ops-owned managed/provider inboxes (WhatsApp/email/sms/line/telegram/social) via
-# inboxes#destroy, nor re-register a provider webhook via inboxes#register_webhook. In managed mode the
-# inbox/channel lifecycle and the Meta webhook are owned by Bloomwire Ops + the global webhook router.
-# Self-service web_widget/api inbox deletion stays allowed; reset_secret / sync_templates / health are NOT
-# touched by this slice; agents stay on the existing InboxPolicy (admin-only) path, unchanged. OFF == stock
-# Chatwoot. 403 with a non-secret managed_by_ops message; the ON guard short-circuits before any delete /
-# DeleteObjectJob enqueue / webhook service call, so no inbox, channel, token, or Meta state changes.
+# The former Phase 11B.5B managed/provider DESTROY restriction is now LIFTED: an Account Administrator may remove
+# ANY of their own inboxes (universal "Remove inbox"). A WhatsApp delete (any source, when Bloomwire mode is ON)
+# routes through the Meta-safe async deprovision (Bloomwire::WhatsappInboxDeprovisionService → no Meta call); every
+# other inbox type uses the stock DeleteObjectJob. This spec pins that universal-delete routing AND the STILL-ACTIVE
+# provider WEBHOOK-registration restriction (inboxes#register_webhook stays 403 when BLOOMWIRE_RESTRICT_PROVIDER_SETUP
+# is ON). Agents stay on the existing InboxPolicy (admin-only) path (401); reset_secret / sync_templates / health are
+# untouched; OFF (master OFF) == stock Chatwoot.
 RSpec.describe 'Bloomwire managed inbox destroy + webhook registration restriction', type: :request do
   let(:account) { create(:account) }
   let!(:administrator) { create(:user, account: account, role: :administrator) }
@@ -51,12 +50,15 @@ RSpec.describe 'Bloomwire managed inbox destroy + webhook registration restricti
   describe 'when provider-setup restriction is ON' do
     before { enable_restriction }
 
-    it 'blocks an administrator from destroying the managed WhatsApp inbox (403, not deleted, no job)' do
+    it 'allows an administrator to remove the managed WhatsApp inbox via the Meta-safe async deprovision (no DeleteObjectJob, no Meta call)' do
       inbox = whatsapp_cloud_inbox
       expect(DeleteObjectJob).not_to receive(:perform_later)
-      delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
-      expect_blocked
-      expect(Inbox.exists?(inbox.id)).to be(true)
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+      expect do
+        delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
+      end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body['managed_by_ops']).to be_nil
     end
 
     {
@@ -65,12 +67,13 @@ RSpec.describe 'Bloomwire managed inbox destroy + webhook registration restricti
       'line' => :channel_line,
       'telegram' => :channel_telegram
     }.each do |label, factory|
-      it "blocks an administrator from destroying a #{label} provider inbox (403, not deleted, no job)" do
+      it "allows an administrator to destroy a #{label} provider inbox via the stock DeleteObjectJob" do
         inbox = managed_inbox(factory)
-        expect(DeleteObjectJob).not_to receive(:perform_later)
+        expect(Bloomwire::WhatsappInboxDeprovisionJob).not_to receive(:perform_later)
+        expect(DeleteObjectJob).to receive(:perform_later)
         delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
-        expect_blocked
-        expect(Inbox.exists?(inbox.id)).to be(true)
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['managed_by_ops']).to be_nil
       end
     end
 
@@ -142,11 +145,13 @@ RSpec.describe 'Bloomwire managed inbox destroy + webhook registration restricti
       expect(response).to have_http_status(:ok)
     end
 
-    it 'does not intercept when master mode is ON but BLOOMWIRE_RESTRICT_PROVIDER_SETUP is OFF' do
+    it 'routes a WhatsApp delete through the Meta-safe deprovision when master mode is ON (restrict OFF)' do
       set_toggle('BLOOMWIRE_MODE_ENABLED', true) # master only; provider-setup toggle stays OFF
       inbox = whatsapp_cloud_inbox
-      expect(DeleteObjectJob).to receive(:perform_later)
-      delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
+      expect(DeleteObjectJob).not_to receive(:perform_later)
+      expect do
+        delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
+      end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
       expect(response).to have_http_status(:ok)
     end
   end

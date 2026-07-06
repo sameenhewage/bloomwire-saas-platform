@@ -57,23 +57,6 @@ module Bloomwire::RestrictsProviderSetup
     restrict_provider_setup_for_account_admin!
   end
 
-  # Scoped, admin-gated guard for DESTROYING an Ops-owned managed/provider inbox (Phase 11B.5B). The including
-  # controller overrides `managed_provider_inbox_destroy?` to mark ONLY the channel types whose lifecycle is
-  # Ops-owned in managed mode; self-service inboxes (web_widget/api) stay deletable and agents remain on the
-  # controller's existing admin-only InboxPolicy#destroy? path. Short-circuits before any delete is enqueued.
-  def restrict_managed_provider_inbox_destroy!
-    return unless Bloomwire::Features.restrict_provider_setup?
-    return unless @current_account_user&.administrator?
-    return unless managed_provider_inbox_destroy?
-
-    render_provider_setup_restricted
-  end
-
-  # Default: not a managed/provider inbox destroy. Mixed controllers (e.g. inboxes) override this.
-  def managed_provider_inbox_destroy?
-    false
-  end
-
   def render_provider_setup_restricted
     render json: { error: I18n.t('bloomwire.provider_setup_restricted'), managed_by_ops: true }, status: :forbidden
   end

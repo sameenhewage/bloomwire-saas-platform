@@ -19,6 +19,7 @@
 
 ## A. Current State  *(keep this live — update at the end of every session)*
 
+- **`version_1` tip (current):** `b6b5bfb` — **PR #132** (admin managed "Remove WhatsApp Inbox" deprovision) is **merged** and DEV-deployed at `b6b5bfb`. **In-flight (NOT merged):** branch `feature/bloomwire-universal-remove-inbox` off `version_1` `b6b5bfb` — the **universal Account-Admin "Remove inbox"** (generalizes #132 to ALL inbox types + ALL WhatsApp sources, Meta-safe; unblocks deleting the dead Account‑1 inbox so its number frees for Account 21). Local green: deprovision service 31/0 · inboxes `#destroy` 7/0 · backend batch 148/0 · RuboCop 0 · Vitest 28/0 · ESLint 0 · vite build ✓. Open a PR into `version_1`; **do not merge without GPT‑5.5 exact-head review.** *(Older §A bullets below may be stale — trust git + the newest §C entry.)*
 - **`version_1` tip (repository HEAD):** `e9fcef99705eee792cf99c04baa9edc24eee880e` (`e9fcef9`) — PR #125 merged (Phase **17F.2B** Category → Add WhatsApp Inbox launcher, frontend-only) on top of PR #124 (`0c3f32d`) / PR #123 (`9fe522f`) / PR #122 (`6894d93`). The Phase **17F.3** implementation branch `feature/bloomwire-phase-17f3-guided-membership-alignment` is based on this exact tip (fail-closed base check passed) and must open a PR into `version_1`; do not merge without GPT-5.5 exact-head review.
 - **Dev deployed runtime SHA:** `e9fcef99705eee792cf99c04baa9edc24eee880e` (`e9fcef9`) — deployed to DEV by manual `deploy-dev.yml` run `28732366110` (success); Rails + Sidekiq report `e9fcef9`; no pending migrations (no schema change); local + public health 200; Sidekiq retry 0 (no new); PostgreSQL + Redis preserved; production untouched. **Phase 17F.2B DEV runtime PASS** validated on this SHA (authenticated account-1 admin; launcher on both eligible rows; account-scoped existing WhatsApp wizard reached; Standard + Coexistence reused; zero membership/inbox/channel/setup/contact/conversation/message deltas; no Meta signup; **not Gate B PASS**).
 - **Latest completed / merged:** **PR #125** — Phase **17F.2B** Category → Add WhatsApp Inbox launcher (frontend-only), merged at `e9fcef9`, DEV-deployed run `28732366110`, **DEV runtime PASS** (not customer-onboarding cert; not Gate B). Before it: **PR #124** — docs-only record of the **Meta Embedded Signup launch/cancel preflight PASS — account 1**, merged at `0c3f32d`; **PR #123** — docs-only 17F.2A status-evidence correction, merged at `9fe522f`; **PR #122** — Phase **17F.2A** managed WhatsApp onboarding entry restoration, merged at `6894d93`, DEV-deployed run `28699117487`, Gate A PASS for UI/runtime scope; **PR #121** (17F.2 discovery + contract, docs-only, `ada23bc`); **PR #120** (17F.1 closure docs, `bb2a3d7`); **PR #119** — Phase **17F.1** read-only "Categories & Inboxes" admin overview (product code, gated), merged at `7bc59c7` and DEV-deployed + authenticated MCP validated (PASS) in 17F.1D; **PR #118** (17F.0 multi-inbox/category discovery docs, `6c0ab8c`); **PR #117** (17E.4D dev-release governance docs, `096f619`); **PR #116** (17E.4 contact ID hardening, `4525bea`, deployed + authenticated smoke PASS on dev in 17E.4D); PR #115 (17E.3, `3c45720`); PR #114 (17E.2, `d98f7d8`); PR #113 (17E.1, `5df9f9d`); PR #112 (17E.0, `8349689`); PR #111 (17D.3, `ea30579`); PR #109 (17D.2, `4a57564`); PR #107 (17D.1, `ebdcba2`); PR #106 (17D.0, `f9aeac7`); PR #104 (17C.3, `bf81c7c`); PR #102 (17C.2, `84481ed`); PR #100 (17C.1, `ac79a88`); PR #98 (17B, `6eac9fa`); PR #97 (17A, `8719de2`).
@@ -80,7 +81,31 @@
 
 ## C. Session journal  *(newest first — prepend new entries)*
 
-### 2026-07-06 — Admin "Remove WhatsApp Inbox" (managed deprovision) (product code; open branch; NOT merged)
+### 2026-07-06 — Universal Account-Admin "Remove inbox" (generalizes #132) (product code; open branch; NOT merged)
+- **Goal:** an Account Administrator removes ANY of their own inboxes (WhatsApp any source incl. legacy/dead, API, Web
+  widget, Email, FB/IG, …) via the **normal Inbox Settings page** — unblocking the dead Account‑1 WhatsApp inbox (Meta
+  asset gone) that pinned its number so it can be onboarded into Account 21. NOT a super-admin feature; no manual DB
+  cleanup; no one-time script; not special-cased to Account 1.
+- **Branch:** `feature/bloomwire-universal-remove-inbox` off `version_1` `b6b5bfb` (post‑#132 merge). One focused PR.
+- **Backend:** lifted `restrict_managed_provider_inbox_destroy!` (Phase 11B.5B); stock `InboxesController#destroy` routes
+  WhatsApp (any source, master ON) → generalized Meta‑safe `Bloomwire::WhatsappInboxDeprovisionService` (block router,
+  destroy every setup by channel OR inbox id → no orphan, batched purge), else stock `DeleteObjectJob`.
+  `Channel::Whatsapp#skip_webhook_teardown` → **NO Meta call** for any source (incl. embedded_signup/dead). `canRemoveInbox`
+  capability (admin && master ON). Removed the redundant `bloomwire/whatsapp/inboxes#destroy` endpoint/route/spec +
+  `removeBloomwireWhatsAppInbox` store action + `WhatsappChannel.deleteInbox`.
+- **Frontend:** universal `BloomwireRemoveInbox.vue` for all types (name + channel type + masked phone/email + permanent
+  warning + Cancel + Delete) → stock `inboxes/delete`; double-click blocked; bounded timeout + route‑leave safety.
+- **Not changed:** admin-only (`InboxPolicy#destroy?`) + account-scoped (cross‑tenant 404); shared Contacts + Account +
+  Users preserved; no schema/migration; no SMTP/DNS/Meta-credential change; OFF (master OFF) == stock; Enterprise
+  `DeleteObjectJob` audit override intact.
+- **Validation (cwd `app/`):** deprovision service **31/0** (embedded_signup/legacy/no‑Meta/orphan‑free RED→GREEN);
+  inboxes `#destroy` **7/0** (WA→async Meta‑safe, non‑WA→`DeleteObjectJob`, OFF==stock, agent/cross‑tenant); account
+  capabilities incl. `canRemoveInbox`; backend batch **148/0**; RuboCop **0**; Vitest **28/0** (component 10 + composable
+  18); ESLint **0**; `vite build` ✓; no secret in diff; **no live Meta call**. **Open PR — do not merge without GPT‑5.5
+  exact-head review.** DEV runtime acceptance (delete dead Account‑1 inbox via UI → onboard released number into Account
+  21 → multi-inbox → health/sidekiq) pending post-merge deploy.
+
+### 2026-07-06 — Admin "Remove WhatsApp Inbox" (managed deprovision) (product code; open branch; NOT merged) — *[later MERGED as PR #132 `b6b5bfb`]*
 - **GPT‑5.5 CHANGES REQUIRED (4th pass, reviewed `6823321`) — DOCS-ONLY:** the three production fixes were verified
   correct at head `6823321` (no deprovision-logic change); only stale contract/documentation needed correcting:
   the service header comment now accurately states the `RecordNotFound` fresh-`Inbox.exists?` rule (swallow only when

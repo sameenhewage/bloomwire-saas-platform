@@ -1,26 +1,37 @@
 require 'rails_helper'
 
-# Two-phase managed WhatsApp inbox removal: a short synchronous #prepare (authorize/verify, block routing, enqueue)
-# and an async, retry-safe, idempotent .purge! (heavy deletion, no orphans, no shared-Contact loss, no Meta call).
+# Two-phase Bloomwire WhatsApp inbox removal (ANY source: managed, embedded_signup, legacy/manual, or missing): a
+# short synchronous #prepare (authorize/verify, block routing, enqueue) and an async, retry-safe, idempotent
+# .purge! (heavy deletion, no orphans, no shared-Contact loss, and NO Meta call for any source).
 RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
 
-  # A managed WhatsApp inbox: whatsapp_cloud channel with source 'bloomwire_managed' (+ its inbox) and an aligned,
-  # routeable Bloomwire::WhatsappSetup. Fake routing identifiers only.
-  def managed_inbox(on: account, phone_number: '+15551230001', phone_number_id: 'PNID-1', waba_id: 'WABA-1')
+  # A WhatsApp inbox for the given source (managed / embedded_signup / legacy-missing): a whatsapp_cloud channel
+  # (+ its inbox) and, by default, an aligned routeable Bloomwire::WhatsappSetup. Fake routing identifiers only.
+  # source: nil omits the provider_config 'source' key (legacy); api_key/waba_id: nil model a dead/asset-gone inbox.
+  # rubocop:disable Metrics/ParameterLists
+  def whatsapp_inbox(on: account, phone_number: '+15551230001', phone_number_id: 'PNID-1', waba_id: 'WABA-1',
+                     source: 'bloomwire_managed', api_key: 'FAKE-KEY', with_setup: true)
     channel = create(:channel_whatsapp, account: on, provider: 'whatsapp_cloud', phone_number: phone_number,
                                         sync_templates: false, validate_provider_config: false)
     channel.provider_config = {
-      'source' => 'bloomwire_managed', 'phone_number_id' => phone_number_id,
-      'business_account_id' => waba_id, 'api_key' => 'FAKE-KEY'
-    }
+      'source' => source, 'phone_number_id' => phone_number_id,
+      'business_account_id' => waba_id, 'api_key' => api_key
+    }.compact
     channel.save!(validate: false)
     inbox = channel.inbox
-    setup = create(:bloomwire_whatsapp_setup, account: on, inbox: inbox, channel_whatsapp: channel,
-                                              phone_number_id: phone_number_id, waba_id: waba_id,
-                                              display_phone_number: phone_number, setup_status: 'ready_for_webhook')
-    [inbox, channel, setup]
+    setup = with_setup && create(:bloomwire_whatsapp_setup, account: on, inbox: inbox, channel_whatsapp: channel,
+                                                            phone_number_id: phone_number_id, waba_id: waba_id,
+                                                            display_phone_number: phone_number,
+                                                            setup_status: 'ready_for_webhook')
+    [inbox, channel, setup || nil]
+  end
+  # rubocop:enable Metrics/ParameterLists
+
+  # Backwards-compatible alias: the managed-source inbox used across the existing examples.
+  def managed_inbox(**)
+    whatsapp_inbox(source: 'bloomwire_managed', **)
   end
 
   def service(inbox, acting_account: account)
@@ -46,12 +57,18 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       expect(service(web).prepare.error).to eq(:not_whatsapp)
     end
 
-    it 'refuses a non-managed (embedded_signup) WhatsApp channel (:not_managed)' do
-      channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
-                                          sync_templates: false, validate_provider_config: false)
-      channel.provider_config = channel.provider_config.merge('source' => 'embedded_signup')
-      channel.save!(validate: false)
-      expect(service(channel.inbox).prepare.error).to eq(:not_managed)
+    it 'ACCEPTS an embedded_signup WhatsApp channel (no longer managed-only): blocks routing + enqueues' do
+      inbox, _channel, setup = whatsapp_inbox(source: 'embedded_signup')
+      expect do
+        expect(service(inbox).prepare).to be_success
+      end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
+      expect(setup.reload.setup_status).to eq('blocked')
+    end
+
+    it 'ACCEPTS a legacy WhatsApp channel with NO source key and no routing row' do
+      inbox, = whatsapp_inbox(source: nil, with_setup: false)
+      expect { expect(service(inbox).prepare).to be_success }
+        .to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
     end
 
     it 'blocks routing and enqueues the deletion job WITHOUT doing the heavy delete in-request' do
@@ -227,6 +244,36 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       inbox, = managed_inbox
       expect(Whatsapp::FacebookApiClient).not_to receive(:new)
       purge(inbox)
+    end
+
+    # The crux of the generalization: an embedded_signup channel WITH live-looking creds would normally fire
+    # Channel::Whatsapp#teardown_webhooks -> a real Meta unsubscribe call. The Bloomwire delete must skip it.
+    it 'makes NO Meta call for an embedded_signup channel (webhook teardown is skipped for every source)' do
+      inbox, = whatsapp_inbox(source: 'embedded_signup', api_key: 'FAKE-KEY', waba_id: 'WABA-EMBED')
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+      purge(inbox)
+      expect(Inbox.exists?(inbox.id)).to be(false)
+    end
+
+    it 'removes a legacy inbox whose Meta assets are already gone (missing source, no creds) without failing' do
+      inbox, channel, = whatsapp_inbox(source: nil, api_key: nil, waba_id: nil, with_setup: false)
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+      expect { purge(inbox) }.not_to raise_error
+      aggregate_failures do
+        expect(Inbox.exists?(inbox.id)).to be(false)
+        expect(Channel::Whatsapp.exists?(channel.id)).to be(false)
+      end
+    end
+
+    it 'destroys an orphan-prone setup mapping keyed only by inbox_id (no orphaned routing row)' do
+      inbox, channel, = whatsapp_inbox(with_setup: false)
+      setup = create(:bloomwire_whatsapp_setup, account: account, inbox: inbox, setup_status: 'pending')
+      purge(inbox)
+      aggregate_failures do
+        expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(false)
+        expect(Inbox.exists?(inbox.id)).to be(false)
+        expect(Channel::Whatsapp.exists?(channel.id)).to be(false)
+      end
     end
 
     it 'frees the number: the local phone_number_taken guard no longer matches after removal' do

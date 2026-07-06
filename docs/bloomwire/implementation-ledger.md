@@ -314,7 +314,33 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Admin — Remove WhatsApp Inbox (managed deprovision) — `Open (product code; not merged)`
+### Universal Account-Admin "Remove inbox" (generalizes the managed-only removal) — `Open (product code; not merged)`
+- **Branch** `feature/bloomwire-universal-remove-inbox` off `version_1` `b6b5bfb` (post‑#132 merge). No schema/migration ·
+  Enterprise: unchanged (`DeleteObjectJob` audit override intact) · admin-only (`InboxPolicy#destroy?`) + account-scoping
+  preserved (cross‑tenant → 404) · NO Meta call for any source · OFF (Bloomwire master OFF) == stock.
+- **What & why:** an Account Administrator can permanently remove **any** inbox they own — WhatsApp (**any** source, incl.
+  legacy/dead), API, Web widget, Email, Facebook/Instagram, and other supported types — from the normal Inbox Settings page.
+  Unblocks deleting the dead Account‑1 WhatsApp inbox (Meta asset already removed) that pinned its phone number so it can be
+  onboarded into another account. Generalizes PR #132's managed‑only action.
+- **Backend:** the Phase 11B.5B managed/provider destroy restriction is **lifted** (`restrict_managed_provider_inbox_destroy!`
+  removed); stock `InboxesController#destroy` routes a WhatsApp delete (any source, Bloomwire mode ON) → generalized
+  Meta‑safe `Bloomwire::WhatsappInboxDeprovisionService` (block the global router, destroy **every** setup row keyed by
+  channel **or** inbox id → no orphan, batched purge), and every other type → stock `DeleteObjectJob`. New
+  `Channel::Whatsapp#skip_webhook_teardown` flag → **NO Meta call** for **any** source (incl. `embedded_signup` with
+  live‑looking creds / a legacy channel whose Meta assets are gone). New `canRemoveInbox` capability (admin && master ON).
+  Removed the now‑redundant `bloomwire/whatsapp/inboxes#destroy` endpoint/route/spec + `removeBloomwireWhatsAppInbox` store
+  action + `WhatsappChannel.deleteInbox`.
+- **Frontend:** universal `BloomwireRemoveInbox.vue` for all inbox types (name + channel type + masked phone/email +
+  permanent‑deletion warning + Cancel + Delete) → stock `inboxes/delete`; repeated clicks blocked; bounded timeout +
+  route‑leave/unmount safety.
+- **Validation (cwd `app/`):** deprovision service **31/0** (embedded_signup/legacy/no‑Meta/orphan‑free cases RED→GREEN);
+  inboxes `#destroy` **7/0** (WA→async Meta‑safe, non‑WA→`DeleteObjectJob`, OFF==stock, agent/cross‑tenant); account
+  capabilities incl. `canRemoveInbox`; backend batch **148/0**; RuboCop 0; Vitest **28/0** (component 10 + composable 18);
+  ESLint 0; `vite build` ✓; no secret in diff; no live Meta/WhatsApp call.
+- **Status:** open PR into `version_1`; awaiting GPT‑5.5 exact‑head review; not merged/deployed. DEV runtime acceptance
+  (delete dead Account‑1 inbox via UI → onboard released number into Account 21) pending post‑merge deploy.
+
+### Admin — Remove WhatsApp Inbox (managed deprovision) — `MERGED b6b5bfb (PR #132; generalized by the universal Remove inbox above)`
 - **Branch** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c`.
   No schema/migration · Enterprise: NO · stock destroy guard: UNCHANGED · global duplicate guard: UNCHANGED · webhook router: UNCHANGED · no Meta call · DEV account‑1 fixture not touched by tests.
 - **GPT‑5.5 CHANGES REQUIRED (3rd pass, reviewed `44b3e3c`) — fixed:** (1) `RecordNotFound` now gets the same

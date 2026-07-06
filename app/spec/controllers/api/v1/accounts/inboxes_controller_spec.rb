@@ -358,6 +358,55 @@ RSpec.describe 'Inboxes API', type: :request do
         expect(json_response['message']).to eq('Your inbox deletion request will be processed in some time.')
       end
 
+      context 'when Bloomwire managed mode is ON' do
+        before { allow(Bloomwire::Features).to receive(:master_enabled?).and_return(true) }
+
+        # Crux: an embedded_signup WhatsApp channel WITH creds (the factory default) would normally fire a Meta
+        # webhook teardown on destroy. The universal delete must route through the Meta-safe async deprovision.
+        it 'removes a WhatsApp inbox via the Meta-safe async deprovision (no DeleteObjectJob, no Meta call)' do
+          channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
+                                              sync_templates: false, validate_provider_config: false)
+          wa_inbox = channel.inbox
+
+          expect(DeleteObjectJob).not_to receive(:perform_later)
+          expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+          perform_enqueued_jobs(only: Bloomwire::WhatsappInboxDeprovisionJob) do
+            delete "/api/v1/accounts/#{account.id}/inboxes/#{wa_inbox.id}",
+                   headers: admin.create_new_auth_token, as: :json
+          end
+
+          expect(response).to have_http_status(:success)
+          expect(Inbox.exists?(wa_inbox.id)).to be(false)
+        end
+
+        it 'still uses the stock DeleteObjectJob for a non-WhatsApp inbox' do
+          expect(DeleteObjectJob).to receive(:perform_later).with(inbox, admin, anything).once
+          expect(Bloomwire::WhatsappInboxDeprovisionJob).not_to receive(:perform_later)
+
+          delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}",
+                 headers: admin.create_new_auth_token, as: :json
+
+          expect(response).to have_http_status(:success)
+        end
+      end
+
+      context 'when Bloomwire mode is OFF (stock)' do
+        before { allow(Bloomwire::Features).to receive(:master_enabled?).and_return(false) }
+
+        it 'uses the stock DeleteObjectJob even for a WhatsApp inbox (OFF == stock)' do
+          channel = create(:channel_whatsapp, account: account, sync_templates: false, validate_provider_config: false)
+          wa_inbox = channel.inbox
+
+          expect(DeleteObjectJob).to receive(:perform_later).with(wa_inbox, admin, anything).once
+          expect(Bloomwire::WhatsappInboxDeprovisionJob).not_to receive(:perform_later)
+
+          delete "/api/v1/accounts/#{account.id}/inboxes/#{wa_inbox.id}",
+                 headers: admin.create_new_auth_token, as: :json
+
+          expect(response).to have_http_status(:success)
+        end
+      end
+
       it 'is unable to delete inbox of another account' do
         other_account = create(:account)
         other_inbox = create(:inbox, account: other_account)

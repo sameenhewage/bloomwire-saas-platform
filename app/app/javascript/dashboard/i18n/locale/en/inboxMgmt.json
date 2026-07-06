@@ -384,21 +384,6 @@
             "INVALID_PHONE_NUMBER": "Please enter a valid WhatsApp number and try again."
           },
           "SUPPORT_REFERENCE": "Reference: {reference}",
-          "REMOVE": {
-            "ACTION": "Remove inbox",
-            "TITLE": "Remove this WhatsApp inbox?",
-            "WARNING": "If you delete this inbox, all conversations and messages related to this inbox will be permanently deleted from the Bloomwire database. This action cannot be undone.",
-            "INBOX_LABEL": "Inbox",
-            "NUMBER_LABEL": "WhatsApp number",
-            "MODE_LABEL": "Connection mode",
-            "MODE_STANDARD": "Standard (new number)",
-            "MODE_COEXISTENCE": "Coexistence (existing number)",
-            "META_NOTE": "Removing this inbox from Bloomwire does not automatically delete the phone number or WhatsApp Business Account from Meta.",
-            "CANCEL": "Cancel",
-            "CONFIRM": "Delete inbox permanently",
-            "STARTED": "WhatsApp inbox removal started. Its conversations and messages are being deleted.",
-            "ERROR": "Could not start removing this WhatsApp inbox. Please try again."
-          },
           "SUCCESS": {
             "TITLE": "WhatsApp number registered",
             "SUBTITLE": "Your WhatsApp inbox is ready to receive messages.",
@@ -709,6 +694,20 @@
       "ENABLE_HMAC": {
         "LABEL": "Enable"
       }
+    },
+    "BLOOMWIRE_REMOVE": {
+      "ACTION": "Remove inbox",
+      "SECTION_HELP": "Permanently delete this inbox and all of its conversations and messages from Bloomwire. Shared contacts, your account, and your users are kept.",
+      "TITLE": "Remove this inbox?",
+      "WARNING": "Deleting this inbox permanently removes it and all of its conversations and messages from the Bloomwire database. Shared contacts, your account, and your users are kept. This action cannot be undone.",
+      "INBOX_LABEL": "Inbox",
+      "TYPE_LABEL": "Channel",
+      "IDENTIFIER_LABEL": "Connected as",
+      "META_NOTE": "Removing a WhatsApp inbox from Bloomwire does not delete the phone number or WhatsApp Business Account from Meta, and makes no changes on Meta.",
+      "CANCEL": "Cancel",
+      "CONFIRM": "Delete inbox permanently",
+      "STARTED": "Inbox removal started. Its conversations and messages are being deleted.",
+      "ERROR": "Could not start removing this inbox. Please try again."
     },
     "DELETE": {
       "BUTTON_TEXT": "Delete",
