@@ -376,7 +376,8 @@
           "REGISTER_BUTTON": "Register WhatsApp number",
           "PROCESSING": "Registering your WhatsApp number…",
           "CANCELLED": "WhatsApp registration was cancelled.",
-          "ERROR": "We couldn’t complete WhatsApp registration. Please try again or contact Bloomwire support.",
+          "ERROR": "We couldn’t finish connecting WhatsApp. No automatic retry was performed. Please try again or contact Bloomwire support.",
+          "SUPPORT_REFERENCE": "Reference: {reference}",
           "SUCCESS": {
             "TITLE": "WhatsApp number registered",
             "SUBTITLE": "Your WhatsApp inbox is ready to receive messages.",

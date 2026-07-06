@@ -11,11 +11,29 @@ import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbe
 // renders a safe DTO with Open inbox + Inbox settings (NEVER an Add Agents step); failures show one sanitized
 // generic message.
 const dispatch = vi.fn();
+const routeLeaveGuard = vi.fn();
+const trace = vi.fn();
 vi.mock('vuex', () => ({ useStore: () => ({ dispatch }) }));
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: key => key }) }));
+vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: fn => routeLeaveGuard(fn),
+}));
 vi.mock('dashboard/composables/useWhatsappEmbeddedSignup');
+// The wizard mints its own tracer; keep it inert + observable (no real network) so trace calls never break tests.
+vi.mock(
+  'dashboard/routes/dashboard/settings/inbox/channels/whatsapp/onboardingTrace',
+  () => ({
+    createOnboardingTracer: () => ({
+      attemptId: 'att-wizard-abc123',
+      shortRef: 'att-wiza',
+      trace,
+    }),
+    shortAttemptRef: id => String(id || '').slice(0, 8),
+  })
+);
 
 const runEmbeddedSignup = vi.fn();
+const cancelEmbeddedSignup = vi.fn();
 
 const CREDS = {
   code: 'META-CODE',
@@ -37,6 +55,7 @@ const mountWizard = () => {
   useWhatsappEmbeddedSignup.mockReturnValue({
     isAuthenticating: ref(false),
     runEmbeddedSignup,
+    cancel: cancelEmbeddedSignup,
   });
   return mount(BloomwireWhatsapp, {
     global: {
@@ -89,6 +108,9 @@ const submit = async wrapper => {
 beforeEach(() => {
   dispatch.mockReset();
   runEmbeddedSignup.mockReset();
+  cancelEmbeddedSignup.mockReset();
+  trace.mockReset();
+  routeLeaveGuard.mockReset();
 });
 
 describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
@@ -183,14 +205,15 @@ describe('BloomwireWhatsapp.vue — Standard registration flow', () => {
     await startRegister(wrapper);
     await submit(wrapper);
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
+    // Only the non-secret credentials + the opaque onboarding_attempt_id correlation are sent.
     expect(dispatch).toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppEmbeddedSignup',
-      CREDS
+      { ...CREDS, onboarding_attempt_id: 'att-wizard-abc123' }
     );
     // Standard must NOT regress onto the coexistence endpoint
     expect(dispatch).not.toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup',
-      CREDS
+      expect.anything()
     );
   });
 
@@ -305,11 +328,11 @@ describe('BloomwireWhatsapp.vue — Coexistence flow (Phase 17D.3)', () => {
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup',
-      CREDS
+      { ...CREDS, onboarding_attempt_id: 'att-wizard-abc123' }
     );
     expect(dispatch).not.toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppEmbeddedSignup',
-      CREDS
+      expect.anything()
     );
   });
 
@@ -373,5 +396,157 @@ describe('BloomwireWhatsapp.vue — Coexistence flow (Phase 17D.3)', () => {
     expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
       false
     );
+  });
+});
+
+// Bounded backend create, lifecycle cleanup, retry + trace correlation (onboarding hardening).
+describe('BloomwireWhatsapp.vue — bounded create, cleanup, retry + trace', () => {
+  const events = () => trace.mock.calls.map(call => call[0]);
+
+  // (8): a create POST that stays pending is bounded and fails closed with a safe error + support reference.
+  it('bounds a pending create request and fails closed with a safe error + support reference', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockReturnValue(new Promise(() => {})); // never resolves — POST stays pending
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    vi.useFakeTimers();
+    wrapper.find('form').trigger('submit');
+    await vi.advanceTimersByTimeAsync(45000); // CREATE_REQUEST_TIMEOUT_MS
+    vi.useRealTimers();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-error"]').text()).toBe(
+      `${B}.ERROR`
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-attempt-ref"]').exists()
+    ).toBe(true);
+    expect(events()).toContain('create_request_timeout');
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      false
+    );
+  });
+
+  // (9): a 4xx create fails closed with the sanitized message (no raw status/error leaked to the user).
+  it('shows the sanitized error when the create returns 4xx', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({ response: { status: 422 } });
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    await submit(wrapper);
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-error"]').text()).toBe(
+      `${B}.ERROR`
+    );
+    expect(wrapper.html()).not.toContain('422');
+    expect(events()).toContain('create_request_failed');
+  });
+
+  // (10): a 5xx create fails closed the same way.
+  it('shows the sanitized error when the create returns 5xx', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({ response: { status: 500 } });
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    await submit(wrapper);
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-error"]').exists()).toBe(
+      true
+    );
+    expect(events()).toContain('create_request_failed');
+    expect(events()).toContain('frontend_error_transition');
+  });
+
+  // (11): a successful create transitions to success and traces the success path end-to-end.
+  it('transitions to success and traces the create success + finish', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockResolvedValue(DTO);
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    await submit(wrapper);
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      true
+    );
+    expect(events()).toEqual(
+      expect.arrayContaining([
+        'create_request_started',
+        'create_request_succeeded',
+        'frontend_success_transition',
+        'attempt_finished',
+      ])
+    );
+  });
+
+  // (12): after a failure, loading is cleared (the register button is usable again).
+  it('clears the loading state after a failure so the user can retry', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({ response: { status: 500 } });
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    await submit(wrapper);
+
+    expect(wrapper.find('.loading-state').exists()).toBe(false);
+    expect(
+      wrapper
+        .find('[data-testid="bloomwire-wa-register"]')
+        .attributes('disabled')
+    ).toBeFalsy();
+  });
+
+  // (13): component unmount cancels any in-flight signup (clears listeners/timers via the composable).
+  it('cancels the in-flight signup on component unmount', () => {
+    const wrapper = mountWizard();
+    wrapper.unmount();
+    expect(cancelEmbeddedSignup).toHaveBeenCalled();
+  });
+
+  // (14): a route change (onBeforeRouteLeave) cancels the in-flight signup.
+  it('cancels the in-flight signup on route change', () => {
+    mountWizard();
+    const guard = routeLeaveGuard.mock.calls.at(-1)[0];
+    expect(typeof guard).toBe('function');
+    guard();
+    expect(cancelEmbeddedSignup).toHaveBeenCalled();
+  });
+
+  // (15): a repeated attempt after a failure starts cleanly (prior error cleared, success renders).
+  it('starts cleanly on a repeated attempt after a failure', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch
+      .mockRejectedValueOnce({ response: { status: 500 } })
+      .mockResolvedValueOnce(DTO);
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    await submit(wrapper); // first attempt fails
+    expect(wrapper.find('[data-testid="bloomwire-wa-error"]').exists()).toBe(
+      true
+    );
+    await submit(wrapper); // retry
+    expect(wrapper.find('[data-testid="bloomwire-wa-error"]').exists()).toBe(
+      false
+    );
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      true
+    );
+  });
+
+  // (16): a double-submit does not fan out into parallel create requests. The composable's in-flight guard
+  // returns null for the second, concurrent runEmbeddedSignup() call (see the composable spec) — so only the
+  // first attempt reaches the create dispatch.
+  it('does not create parallel attempts on double submit', async () => {
+    runEmbeddedSignup.mockResolvedValueOnce(CREDS).mockResolvedValue(null);
+    dispatch.mockResolvedValue(DTO);
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    wrapper.find('form').trigger('submit');
+    wrapper.find('form').trigger('submit');
+    await flushPromises();
+    const creates = dispatch.mock.calls.filter(call =>
+      String(call[0]).includes(
+        'createBloomwireWhatsAppCoexistenceEmbeddedSignup'
+      )
+    );
+    expect(creates).toHaveLength(1);
   });
 });

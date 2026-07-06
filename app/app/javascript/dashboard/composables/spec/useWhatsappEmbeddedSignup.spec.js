@@ -280,3 +280,126 @@ describe('useWhatsappEmbeddedSignup', () => {
     );
   });
 });
+
+// Stage-A hardening: the overall watchdog (armed at launch) bounds the zero-signal / never-settling-SDK path
+// that the second-signal timer cannot; plus lifecycle cleanup (cancel) and end-to-end trace correlation.
+describe('useWhatsappEmbeddedSignup — bounded state, overall watchdog, cancel + trace', () => {
+  let signupCallback;
+  const emit = data => signupCallback(data);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.chatwootConfig = {
+      whatsappAppId: 'app-id',
+      whatsappConfigurationId: 'config-id',
+      whatsappApiVersion: 'v25.0',
+    };
+    setupFacebookSdk.mockResolvedValue();
+    createMessageHandler.mockImplementation(callback => {
+      signupCallback = callback;
+      return () => {};
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // (1)+(6): zero signals / SDK never settles → overall watchdog rejects and the spinner is cleared.
+  it('rejects via the overall watchdog when ZERO signals arrive (SDK/FB.login never settles) and clears state', async () => {
+    vi.useFakeTimers();
+    initWhatsAppEmbeddedSignup.mockReturnValue(createDeferred().promise); // FB.login never settles
+    const { runEmbeddedSignup, isAuthenticating, state } =
+      useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ overallTimeoutMs: 180000 });
+    const assertion = expect(result).rejects.toThrow('overall timeout');
+    await vi.advanceTimersByTimeAsync(180000);
+    await assertion;
+    expect(isAuthenticating.value).toBe(false);
+    expect(state.value).toBe('idle');
+  });
+
+  // (12): a failure (overall timeout) always clears loading/authentication state.
+  it('clears isAuthenticating on the overall-timeout failure path', async () => {
+    vi.useFakeTimers();
+    initWhatsAppEmbeddedSignup.mockReturnValue(createDeferred().promise);
+    const { runEmbeddedSignup, isAuthenticating } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ overallTimeoutMs: 5000 });
+    const assertion = expect(result).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(5000);
+    await assertion;
+    expect(isAuthenticating.value).toBe(false);
+  });
+
+  // (13): cancel() (component unmount / route change) settles an in-flight run and tears down listener + state.
+  it('cancel() settles an in-flight run as null, stops the spinner and removes the message listener', async () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    initWhatsAppEmbeddedSignup.mockReturnValue(createDeferred().promise);
+    const { runEmbeddedSignup, cancel, isAuthenticating } =
+      useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup();
+    await flushPromises();
+    expect(isAuthenticating.value).toBe(true);
+    cancel();
+    await expect(result).resolves.toBeNull();
+    expect(isAuthenticating.value).toBe(false);
+    expect(removeSpy).toHaveBeenCalledWith('message', expect.any(Function));
+    removeSpy.mockRestore();
+  });
+
+  // (16): an in-flight run guards against a parallel attempt (double click).
+  it('does not start a parallel attempt while one is in flight (double-click guard)', async () => {
+    initWhatsAppEmbeddedSignup.mockReturnValue(createDeferred().promise);
+    const { runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    runEmbeddedSignup();
+    await flushPromises();
+    await expect(runEmbeddedSignup()).resolves.toBeNull(); // second call is a no-op
+    expect(setupFacebookSdk).toHaveBeenCalledTimes(1);
+  });
+
+  // (17): every stage traces through ONE correlation id (the single injected tracer).
+  it('emits stage trace events through a single correlation id', async () => {
+    initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
+    const trace = vi.fn();
+    const tracer = { attemptId: 'att-corr-0001', shortRef: 'att-corr', trace };
+    const { runEmbeddedSignup, attemptId } = useWhatsappEmbeddedSignup({
+      tracer,
+    });
+    expect(attemptId).toBe('att-corr-0001');
+    const result = runEmbeddedSignup();
+    await flushPromises();
+    emit({ event: 'FINISH', data: VALID_BUSINESS });
+    await result;
+    const events = trace.mock.calls.map(call => call[0]);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        'onboarding_started',
+        'sdk_initialization_started',
+        'sdk_initialization_succeeded',
+        'meta_popup_opened',
+        'auth_callback_received',
+        'business_message_received',
+        'both_signals_received',
+      ])
+    );
+    // No sensitive value is ever passed to the tracer — only allow-listed { result, elapsedMs, ... } metadata.
+    trace.mock.calls.forEach(([, meta = {}]) => {
+      expect(
+        Object.keys(meta).every(k =>
+          ['result', 'elapsedMs', 'httpStatus', 'errorCode'].includes(k)
+        )
+      ).toBe(true);
+    });
+  });
+
+  // The non-managed (Standard) caller passes no tracer → no attempt id, no trace calls (unchanged behavior).
+  it('is silent (no attempt id) when no tracer is injected', async () => {
+    initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
+    const { runEmbeddedSignup, attemptId } = useWhatsappEmbeddedSignup();
+    expect(attemptId).toBeUndefined();
+    const result = runEmbeddedSignup();
+    await flushPromises();
+    emit({ event: 'FINISH', data: VALID_BUSINESS });
+    await expect(result).resolves.toMatchObject({ code: 'auth-code' });
+  });
+});

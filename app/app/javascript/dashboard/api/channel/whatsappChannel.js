@@ -31,6 +31,16 @@ class WhatsappChannel extends ApiClient {
     );
   }
 
+  // Structured, sanitized onboarding trace sink (managed WhatsApp / Coexistence). Sends ONLY allow-listed,
+  // non-sensitive telemetry (attempt id, event, result, elapsed_ms, http_status, error_code) to the
+  // account-scoped admin endpoint. Never sends the auth code / tokens / phone number / WABA / Meta identifiers.
+  sendOnboardingTrace(params) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_traces`,
+      params
+    );
+  }
+
   reauthorizeWhatsApp({ inboxId, ...params }) {
     return axios.post(`${this.baseUrl()}/whatsapp/authorization`, {
       ...params,

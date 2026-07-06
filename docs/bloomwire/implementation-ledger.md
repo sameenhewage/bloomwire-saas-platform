@@ -314,6 +314,27 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — `Open (product code; not merged)`
+- **Branch** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`.
+  No schema/migration · Enterprise: NO · webhook router: UNCHANGED · Standard flow: UNCHANGED · account-1 fixture untouched.
+- **Incident RCA (Part 1) — Stage A:** the customer completed the Meta flow (3 Meta webhooks 04:17–04:19 →
+  `no handoff-safe setup`, 200), but the browser received no signal that resolved `runEmbeddedSignup()`; the create
+  POST was never dispatched (0 coexistence POSTs in the current-container logs), 0 records created, and the hang was
+  indefinite → PR #127's second-signal timeout never armed. Read-only investigation; no records mutated; no retry.
+- **Fix (Part 3):** finite state (`idle/launching/waiting_for_meta/waiting_for_second_signal`) + **overall watchdog
+  armed at launch** (default 180s, covers zero-signal / never-settling SDK) + kept second-signal timer + **bounded
+  backend create** (45s). Guaranteed teardown (settle-once + `cancel()` on `onBeforeUnmount`/`onBeforeRouteLeave`)
+  clears timers/listener/`isAuthenticating`/processing on every terminal path. Failure UX: spinner stops, sanitized
+  message, support reference (short attempt id), manual Retry, no auto-retry, no partial records.
+- **Trace (Part 2):** one `onboarding_attempt_id` carried browser→controller; `Bloomwire::OnboardingTrace` writes
+  one allow-listed structured-JSON line per event to the app log (22 events); new admin-only, account-scoped,
+  feature-gated (404), rate-limited endpoint `POST …/bloomwire/whatsapp/onboarding_traces` with strict event +
+  metadata allow-list (unknown event → 422; logging failure → 204). Never logs code/token/phone/phone_number_id/
+  WABA/business/App ID/Config ID/Meta URL. Standard/native flow untraced (no-op tracer).
+- **Validation:** composable 20 · wizard 25 · trace service 9 · trace endpoint 8; WhatsApp backend regression
+  281/0; ESLint + RuboCop clean; vite build ok; no secret in diff. Runtime trace evidence deferred to Part 6
+  (post-approval deploy + owner-assisted controlled retry).
+
 ### WhatsApp channel tile intermittently disappears (deterministic-state fix) — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-whatsapp-tile-race` off `version_1` `8fabfc331b7f62d5c64197fe020e563140d3239f`.
   **Frontend-only.** Backend/DB/router/auth/config: NO · Enterprise: NO · Standard/Coexistence flows: UNCHANGED.

@@ -10,17 +10,33 @@
 // Webhook URL / API token / provider_config); it launches Meta Embedded Signup, sends only the non-secret signup
 // credentials to the dedicated Bloomwire endpoint, and renders a safe DTO on success. The registered number shown
 // is the backend/Meta source of truth (not the typed number). Failures show a single sanitized generic message.
-import { ref, computed } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { useStore } from 'vuex';
 import { useI18n } from 'vue-i18n';
+import { onBeforeRouteLeave } from 'vue-router';
 import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbeddedSignup';
+import { createOnboardingTracer } from 'dashboard/routes/dashboard/settings/inbox/channels/whatsapp/onboardingTrace';
 import Icon from 'next/icon/Icon.vue';
 import NextButton from 'next/button/Button.vue';
 import LoadingState from 'dashboard/components/widgets/LoadingState.vue';
 
+// The backend create must never leave the UI pending forever (the "POST started and stayed pending" class).
+// Bound it and fail closed with a safe recoverable error.
+const CREATE_REQUEST_TIMEOUT_MS = 45000;
+
 const store = useStore();
 const { t } = useI18n();
-const { isAuthenticating, runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+// One correlation id for this managed-onboarding attempt, shared by the signup composable (browser trace) and
+// the backend create request (controller/service trace). Only the managed flow traces; Standard/native does not.
+const tracer = createOnboardingTracer();
+const attemptId = tracer.attemptId;
+// Short, non-sensitive support reference shown to the user on failure.
+const attemptRef = tracer.shortRef;
+const {
+  isAuthenticating,
+  runEmbeddedSignup,
+  cancel: cancelEmbeddedSignup,
+} = useWhatsappEmbeddedSignup({ tracer });
 
 // 'choose' = connection-choice screen (default); 'register' = the number/connect form (shared by both flows).
 const mode = ref('choose');
@@ -136,6 +152,26 @@ const maybeRenameInbox = async () => {
   }
 };
 
+// Bounds a promise so a never-settling backend request can't hang the UI. Rejects with a tagged timeout error.
+const withTimeout = (promise, ms) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error('create request timed out');
+      error.isTimeout = true;
+      reject(error);
+    }, ms);
+    Promise.resolve(promise).then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+
 const register = async () => {
   errorMessage.value = '';
 
@@ -143,12 +179,19 @@ const register = async () => {
   try {
     credentials = await runEmbeddedSignup();
   } catch (_) {
+    // Signal-acquisition failure (SDK/one-signal/overall timeout) — the composable already traced the cause.
+    tracer.trace('frontend_error_transition', {
+      result: 'failure',
+      errorCode: 'signal_failure',
+    });
+    tracer.trace('attempt_finished', { result: 'failure' });
     errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
     return;
   }
 
-  // Resolves null when the customer dismisses the Meta popup.
+  // Resolves null when the customer dismisses the Meta popup (or the run was cancelled).
   if (!credentials) {
+    tracer.trace('attempt_finished', { result: 'cancelled' });
     errorMessage.value = t(
       'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CANCELLED'
     );
@@ -156,22 +199,65 @@ const register = async () => {
   }
 
   isProcessing.value = true;
+  const startedAt = Date.now();
+  tracer.trace('create_request_started', { result: 'started' });
   try {
     // Only the non-secret Meta signup credentials are sent — no typed number, no credentials. The Coexistence
     // flow (17D.3) posts to its own endpoint; the Standard flow is unchanged. Both return the same safe DTO.
+    // The onboarding_attempt_id correlates the browser trace with the backend controller/service trace; it is
+    // dropped from the Meta service params server-side.
     const action = isCoexistence.value
       ? 'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup'
       : 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
-    const dto = await store.dispatch(action, credentials);
+    const dto = await withTimeout(
+      store.dispatch(action, {
+        ...credentials,
+        onboarding_attempt_id: attemptId,
+      }),
+      CREATE_REQUEST_TIMEOUT_MS
+    );
     result.value = dto;
+    tracer.trace('create_request_succeeded', {
+      result: 'success',
+      httpStatus: 201,
+      elapsedMs: Date.now() - startedAt,
+    });
     await maybeRenameInbox();
-  } catch (_) {
-    // Never surface the raw server/Meta error — always the sanitized generic message.
+    tracer.trace('frontend_success_transition', { result: 'success' });
+    tracer.trace('attempt_finished', { result: 'success' });
+  } catch (error) {
+    const timedOut = Boolean(error && error.isTimeout);
+    const httpStatus = error?.response?.status;
+    tracer.trace(
+      timedOut ? 'create_request_timeout' : 'create_request_failed',
+      {
+        result: timedOut ? 'timeout' : 'failure',
+        httpStatus,
+        errorCode: timedOut
+          ? 'create_timeout'
+          : `http_${httpStatus || 'error'}`,
+        elapsedMs: Date.now() - startedAt,
+      }
+    );
+    tracer.trace('frontend_error_transition', { result: 'failure' });
+    tracer.trace('attempt_finished', { result: 'failure' });
+    // Never surface the raw server/Meta error — always the sanitized generic message (+ the support reference).
     errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
   } finally {
     isProcessing.value = false;
   }
 };
+
+// Guaranteed cleanup on unmount / route change: settle any in-flight signup run and stop every loading flag, so
+// listeners/timers/pending state can never leak past this component's lifecycle.
+const cleanupOnboarding = () => {
+  cancelEmbeddedSignup();
+  isProcessing.value = false;
+};
+onBeforeUnmount(cleanupOnboarding);
+onBeforeRouteLeave(() => {
+  cleanupOnboarding();
+});
 </script>
 
 <template>
@@ -480,13 +566,25 @@ const register = async () => {
           </p>
         </div>
 
-        <p
-          v-if="errorMessage"
-          data-testid="bloomwire-wa-error"
-          class="text-sm text-n-ruby-11 mb-4"
-        >
-          {{ errorMessage }}
-        </p>
+        <div v-if="errorMessage" class="mb-4">
+          <p data-testid="bloomwire-wa-error" class="text-sm text-n-ruby-11">
+            {{ errorMessage }}
+          </p>
+          <p
+            v-if="attemptRef"
+            data-testid="bloomwire-wa-attempt-ref"
+            class="text-xs text-n-slate-10 mt-1"
+          >
+            {{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.SUPPORT_REFERENCE',
+                {
+                  reference: attemptRef,
+                }
+              )
+            }}
+          </p>
+        </div>
 
         <div class="flex mt-2">
           <NextButton

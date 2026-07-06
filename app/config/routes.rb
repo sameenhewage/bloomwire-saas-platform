@@ -354,6 +354,9 @@ Rails.application.routes.draw do
             namespace :whatsapp do
               resource :embedded_signup, only: [:create]
               resource :coexistence_embedded_signup, only: [:create]
+              # Structured, sanitized browser onboarding trace sink. Admin-only; inert (404) unless managed
+              # WhatsApp self-serve is active. Allow-listed events/metadata only; writes to the app log.
+              resources :onboarding_traces, only: [:create]
             end
             # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
             # BLOOMWIRE_CATEGORY_ADMIN_UI feature is enabled. Safe DTO only; no writes; no schema; account-scoped.
