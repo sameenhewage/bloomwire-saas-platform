@@ -12,6 +12,10 @@ RSpec.describe 'Bloomwire WhatsApp onboarding trace endpoint', type: :request do
     { onboarding_attempt_id: 'att-abc-123456', event: 'onboarding_started', result: 'started', elapsed_ms: 10 }
   end
 
+  # The GlobalConfig cache (Redis) is not rolled back between examples the way the DB is, so a prior example can
+  # leave a Bloomwire flag cached ON. Start every example from a clean cache → the "stock/off" default is honoured.
+  before { GlobalConfig.clear_cache }
+
   def enable_managed_mode
     bw_set_config('BLOOMWIRE_MODE_ENABLED', true)
     bw_set_config('BLOOMWIRE_PRIVACY_HARDENING', true)
