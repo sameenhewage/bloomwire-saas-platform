@@ -17,6 +17,7 @@ import DuplicateInboxBanner from './channels/instagram/DuplicateInboxBanner.vue'
 import MicrosoftReauthorize from './channels/microsoft/Reauthorize.vue';
 import GoogleReauthorize from './channels/google/Reauthorize.vue';
 import WhatsappReauthorize from './channels/whatsapp/Reauthorize.vue';
+import BloomwireRemoveWhatsappInbox from './channels/BloomwireRemoveWhatsappInbox.vue';
 import InboxHealthAPI from 'dashboard/api/inboxHealth';
 import PreChatFormSettings from './PreChatForm/Settings.vue';
 import WeeklyAvailability from './components/WeeklyAvailability.vue';
@@ -69,6 +70,7 @@ export default {
     InstagramReauthorize,
     TiktokReauthorize,
     WhatsappReauthorize,
+    BloomwireRemoveWhatsappInbox,
     DuplicateInboxBanner,
     Editor,
     Avatar,
@@ -128,11 +130,21 @@ export default {
   computed: {
     ...mapGetters({
       accountId: 'getCurrentAccountId',
+      currentRole: 'getCurrentRole',
       isFeatureEnabledonAccount: 'accounts/isFeatureEnabledonAccount',
       isOnChatwootCloud: 'globalConfig/isOnChatwootCloud',
       uiFlags: 'inboxes/getUIFlags',
       portals: 'portals/allPortals',
     }),
+    // Admin-only "Remove WhatsApp Inbox" action, shown only for a Bloomwire-managed WhatsApp Cloud inbox. The
+    // deprovision endpoint is admin + account scoped server-side; this is a UX gate on top of that.
+    canRemoveManagedWhatsappInbox() {
+      return (
+        this.currentRole === 'administrator' &&
+        this.isAWhatsAppCloudChannel &&
+        this.inbox.provider_config?.source === 'bloomwire_managed'
+      );
+    },
     isInboundEmailEnabled() {
       return this.isFeatureEnabledonAccount(
         this.accountId,
@@ -437,6 +449,10 @@ export default {
     this.fetchSharedData();
   },
   methods: {
+    // After a managed WhatsApp inbox is deprovisioned, leave the (now-deleted) inbox settings for the inbox list.
+    onManagedWhatsappInboxRemoved() {
+      this.$router.replace({ name: 'settings_inbox_list' });
+    },
     async copyWebhookSecret(value) {
       await copyTextToClipboard(value);
       useAlert(
@@ -859,6 +875,21 @@ export default {
                 type="text"
                 disabled
                 class="!mb-0"
+              />
+            </SettingsFieldSection>
+
+            <SettingsFieldSection
+              v-if="canRemoveManagedWhatsappInbox"
+              :label="
+                $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.ACTION')
+              "
+              :help-text="
+                $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.META_NOTE')
+              "
+            >
+              <BloomwireRemoveWhatsappInbox
+                :inbox="inbox"
+                @removed="onManagedWhatsappInboxRemoved"
               />
             </SettingsFieldSection>
 

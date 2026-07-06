@@ -15,6 +15,39 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Admin — Remove WhatsApp Inbox (managed deprovision) — OPEN (product code; not merged)
+- **Branch:** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c` (post‑#131 merge SHA).
+- **Why:** in managed mode, account admins cannot remove a WhatsApp inbox — the stock `InboxesController#destroy`
+  is blocked by `restrict_managed_provider_inbox_destroy!` (403). This adds a dedicated, admin-facing deprovision.
+- **Backend — dedicated deprovision service** (`Bloomwire::WhatsappInboxDeprovisionService`) + endpoint
+  `DELETE …/bloomwire/whatsapp/inboxes/:id` (admin-only, account-scoped, feature-gated 404). It does **not** weaken
+  the stock destroy guard. Sequence: (1) **block routing first** — `Bloomwire::WhatsappSetup.setup_status ->
+  'blocked'`, committed immediately (the global router only routes `ready_for_webhook`); (2) **destroy the setup
+  mapping** explicitly (it has no dependent cleanup and would otherwise orphan); (3) **destroy the inbox**, which
+  cascades conversations/messages/contact_inboxes/inbox_members/reporting_events/webhooks + the `Channel::Whatsapp`
+  (`dependent: :destroy`). Shared **Contact records are preserved** (only ContactInbox joins go). **Idempotent**
+  (repeat → 404). **Meta boundary:** only `provider_config['source'] == 'bloomwire_managed'` channels are
+  deprovisioned, so `Channel::Whatsapp#teardown_webhooks` (a Meta unsubscribe, `embedded_signup`-only) **never
+  fires** — no WABA delete, no number deregister, no Meta call. Sanitized audit log (internal ids only). After
+  removal the local `phone_number_taken` guard no longer matches (number freed); the global uniqueness guard is
+  unchanged.
+- **Frontend:** an admin-only "Remove inbox" action on the WhatsApp inbox settings page opens a destructive
+  confirmation modal (title, irreversible warning, inbox name, **masked** phone number (last 4 only), connection
+  mode Standard/Coexistence, the Meta-boundary note, Cancel + red "Delete inbox permanently"); repeated clicks
+  disabled while deleting; safe success/failure alerts; on success it returns to the inbox list. Never renders the
+  full number, phone_number_id, WABA id, or credentials.
+- **Not changed / safety:** stock destroy guard; the global duplicate-number guard; the webhook router resolution;
+  Enterprise. No Meta call; shared Contacts + other inboxes/tenant data untouched; the DEV account‑1 fixture is not
+  deleted by tests (each test builds its own account/inbox).
+- **TDD:** service `whatsapp_inbox_deprovision_service_spec` **11** (cross-account/not-whatsapp/not-managed refusals;
+  destroys inbox+channel+setup no orphans; conversations/messages/contact_inboxes deleted; shared Contact preserved;
+  unrelated data untouched; router stops resolving; no Meta call; idempotent; number freed); request
+  `inboxes_spec` **6** (feature-off 404; admin removes; agent 403; cross-tenant 404; idempotent 404; no-secret
+  response); component `BloomwireRemoveWhatsappInbox.spec` **8** (action shown; warning/name/mode; masked number
+  only; Coexistence mode; cancel = no writes; confirm dispatches + emits; safe error; repeated-click guard). Full
+  WhatsApp backend regression **492 examples, 0 failures** (1 pending); FE `57` (removal 8 + wizard 45 + api 4);
+  ESLint + RuboCop + vite build clean; `git diff --check` clean; no secret in diff.
+
 ### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a` (current deployed SHA).
 - **GPT‑5.5 CHANGES REQUIRED (reviewed `fb77e55`) — 3 items fixed:**

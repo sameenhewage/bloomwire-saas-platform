@@ -384,6 +384,21 @@
             "INVALID_PHONE_NUMBER": "Please enter a valid WhatsApp number and try again."
           },
           "SUPPORT_REFERENCE": "Reference: {reference}",
+          "REMOVE": {
+            "ACTION": "Remove inbox",
+            "TITLE": "Remove this WhatsApp inbox?",
+            "WARNING": "If you delete this inbox, all conversations and messages related to this inbox will be permanently deleted from the Bloomwire database. This action cannot be undone.",
+            "INBOX_LABEL": "Inbox",
+            "NUMBER_LABEL": "WhatsApp number",
+            "MODE_LABEL": "Connection mode",
+            "MODE_STANDARD": "Standard (new number)",
+            "MODE_COEXISTENCE": "Coexistence (existing number)",
+            "META_NOTE": "Removing this inbox from Bloomwire does not automatically delete the phone number or WhatsApp Business Account from Meta.",
+            "CANCEL": "Cancel",
+            "CONFIRM": "Delete inbox permanently",
+            "SUCCESS": "WhatsApp inbox removed.",
+            "ERROR": "Could not remove this WhatsApp inbox. Please try again."
+          },
           "SUCCESS": {
             "TITLE": "WhatsApp number registered",
             "SUBTITLE": "Your WhatsApp inbox is ready to receive messages.",

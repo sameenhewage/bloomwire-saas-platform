@@ -80,6 +80,29 @@
 
 ## C. Session journal  *(newest first — prepend new entries)*
 
+### 2026-07-06 — Admin "Remove WhatsApp Inbox" (managed deprovision) (product code; open branch; NOT merged)
+- **Context:** PR #131 was GPT‑5.5 approved at `9498ce7`, merged to `version_1` (merge `a6b26e8`) and deployed to DEV
+  (Rails+Sidekiq `a6b26e8`, health 200/200, no pending migrations, no new 5xx, Postgres/Redis preserved, account‑1
+  1/1, account‑21 0/0/0; backend already-connected detection + served bundle verified — the authenticated
+  browser-visual smoke is blocked on missing DEV admin creds). This feature is the **separate** focused PR started
+  after that merge.
+- **Why:** managed-mode admins cannot delete a WhatsApp inbox (stock destroy → 403 via
+  `restrict_managed_provider_inbox_destroy!`). Adds a dedicated deprovision that does NOT weaken that guard.
+- **Backend:** `Bloomwire::WhatsappInboxDeprovisionService` + `DELETE …/bloomwire/whatsapp/inboxes/:id` (admin-only,
+  account-scoped, feature-gated 404). Block routing (`setup_status -> 'blocked'`, committed) → destroy the setup
+  mapping (else orphaned) → destroy the inbox (cascades conversations/messages/contact_inboxes/members/reporting/
+  webhooks + `Channel::Whatsapp`). Shared Contacts preserved. Idempotent (repeat → 404). Meta-safe: only
+  `source: bloomwire_managed` channels → `teardown_webhooks` never fires. Sanitized audit; frees the local
+  `phone_number_taken` guard.
+- **Frontend:** admin-only "Remove inbox" action on the inbox settings page → destructive modal (title, irreversible
+  warning, name, MASKED number last-4, Standard/Coexistence mode, Meta-boundary note, Cancel + red Delete); disables
+  repeat clicks; safe alerts; returns to the inbox list. No full number / pnid / WABA / credential rendered.
+- **Validation:** service 11 · request 6 · component 8; full WhatsApp backend regression **492/0** (1 pending); FE 57
+  (removal 8 + wizard 45 + api 4); ESLint + RuboCop + vite build clean; no secret in diff. No schema/migration; stock
+  destroy guard + global duplicate guard + router + Enterprise untouched; no Meta call; DEV account‑1 fixture not
+  touched by tests. Branch `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8`; open PR — do not merge
+  (awaiting GPT‑5.5 exact-head review).
+
 ### 2026-07-06 — Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering (product code; open branch; NOT merged)
 - **GPT‑5.5 CHANGES REQUIRED (reviewed `fb77e55`) — 3 items fixed:** (1) **lifecycle-safe bounded preflight** —
   `attemptSeq`/`seq` + timer/abort reset established BEFORE the first await; bounded (8s) + `AbortController` (signal
