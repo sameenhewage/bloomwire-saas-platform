@@ -317,14 +317,19 @@
 ### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`.
   No schema/migration · Enterprise: NO · webhook router: UNCHANGED · Standard flow: UNCHANGED · account-1 fixture untouched.
+- **Current exact-head validation (head `181d34ecabb67f01c929281739548ecaad11f960`):** composable **20** · wizard **32** ·
+  trace service **8** · trace endpoint **25** · WhatsApp backend regression **314 examples, 0 failures** · CI **8/8 green** ·
+  unresolved review threads **0**. ESLint + RuboCop + vite build clean; `git diff --check` clean; no secret in diff.
+  **PR remains unmerged and undeployed.** (The per-pass counts below are historical snapshots for each earlier review head.)
 - **GPT‑5.5 CHANGES REQUIRED (reviewed `5d4f763`) — 4 findings fixed:** (1) tracer created **only for Coexistence**
   (per attempt); Standard/native = no-op tracer (no attempt id / no trace / no endpoint / not `mode=coexistence`);
   (2) **fresh attempt id + support ref per attempt** (minted at attempt start, not mount; retry → new id end-to-end);
   (3) **lifecycle-safe create** — cancellable timer + `AbortController` (signal store→API→axios) cleared/aborted on
   success/failure/route-leave/unmount/retry + a per-attempt **stale guard** so a late response can't mutate
   UI/store/trace; (4) trace endpoint **rejects (4xx, no log)** any non-allow-listed/sensitive top-level key (raw-body
-  check before strong-params); unknown event → 422; logging failure → 204. Re-validated: composable 20 · wizard 29 ·
-  trace service 8 · trace endpoint 25; WhatsApp backend **314/0**; ESLint/RuboCop/build clean; no secret in diff.
+  check before strong-params); unknown event → 422; logging failure → 204. Suite after this first fix pass (historical
+  snapshot; superseded — see the current exact-head line above): composable 20 · wizard 29 · trace service 8 · trace
+  endpoint 25; WhatsApp backend **314/0**; ESLint/RuboCop/build clean; no secret in diff.
 - **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `4d041b5`) — double-submit attempt ownership fixed:** `register()`
   mutated attempt state (tracer/id/support-ref/`attemptSeq`/`AbortController`/timer) **before** the composable in-flight
   guard, so a rapid second click could mint a second id and supersede/abort the first valid attempt. Fix: a wizard-owned
@@ -347,7 +352,9 @@
   feature-gated (404), rate-limited endpoint `POST …/bloomwire/whatsapp/onboarding_traces` with strict event +
   metadata allow-list (unknown event → 422; logging failure → 204). Never logs code/token/phone/phone_number_id/
   WABA/business/App ID/Config ID/Meta URL. Standard/native flow untraced (no-op tracer).
-- **Validation:** composable 20 · wizard 25 · trace service 8 · trace endpoint 8; WhatsApp backend regression
+- **Initial validation (HISTORICAL snapshot at first push; superseded — current exact-head counts are in the
+  "Current exact-head validation" line above: composable 20 · wizard 32 · trace service 8 · trace endpoint 25 ·
+  backend 314/0):** composable 20 · wizard 25 · trace service 8 · trace endpoint 8; WhatsApp backend regression
   281/0; ESLint + RuboCop clean; vite build ok; no secret in diff. Runtime trace evidence deferred to Part 6
   (post-approval deploy + owner-assisted controlled retry).
 

@@ -33,9 +33,10 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
      and returns **4xx with no log** for ANY non-allow-listed top-level key (unknown or sensitive:
      `code/auth_code/access_token/token/phone/phone_number/phone_number_id/waba_id/business_id/app_id/configuration_id/url/query/message/metadata/...`);
      unknown event → 422; a logging-infra failure for an otherwise-valid request still returns 204.
-  - Re-validated: composable **20**, wizard **29**, trace service **8**, trace endpoint **25** (incl. per-sensitive-key
+  - Suite after this first fix pass (historical snapshot; superseded — see the **Current exact-head validation** line
+    below): composable **20**, wizard **29**, trace service **8**, trace endpoint **25** (incl. per-sensitive-key
     rejection), WhatsApp backend regression **314/0**; ESLint + RuboCop + vite build clean; no migration/schema; no
-    Standard/router/Enterprise change beyond restoring Standard; no Meta retry; no record mutation. New head pending push.
+    Standard/router/Enterprise change beyond restoring Standard; no Meta retry; no record mutation.
 - **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `4d041b5`) — remaining blocker fixed: double-submit attempt ownership.**
   `register()` mutated attempt state (tracer / attempt id / support reference / `attemptSeq` / `AbortController` /
   timer) **before** the composable's in-flight guard, so a rapid second click could mint a second id, bump `attemptSeq`,
@@ -46,8 +47,12 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   active attempt, no support-reference change. Manual retry after a terminal failure still mints a fresh id. Wizard spec
   now **32** (added: no-op during signup — one tracer/id/signup/no-abort; support-ref unchanged; no-op during
   creating_inbox — form hidden + one POST; retry → new id; RED-proven: without the guard a double-submit mints 2
-  tracers). Standard flow unchanged. Re-validated: composable **20** · wizard **32** · trace service **8** · trace
-  endpoint **25**; WhatsApp backend **314/0**; ESLint + vite build clean; no secret in diff; no migration; no Meta retry.
+  tracers). Standard flow unchanged.
+- **Current exact-head validation (head `181d34ecabb67f01c929281739548ecaad11f960`):** composable **20** · wizard
+  **32** · trace service **8** · trace endpoint **25** · WhatsApp backend regression **314 examples, 0 failures** ·
+  CI **8/8 green** · unresolved review threads **0**. ESLint + RuboCop + vite build clean; `git diff --check` clean;
+  no secret in diff; no migration/schema; no webhook-router change; no Enterprise change; Standard flow unchanged;
+  no Meta retry; no account/Inbox/Channel/WhatsappSetup mutation. **PR remains unmerged and undeployed.**
 - **Incident (Part 1, evidence-based classification): Stage A** — during a live Coexistence attempt the customer
   completed the Meta flow (3 Meta webhooks at 04:17–04:19 today → `[BLOOMWIRE ROUTER] no handoff-safe setup`,
   `200 OK`), but the **browser received no signal that resolved `runEmbeddedSignup()`** → the create POST was
@@ -76,7 +81,9 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 - **Not changed:** backend authorization; the global webhook router; the coexistence service's Meta/DB behavior;
   Standard flow; Enterprise; **no schema/migration** (trace → app log, not a DB table); account-1 fixture. No Meta
   onboarding retried; no records mutated during investigation.
-- **TDD:** composable `useWhatsappEmbeddedSignup.spec.js` **20** (overall watchdog / zero-signal, second-signal,
+- **TDD — initial validation (HISTORICAL snapshot at first push; superseded by the two review-fix passes above —
+  see the current exact-head counts: composable 20 · wizard 32 · trace service 8 · trace endpoint 25 · backend 314/0):**
+  composable `useWhatsappEmbeddedSignup.spec.js` **20** (overall watchdog / zero-signal, second-signal,
   either-order, duplicate→one, SDK-never-settles, cancel/unmount, double-click guard, trace correlation);
   wizard `BloomwireWhatsapp.spec.js` **25** (create timeout, 4xx, 5xx, success transition, failure clears loading,
   unmount + route-change cleanup, repeated attempt, no-parallel, attempt-ref); `onboarding_trace_spec` **9**
