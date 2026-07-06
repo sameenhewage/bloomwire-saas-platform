@@ -81,7 +81,17 @@
 ## C. Session journal  *(newest first — prepend new entries)*
 
 ### 2026-07-06 — Admin "Remove WhatsApp Inbox" (managed deprovision) (product code; open branch; NOT merged)
-- **GPT‑5.5 CHANGES REQUIRED (reviewed `cecac65`) — fixed:** (1–4) heavy purge moved OUT of the request into a
+- **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `2a96f49`) — fixed:** (1) `.purge!` no longer swallows
+  `RecordNotDestroyed` — a surviving inbox logs a sanitized `removal_failed` and RE-RAISES for Sidekiq retry (only a
+  fresh `Inbox.exists?`=false counts as idempotent success); the `RecordNotFound` race stays a safe no-op. (2–3)
+  `#prepare` verifies `perform_later` acceptance (false / not-`successfully_enqueued?` / raised → confirmed failure),
+  **restores the prior routeable status** on failure (deterministic) and returns `:enqueue_failed` → controller
+  **503** (retriable); 202 only for a confirmed-accepted job. (4) sanitized `removal_started`/`removal_succeeded`/
+  `removal_failed` audit events. (5) Settings-level gate test (`canRemoveManagedWhatsappInbox`: capability OFF hides,
+  ON+managed cloud shows). (6) real 15s timeout-abort FE test. Re-validated: service 24 · job 1 · request 8 ·
+  component 11 · settings-gate 4; full WhatsApp backend regression **490/0** (1 pending); FE 64; ESLint + RuboCop +
+  vite build clean; no secret in diff. New head pending push; awaiting fresh GPT‑5.5 exact-head review.
+- **GPT‑5.5 CHANGES REQUIRED (1st pass, reviewed `cecac65`) — fixed:** (1–4) heavy purge moved OUT of the request into a
   dedicated idempotent job (`Bloomwire::WhatsappInboxDeprovisionJob`); the request `#prepare` now authorizes/verifies,
   blocks routing, enqueues, and returns **202 `removal_started`**; `.purge!` re-verifies state each run, uses **no
   single giant transaction** (batched per-record destroy!), and is concurrency/retry/idempotency-safe (no-op when

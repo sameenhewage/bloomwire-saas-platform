@@ -75,6 +75,18 @@ RSpec.describe 'Bloomwire admin Remove WhatsApp Inbox endpoint', type: :request 
       end
     end
 
+    it 'returns 503 (retriable) and restores routing when the enqueue is not accepted' do
+      inbox, _channel, setup = managed_inbox(on: account)
+      allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_return(false)
+
+      delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:service_unavailable)
+      expect(response.parsed_body['code']).to eq('enqueue_failed')
+      expect(setup.reload.setup_status).to eq('ready_for_webhook') # deterministic: routing restored
+      expect(Inbox.exists?(inbox.id)).to be(true)
+    end
+
     it 'forbids an agent (403) and enqueues nothing' do
       inbox, = managed_inbox(on: account)
       expect do

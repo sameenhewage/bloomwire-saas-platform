@@ -65,6 +65,59 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       expect(setup.reload.setup_status).to eq('blocked')
       expect(Inbox.exists?(inbox.id)).to be(true)
     end
+
+    it 'emits a sanitized removal_started audit event on a successful prepare' do
+      inbox, channel, = managed_inbox
+      allow(Rails.logger).to receive(:info)
+      service(inbox).prepare
+      expect(Rails.logger).to have_received(:info)
+        .with("[BLOOMWIRE WA DEPROVISION] removal_started account=#{account.id} inbox=#{inbox.id} " \
+              "channel=#{channel.id} actor=#{admin.id}")
+    end
+
+    describe 'enqueue acceptance (findings 2 & 3)' do
+      # A `perform_later` that returns false (a halted enqueue callback) is a confirmed failure.
+      it 'returns :enqueue_failed and RESTORES prior routing when perform_later returns false' do
+        inbox, _channel, setup = managed_inbox
+        allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_return(false)
+
+        expect(service(inbox).prepare.error).to eq(:enqueue_failed)
+        expect(setup.reload.setup_status).to eq('ready_for_webhook') # deterministic: routing restored
+        expect(Inbox.exists?(inbox.id)).to be(true)
+      end
+
+      # A returned job that was not accepted by the adapter (successfully_enqueued? == false) is also a failure.
+      it 'returns :enqueue_failed when the job was not successfully enqueued' do
+        inbox, _channel, setup = managed_inbox
+        unenqueued = Bloomwire::WhatsappInboxDeprovisionJob.new
+        allow(unenqueued).to receive(:successfully_enqueued?).and_return(false)
+        allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_return(unenqueued)
+
+        expect(service(inbox).prepare.error).to eq(:enqueue_failed)
+        expect(setup.reload.setup_status).to eq('ready_for_webhook')
+      end
+
+      # A RAISED enqueue (adapter/broker down) is a confirmed failure, not a 202.
+      it 'returns :enqueue_failed and restores routing when perform_later raises' do
+        inbox, _channel, setup = managed_inbox
+        allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_raise(StandardError, 'broker down')
+
+        expect(service(inbox).prepare.error).to eq(:enqueue_failed)
+        expect(setup.reload.setup_status).to eq('ready_for_webhook')
+      end
+
+      it 'allows a successful manual retry after an enqueue failure' do
+        inbox, _channel, setup = managed_inbox
+        allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_return(false)
+        expect(service(inbox).prepare.error).to eq(:enqueue_failed)
+
+        allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_call_original
+        expect do
+          expect(service(inbox).prepare).to be_success
+        end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
+        expect(setup.reload.setup_status).to eq('blocked')
+      end
+    end
   end
 
   describe '.purge! (async deletion)' do
@@ -168,6 +221,15 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       expect(Inbox.exists?(inbox.id)).to be(false)
     end
 
+    it 'emits a sanitized removal_succeeded audit event when the purge completes' do
+      inbox, channel, = managed_inbox
+      allow(Rails.logger).to receive(:info)
+      purge(inbox)
+      expect(Rails.logger).to have_received(:info)
+        .with("[BLOOMWIRE WA DEPROVISION] removal_succeeded account=#{account.id} inbox=#{inbox.id} " \
+              "channel=#{channel.id} actor=#{admin.id}")
+    end
+
     it 'swallows a concurrent-delete race (RecordNotFound) so a duplicate job does not fail' do
       inbox, = managed_inbox
       allow(Inbox).to receive(:find_by).and_call_original
@@ -176,12 +238,41 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       expect { purge(inbox) }.not_to raise_error
     end
 
-    it 'lets an UNEXPECTED error propagate so Sidekiq retries the job' do
+    # (finding 1) RED->GREEN: a RecordNotDestroyed while the inbox STILL EXISTS must NOT be marked successful — it is
+    # logged (sanitized) and re-raised so Sidekiq retries.
+    it 'RE-RAISES RecordNotDestroyed (and logs removal_failed) when the inbox survives' do
+      inbox, = managed_inbox
+      allow(Rails.logger).to receive(:warn)
+      allow(Inbox).to receive(:find_by).and_call_original
+      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
+      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotDestroyed.new(inbox))
+
+      expect { purge(inbox) }.to raise_error(ActiveRecord::RecordNotDestroyed)
+      expect(Inbox.exists?(inbox.id)).to be(true) # not falsely removed
+      expect(Rails.logger).to have_received(:warn)
+        .with(/removal_failed .*reason=ActiveRecord::RecordNotDestroyed/)
+    end
+
+    # If a fresh DB check proves the inbox is genuinely gone, a trailing RecordNotDestroyed is idempotent success.
+    it 'treats RecordNotDestroyed as a no-op only when a fresh DB check proves the inbox is gone' do
       inbox, = managed_inbox
       allow(Inbox).to receive(:find_by).and_call_original
       allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
+      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotDestroyed.new(inbox))
+      allow(Inbox).to receive(:exists?).with(inbox.id).and_return(false) # fresh check: already gone
+
+      expect { purge(inbox) }.not_to raise_error
+    end
+
+    it 'logs removal_failed and re-raises an UNEXPECTED error so Sidekiq retries the job' do
+      inbox, = managed_inbox
+      allow(Rails.logger).to receive(:warn)
+      allow(Inbox).to receive(:find_by).and_call_original
+      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
       allow(inbox).to receive(:destroy!).and_raise(StandardError, 'db down')
+
       expect { purge(inbox) }.to raise_error(StandardError, 'db down')
+      expect(Rails.logger).to have_received(:warn).with(/removal_failed .*reason=StandardError/)
     end
   end
 end

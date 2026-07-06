@@ -26,10 +26,14 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::InboxesController < Api::V1::Accou
     ).prepare
 
     if result.success?
-      # 202: routing is blocked and the deletion has been enqueued; the heavy purge completes asynchronously.
+      # 202: routing is blocked and the deletion job was accepted; the heavy purge completes asynchronously.
       render json: { status: 'removal_started' }, status: :accepted
     elsif result.error == :not_found
       render_gone
+    elsif result.error == :enqueue_failed
+      # The job was NOT accepted; routing has been restored to its prior state. Safe to retry.
+      render json: { error: 'Could not start removal right now. Please try again.', code: 'enqueue_failed' },
+             status: :service_unavailable
     else
       render json: { error: SAFE_ERRORS.fetch(result.error, 'Could not remove this inbox.'), code: result.error },
              status: :unprocessable_entity

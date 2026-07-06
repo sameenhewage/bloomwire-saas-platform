@@ -180,6 +180,29 @@ it('does not alert or emit if unmounted while the request is pending', async () 
   expect(alertSpy).not.toHaveBeenCalled();
 });
 
+// (finding 6) the 15s bound: on timeout the AbortController aborts the request and the safe error is surfaced.
+it('aborts the request after the 15s timeout and surfaces the safe error (no hang)', async () => {
+  dispatch.mockImplementation(
+    (action, payload) =>
+      new Promise((_resolve, reject) => {
+        payload.signal?.addEventListener('abort', () =>
+          reject(
+            Object.assign(new Error('canceled'), { name: 'CanceledError' })
+          )
+        );
+      })
+  );
+  const wrapper = mountComp();
+  await openModal(wrapper);
+  vi.useFakeTimers();
+  find(wrapper, 'bloomwire-remove-wa-confirm').trigger('click');
+  await vi.advanceTimersByTimeAsync(15000); // REMOVE_REQUEST_TIMEOUT_MS -> abort -> reject
+  vi.useRealTimers();
+  await flushPromises();
+  expect(alertSpy).toHaveBeenCalledWith(`${R}.ERROR`);
+  expect(wrapper.emitted('removed')).toBeFalsy();
+});
+
 it('shows a safe error alert and does not emit removed on failure', async () => {
   dispatch.mockRejectedValue({ response: { status: 422 } });
   const wrapper = mountComp();

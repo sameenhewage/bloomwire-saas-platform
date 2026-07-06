@@ -17,7 +17,24 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ### Admin — Remove WhatsApp Inbox (managed deprovision) — OPEN (product code; not merged)
 - **Branch:** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c` (post‑#131 merge SHA).
-- **GPT‑5.5 CHANGES REQUIRED (reviewed `cecac65`) — fixed:**
+- **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `2a96f49`) — fixed:**
+  1. **`RecordNotDestroyed` no longer swallowed.** `.purge!` keeps the safe `RecordNotFound` race no-op, but a
+     `RecordNotDestroyed` (e.g. a halted destroy callback) is treated as success ONLY if a fresh `Inbox.exists?`
+     check proves the inbox is gone; otherwise it logs a sanitized `removal_failed` and **re-raises for Sidekiq
+     retry** (RED→GREEN spec: surviving inbox propagates + is not marked successful).
+  2–3. **Enqueue acceptance verified + deterministic routing.** `#prepare` now checks `perform_later` acceptance
+     (`false` / not-`successfully_enqueued?` / raised → confirmed failure); on failure it **restores the prior
+     routeable status** (deterministic — nothing deleted, fully routeable again) and returns `:enqueue_failed`
+     (controller → **503**, retriable). Success returns 202 only for a confirmed-accepted job. Tests cover
+     false/un-enqueued/raised enqueue + the successful manual retry.
+  4. **Sanitized audit events** `removal_started` (prepare), `removal_succeeded` (purge done), `removal_failed`
+     (purge error, warn) — internal ids/actor/error-class only.
+  5. **Settings-level gate test** — `Settings.vue#canRemoveManagedWhatsappInbox` proven: capability OFF hides the
+     action; capability ON + managed WhatsApp Cloud shows it (+ non-cloud / non-managed hidden).
+  6. **Real 15s timeout-abort test** — advancing the timer aborts the request and surfaces the safe error (no hang).
+  - Re-validated: service 24 · job 1 · request 8 · component 11 · settings-gate 4; full WhatsApp backend regression
+    **490/0** (1 pending); FE 64; ESLint + RuboCop + vite build clean; no secret in diff.
+- **GPT‑5.5 CHANGES REQUIRED (1st pass, reviewed `cecac65`) — fixed:**
   1–4. **Async, retry-safe deletion.** The heavy purge moved OUT of the request into a dedicated idempotent
      background job (`Bloomwire::WhatsappInboxDeprovisionJob`). The request path is now short — `#prepare`:
      authorize/verify account+source, **block routing** (`setup_status -> 'blocked'`, committed), **enqueue**, and
