@@ -5,7 +5,8 @@
 // routing, removes setup/inbox/channel + owned data, preserves shared Contacts, and makes no Meta call). Repeated
 // clicks are disabled while deleting; success/failure is surfaced via a safe alert. Never renders the full number,
 // phone_number_id, WABA id, or any credential.
-import { ref, computed } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import { useStore } from 'vuex';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
@@ -14,13 +15,41 @@ import NextButton from 'next/button/Button.vue';
 const props = defineProps({
   inbox: { type: Object, required: true },
 });
+
 const emit = defineEmits(['removed']);
+
+// The removal request only enqueues the async deletion, but must never leave the UI pending forever — bound it and
+// abort on unmount / route change.
+const REMOVE_REQUEST_TIMEOUT_MS = 15000;
 
 const store = useStore();
 const { t } = useI18n();
 
 const showConfirm = ref(false);
 const isDeleting = ref(false);
+
+// Bounded, abortable request lifecycle: a cancellable timer + an AbortController + a left-flow flag so a late
+// response after unmount / route change never fires an alert, emits, or flips loading state.
+let deleteAbort = null;
+let deleteTimer = null;
+let leftFlow = false;
+
+const clearDeleteTimer = () => {
+  if (deleteTimer) {
+    clearTimeout(deleteTimer);
+    deleteTimer = null;
+  }
+};
+const abortDelete = () => {
+  if (deleteAbort) {
+    try {
+      deleteAbort.abort();
+    } catch (_) {
+      // AbortController unavailable in some very old runtimes — safe to ignore.
+    }
+    deleteAbort = null;
+  }
+};
 
 // Mask to the last 4 digits only — never show the full number.
 const maskedNumber = computed(() => {
@@ -45,23 +74,45 @@ const closeConfirm = () => {
 };
 
 const confirmRemove = async () => {
-  if (isDeleting.value) return; // disable repeated clicks while deletion runs
+  if (isDeleting.value) return; // disable repeated clicks while the request is in flight
   isDeleting.value = true;
+  clearDeleteTimer();
+  abortDelete();
+  deleteAbort =
+    typeof AbortController !== 'undefined' ? new AbortController() : null;
+  deleteTimer = setTimeout(abortDelete, REMOVE_REQUEST_TIMEOUT_MS);
+
   try {
-    await store.dispatch(
-      'inboxes/removeBloomwireWhatsAppInbox',
-      props.inbox.id
-    );
-    useAlert(t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.SUCCESS'));
+    await store.dispatch('inboxes/removeBloomwireWhatsAppInbox', {
+      inboxId: props.inbox.id,
+      signal: deleteAbort?.signal,
+    });
+    if (leftFlow) return; // left the page mid-request — no late alert/emit
+    clearDeleteTimer();
+    // Accepted async job — the deletion has STARTED (not necessarily finished).
+    useAlert(t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.STARTED'));
     showConfirm.value = false;
     emit('removed', props.inbox.id);
   } catch (error) {
+    if (leftFlow) return; // left the page mid-request — no late alert
+    clearDeleteTimer();
     // Safe, generic failure message — never a raw backend/Meta error.
     useAlert(t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.ERROR'));
   } finally {
-    isDeleting.value = false;
+    if (!leftFlow) isDeleting.value = false;
   }
 };
+
+// On unmount / route change: mark the flow left and abort any in-flight request so no late alert/emit can fire.
+const cleanup = () => {
+  leftFlow = true;
+  abortDelete();
+  clearDeleteTimer();
+};
+onBeforeUnmount(cleanup);
+onBeforeRouteLeave(() => {
+  cleanup();
+});
 </script>
 
 <template>
@@ -101,7 +152,7 @@ const confirmRemove = async () => {
                 $t(
                   'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.INBOX_LABEL'
                 )
-              }}:
+              }}
             </dt>
             <dd data-testid="bloomwire-remove-wa-name">{{ inbox.name }}</dd>
           </div>
@@ -111,7 +162,7 @@ const confirmRemove = async () => {
                 $t(
                   'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.NUMBER_LABEL'
                 )
-              }}:
+              }}
             </dt>
             <dd data-testid="bloomwire-remove-wa-number">{{ maskedNumber }}</dd>
           </div>
@@ -121,7 +172,7 @@ const confirmRemove = async () => {
                 $t(
                   'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.MODE_LABEL'
                 )
-              }}:
+              }}
             </dt>
             <dd data-testid="bloomwire-remove-wa-mode">
               {{ connectionModeLabel }}

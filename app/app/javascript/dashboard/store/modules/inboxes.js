@@ -298,12 +298,16 @@ export const actions = {
       throw error;
     }
   },
-  // Admin "Remove WhatsApp Inbox": permanently deprovision a managed WhatsApp inbox (server blocks routing +
-  // removes setup/inbox/channel + owned data, no orphans, no Meta call). On success, drop it from the store list.
-  removeBloomwireWhatsAppInbox: async ({ commit }, inboxId) => {
+  // Admin "Remove WhatsApp Inbox": request the async deprovision of a managed WhatsApp inbox. The server blocks
+  // routing + enqueues the deletion (202 accepted); we optimistically drop it from the store list since it is on
+  // its way out. The optional abort `signal` bounds/cancels the request.
+  removeBloomwireWhatsAppInbox: async (
+    { commit },
+    { inboxId, signal } = {}
+  ) => {
     commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: true });
     try {
-      await WhatsappChannel.deleteInbox(inboxId);
+      await WhatsappChannel.deleteInbox(inboxId, { signal });
       commit(types.default.DELETE_INBOXES, inboxId);
       commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: false });
     } catch (error) {

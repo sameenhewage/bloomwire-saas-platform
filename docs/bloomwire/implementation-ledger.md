@@ -317,10 +317,17 @@
 ### Admin — Remove WhatsApp Inbox (managed deprovision) — `Open (product code; not merged)`
 - **Branch** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c`.
   No schema/migration · Enterprise: NO · stock destroy guard: UNCHANGED · global duplicate guard: UNCHANGED · webhook router: UNCHANGED · no Meta call · DEV account‑1 fixture not touched by tests.
+- **GPT‑5.5 CHANGES REQUIRED (reviewed `cecac65`) — fixed:** heavy purge moved to a dedicated idempotent job
+  (`Bloomwire::WhatsappInboxDeprovisionJob`); request path short (`#prepare`: authorize/verify, block routing,
+  enqueue → **202 `removal_started`**); `.purge!` re-verifies each run, **no giant transaction** (batched), and is
+  concurrency/retry-safe; UI gated on `canSelfServeManagedWhatsapp` (same as onboarding; hidden when OFF); FE bounded
+  `AbortController` + timeout aborted on unmount/route-leave with a leftFlow guard (no late alert/emit); wording is
+  now **"removal started"** (accepted async), not "removed". Re-validated: service 16 · job 1 · request 6 · component
+  10; full WhatsApp backend regression **481/0** (1 pending); ESLint + RuboCop + vite build clean; no secret in diff.
 - **Why:** managed-mode admins cannot delete a WhatsApp inbox (stock destroy is 403 via `restrict_managed_provider_inbox_destroy!`). Adds a dedicated admin deprovision.
 - **Backend:** `Bloomwire::WhatsappInboxDeprovisionService` + `DELETE …/bloomwire/whatsapp/inboxes/:id` (admin-only, account-scoped, feature-gated 404). Blocks routing (`setup_status -> 'blocked'`, committed) → destroys the setup mapping (else orphaned) → destroys the inbox (cascades conversations/messages/contact_inboxes/members/reporting/webhooks + `Channel::Whatsapp`). Shared Contacts preserved. Idempotent (repeat → 404). Meta-safe: only `source: bloomwire_managed` channels → `teardown_webhooks` never fires. Sanitized audit log. Frees the local `phone_number_taken` guard.
-- **Frontend:** admin-only "Remove inbox" action on the inbox settings page → destructive modal (title, irreversible warning, name, MASKED number (last 4), Standard/Coexistence mode, Meta-boundary note, Cancel + red Delete); disables repeat clicks; safe alerts; returns to the inbox list. No full number / pnid / WABA / credential rendered.
-- **Validation:** service 11 · request 6 · component 8; full WhatsApp backend regression **492/0** (1 pending); FE 57 (removal 8 + wizard 45 + api 4); ESLint + RuboCop + vite build clean; no secret in diff.
+- **Frontend:** admin-only "Remove inbox" action (gated on `canSelfServeManagedWhatsapp`, hidden when OFF) on the inbox settings page → destructive modal (title, irreversible warning, name, MASKED number (last 4), Standard/Coexistence mode, Meta-boundary note, Cancel + red Delete); bounded AbortController lifecycle (no late alert/emit after route-leave); "removal started" wording; disables repeat clicks. No full number / pnid / WABA / credential rendered.
+- **Validation (current head):** service 16 · job 1 · request 6 · component 10; full WhatsApp backend regression **481/0** (1 pending); FE 59 (removal 10 + wizard 45 + api 4); ESLint + RuboCop + vite build clean; no secret in diff.
 
 ### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a`.

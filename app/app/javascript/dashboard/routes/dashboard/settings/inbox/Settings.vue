@@ -88,12 +88,14 @@ export default {
       canManageProviderSetup,
       canManageNativeWhatsappSetup,
       canRegisterProviderWebhook,
+      canSelfServeManagedWhatsapp,
     } = useBloomwireCapabilities();
     return {
       v$: useVuelidate(),
       canManageProviderSetup,
       canManageNativeWhatsappSetup,
       canRegisterProviderWebhook,
+      canSelfServeManagedWhatsapp,
     };
   },
   data() {
@@ -130,17 +132,18 @@ export default {
   computed: {
     ...mapGetters({
       accountId: 'getCurrentAccountId',
-      currentRole: 'getCurrentRole',
       isFeatureEnabledonAccount: 'accounts/isFeatureEnabledonAccount',
       isOnChatwootCloud: 'globalConfig/isOnChatwootCloud',
       uiFlags: 'inboxes/getUIFlags',
       portals: 'portals/allPortals',
     }),
-    // Admin-only "Remove WhatsApp Inbox" action, shown only for a Bloomwire-managed WhatsApp Cloud inbox. The
-    // deprovision endpoint is admin + account scoped server-side; this is a UX gate on top of that.
+    // "Remove WhatsApp Inbox" action. Gated on the SAME managed WhatsApp self-serve capability used by onboarding
+    // (`canSelfServeManagedWhatsapp` — server-derived: admin + native WhatsApp restricted + managed_whatsapp_
+    // onboarding on; default FALSE so it is HIDDEN when the feature is OFF), and only for a Bloomwire-managed
+    // WhatsApp Cloud inbox. The deprovision endpoint is admin + account scoped server-side; this is a UX gate.
     canRemoveManagedWhatsappInbox() {
       return (
-        this.currentRole === 'administrator' &&
+        this.canSelfServeManagedWhatsapp &&
         this.isAWhatsAppCloudChannel &&
         this.inbox.provider_config?.source === 'bloomwire_managed'
       );

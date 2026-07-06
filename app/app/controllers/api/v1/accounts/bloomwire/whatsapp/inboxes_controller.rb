@@ -1,8 +1,9 @@
 # Admin-facing "Remove WhatsApp Inbox" deprovision endpoint (managed mode). Admin-only; inert (404) unless managed
 # WhatsApp self-serve is active; strictly account-scoped (an inbox is only ever resolved from Current.account, so a
-# cross-account id 404s). Delegates the destructive work to Bloomwire::WhatsappInboxDeprovisionService, which blocks
-# routing, removes the setup + inbox + channel + owned dependents (no orphans), preserves shared Contacts, and makes
-# no Meta call. Returns a SAFE result only — never the phone number, phone_number_id, WABA id, or any credential.
+# cross-account id 404s). The request path is SHORT: it authorizes, verifies account + managed source, blocks routing,
+# and enqueues a retry-safe/idempotent background job (Bloomwire::WhatsappInboxDeprovisionService#prepare); the heavy
+# purge runs off-request. Returns a SAFE, ACCEPTED response only — never the phone number, phone_number_id, WABA id,
+# or any credential.
 #
 # This is a DEDICATED path; it does NOT weaken the stock InboxesController destroy guard
 # (restrict_managed_provider_inbox_destroy!), which still blocks deleting managed inboxes via the generic route.
@@ -22,10 +23,11 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::InboxesController < Api::V1::Accou
 
     result = ::Bloomwire::WhatsappInboxDeprovisionService.new(
       account: Current.account, inbox: inbox, actor: Current.user
-    ).perform
+    ).prepare
 
     if result.success?
-      render json: { success: true }, status: :ok
+      # 202: routing is blocked and the deletion has been enqueued; the heavy purge completes asynchronously.
+      render json: { status: 'removal_started' }, status: :accepted
     elsif result.error == :not_found
       render_gone
     else

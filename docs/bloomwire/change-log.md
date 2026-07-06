@@ -17,6 +17,21 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ### Admin — Remove WhatsApp Inbox (managed deprovision) — OPEN (product code; not merged)
 - **Branch:** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c` (post‑#131 merge SHA).
+- **GPT‑5.5 CHANGES REQUIRED (reviewed `cecac65`) — fixed:**
+  1–4. **Async, retry-safe deletion.** The heavy purge moved OUT of the request into a dedicated idempotent
+     background job (`Bloomwire::WhatsappInboxDeprovisionJob`). The request path is now short — `#prepare`:
+     authorize/verify account+source, **block routing** (`setup_status -> 'blocked'`, committed), **enqueue**, and
+     return **202 `removal_started`**. `.purge!` re-verifies state each run, **no single giant transaction** (batched
+     per-record destroy!), and handles concurrent/duplicate/retried jobs (no-op when gone; rescues the
+     RecordNotFound race; lets unexpected errors propagate so Sidekiq retries). New concurrency/retry/idempotency
+     tests added.
+  5–6. **UI gated on the onboarding capability.** The Remove action is gated on `canSelfServeManagedWhatsapp` (the
+     SAME server-derived capability onboarding uses; opt-in default FALSE) → **hidden when the feature is OFF**.
+  7. **Bounded, abortable FE lifecycle.** The removal request uses an `AbortController` + a 15s timeout, aborted on
+     `onBeforeUnmount`/`onBeforeRouteLeave`; a `leftFlow` guard prevents any late alert/emit after route leave.
+  8. **Accurate wording.** Success now says **"removal started"** (accepted async job), not "removed".
+  - Re-validated: service 16 · job 1 · request 6 · component 10; full WhatsApp backend regression **481/0** (1
+    pending); ESLint + RuboCop + vite build clean; no secret in diff.
 - **Why:** in managed mode, account admins cannot remove a WhatsApp inbox — the stock `InboxesController#destroy`
   is blocked by `restrict_managed_provider_inbox_destroy!` (403). This adds a dedicated, admin-facing deprovision.
 - **Backend — dedicated deprovision service** (`Bloomwire::WhatsappInboxDeprovisionService`) + endpoint

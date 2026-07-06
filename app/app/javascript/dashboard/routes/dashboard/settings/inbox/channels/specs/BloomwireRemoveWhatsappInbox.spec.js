@@ -4,9 +4,13 @@ import BloomwireRemoveWhatsappInbox from '../BloomwireRemoveWhatsappInbox.vue';
 // Destructive "Remove WhatsApp Inbox" action + confirmation modal. All store/alert calls mocked; no real HTTP.
 const dispatch = vi.fn();
 const alertSpy = vi.fn();
+const routeLeaveGuard = vi.fn();
 
 vi.mock('vuex', () => ({ useStore: () => ({ dispatch }) }));
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: key => key }) }));
+vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: fn => routeLeaveGuard(fn),
+}));
 vi.mock('dashboard/composables', () => ({
   useAlert: (...args) => alertSpy(...args),
 }));
@@ -59,6 +63,7 @@ const openModal = async wrapper => {
 beforeEach(() => {
   dispatch.mockReset();
   alertSpy.mockReset();
+  routeLeaveGuard.mockReset();
 });
 
 // (case 1) the Remove Inbox option is rendered.
@@ -119,18 +124,60 @@ it('cancel closes the modal and dispatches nothing', async () => {
   expect(find(wrapper, 'bloomwire-remove-wa-modal').exists()).toBe(false);
 });
 
-it('confirm dispatches the deprovision with the inbox id and emits removed on success', async () => {
-  dispatch.mockResolvedValue({ success: true });
+// (finding 8) accepted async job -> "removal started" wording (not "removed").
+it('confirm dispatches the deprovision with the inbox id and emits removed + "removal started" alert', async () => {
+  dispatch.mockResolvedValue({ status: 'removal_started' });
   const wrapper = mountComp();
   await openModal(wrapper);
   await find(wrapper, 'bloomwire-remove-wa-confirm').trigger('click');
   await flushPromises();
   expect(dispatch).toHaveBeenCalledWith(
     'inboxes/removeBloomwireWhatsAppInbox',
-    42
+    expect.objectContaining({ inboxId: 42 })
   );
-  expect(alertSpy).toHaveBeenCalledWith(`${R}.SUCCESS`);
+  expect(alertSpy).toHaveBeenCalledWith(`${R}.STARTED`);
   expect(wrapper.emitted('removed')).toBeTruthy();
+});
+
+// (finding 7) a late response after route leave must NOT alert or emit.
+it('does not alert or emit if the flow is left (route change) while the request is pending', async () => {
+  let resolveDelete;
+  dispatch.mockReturnValue(
+    new Promise(resolve => {
+      resolveDelete = resolve;
+    })
+  );
+  const wrapper = mountComp();
+  await openModal(wrapper);
+  await find(wrapper, 'bloomwire-remove-wa-confirm').trigger('click');
+
+  // Leave the page mid-request (invoke the captured onBeforeRouteLeave guard).
+  const guard = routeLeaveGuard.mock.calls.at(-1)[0];
+  guard();
+  resolveDelete({ status: 'removal_started' }); // late success
+  await flushPromises();
+
+  expect(alertSpy).not.toHaveBeenCalled();
+  expect(wrapper.emitted('removed')).toBeFalsy();
+});
+
+// (finding 7) a late response after unmount must NOT alert or emit.
+it('does not alert or emit if unmounted while the request is pending', async () => {
+  let resolveDelete;
+  dispatch.mockReturnValue(
+    new Promise(resolve => {
+      resolveDelete = resolve;
+    })
+  );
+  const wrapper = mountComp();
+  await openModal(wrapper);
+  await find(wrapper, 'bloomwire-remove-wa-confirm').trigger('click');
+
+  wrapper.unmount();
+  resolveDelete({ status: 'removal_started' });
+  await flushPromises();
+
+  expect(alertSpy).not.toHaveBeenCalled();
 });
 
 it('shows a safe error alert and does not emit removed on failure', async () => {

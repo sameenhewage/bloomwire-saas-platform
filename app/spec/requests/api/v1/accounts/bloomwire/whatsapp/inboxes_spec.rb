@@ -1,7 +1,10 @@
 require 'rails_helper'
 
 # Admin "Remove WhatsApp Inbox" deprovision endpoint. Admin-only + managed-mode-only (404 when off) + account-scoped.
+# The request path is short: it blocks routing + enqueues the async deletion and returns 202 (removal_started).
 RSpec.describe 'Bloomwire admin Remove WhatsApp Inbox endpoint', type: :request do
+  include ActiveJob::TestHelper
+
   let(:account) { create(:account) }
   let(:other_account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
@@ -34,9 +37,11 @@ RSpec.describe 'Bloomwire admin Remove WhatsApp Inbox endpoint', type: :request 
   def url_for(inbox) = "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/inboxes/#{inbox.id}"
 
   context 'when managed self-serve is OFF (stock)' do
-    it 'is 404 (feature-off stock behavior)' do
+    it 'is 404 (feature-off stock behavior) and enqueues nothing' do
       inbox, = managed_inbox(on: account)
-      delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+      expect do
+        delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
       expect(response).to have_http_status(:not_found)
       expect(Inbox.exists?(inbox.id)).to be(true)
     end
@@ -45,11 +50,24 @@ RSpec.describe 'Bloomwire admin Remove WhatsApp Inbox endpoint', type: :request 
   context 'when managed mode is active' do
     before { enable_managed_mode }
 
-    it 'lets an administrator remove the inbox (+ channel + setup)' do
-      inbox, channel, setup = managed_inbox(on: account)
-      delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+    it 'accepts the removal (202), blocks routing, and enqueues the async deletion job' do
+      inbox, _channel, setup = managed_inbox(on: account)
 
-      expect(response).to have_http_status(:ok)
+      expect do
+        delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+      end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
+
+      expect(response).to have_http_status(:accepted)
+      expect(response.parsed_body).to eq('status' => 'removal_started')
+      expect(setup.reload.setup_status).to eq('blocked') # routing stopped immediately
+      expect(Inbox.exists?(inbox.id)).to be(true) # heavy delete is async
+    end
+
+    it 'removes the inbox + channel + setup once the enqueued job runs' do
+      inbox, channel, setup = managed_inbox(on: account)
+      perform_enqueued_jobs(only: Bloomwire::WhatsappInboxDeprovisionJob) do
+        delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+      end
       aggregate_failures do
         expect(Inbox.exists?(inbox.id)).to be(false)
         expect(Channel::Whatsapp.exists?(channel.id)).to be(false)
@@ -57,26 +75,28 @@ RSpec.describe 'Bloomwire admin Remove WhatsApp Inbox endpoint', type: :request 
       end
     end
 
-    it 'forbids an agent (403) and deletes nothing' do
+    it 'forbids an agent (403) and enqueues nothing' do
       inbox, = managed_inbox(on: account)
-      delete url_for(inbox), headers: agent.create_new_auth_token, as: :json
+      expect do
+        delete url_for(inbox), headers: agent.create_new_auth_token, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
       expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
       expect(Inbox.exists?(inbox.id)).to be(true)
     end
 
     it 'cannot delete another tenant’s inbox (account-scoped -> 404, untouched)' do
       other_inbox, = managed_inbox(on: other_account)
-      # Same account-scoped route, foreign inbox id.
       delete "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/inboxes/#{other_inbox.id}",
              headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
       expect(Inbox.exists?(other_inbox.id)).to be(true)
     end
 
-    it 'is idempotent: a repeat delete returns 404' do
+    it 'is idempotent: after the job has removed it, a repeat delete returns 404' do
       inbox, = managed_inbox(on: account)
-      delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
-      expect(response).to have_http_status(:ok)
+      perform_enqueued_jobs(only: Bloomwire::WhatsappInboxDeprovisionJob) do
+        delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
+      end
       delete url_for(inbox), headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end

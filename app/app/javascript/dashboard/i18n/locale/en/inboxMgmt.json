@@ -396,8 +396,8 @@
             "META_NOTE": "Removing this inbox from Bloomwire does not automatically delete the phone number or WhatsApp Business Account from Meta.",
             "CANCEL": "Cancel",
             "CONFIRM": "Delete inbox permanently",
-            "SUCCESS": "WhatsApp inbox removed.",
-            "ERROR": "Could not remove this WhatsApp inbox. Please try again."
+            "STARTED": "WhatsApp inbox removal started. Its conversations and messages are being deleted.",
+            "ERROR": "Could not start removing this WhatsApp inbox. Please try again."
           },
           "SUCCESS": {
             "TITLE": "WhatsApp number registered",
