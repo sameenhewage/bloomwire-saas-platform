@@ -15,6 +15,82 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — OPEN (product code; not merged)
+- **Branch:** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`
+  (base verified, current deployed SHA).
+- **GPT‑5.5 CHANGES REQUIRED — 4 blocking findings fixed (reviewed head `5d4f763`):**
+  1. **Standard flow restored:** the tracer is created **only for Coexistence** (per attempt); Standard/native uses
+     a no-op tracer → **no** attempt id, **no** browser trace events, **no** trace-endpoint call, never `mode=coexistence`;
+     the Standard create payload is exactly pre-PR (no `onboarding_attempt_id`).
+  2. **Fresh attempt id per attempt:** the tracer + random id are minted at the **start of every** Coexistence
+     attempt (not at mount); a retry uses a **different** id + support reference, carried end-to-end (signup →
+     signals → create POST → controller trace → UI); no stale state/timers/events carry over.
+  3. **Lifecycle-safe create:** the create timeout is a lifecycle-scoped, cancellable timer + an `AbortController`
+     (signal threaded store→API→axios) cleared/aborted on success/failure/route-leave/unmount/retry; a per-attempt
+     **stale guard** makes any late response inert (no UI change, no navigation, no late trace, no store refresh —
+     the abort makes the store action reject before its `dispatch('get')`).
+  4. **Forbidden trace payloads rejected:** the trace endpoint now inspects the **raw** body before strong-params
+     and returns **4xx with no log** for ANY non-allow-listed top-level key (unknown or sensitive:
+     `code/auth_code/access_token/token/phone/phone_number/phone_number_id/waba_id/business_id/app_id/configuration_id/url/query/message/metadata/...`);
+     unknown event → 422; a logging-infra failure for an otherwise-valid request still returns 204.
+  - Suite after this first fix pass (historical snapshot; superseded — see the **Current exact-head validation** line
+    below): composable **20**, wizard **29**, trace service **8**, trace endpoint **25** (incl. per-sensitive-key
+    rejection), WhatsApp backend regression **314/0**; ESLint + RuboCop + vite build clean; no migration/schema; no
+    Standard/router/Enterprise change beyond restoring Standard; no Meta retry; no record mutation.
+- **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `4d041b5`) — remaining blocker fixed: double-submit attempt ownership.**
+  `register()` mutated attempt state (tracer / attempt id / support reference / `attemptSeq` / `AbortController` /
+  timer) **before** the composable's in-flight guard, so a rapid second click could mint a second id, bump `attemptSeq`,
+  and supersede/abort the first valid attempt. Fix: a **wizard-owned `attemptActive` guard** set the instant an attempt
+  starts (before ANY attempt-state mutation) and cleared only on a terminal state (success/failure/cancel/timeout/
+  route-leave/unmount). A second submit while a signup OR create is active is now a **pure no-op** — exactly one tracer,
+  one attempt id, one Meta signup launch, one create POST (carrying the first id); no supersession, no abort of the
+  active attempt, no support-reference change. Manual retry after a terminal failure still mints a fresh id. Wizard spec
+  now **32** (added: no-op during signup — one tracer/id/signup/no-abort; support-ref unchanged; no-op during
+  creating_inbox — form hidden + one POST; retry → new id; RED-proven: without the guard a double-submit mints 2
+  tracers). Standard flow unchanged.
+- **Current exact-head validation (head `181d34ecabb67f01c929281739548ecaad11f960`):** composable **20** · wizard
+  **32** · trace service **8** · trace endpoint **25** · WhatsApp backend regression **314 examples, 0 failures** ·
+  CI **8/8 green** · unresolved review threads **0**. ESLint + RuboCop + vite build clean; `git diff --check` clean;
+  no secret in diff; no migration/schema; no webhook-router change; no Enterprise change; Standard flow unchanged;
+  no Meta retry; no account/Inbox/Channel/WhatsappSetup mutation. **PR remains unmerged and undeployed.**
+- **Incident (Part 1, evidence-based classification): Stage A** — during a live Coexistence attempt the customer
+  completed the Meta flow (3 Meta webhooks at 04:17–04:19 today → `[BLOOMWIRE ROUTER] no handoff-safe setup`,
+  `200 OK`), but the **browser received no signal that resolved `runEmbeddedSignup()`** → the create POST was
+  **never dispatched** (0 coexistence POSTs in the whole current-container log window) → **0 records** for the
+  target account; the hang was **indefinite** → PR #127's second-signal timeout **never armed** (it arms only
+  after the first signal). Not D/E/F. Exact browser sub-stage was not directly logged (no client trace existed —
+  fixed by Part 2).
+- **Part 3 — every infinite-wait path removed:** `useWhatsappEmbeddedSignup` now has an explicit finite state
+  (`idle/launching/waiting_for_meta/waiting_for_second_signal`) with an **overall watchdog armed at launch**
+  (`OVERALL_SIGNUP_TIMEOUT_MS`, default 180s) that bounds the **zero-signal / never-settling SDK/FB.login** class
+  the second-signal timer cannot, plus the existing second-signal timer; the wizard adds a **bounded backend create
+  request** (`CREATE_REQUEST_TIMEOUT_MS`, 45s) that fails closed. **Guaranteed teardown** (settle-once cleanup +
+  `cancel()` wired to `onBeforeUnmount` + `onBeforeRouteLeave`) clears timers, the `message` listener,
+  `isAuthenticating` and processing state on every success/cancel/timeout/exception/unmount/route change. On
+  failure the UI stops the spinner, shows a **sanitized** message ("No automatic retry was performed"), a
+  **support reference** (short attempt id), and a safe manual **Retry** — no auto-retry, no partial local records.
+- **Part 2 — structured sanitized trace:** one random `onboarding_attempt_id` per attempt is carried browser →
+  controller. New `Bloomwire::OnboardingTrace` writes ONE allow-listed structured-JSON line per event to the app
+  log (22 events: `onboarding_started` … `attempt_finished`); metadata is strictly allow-listed
+  (attempt id, account id, actor id, mode=coexistence, event, result, elapsed_ms, http_status, sanitized
+  error_code, source, build sha, ts). New admin-only, account-scoped, feature-gated (404), rate-limited endpoint
+  `POST …/bloomwire/whatsapp/onboarding_traces` receives browser events with a strict event + metadata allow-list
+  (rejects arbitrary/sensitive payloads; unknown event → 422; a logging failure always returns 204). **Never logs**
+  auth code / token / phone number / phone_number_id / WABA / business / App ID / Config ID / Meta URL. Standard
+  (native) flow is unchanged (no tracer → no attempt id, no trace calls).
+- **Not changed:** backend authorization; the global webhook router; the coexistence service's Meta/DB behavior;
+  Standard flow; Enterprise; **no schema/migration** (trace → app log, not a DB table); account-1 fixture. No Meta
+  onboarding retried; no records mutated during investigation.
+- **TDD — initial validation (HISTORICAL snapshot at first push; superseded by the two review-fix passes above —
+  see the current exact-head counts: composable 20 · wizard 32 · trace service 8 · trace endpoint 25 · backend 314/0):**
+  composable `useWhatsappEmbeddedSignup.spec.js` **20** (overall watchdog / zero-signal, second-signal,
+  either-order, duplicate→one, SDK-never-settles, cancel/unmount, double-click guard, trace correlation);
+  wizard `BloomwireWhatsapp.spec.js` **25** (create timeout, 4xx, 5xx, success transition, failure clears loading,
+  unmount + route-change cleanup, repeated attempt, no-parallel, attempt-ref); `onboarding_trace_spec` **9**
+  (allow-list, secret rejection, sanitization, never-raise); `onboarding_traces` request spec **8** (admin +
+  account scope + feature gate + allow-list + rate-limit + logging-failure-safe). WhatsApp backend regression
+  **281/0**; ESLint + RuboCop clean; vite build ok; no secret in diff.
+
 ### WhatsApp channel tile intermittently disappears (deterministic-state fix) — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-whatsapp-tile-race` off `version_1` `8fabfc331b7f62d5c64197fe020e563140d3239f`
   (base verified). **Frontend-only; no backend / DB / router / auth / config change.**

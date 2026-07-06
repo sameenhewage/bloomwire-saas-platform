@@ -47,7 +47,8 @@ describe('#whatsappChannel', () => {
       whatsappChannel.createBloomwireEmbeddedSignup(CREDS);
       expect(axiosMock.post).toHaveBeenCalledWith(
         '/api/v1/bloomwire/whatsapp/embedded_signup',
-        CREDS
+        CREDS,
+        {}
       );
     });
 
@@ -55,7 +56,8 @@ describe('#whatsappChannel', () => {
       whatsappChannel.createBloomwireCoexistenceEmbeddedSignup(CREDS);
       expect(axiosMock.post).toHaveBeenCalledWith(
         '/api/v1/bloomwire/whatsapp/coexistence_embedded_signup',
-        CREDS
+        CREDS,
+        {}
       );
       // never touches the native authorization path
       expect(axiosMock.post).not.toHaveBeenCalledWith(

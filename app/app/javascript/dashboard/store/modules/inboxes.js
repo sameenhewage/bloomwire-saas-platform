@@ -281,12 +281,14 @@ export const actions = {
   // the DTO to the caller. No secrets (api_key/token/provider_config) are ever in the payload or the response.
   createBloomwireWhatsAppEmbeddedSignup: async (
     { commit, dispatch },
-    params
+    { signal, ...params } = {}
   ) => {
     try {
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: true });
-      const response =
-        await WhatsappChannel.createBloomwireEmbeddedSignup(params);
+      const response = await WhatsappChannel.createBloomwireEmbeddedSignup(
+        params,
+        { signal }
+      );
       await dispatch('get');
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
       sendAnalyticsEvent('whatsapp');
@@ -301,12 +303,14 @@ export const actions = {
   // (connection_mode=coexistence). No secrets (api_key/token/provider_config) are ever in the payload or response.
   createBloomwireWhatsAppCoexistenceEmbeddedSignup: async (
     { commit, dispatch },
-    params
+    { signal, ...params } = {}
   ) => {
     try {
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: true });
       const response =
-        await WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup(params);
+        await WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup(params, {
+          signal,
+        });
       await dispatch('get');
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
       sendAnalyticsEvent('whatsapp');

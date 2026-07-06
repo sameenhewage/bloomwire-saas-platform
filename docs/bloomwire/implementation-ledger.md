@@ -314,6 +314,50 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — `Open (product code; not merged)`
+- **Branch** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`.
+  No schema/migration · Enterprise: NO · webhook router: UNCHANGED · Standard flow: UNCHANGED · account-1 fixture untouched.
+- **Current exact-head validation (head `181d34ecabb67f01c929281739548ecaad11f960`):** composable **20** · wizard **32** ·
+  trace service **8** · trace endpoint **25** · WhatsApp backend regression **314 examples, 0 failures** · CI **8/8 green** ·
+  unresolved review threads **0**. ESLint + RuboCop + vite build clean; `git diff --check` clean; no secret in diff.
+  **PR remains unmerged and undeployed.** (The per-pass counts below are historical snapshots for each earlier review head.)
+- **GPT‑5.5 CHANGES REQUIRED (reviewed `5d4f763`) — 4 findings fixed:** (1) tracer created **only for Coexistence**
+  (per attempt); Standard/native = no-op tracer (no attempt id / no trace / no endpoint / not `mode=coexistence`);
+  (2) **fresh attempt id + support ref per attempt** (minted at attempt start, not mount; retry → new id end-to-end);
+  (3) **lifecycle-safe create** — cancellable timer + `AbortController` (signal store→API→axios) cleared/aborted on
+  success/failure/route-leave/unmount/retry + a per-attempt **stale guard** so a late response can't mutate
+  UI/store/trace; (4) trace endpoint **rejects (4xx, no log)** any non-allow-listed/sensitive top-level key (raw-body
+  check before strong-params); unknown event → 422; logging failure → 204. Suite after this first fix pass (historical
+  snapshot; superseded — see the current exact-head line above): composable 20 · wizard 29 · trace service 8 · trace
+  endpoint 25; WhatsApp backend **314/0**; ESLint/RuboCop/build clean; no secret in diff.
+- **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `4d041b5`) — double-submit attempt ownership fixed:** `register()`
+  mutated attempt state (tracer/id/support-ref/`attemptSeq`/`AbortController`/timer) **before** the composable in-flight
+  guard, so a rapid second click could mint a second id and supersede/abort the first valid attempt. Fix: a wizard-owned
+  **`attemptActive` guard** set before ANY attempt-state mutation and cleared only on a terminal state → a second submit
+  during signup OR create is a **pure no-op** (one tracer, one id, one signup launch, one create POST with the first id;
+  no supersede, no abort, no support-ref change); manual retry after terminal failure still mints a fresh id; Standard
+  unchanged. RED-proven (without the guard a double-submit mints 2 tracers). Wizard spec **29 → 32**; composable 20 ·
+  trace service 8 · trace endpoint 25; WhatsApp backend **314/0**; ESLint + build clean; no secret; no migration.
+- **Incident RCA (Part 1) — Stage A:** the customer completed the Meta flow (3 Meta webhooks 04:17–04:19 →
+  `no handoff-safe setup`, 200), but the browser received no signal that resolved `runEmbeddedSignup()`; the create
+  POST was never dispatched (0 coexistence POSTs in the current-container logs), 0 records created, and the hang was
+  indefinite → PR #127's second-signal timeout never armed. Read-only investigation; no records mutated; no retry.
+- **Fix (Part 3):** finite state (`idle/launching/waiting_for_meta/waiting_for_second_signal`) + **overall watchdog
+  armed at launch** (default 180s, covers zero-signal / never-settling SDK) + kept second-signal timer + **bounded
+  backend create** (45s). Guaranteed teardown (settle-once + `cancel()` on `onBeforeUnmount`/`onBeforeRouteLeave`)
+  clears timers/listener/`isAuthenticating`/processing on every terminal path. Failure UX: spinner stops, sanitized
+  message, support reference (short attempt id), manual Retry, no auto-retry, no partial records.
+- **Trace (Part 2):** one `onboarding_attempt_id` carried browser→controller; `Bloomwire::OnboardingTrace` writes
+  one allow-listed structured-JSON line per event to the app log (22 events); new admin-only, account-scoped,
+  feature-gated (404), rate-limited endpoint `POST …/bloomwire/whatsapp/onboarding_traces` with strict event +
+  metadata allow-list (unknown event → 422; logging failure → 204). Never logs code/token/phone/phone_number_id/
+  WABA/business/App ID/Config ID/Meta URL. Standard/native flow untraced (no-op tracer).
+- **Initial validation (HISTORICAL snapshot at first push; superseded — current exact-head counts are in the
+  "Current exact-head validation" line above: composable 20 · wizard 32 · trace service 8 · trace endpoint 25 ·
+  backend 314/0):** composable 20 · wizard 25 · trace service 8 · trace endpoint 8; WhatsApp backend regression
+  281/0; ESLint + RuboCop clean; vite build ok; no secret in diff. Runtime trace evidence deferred to Part 6
+  (post-approval deploy + owner-assisted controlled retry).
+
 ### WhatsApp channel tile intermittently disappears (deterministic-state fix) — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-whatsapp-tile-race` off `version_1` `8fabfc331b7f62d5c64197fe020e563140d3239f`.
   **Frontend-only.** Backend/DB/router/auth/config: NO · Enterprise: NO · Standard/Coexistence flows: UNCHANGED.

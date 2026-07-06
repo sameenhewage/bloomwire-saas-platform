@@ -13,10 +13,11 @@ class WhatsappChannel extends ApiClient {
   // Phase 17C.3: managed self-serve WhatsApp Embedded Signup. Sends only the non-secret Meta signup credentials
   // (code / business_id / waba_id / phone_number_id) to the dedicated Bloomwire endpoint (global webhook router).
   // Never posts to native /whatsapp/authorization; never sends app secret / verify token / webhook URL / token.
-  createBloomwireEmbeddedSignup(params) {
+  createBloomwireEmbeddedSignup(params, config = {}) {
     return axios.post(
       `${this.baseUrl()}/bloomwire/whatsapp/embedded_signup`,
-      params
+      params,
+      config
     );
   }
 
@@ -24,9 +25,20 @@ class WhatsappChannel extends ApiClient {
   // signup credentials (code / business_id / waba_id / phone_number_id) but to the dedicated coexistence
   // endpoint (connection_mode=coexistence; Phase 17D.1). Never posts to native /whatsapp/authorization; never
   // sends app secret / verify token / webhook URL / API token / provider_config.
-  createBloomwireCoexistenceEmbeddedSignup(params) {
+  createBloomwireCoexistenceEmbeddedSignup(params, config = {}) {
     return axios.post(
       `${this.baseUrl()}/bloomwire/whatsapp/coexistence_embedded_signup`,
+      params,
+      config
+    );
+  }
+
+  // Structured, sanitized onboarding trace sink (managed WhatsApp / Coexistence). Sends ONLY allow-listed,
+  // non-sensitive telemetry (attempt id, event, result, elapsed_ms, http_status, error_code) to the
+  // account-scoped admin endpoint. Never sends the auth code / tokens / phone number / WABA / Meta identifiers.
+  sendOnboardingTrace(params) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_traces`,
       params
     );
   }
