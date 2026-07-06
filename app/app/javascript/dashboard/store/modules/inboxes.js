@@ -299,12 +299,15 @@ export const actions = {
     }
   },
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Returns the safe DTO
-  // ({ status: 'available' | 'already_connected' }); no inbox-list mutation, no secrets.
+  // ({ status: 'available' | 'already_connected' }); no inbox-list mutation, no secrets. The optional abort
+  // `signal` lets the caller bound/cancel the request.
   checkBloomwireWhatsAppPhoneAvailability: async (
     _store,
-    { phoneNumber } = {}
+    { phoneNumber, signal } = {}
   ) => {
-    const response = await WhatsappChannel.checkPhoneAvailability(phoneNumber);
+    const response = await WhatsappChannel.checkPhoneAvailability(phoneNumber, {
+      signal,
+    });
     return response.data;
   },
   // Phase 17D.3: managed self-serve WhatsApp Business App Coexistence signup. Same safe-DTO contract as the

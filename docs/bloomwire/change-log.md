@@ -17,6 +17,26 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a` (current deployed SHA).
+- **GPT‑5.5 CHANGES REQUIRED (reviewed `fb77e55`) — 3 items fixed:**
+  1. **Lifecycle-safe bounded preflight:** the preflight now runs INSIDE the attempt's `try` — `attemptSeq`/`seq` +
+     timer/abort reset are established BEFORE the first await; the request is **bounded** (`PREFLIGHT_TIMEOUT_MS`
+     8s) via a cancellable timer + `AbortController` (signal threaded store→API→axios), **aborted** on
+     unmount/route‑leave; a **stale/leftFlow check runs immediately after the await, before creating a tracer or
+     opening Meta** (a late response can no longer open the popup after the flow left); `attemptActive` is released
+     on every terminal preflight path; a visible "checking" state disables the submit action. Fails open; the
+     authoritative post‑Meta guard is unchanged.
+  2. **Availability-oracle throttling:** the `phone_availability` endpoint is rate-limited per `(account, actor)`
+     (`RATE_LIMIT` 20 / `RATE_PERIOD` 60s) → **429** on excess (lookup not run); the raw phone number is never
+     logged (anchored filter, below); response contract unchanged (`{ status }` only, no tenant leak).
+  3. **Exact-key parameter filtering:** replaced the broad `:code`/`:phone_number` substring symbol filters with
+     **anchored regexes** (`/\Acode\z/i` … `/\Aphone_number\z/i`) so unrelated keys (`error_code`, `status_code`,
+     `country_code`, `phone_number_verified`) stay visible and `website_token` is preserved, while the required
+     sensitive keys render `[FILTERED]` (verified).
+  - Re-validated: service 8 · request 9 · filter 3 · wizard **45** (+4 preflight-lifecycle: timeout→fail-open,
+    unmount-during-preflight, route-leave-during-preflight, clean manual retry); WhatsApp backend regression
+    **337/0**; ESLint + RuboCop + vite build clean; no secret in diff.
+  - **Note:** the "Remove WhatsApp Inbox" feature is intentionally **out of this PR** — it will be a separate
+    focused PR after #131 is approved and merged.
 - **Root cause (proven, prior investigation):** on DEV a Standard signup used a number already connected as the
   account‑1 fixture; the backend correctly returned **422 `phone_number_taken`** with the safe message "This
   WhatsApp phone number is already connected.", but the wizard **discarded** the backend `code`/message and showed

@@ -834,9 +834,10 @@ describe('BloomwireWhatsapp.vue — duplicate-number preflight + error-code mapp
     await startRegister(wrapper);
     await typeNumber(wrapper, '+15551239999');
     await submit(wrapper);
-    expect(dispatch).toHaveBeenCalledWith(PREFLIGHT, {
-      phoneNumber: '+15551239999',
-    });
+    expect(dispatch).toHaveBeenCalledWith(
+      PREFLIGHT,
+      expect.objectContaining({ phoneNumber: '+15551239999' })
+    );
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1); // popup opened
   });
 
@@ -925,5 +926,116 @@ describe('BloomwireWhatsapp.vue — duplicate-number preflight + error-code mapp
     await startRegister(wrapper);
     await submit(wrapper);
     expect(errorText(wrapper)).toBe(`${B}.ERROR`);
+  });
+});
+
+// GPT-5.5 CHANGES REQUIRED (PR #131) — the advisory preflight must be lifecycle-safe: bounded (timeout aborts),
+// abortable on unmount/route change, stale-checked after the await, and never opens Meta after the flow left.
+describe('BloomwireWhatsapp.vue — lifecycle-safe bounded preflight', () => {
+  const PREFLIGHT = 'inboxes/checkBloomwireWhatsAppPhoneAvailability';
+  const typeNumber = async (wrapper, value) =>
+    wrapper.find('[data-testid="bloomwire-wa-phone-number"]').setValue(value);
+
+  // (timeout) A never-settling preflight is aborted by the timeout and fails OPEN → the Meta popup still opens.
+  it('bounds the preflight with a timeout that aborts and fails open (popup opens)', async () => {
+    dispatch.mockImplementation((action, payload) => {
+      if (action === PREFLIGHT) {
+        return new Promise((_resolve, reject) => {
+          payload.signal?.addEventListener('abort', () =>
+            reject(
+              Object.assign(new Error('canceled'), { name: 'CanceledError' })
+            )
+          );
+        });
+      }
+      return Promise.resolve(DTO);
+    });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551239999');
+    vi.useFakeTimers();
+    wrapper.find('form').trigger('submit');
+    await vi.advanceTimersByTimeAsync(8000); // PREFLIGHT_TIMEOUT_MS -> abort -> fail open
+    vi.useRealTimers();
+    await flushPromises();
+    expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
+  });
+
+  // (unmount during pending preflight) a late preflight success must NOT open Meta after the flow left.
+  it('does not open Meta when unmounted while the preflight is pending (late response ignored)', async () => {
+    let resolvePreflight;
+    dispatch.mockImplementation(action => {
+      if (action === PREFLIGHT) {
+        return new Promise(resolve => {
+          resolvePreflight = resolve;
+        });
+      }
+      return Promise.resolve(DTO);
+    });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551239999');
+    wrapper.find('form').trigger('submit');
+    await flushPromises(); // preflight in flight
+    expect(cancelEmbeddedSignup).not.toHaveBeenCalled();
+
+    wrapper.unmount(); // leave the flow -> cleanup aborts the preflight
+    resolvePreflight({ status: 'available' }); // late success arrives after leaving
+    await flushPromises();
+
+    expect(runEmbeddedSignup).not.toHaveBeenCalled(); // Meta popup never opened
+  });
+
+  // (route leave during pending preflight) same protection via onBeforeRouteLeave.
+  it('does not open Meta when the route is left while the preflight is pending', async () => {
+    let resolvePreflight;
+    dispatch.mockImplementation(action => {
+      if (action === PREFLIGHT) {
+        return new Promise(resolve => {
+          resolvePreflight = resolve;
+        });
+      }
+      return Promise.resolve(DTO);
+    });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551239999');
+    wrapper.find('form').trigger('submit');
+    await flushPromises();
+
+    const guard = routeLeaveGuard.mock.calls.at(-1)[0];
+    guard(); // route leave
+    resolvePreflight({ status: 'available' });
+    await flushPromises();
+
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+  });
+
+  // A manual retry after a preflight-blocked attempt starts cleanly (attemptActive released; a fresh attempt runs).
+  it('allows a clean manual retry after a preflight already_connected block', async () => {
+    dispatch
+      .mockImplementationOnce(action =>
+        action === PREFLIGHT
+          ? Promise.resolve({ status: 'already_connected' })
+          : Promise.resolve(DTO)
+      )
+      .mockImplementation(action =>
+        action === PREFLIGHT
+          ? Promise.resolve({ status: 'available' })
+          : Promise.resolve(DTO)
+      );
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551230001');
+
+    await submit(wrapper); // attempt 1: preflight blocks -> no popup
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+
+    await submit(wrapper); // retry: preflight available -> popup opens
+    expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
   });
 });

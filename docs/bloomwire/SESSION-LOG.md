@@ -81,6 +81,20 @@
 ## C. Session journal  *(newest first — prepend new entries)*
 
 ### 2026-07-06 — Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering (product code; open branch; NOT merged)
+- **GPT‑5.5 CHANGES REQUIRED (reviewed `fb77e55`) — 3 items fixed:** (1) **lifecycle-safe bounded preflight** —
+  `attemptSeq`/`seq` + timer/abort reset established BEFORE the first await; bounded (8s) + `AbortController` (signal
+  store→API→axios) aborted on unmount/route-leave; a **stale/leftFlow check runs immediately after the await, before
+  creating a tracer or opening Meta** (a late preflight response can no longer open the popup after the flow left);
+  `attemptActive` released on every terminal preflight path; a visible "checking" state disables the submit action;
+  fails open; authoritative post-Meta guard unchanged. (2) **availability-oracle throttling** — the
+  `phone_availability` endpoint is rate-limited per `(account, actor)` (20/60s) → **429**; the raw number is never
+  logged; `{ status }`-only contract preserved. (3) **exact-key filtering** — replaced broad `:code`/`:phone_number`
+  substring symbols with **anchored regexes** so `error_code`/`status_code`/`country_code`/`phone_number_verified`
+  stay visible and `website_token` is preserved, while required sensitive keys render `[FILTERED]`. Re-validated:
+  service 8 · request 9 · filter 3 · wizard **45** (+4 preflight-lifecycle); WhatsApp backend **337/0**; ESLint +
+  RuboCop + vite build clean; no secret in diff. New head pending push; awaiting fresh GPT‑5.5 exact-head review.
+  **The "Remove WhatsApp Inbox" feature is intentionally out of this PR — separate focused PR after #131 is
+  approved+merged.**
 - **Root cause (proven):** on DEV a Standard signup used a number already connected as the account‑1 fixture; the
   backend correctly returned **422 `phone_number_taken`** (safe message), but the wizard discarded the safe
   `code`/message and showed only the generic "We couldn't finish connecting WhatsApp." Separately the Meta auth

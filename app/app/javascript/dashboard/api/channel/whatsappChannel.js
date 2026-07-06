@@ -35,10 +35,11 @@ class WhatsappChannel extends ApiClient {
 
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Sends only the typed phone number and
   // receives ONLY { status: "available" | "already_connected" } — never another tenant's account/inbox/channel.
-  checkPhoneAvailability(phoneNumber) {
+  checkPhoneAvailability(phoneNumber, config = {}) {
     return axios.post(
       `${this.baseUrl()}/bloomwire/whatsapp/phone_availability`,
-      { phone_number: phoneNumber }
+      { phone_number: phoneNumber },
+      config
     );
   }
 

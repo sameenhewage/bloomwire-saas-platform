@@ -74,5 +74,22 @@ RSpec.describe 'Bloomwire WhatsApp phone-availability preflight endpoint', type:
         post url, headers: admin.create_new_auth_token, params: { phone_number: '+15551230001' }, as: :json
       end.not_to(change { [Channel::Whatsapp.count, Inbox.count] })
     end
+
+    # Enumeration protection: the global availability oracle is rate-limited per (account, actor) -> 429 on excess.
+    it 'rate-limits abusive volumes with 429 and does not run the lookup' do
+      allow(Rails.cache).to receive(:increment).and_return(
+        Api::V1::Accounts::Bloomwire::Whatsapp::PhoneAvailabilitiesController::RATE_LIMIT + 1
+      )
+      expect(Bloomwire::WhatsappPhoneAvailability).not_to receive(:status_for)
+      post url, headers: admin.create_new_auth_token, params: { phone_number: '+15551230001' }, as: :json
+      expect(response).to have_http_status(:too_many_requests)
+    end
+
+    it 'allows requests under the rate limit' do
+      allow(Rails.cache).to receive(:increment).and_return(1)
+      post url, headers: admin.create_new_auth_token, params: { phone_number: '+15551239999' }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to eq('status' => 'available')
+    end
   end
 end

@@ -34,4 +34,20 @@ RSpec.describe 'filter_parameter_logging (managed WhatsApp onboarding)' do # rub
     filtered = filter.filter('website_token' => 'PUBLIC-WIDGET-TOKEN')
     expect(filtered['website_token']).to eq('PUBLIC-WIDGET-TOKEN')
   end
+
+  # The anchored (exact-key) filters must NOT redact unrelated keys that merely contain "code" / "phone_number".
+  it 'leaves unrelated keys visible (error_code / status_code / country_code / verified flags)' do
+    filtered = filter.filter(
+      'error_code' => 'phone_number_taken',
+      'status_code' => 422,
+      'country_code' => 'LK',
+      'phone_number_verified' => true
+    )
+    aggregate_failures do
+      expect(filtered['error_code']).to eq('phone_number_taken')
+      expect(filtered['status_code']).to eq(422)
+      expect(filtered['country_code']).to eq('LK')
+      expect(filtered['phone_number_verified']).to be(true)
+    end
+  end
 end
