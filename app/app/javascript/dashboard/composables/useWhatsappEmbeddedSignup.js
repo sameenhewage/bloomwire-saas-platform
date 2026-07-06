@@ -32,17 +32,21 @@ export const SIGNUP_STATES = Object.freeze({
 // on cancel; rejects on SDK/signup error, one-signal timeout, or the overall watchdog. Timers + the window
 // listener are scoped to a single run and torn down on every settle, so this is safe to call without lifecycle
 // wiring; `cancel()` is additionally provided for component unmount / route change.
-export function useWhatsappEmbeddedSignup({ tracer } = {}) {
+export function useWhatsappEmbeddedSignup() {
   const isAuthenticating = ref(false);
   const state = ref(SIGNUP_STATES.IDLE);
-  const activeTracer = tracer || createNoopTracer();
   // Set to the current run's cancel-cleanup while a run is in flight; cleared on settle. Used by `cancel()`.
   let cancelActiveRun = null;
 
+  // The tracer is supplied PER RUN (not at construction) so the caller can mint a fresh attempt id for every
+  // attempt, and so non-traced callers (Standard/native) simply pass nothing → a no-op tracer (no attempt id,
+  // no trace calls, no Coexistence endpoint hit).
   const runEmbeddedSignup = ({
+    tracer,
     timeoutMs = SIGNUP_COMPLETION_TIMEOUT_MS,
     overallTimeoutMs = OVERALL_SIGNUP_TIMEOUT_MS,
   } = {}) => {
+    const activeTracer = tracer || createNoopTracer();
     // In-flight guard: a second call (e.g. double click) never starts a parallel attempt.
     if (isAuthenticating.value) return Promise.resolve(null);
     isAuthenticating.value = true;
@@ -77,8 +81,11 @@ export function useWhatsappEmbeddedSignup({ tracer } = {}) {
         fn(value);
       };
 
-      // cancel()/unmount/route-change → resolve as a (null) cancellation after full teardown.
-      cancelActiveRun = () => settle(resolve, null);
+      // cancel()/unmount/route-change → trace + resolve as a (null) cancellation after full teardown.
+      cancelActiveRun = () => {
+        activeTracer.trace('attempt_cancelled', { result: 'cancelled' });
+        settle(resolve, null);
+      };
 
       const markFirstSignal = () => {
         if (firstSignalSeen) return;
@@ -201,17 +208,12 @@ export function useWhatsappEmbeddedSignup({ tracer } = {}) {
   // Guaranteed cleanup for component unmount / route change: if a run is in flight, settle it as a cancellation
   // and tear down timers + listeners + pending state. A no-op when idle.
   const cancel = () => {
-    if (cancelActiveRun) {
-      activeTracer.trace('attempt_cancelled', { result: 'cancelled' });
-      cancelActiveRun();
-    }
+    if (cancelActiveRun) cancelActiveRun();
   };
 
   return {
     isAuthenticating,
     state,
-    attemptId: activeTracer.attemptId,
-    tracer: activeTracer,
     runEmbeddedSignup,
     cancel,
   };

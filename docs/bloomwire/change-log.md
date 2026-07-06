@@ -18,6 +18,24 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 ### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`
   (base verified, current deployed SHA).
+- **GPT‑5.5 CHANGES REQUIRED — 4 blocking findings fixed (reviewed head `5d4f763`):**
+  1. **Standard flow restored:** the tracer is created **only for Coexistence** (per attempt); Standard/native uses
+     a no-op tracer → **no** attempt id, **no** browser trace events, **no** trace-endpoint call, never `mode=coexistence`;
+     the Standard create payload is exactly pre-PR (no `onboarding_attempt_id`).
+  2. **Fresh attempt id per attempt:** the tracer + random id are minted at the **start of every** Coexistence
+     attempt (not at mount); a retry uses a **different** id + support reference, carried end-to-end (signup →
+     signals → create POST → controller trace → UI); no stale state/timers/events carry over.
+  3. **Lifecycle-safe create:** the create timeout is a lifecycle-scoped, cancellable timer + an `AbortController`
+     (signal threaded store→API→axios) cleared/aborted on success/failure/route-leave/unmount/retry; a per-attempt
+     **stale guard** makes any late response inert (no UI change, no navigation, no late trace, no store refresh —
+     the abort makes the store action reject before its `dispatch('get')`).
+  4. **Forbidden trace payloads rejected:** the trace endpoint now inspects the **raw** body before strong-params
+     and returns **4xx with no log** for ANY non-allow-listed top-level key (unknown or sensitive:
+     `code/auth_code/access_token/token/phone/phone_number/phone_number_id/waba_id/business_id/app_id/configuration_id/url/query/message/metadata/...`);
+     unknown event → 422; a logging-infra failure for an otherwise-valid request still returns 204.
+  - Re-validated: composable **22**, wizard **29**, trace service **9**, trace endpoint **17** (incl. per-sensitive-key
+    rejection), WhatsApp backend regression **314/0**; ESLint + RuboCop + vite build clean; no migration/schema; no
+    Standard/router/Enterprise change beyond restoring Standard; no Meta retry; no record mutation. New head pending push.
 - **Incident (Part 1, evidence-based classification): Stage A** — during a live Coexistence attempt the customer
   completed the Meta flow (3 Meta webhooks at 04:17–04:19 today → `[BLOOMWIRE ROUTER] no handoff-safe setup`,
   `200 OK`), but the **browser received no signal that resolved `runEmbeddedSignup()`** → the create POST was

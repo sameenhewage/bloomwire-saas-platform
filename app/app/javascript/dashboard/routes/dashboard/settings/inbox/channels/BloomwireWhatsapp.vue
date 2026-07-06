@@ -15,7 +15,10 @@ import { useStore } from 'vuex';
 import { useI18n } from 'vue-i18n';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbeddedSignup';
-import { createOnboardingTracer } from 'dashboard/routes/dashboard/settings/inbox/channels/whatsapp/onboardingTrace';
+import {
+  createOnboardingTracer,
+  createNoopTracer,
+} from 'dashboard/routes/dashboard/settings/inbox/channels/whatsapp/onboardingTrace';
 import Icon from 'next/icon/Icon.vue';
 import NextButton from 'next/button/Button.vue';
 import LoadingState from 'dashboard/components/widgets/LoadingState.vue';
@@ -26,17 +29,40 @@ const CREATE_REQUEST_TIMEOUT_MS = 45000;
 
 const store = useStore();
 const { t } = useI18n();
-// One correlation id for this managed-onboarding attempt, shared by the signup composable (browser trace) and
-// the backend create request (controller/service trace). Only the managed flow traces; Standard/native does not.
-const tracer = createOnboardingTracer();
-const attemptId = tracer.attemptId;
-// Short, non-sensitive support reference shown to the user on failure.
-const attemptRef = tracer.shortRef;
 const {
   isAuthenticating,
   runEmbeddedSignup,
   cancel: cancelEmbeddedSignup,
-} = useWhatsappEmbeddedSignup({ tracer });
+} = useWhatsappEmbeddedSignup();
+// Short, non-sensitive support reference for the CURRENT attempt (set per attempt; changes on every retry).
+const attemptRef = ref('');
+
+// Lifecycle-scoped create-request control (Finding 3): a cancellable timer + an AbortController + a per-attempt
+// sequence + a left-flow flag, so an in-flight create is aborted and any late response is ignored (no UI change,
+// no navigation, no trace, no store refresh) on success/failure/retry/unmount/route change.
+let createTimer = null;
+let createAbort = null;
+let attemptSeq = 0;
+let leftFlow = false;
+
+const clearCreateTimer = () => {
+  if (createTimer) {
+    clearTimeout(createTimer);
+    createTimer = null;
+  }
+};
+const abortCreate = () => {
+  if (createAbort) {
+    try {
+      createAbort.abort();
+    } catch (_) {
+      // AbortController is unavailable in some very old runtimes — safe to ignore.
+    }
+    createAbort = null;
+  }
+};
+// True when this attempt no longer owns the flow — the component left, or a newer attempt superseded it.
+const isStale = seq => leftFlow || seq !== attemptSeq;
 
 // 'choose' = connection-choice screen (default); 'register' = the number/connect form (shared by both flows).
 const mode = ref('choose');
@@ -152,33 +178,25 @@ const maybeRenameInbox = async () => {
   }
 };
 
-// Bounds a promise so a never-settling backend request can't hang the UI. Rejects with a tagged timeout error.
-const withTimeout = (promise, ms) =>
-  new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const error = new Error('create request timed out');
-      error.isTimeout = true;
-      reject(error);
-    }, ms);
-    Promise.resolve(promise).then(
-      value => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      error => {
-        clearTimeout(timer);
-        reject(error);
-      }
-    );
-  });
-
 const register = async () => {
   errorMessage.value = '';
+  // Fresh tracer + attempt id PER attempt. Coexistence traces; Standard/native uses a no-op tracer (no attempt
+  // id, no browser trace events, no Coexistence trace endpoint, never logged as mode=coexistence).
+  const tracer = isCoexistence.value
+    ? createOnboardingTracer()
+    : createNoopTracer();
+  attemptRef.value = tracer.shortRef;
+  // Supersede any prior in-flight attempt (retry) and reset its timer/abort so no stale state carries over.
+  attemptSeq += 1;
+  const seq = attemptSeq;
+  clearCreateTimer();
+  abortCreate();
 
   let credentials;
   try {
-    credentials = await runEmbeddedSignup();
+    credentials = await runEmbeddedSignup({ tracer });
   } catch (_) {
+    if (isStale(seq)) return;
     // Signal-acquisition failure (SDK/one-signal/overall timeout) — the composable already traced the cause.
     tracer.trace('frontend_error_transition', {
       result: 'failure',
@@ -188,6 +206,7 @@ const register = async () => {
     errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
     return;
   }
+  if (isStale(seq)) return;
 
   // Resolves null when the customer dismisses the Meta popup (or the run was cancelled).
   if (!credentials) {
@@ -201,21 +220,35 @@ const register = async () => {
   isProcessing.value = true;
   const startedAt = Date.now();
   tracer.trace('create_request_started', { result: 'started' });
-  try {
-    // Only the non-secret Meta signup credentials are sent — no typed number, no credentials. The Coexistence
-    // flow (17D.3) posts to its own endpoint; the Standard flow is unchanged. Both return the same safe DTO.
-    // The onboarding_attempt_id correlates the browser trace with the backend controller/service trace; it is
-    // dropped from the Meta service params server-side.
-    const action = isCoexistence.value
-      ? 'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup'
-      : 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
-    const dto = await withTimeout(
-      store.dispatch(action, {
+
+  // Lifecycle-scoped, cancellable create timeout + abort. The timer aborts the request; unmount/route/retry abort
+  // it too. A late response is ignored by the `isStale` guard so it can never mutate UI/store/trace after the fact.
+  createAbort =
+    typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timedOut = false;
+  clearCreateTimer();
+  createTimer = setTimeout(() => {
+    timedOut = true;
+    abortCreate();
+  }, CREATE_REQUEST_TIMEOUT_MS);
+
+  const action = isCoexistence.value
+    ? 'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup'
+    : 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
+  // Only the non-secret Meta signup credentials are sent. Coexistence adds the opaque onboarding_attempt_id to
+  // correlate the backend trace; Standard sends NO attempt id. The abort `signal` is stripped server-side.
+  const payload = isCoexistence.value
+    ? {
         ...credentials,
-        onboarding_attempt_id: attemptId,
-      }),
-      CREATE_REQUEST_TIMEOUT_MS
-    );
+        onboarding_attempt_id: tracer.attemptId,
+        signal: createAbort?.signal,
+      }
+    : { ...credentials, signal: createAbort?.signal };
+
+  try {
+    const dto = await store.dispatch(action, payload);
+    if (isStale(seq)) return; // late/superseded → ignore (no UI/nav/trace/store side-effects)
+    clearCreateTimer();
     result.value = dto;
     tracer.trace('create_request_succeeded', {
       result: 'success',
@@ -223,10 +256,12 @@ const register = async () => {
       elapsedMs: Date.now() - startedAt,
     });
     await maybeRenameInbox();
+    if (isStale(seq)) return;
     tracer.trace('frontend_success_transition', { result: 'success' });
     tracer.trace('attempt_finished', { result: 'success' });
   } catch (error) {
-    const timedOut = Boolean(error && error.isTimeout);
+    if (isStale(seq)) return; // late/superseded → ignore
+    clearCreateTimer();
     const httpStatus = error?.response?.status;
     tracer.trace(
       timedOut ? 'create_request_timeout' : 'create_request_failed',
@@ -244,14 +279,18 @@ const register = async () => {
     // Never surface the raw server/Meta error — always the sanitized generic message (+ the support reference).
     errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
   } finally {
-    isProcessing.value = false;
+    if (!isStale(seq)) isProcessing.value = false;
   }
 };
 
-// Guaranteed cleanup on unmount / route change: settle any in-flight signup run and stop every loading flag, so
-// listeners/timers/pending state can never leak past this component's lifecycle.
+// Guaranteed cleanup on unmount / route change: settle any in-flight signup run, abort the create request, clear
+// its timer, mark the flow left (so any late response is ignored) and stop every loading flag, so
+// listeners/timers/pending/create state can never leak past this component's lifecycle.
 const cleanupOnboarding = () => {
+  leftFlow = true;
   cancelEmbeddedSignup();
+  clearCreateTimer();
+  abortCreate();
   isProcessing.value = false;
 };
 onBeforeUnmount(cleanupOnboarding);

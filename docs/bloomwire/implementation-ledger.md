@@ -317,6 +317,14 @@
 ### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`.
   No schema/migration · Enterprise: NO · webhook router: UNCHANGED · Standard flow: UNCHANGED · account-1 fixture untouched.
+- **GPT‑5.5 CHANGES REQUIRED (reviewed `5d4f763`) — 4 findings fixed:** (1) tracer created **only for Coexistence**
+  (per attempt); Standard/native = no-op tracer (no attempt id / no trace / no endpoint / not `mode=coexistence`);
+  (2) **fresh attempt id + support ref per attempt** (minted at attempt start, not mount; retry → new id end-to-end);
+  (3) **lifecycle-safe create** — cancellable timer + `AbortController` (signal store→API→axios) cleared/aborted on
+  success/failure/route-leave/unmount/retry + a per-attempt **stale guard** so a late response can't mutate
+  UI/store/trace; (4) trace endpoint **rejects (4xx, no log)** any non-allow-listed/sensitive top-level key (raw-body
+  check before strong-params); unknown event → 422; logging failure → 204. Re-validated: composable 22 · wizard 29 ·
+  trace service 9 · trace endpoint 17; WhatsApp backend **314/0**; ESLint/RuboCop/build clean; no secret in diff.
 - **Incident RCA (Part 1) — Stage A:** the customer completed the Meta flow (3 Meta webhooks 04:17–04:19 →
   `no handoff-safe setup`, 200), but the browser received no signal that resolved `runEmbeddedSignup()`; the create
   POST was never dispatched (0 coexistence POSTs in the current-container logs), 0 records created, and the hang was

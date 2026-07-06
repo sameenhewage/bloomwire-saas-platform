@@ -357,16 +357,13 @@ describe('useWhatsappEmbeddedSignup — bounded state, overall watchdog, cancel 
     expect(setupFacebookSdk).toHaveBeenCalledTimes(1);
   });
 
-  // (17): every stage traces through ONE correlation id (the single injected tracer).
+  // (17): every stage traces through ONE correlation id (the single per-run tracer supplied to runEmbeddedSignup).
   it('emits stage trace events through a single correlation id', async () => {
     initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
     const trace = vi.fn();
     const tracer = { attemptId: 'att-corr-0001', shortRef: 'att-corr', trace };
-    const { runEmbeddedSignup, attemptId } = useWhatsappEmbeddedSignup({
-      tracer,
-    });
-    expect(attemptId).toBe('att-corr-0001');
-    const result = runEmbeddedSignup();
+    const { runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ tracer });
     await flushPromises();
     emit({ event: 'FINISH', data: VALID_BUSINESS });
     await result;
@@ -392,11 +389,11 @@ describe('useWhatsappEmbeddedSignup — bounded state, overall watchdog, cancel 
     });
   });
 
-  // The non-managed (Standard) caller passes no tracer → no attempt id, no trace calls (unchanged behavior).
-  it('is silent (no attempt id) when no tracer is injected', async () => {
+  // The non-managed (Standard) caller passes no tracer → a no-op tracer is used (no trace calls), and the run
+  // still resolves credentials normally (unchanged behavior).
+  it('runs normally and emits no trace when no tracer is supplied to the run', async () => {
     initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
-    const { runEmbeddedSignup, attemptId } = useWhatsappEmbeddedSignup();
-    expect(attemptId).toBeUndefined();
+    const { runEmbeddedSignup } = useWhatsappEmbeddedSignup();
     const result = runEmbeddedSignup();
     await flushPromises();
     emit({ event: 'FINISH', data: VALID_BUSINESS });

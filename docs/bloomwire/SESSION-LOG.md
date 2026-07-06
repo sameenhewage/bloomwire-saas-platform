@@ -81,6 +81,19 @@
 ## C. Session journal  *(newest first — prepend new entries)*
 
 ### 2026-07-06 — Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace (product code; open branch; NOT merged)
+- **GPT‑5.5 CHANGES REQUIRED (reviewed head `5d4f763`) — 4 blocking findings fixed:** (1) **Standard flow restored** —
+  tracer created only for Coexistence (per attempt); Standard/native = no-op tracer (no attempt id, no browser trace,
+  no trace endpoint, not `mode=coexistence`; Standard create payload has no `onboarding_attempt_id`). (2) **Fresh
+  attempt id per attempt** — minted at attempt start (not mount); retry uses a different id + support reference,
+  carried end-to-end; no stale timers/events. (3) **Lifecycle-safe create** — cancellable timer + `AbortController`
+  (signal threaded store→API→axios), cleared/aborted on success/failure/route-leave/unmount/retry, plus a per-attempt
+  stale guard so a late response can't change UI/navigate/emit trace/refresh the store. (4) **Forbidden trace payloads
+  rejected** — endpoint inspects the raw body before strong-params and returns 4xx with NO log for any non-allow-listed
+  or sensitive top-level key (code/token/phone/phone_number_id/waba_id/business_id/app_id/configuration_id/url/query/
+  message/metadata/…); unknown event → 422; logging-infra failure still 204. Re-validated: composable 22 · wizard 29 ·
+  trace service 9 · trace endpoint 17; WhatsApp backend **314/0**; ESLint + RuboCop + vite build clean; no secret in
+  diff; no migration/schema; no router/Enterprise change; Standard restored to pre-PR behavior; no Meta retry; no
+  record mutation. New head pending push; fresh exact-head GPT‑5.5 review requested; do not merge/deploy.
 - **Part 1 RCA (Stage A, evidence-based, read-only):** on deployed `d21a243`, a live Coexistence attempt completed
   the Meta flow (3 Meta webhooks 04:17–04:19 today → `[BLOOMWIRE ROUTER] no handoff-safe setup`, 200 OK) but the
   browser received no signal that resolved `runEmbeddedSignup()` → the create POST was **never dispatched** (0

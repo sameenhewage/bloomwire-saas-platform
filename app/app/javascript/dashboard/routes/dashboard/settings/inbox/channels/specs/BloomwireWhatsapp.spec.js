@@ -12,22 +12,38 @@ import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbe
 // generic message.
 const dispatch = vi.fn();
 const routeLeaveGuard = vi.fn();
+// `trace` = the Coexistence tracer's trace spy; `noopTrace` = the Standard (no-op) tracer's trace spy.
 const trace = vi.fn();
+const noopTrace = vi.fn();
+let tracerSeq = 0;
+// Fresh, distinct attempt id every time the wizard creates a Coexistence tracer (Finding 2). Spied so tests can
+// assert whether a real tracer was created at all (Finding 1: Standard must NOT create one).
+const createOnboardingTracer = vi.fn(() => {
+  tracerSeq += 1;
+  return {
+    attemptId: `att-coex-${tracerSeq}`,
+    shortRef: `coex-${tracerSeq}`,
+    trace,
+  };
+});
+const createNoopTracer = vi.fn(() => ({
+  attemptId: undefined,
+  shortRef: '',
+  trace: noopTrace,
+}));
+
 vi.mock('vuex', () => ({ useStore: () => ({ dispatch }) }));
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: key => key }) }));
 vi.mock('vue-router', () => ({
   onBeforeRouteLeave: fn => routeLeaveGuard(fn),
 }));
 vi.mock('dashboard/composables/useWhatsappEmbeddedSignup');
-// The wizard mints its own tracer; keep it inert + observable (no real network) so trace calls never break tests.
+// Factories are lazily evaluated on first import, so referencing the outer spies is safe.
 vi.mock(
   'dashboard/routes/dashboard/settings/inbox/channels/whatsapp/onboardingTrace',
   () => ({
-    createOnboardingTracer: () => ({
-      attemptId: 'att-wizard-abc123',
-      shortRef: 'att-wiza',
-      trace,
-    }),
+    createOnboardingTracer: (...args) => createOnboardingTracer(...args),
+    createNoopTracer: (...args) => createNoopTracer(...args),
     shortAttemptRef: id => String(id || '').slice(0, 8),
   })
 );
@@ -110,7 +126,11 @@ beforeEach(() => {
   runEmbeddedSignup.mockReset();
   cancelEmbeddedSignup.mockReset();
   trace.mockReset();
+  noopTrace.mockReset();
   routeLeaveGuard.mockReset();
+  createOnboardingTracer.mockClear();
+  createNoopTracer.mockClear();
+  tracerSeq = 0;
 });
 
 describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
@@ -198,18 +218,22 @@ describe('BloomwireWhatsapp.vue — Standard registration flow', () => {
     );
   });
 
-  it('runs Meta embedded signup and posts ONLY the signup credentials to the Bloomwire endpoint', async () => {
+  it('runs Meta embedded signup and posts ONLY the signup credentials to the Bloomwire endpoint (Standard: NO attempt id, NO tracer)', async () => {
     runEmbeddedSignup.mockResolvedValue(CREDS);
     dispatch.mockResolvedValue(DTO);
     const wrapper = mountWizard();
     await startRegister(wrapper);
     await submit(wrapper);
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
-    // Only the non-secret credentials + the opaque onboarding_attempt_id correlation are sent.
-    expect(dispatch).toHaveBeenCalledWith(
-      'inboxes/createBloomwireWhatsAppEmbeddedSignup',
-      { ...CREDS, onboarding_attempt_id: 'att-wizard-abc123' }
+    // Finding 1: Standard sends the non-secret credentials only — NO onboarding_attempt_id.
+    const [, payload] = dispatch.mock.calls.find(
+      c => c[0] === 'inboxes/createBloomwireWhatsAppEmbeddedSignup'
     );
+    expect(payload).toMatchObject(CREDS);
+    expect(payload).not.toHaveProperty('onboarding_attempt_id');
+    // Finding 1: Standard never creates a real tracer nor emits browser trace events.
+    expect(createOnboardingTracer).not.toHaveBeenCalled();
+    expect(trace).not.toHaveBeenCalled();
     // Standard must NOT regress onto the coexistence endpoint
     expect(dispatch).not.toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup',
@@ -326,9 +350,11 @@ describe('BloomwireWhatsapp.vue — Coexistence flow (Phase 17D.3)', () => {
     await startCoexistence(wrapper);
     await submit(wrapper);
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
+    // Coexistence creates a real tracer and sends its opaque attempt id (+ the abort signal, stripped server-side).
+    expect(createOnboardingTracer).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup',
-      { ...CREDS, onboarding_attempt_id: 'att-wizard-abc123' }
+      expect.objectContaining({ ...CREDS, onboarding_attempt_id: 'att-coex-1' })
     );
     expect(dispatch).not.toHaveBeenCalledWith(
       'inboxes/createBloomwireWhatsAppEmbeddedSignup',
@@ -403,15 +429,26 @@ describe('BloomwireWhatsapp.vue — Coexistence flow (Phase 17D.3)', () => {
 describe('BloomwireWhatsapp.vue — bounded create, cleanup, retry + trace', () => {
   const events = () => trace.mock.calls.map(call => call[0]);
 
-  // (8): a create POST that stays pending is bounded and fails closed with a safe error + support reference.
-  it('bounds a pending create request and fails closed with a safe error + support reference', async () => {
+  // (8): a create POST that stays pending is bounded — the timer aborts the request (real axios rejects on the
+  // abort signal), and the UI fails closed with a safe error + support reference.
+  it('bounds a pending create request via the abort signal and fails closed with a safe error + support reference', async () => {
     runEmbeddedSignup.mockResolvedValue(CREDS);
-    dispatch.mockReturnValue(new Promise(() => {})); // never resolves — POST stays pending
+    // Simulate axios: the request stays pending until its abort signal fires, then it rejects (CanceledError).
+    dispatch.mockImplementation(
+      (_action, payload) =>
+        new Promise((_resolve, reject) => {
+          payload.signal?.addEventListener('abort', () =>
+            reject(
+              Object.assign(new Error('canceled'), { name: 'CanceledError' })
+            )
+          );
+        })
+    );
     const wrapper = mountWizard();
     await startCoexistence(wrapper);
     vi.useFakeTimers();
     wrapper.find('form').trigger('submit');
-    await vi.advanceTimersByTimeAsync(45000); // CREATE_REQUEST_TIMEOUT_MS
+    await vi.advanceTimersByTimeAsync(45000); // CREATE_REQUEST_TIMEOUT_MS -> abort -> reject
     vi.useRealTimers();
     await flushPromises();
 
@@ -534,7 +571,9 @@ describe('BloomwireWhatsapp.vue — bounded create, cleanup, retry + trace', () 
   // (16): a double-submit does not fan out into parallel create requests. The composable's in-flight guard
   // returns null for the second, concurrent runEmbeddedSignup() call (see the composable spec) — so only the
   // first attempt reaches the create dispatch.
-  it('does not create parallel attempts on double submit', async () => {
+  it('does not create parallel attempts (IDs or POSTs) on double submit', async () => {
+    // The composable's in-flight guard returns null for the second concurrent run; the wizard also supersedes the
+    // first attempt. Either way, at most ONE create POST is issued — never two parallel ones.
     runEmbeddedSignup.mockResolvedValueOnce(CREDS).mockResolvedValue(null);
     dispatch.mockResolvedValue(DTO);
     const wrapper = mountWizard();
@@ -547,6 +586,107 @@ describe('BloomwireWhatsapp.vue — bounded create, cleanup, retry + trace', () 
         'createBloomwireWhatsAppCoexistenceEmbeddedSignup'
       )
     );
-    expect(creates).toHaveLength(1);
+    expect(creates.length).toBeLessThanOrEqual(1);
+    // No two DISTINCT attempt ids ever reach a create POST (no parallel IDs).
+    const ids = new Set(creates.map(c => c[1].onboarding_attempt_id));
+    expect(ids.size).toBeLessThanOrEqual(1);
+  });
+});
+
+// GPT-5.5 CHANGES REQUIRED — Finding 2 (fresh attempt id per attempt) + Finding 3 (lifecycle-safe create / late
+// response guard). All Meta/store calls mocked; no real Meta, no real HTTP.
+describe('BloomwireWhatsapp.vue — fresh attempt id + lifecycle-safe create (findings 2 & 3)', () => {
+  const events = () => trace.mock.calls.map(call => call[0]);
+  const lastCoexPayload = () =>
+    dispatch.mock.calls
+      .filter(c =>
+        String(c[0]).includes(
+          'createBloomwireWhatsAppCoexistenceEmbeddedSignup'
+        )
+      )
+      .at(-1)[1];
+
+  // (2) attempt 1 and retry attempt 2 mint DIFFERENT ids; each id flows end-to-end into its own create POST.
+  it('mints a fresh attempt id (new tracer) for every Coexistence attempt and retry', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({ response: { status: 500 } }); // both attempts fail so we can retry
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+
+    await submit(wrapper); // attempt 1
+    const id1 = lastCoexPayload().onboarding_attempt_id;
+
+    await submit(wrapper); // retry -> attempt 2
+    const id2 = lastCoexPayload().onboarding_attempt_id;
+
+    expect(createOnboardingTracer).toHaveBeenCalledTimes(2);
+    expect(id1).toBe('att-coex-1');
+    expect(id2).toBe('att-coex-2');
+    expect(id1).not.toBe(id2);
+  });
+
+  // (3) a late create SUCCESS after leaving the flow (unmount) is ignored: no success trace, no finish trace.
+  it('ignores a late create success after unmount (no late trace / transition)', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    let resolveDispatch;
+    dispatch.mockReturnValue(
+      new Promise(resolve => {
+        resolveDispatch = resolve;
+      })
+    );
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    wrapper.find('form').trigger('submit');
+    await flushPromises(); // create in flight
+    expect(events()).toContain('create_request_started');
+
+    wrapper.unmount(); // leave the flow -> cancel + abort + mark left
+    expect(cancelEmbeddedSignup).toHaveBeenCalled();
+    const before = events().length;
+
+    resolveDispatch(DTO); // late success arrives after leaving
+    await flushPromises();
+
+    const after = events().slice(before);
+    expect(after).not.toContain('create_request_succeeded');
+    expect(after).not.toContain('frontend_success_transition');
+    expect(after).not.toContain('attempt_finished');
+  });
+
+  // (3) a late create FAILURE after leaving the flow is likewise ignored (no late error trace / transition).
+  it('ignores a late create failure after unmount', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    let rejectDispatch;
+    dispatch.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectDispatch = reject;
+      })
+    );
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    wrapper.find('form').trigger('submit');
+    await flushPromises();
+    wrapper.unmount();
+    const before = events().length;
+
+    rejectDispatch({ response: { status: 500 } });
+    await flushPromises();
+
+    const after = events().slice(before);
+    expect(after).not.toContain('create_request_failed');
+    expect(after).not.toContain('frontend_error_transition');
+  });
+
+  // (3) a route change during a pending create cancels the run (cancel + guard prevents late mutation).
+  it('cancels the in-flight run on route change during a pending create', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockReturnValue(new Promise(() => {}));
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+    wrapper.find('form').trigger('submit');
+    await flushPromises();
+    const guard = routeLeaveGuard.mock.calls.at(-1)[0];
+    guard(); // route leave
+    expect(cancelEmbeddedSignup).toHaveBeenCalled();
   });
 });

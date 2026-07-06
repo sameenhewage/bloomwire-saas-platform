@@ -61,23 +61,33 @@ RSpec.describe 'Bloomwire WhatsApp onboarding trace endpoint', type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
-    it 'ignores sensitive / non-allow-listed metadata (only allow-listed keys are forwarded)' do
-      captured = nil
-      allow(Bloomwire::OnboardingTrace).to receive(:emit) do |args|
-        captured = args
-        true
-      end
-      post url, headers: admin.create_new_auth_token, params: valid_body.merge(
-        code: 'SECRET-CODE', access_token: 'SECRET-TOKEN', phone_number_id: '15551230001',
-        waba_id: 'WABA-SECRET', business_id: 'BIZ-SECRET', arbitrary: 'nope'
-      ), as: :json
+    # (Finding 4) Forbidden/unknown top-level keys are REJECTED (4xx) BEFORE strong-param filtering — not
+    # silently dropped — and NO trace is emitted for a rejected request.
+    it 'rejects an unknown top-level key with 4xx and logs nothing' do
+      expect(Bloomwire::OnboardingTrace).not_to receive(:emit)
+      post url, headers: admin.create_new_auth_token,
+                params: valid_body.merge(arbitrary: 'nope'), as: :json
+      expect(response).to have_http_status(:bad_request)
+    end
 
+    %w[code auth_code access_token token phone phone_number phone_number_id waba_id business_id app_id
+       configuration_id url query message metadata].each do |sensitive_key|
+      it "rejects the sensitive key '#{sensitive_key}' with 4xx and logs nothing" do
+        expect(Bloomwire::OnboardingTrace).not_to receive(:emit)
+        post url, headers: admin.create_new_auth_token,
+                  params: valid_body.merge(sensitive_key => 'SENSITIVE-VALUE'), as: :json
+        expect(response).to have_http_status(:bad_request)
+        expect(response.body).not_to include('SENSITIVE-VALUE')
+      end
+    end
+
+    it 'accepts a clean, fully allow-listed payload (204) and emits the sanitized trace' do
+      expect(Bloomwire::OnboardingTrace).to receive(:emit).and_call_original
+      post url, headers: admin.create_new_auth_token, params: {
+        onboarding_attempt_id: 'att-abc-123456', event: 'create_request_failed',
+        result: 'failure', elapsed_ms: 250, http_status: 502, error_code: 'http_502'
+      }, as: :json
       expect(response).to have_http_status(:no_content)
-      # Only the allow-listed keys are forwarded to the trace service.
-      expect(captured.keys).to match_array(%i[attempt_id account_id actor_id event source result elapsed_ms http_status error_code])
-      expect(captured.values.map(&:to_s).join(' ')).not_to include('SECRET-CODE')
-      expect(captured.values.map(&:to_s).join(' ')).not_to include('SECRET-TOKEN')
-      expect(captured.values.map(&:to_s).join(' ')).not_to include('WABA-SECRET')
     end
 
     # (20) logging failure never breaks the caller.

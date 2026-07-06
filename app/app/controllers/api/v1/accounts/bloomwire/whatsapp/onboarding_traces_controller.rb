@@ -7,15 +7,27 @@
 # failure must never break onboarding, so a successfully-authorized+shaped request always returns 204 even if the
 # underlying write fails.
 class Api::V1::Accounts::Bloomwire::Whatsapp::OnboardingTracesController < Api::V1::Accounts::BaseController
+  # Disable Rails' parameter wrapping so we can inspect the EXACT submitted body keys (no injected wrapper).
+  wrap_parameters false
+
   before_action :ensure_managed_whatsapp_self_serve!
   before_action :check_admin_authorization?
   before_action :enforce_trace_rate_limit!
+  before_action :reject_forbidden_trace_keys!
 
   RATE_LIMIT = 120       # max trace events ...
   RATE_PERIOD = 60       # ... per this many seconds, per (account, actor)
 
-  # Only these keys are ever read off the request body; everything else is ignored/rejected.
+  # The ONLY body keys a trace may carry. Anything else — unknown OR sensitive — is rejected outright (4xx),
+  # not silently dropped. Explicitly covers the forbidden classes below.
   ALLOWED_KEYS = %w[onboarding_attempt_id event result elapsed_ms http_status error_code].freeze
+
+  # Documented, explicitly-rejected sensitive/forbidden top-level keys (already excluded by the allow-list; listed
+  # here as the security contract). A request carrying any of these — or any other non-allow-listed key — is 4xx.
+  FORBIDDEN_KEYS = %w[
+    code auth_code access_token token phone phone_number phone_number_id waba_id business_id app_id
+    configuration_id url query message metadata arbitrary
+  ].freeze
 
   def create
     attrs = trace_params
@@ -38,6 +50,15 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::OnboardingTracesController < Api::
   end
 
   private
+
+  # Inspect the RAW submitted body BEFORE strong-parameter filtering and reject the whole request (4xx) if it
+  # carries ANY top-level key outside the strict allow-list — unknown OR sensitive (see FORBIDDEN_KEYS). This
+  # closes the "silently ignore and still 204" gap. No trace is emitted for a rejected request. Only field NAMES
+  # are inspected; no value is ever read or echoed.
+  def reject_forbidden_trace_keys!
+    extra = request.request_parameters.keys.map(&:to_s) - ALLOWED_KEYS
+    render(json: { error: 'forbidden_key' }, status: :bad_request) if extra.any?
+  end
 
   # Strong params drop every key that is not explicitly allow-listed, so arbitrary/free-text payloads and
   # sensitive fields (code, access_token, phone_number_id, waba_id, business_id, ...) can never be read.
