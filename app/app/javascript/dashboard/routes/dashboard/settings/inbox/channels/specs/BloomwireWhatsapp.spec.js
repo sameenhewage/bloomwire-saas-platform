@@ -567,29 +567,127 @@ describe('BloomwireWhatsapp.vue — bounded create, cleanup, retry + trace', () 
       true
     );
   });
+});
 
-  // (16): a double-submit does not fan out into parallel create requests. The composable's in-flight guard
-  // returns null for the second, concurrent runEmbeddedSignup() call (see the composable spec) — so only the
-  // first attempt reaches the create dispatch.
-  it('does not create parallel attempts (IDs or POSTs) on double submit', async () => {
-    // The composable's in-flight guard returns null for the second concurrent run; the wizard also supersedes the
-    // first attempt. Either way, at most ONE create POST is issued — never two parallel ones.
-    runEmbeddedSignup.mockResolvedValueOnce(CREDS).mockResolvedValue(null);
-    dispatch.mockResolvedValue(DTO);
-    const wrapper = mountWizard();
-    await startCoexistence(wrapper);
-    wrapper.find('form').trigger('submit');
-    wrapper.find('form').trigger('submit');
-    await flushPromises();
-    const creates = dispatch.mock.calls.filter(call =>
+// GPT-5.5 CHANGES REQUIRED (remaining blocker) — double-submit attempt ownership. The wizard-level active-attempt
+// guard makes a second submit a pure no-op while a signup OR create is in flight, so the first attempt stays
+// authoritative (one tracer, one id, one signup launch, one POST; no supersede, no abort, no support-ref change).
+describe('BloomwireWhatsapp.vue — double-submit attempt ownership (active-attempt guard)', () => {
+  const coexCreates = () =>
+    dispatch.mock.calls.filter(call =>
       String(call[0]).includes(
         'createBloomwireWhatsAppCoexistenceEmbeddedSignup'
       )
     );
-    expect(creates.length).toBeLessThanOrEqual(1);
-    // No two DISTINCT attempt ids ever reach a create POST (no parallel IDs).
-    const ids = new Set(creates.map(c => c[1].onboarding_attempt_id));
-    expect(ids.size).toBeLessThanOrEqual(1);
+
+  // A signup that stays pending until we resolve it — lets the second click land WHILE the first is authenticating.
+  const pendingSignup = () => {
+    let resolveSignup;
+    runEmbeddedSignup.mockReturnValue(
+      new Promise(resolve => {
+        resolveSignup = resolve;
+      })
+    );
+    return () => resolveSignup(CREDS);
+  };
+
+  // (1)(2)(5)(7) double-submit DURING Meta signup → one tracer, one attempt id, one signup launch, no abort.
+  it('is a pure no-op on a second submit during Meta signup (one tracer, one id, one signup, no abort)', async () => {
+    const finishSignup = pendingSignup();
+    dispatch.mockResolvedValue(DTO);
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+
+    wrapper.find('form').trigger('submit'); // first — starts the attempt, awaits signup
+    await flushPromises();
+    wrapper.find('form').trigger('submit'); // second — must be a pure no-op
+    await flushPromises();
+
+    expect(createOnboardingTracer).toHaveBeenCalledTimes(1); // one tracer / one attempt id
+    expect(runEmbeddedSignup).toHaveBeenCalledTimes(1); // one Meta signup launch
+    expect(cancelEmbeddedSignup).not.toHaveBeenCalled(); // active attempt not aborted by the 2nd click
+
+    finishSignup();
+    await flushPromises();
+
+    // (3)(6) first attempt remains authoritative: exactly one create POST, carrying the FIRST attempt id.
+    expect(coexCreates()).toHaveLength(1);
+    expect(coexCreates()[0][1].onboarding_attempt_id).toBe('att-coex-1');
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      true
+    );
+  });
+
+  // (4) the support reference is not changed by a duplicate click (only one tracer is ever created).
+  it('does not change the support reference on a duplicate click', async () => {
+    const finishSignup = pendingSignup();
+    dispatch.mockRejectedValue({ response: { status: 500 } }); // fail so the error + ref render
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+
+    wrapper.find('form').trigger('submit');
+    await flushPromises();
+    wrapper.find('form').trigger('submit'); // no-op
+    await flushPromises();
+    finishSignup();
+    await flushPromises();
+
+    expect(createOnboardingTracer).toHaveBeenCalledTimes(1);
+    const refEl = wrapper.find('[data-testid="bloomwire-wa-attempt-ref"]');
+    expect(refEl.exists()).toBe(true);
+  });
+
+  // (8) during creating_inbox the loader replaces the form (real UI protection → no second submit is possible),
+  // and the guard also blocks re-entry, so exactly one create POST is ever issued.
+  it('is a pure no-op during creating_inbox: form hidden + exactly one create POST', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    let resolveCreate;
+    dispatch.mockReturnValue(
+      new Promise(resolve => {
+        resolveCreate = resolve;
+      })
+    );
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+
+    wrapper.find('form').trigger('submit'); // signup resolves, create POST goes in flight (pending)
+    await flushPromises();
+    expect(coexCreates()).toHaveLength(1);
+
+    // creating_inbox: the register form/submit is not rendered (loader shown), so the user cannot submit again.
+    expect(wrapper.find('.loading-state').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      false
+    );
+    expect(wrapper.find('form').exists()).toBe(false);
+
+    resolveCreate(DTO);
+    await flushPromises();
+    expect(coexCreates()).toHaveLength(1); // still exactly one POST
+    expect(createOnboardingTracer).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      true
+    );
+  });
+
+  // (9) after a terminal failure, a manual retry starts a FRESH attempt id.
+  it('mints a different attempt id on manual retry after a terminal failure', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValueOnce({ response: { status: 500 } });
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper);
+
+    await submit(wrapper); // attempt 1 → fails (terminal)
+    const id1 = coexCreates().at(-1)[1].onboarding_attempt_id;
+
+    dispatch.mockResolvedValueOnce(DTO);
+    await submit(wrapper); // retry → attempt 2
+    const id2 = coexCreates().at(-1)[1].onboarding_attempt_id;
+
+    expect(id1).toBe('att-coex-1');
+    expect(id2).toBe('att-coex-2');
+    expect(id1).not.toBe(id2);
+    expect(createOnboardingTracer).toHaveBeenCalledTimes(2);
   });
 });
 

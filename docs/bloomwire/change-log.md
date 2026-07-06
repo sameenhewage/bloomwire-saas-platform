@@ -36,6 +36,18 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   - Re-validated: composable **20**, wizard **29**, trace service **8**, trace endpoint **25** (incl. per-sensitive-key
     rejection), WhatsApp backend regression **314/0**; ESLint + RuboCop + vite build clean; no migration/schema; no
     Standard/router/Enterprise change beyond restoring Standard; no Meta retry; no record mutation. New head pending push.
+- **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `4d041b5`) — remaining blocker fixed: double-submit attempt ownership.**
+  `register()` mutated attempt state (tracer / attempt id / support reference / `attemptSeq` / `AbortController` /
+  timer) **before** the composable's in-flight guard, so a rapid second click could mint a second id, bump `attemptSeq`,
+  and supersede/abort the first valid attempt. Fix: a **wizard-owned `attemptActive` guard** set the instant an attempt
+  starts (before ANY attempt-state mutation) and cleared only on a terminal state (success/failure/cancel/timeout/
+  route-leave/unmount). A second submit while a signup OR create is active is now a **pure no-op** — exactly one tracer,
+  one attempt id, one Meta signup launch, one create POST (carrying the first id); no supersession, no abort of the
+  active attempt, no support-reference change. Manual retry after a terminal failure still mints a fresh id. Wizard spec
+  now **32** (added: no-op during signup — one tracer/id/signup/no-abort; support-ref unchanged; no-op during
+  creating_inbox — form hidden + one POST; retry → new id; RED-proven: without the guard a double-submit mints 2
+  tracers). Standard flow unchanged. Re-validated: composable **20** · wizard **32** · trace service **8** · trace
+  endpoint **25**; WhatsApp backend **314/0**; ESLint + vite build clean; no secret in diff; no migration; no Meta retry.
 - **Incident (Part 1, evidence-based classification): Stage A** — during a live Coexistence attempt the customer
   completed the Meta flow (3 Meta webhooks at 04:17–04:19 today → `[BLOOMWIRE ROUTER] no handoff-safe setup`,
   `200 OK`), but the **browser received no signal that resolved `runEmbeddedSignup()`** → the create POST was

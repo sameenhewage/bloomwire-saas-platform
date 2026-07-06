@@ -44,6 +44,10 @@ let createTimer = null;
 let createAbort = null;
 let attemptSeq = 0;
 let leftFlow = false;
+// Wizard-owned "an attempt is in flight" flag. Set the instant an attempt starts (before ANY attempt-state
+// mutation) and cleared only on a terminal state, so a duplicate submit while signup OR create is active is a
+// pure no-op — the first attempt stays authoritative and is never superseded/aborted by a second click.
+let attemptActive = false;
 
 const clearCreateTimer = () => {
   if (createTimer) {
@@ -179,6 +183,14 @@ const maybeRenameInbox = async () => {
 };
 
 const register = async () => {
+  // Wizard-level active-attempt guard — MUST run before any attempt-state mutation (tracer / attempt id /
+  // support reference / attemptSeq / AbortController / timer). While a signup OR create is already in flight, a
+  // second submit is a pure no-op: the first attempt stays authoritative until it reaches a terminal state
+  // (success / failure / cancel / timeout / route-leave / unmount). Retry after a terminal state is allowed and
+  // mints a fresh attempt id.
+  if (attemptActive) return;
+  attemptActive = true;
+
   errorMessage.value = '';
   // Fresh tracer + attempt id PER attempt. Coexistence traces; Standard/native uses a no-op tracer (no attempt
   // id, no browser trace events, no Coexistence trace endpoint, never logged as mode=coexistence).
@@ -186,100 +198,107 @@ const register = async () => {
     ? createOnboardingTracer()
     : createNoopTracer();
   attemptRef.value = tracer.shortRef;
-  // Supersede any prior in-flight attempt (retry) and reset its timer/abort so no stale state carries over.
+  // New attempt sequence. The guard above guarantees no active attempt is superseded here; this only advances
+  // when starting a fresh attempt, so a late response from a PREVIOUS (already-terminal) attempt is ignored.
   attemptSeq += 1;
   const seq = attemptSeq;
   clearCreateTimer();
   abortCreate();
 
-  let credentials;
   try {
-    credentials = await runEmbeddedSignup({ tracer });
-  } catch (_) {
+    let credentials;
+    try {
+      credentials = await runEmbeddedSignup({ tracer });
+    } catch (_) {
+      if (isStale(seq)) return;
+      // Signal-acquisition failure (SDK/one-signal/overall timeout) — the composable already traced the cause.
+      tracer.trace('frontend_error_transition', {
+        result: 'failure',
+        errorCode: 'signal_failure',
+      });
+      tracer.trace('attempt_finished', { result: 'failure' });
+      errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
+      return;
+    }
     if (isStale(seq)) return;
-    // Signal-acquisition failure (SDK/one-signal/overall timeout) — the composable already traced the cause.
-    tracer.trace('frontend_error_transition', {
-      result: 'failure',
-      errorCode: 'signal_failure',
-    });
-    tracer.trace('attempt_finished', { result: 'failure' });
-    errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
-    return;
-  }
-  if (isStale(seq)) return;
 
-  // Resolves null when the customer dismisses the Meta popup (or the run was cancelled).
-  if (!credentials) {
-    tracer.trace('attempt_finished', { result: 'cancelled' });
-    errorMessage.value = t(
-      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CANCELLED'
-    );
-    return;
-  }
+    // Resolves null when the customer dismisses the Meta popup (or the run was cancelled).
+    if (!credentials) {
+      tracer.trace('attempt_finished', { result: 'cancelled' });
+      errorMessage.value = t(
+        'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CANCELLED'
+      );
+      return;
+    }
 
-  isProcessing.value = true;
-  const startedAt = Date.now();
-  tracer.trace('create_request_started', { result: 'started' });
+    isProcessing.value = true;
+    const startedAt = Date.now();
+    tracer.trace('create_request_started', { result: 'started' });
 
-  // Lifecycle-scoped, cancellable create timeout + abort. The timer aborts the request; unmount/route/retry abort
-  // it too. A late response is ignored by the `isStale` guard so it can never mutate UI/store/trace after the fact.
-  createAbort =
-    typeof AbortController !== 'undefined' ? new AbortController() : null;
-  let timedOut = false;
-  clearCreateTimer();
-  createTimer = setTimeout(() => {
-    timedOut = true;
-    abortCreate();
-  }, CREATE_REQUEST_TIMEOUT_MS);
-
-  const action = isCoexistence.value
-    ? 'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup'
-    : 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
-  // Only the non-secret Meta signup credentials are sent. Coexistence adds the opaque onboarding_attempt_id to
-  // correlate the backend trace; Standard sends NO attempt id. The abort `signal` is stripped server-side.
-  const payload = isCoexistence.value
-    ? {
-        ...credentials,
-        onboarding_attempt_id: tracer.attemptId,
-        signal: createAbort?.signal,
-      }
-    : { ...credentials, signal: createAbort?.signal };
-
-  try {
-    const dto = await store.dispatch(action, payload);
-    if (isStale(seq)) return; // late/superseded → ignore (no UI/nav/trace/store side-effects)
+    // Lifecycle-scoped, cancellable create timeout + abort. The timer aborts the request; unmount/route abort it
+    // too. A late response is ignored by the `isStale` guard so it can never mutate UI/store/trace after the fact.
+    createAbort =
+      typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timedOut = false;
     clearCreateTimer();
-    result.value = dto;
-    tracer.trace('create_request_succeeded', {
-      result: 'success',
-      httpStatus: 201,
-      elapsedMs: Date.now() - startedAt,
-    });
-    await maybeRenameInbox();
-    if (isStale(seq)) return;
-    tracer.trace('frontend_success_transition', { result: 'success' });
-    tracer.trace('attempt_finished', { result: 'success' });
-  } catch (error) {
-    if (isStale(seq)) return; // late/superseded → ignore
-    clearCreateTimer();
-    const httpStatus = error?.response?.status;
-    tracer.trace(
-      timedOut ? 'create_request_timeout' : 'create_request_failed',
-      {
-        result: timedOut ? 'timeout' : 'failure',
-        httpStatus,
-        errorCode: timedOut
-          ? 'create_timeout'
-          : `http_${httpStatus || 'error'}`,
+    createTimer = setTimeout(() => {
+      timedOut = true;
+      abortCreate();
+    }, CREATE_REQUEST_TIMEOUT_MS);
+
+    const action = isCoexistence.value
+      ? 'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup'
+      : 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
+    // Only the non-secret Meta signup credentials are sent. Coexistence adds the opaque onboarding_attempt_id to
+    // correlate the backend trace; Standard sends NO attempt id. The abort `signal` is stripped server-side.
+    const payload = isCoexistence.value
+      ? {
+          ...credentials,
+          onboarding_attempt_id: tracer.attemptId,
+          signal: createAbort?.signal,
+        }
+      : { ...credentials, signal: createAbort?.signal };
+
+    try {
+      const dto = await store.dispatch(action, payload);
+      if (isStale(seq)) return; // late/superseded → ignore (no UI/nav/trace/store side-effects)
+      clearCreateTimer();
+      result.value = dto;
+      tracer.trace('create_request_succeeded', {
+        result: 'success',
+        httpStatus: 201,
         elapsedMs: Date.now() - startedAt,
-      }
-    );
-    tracer.trace('frontend_error_transition', { result: 'failure' });
-    tracer.trace('attempt_finished', { result: 'failure' });
-    // Never surface the raw server/Meta error — always the sanitized generic message (+ the support reference).
-    errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
+      });
+      await maybeRenameInbox();
+      if (isStale(seq)) return;
+      tracer.trace('frontend_success_transition', { result: 'success' });
+      tracer.trace('attempt_finished', { result: 'success' });
+    } catch (error) {
+      if (isStale(seq)) return; // late/superseded → ignore
+      clearCreateTimer();
+      const httpStatus = error?.response?.status;
+      tracer.trace(
+        timedOut ? 'create_request_timeout' : 'create_request_failed',
+        {
+          result: timedOut ? 'timeout' : 'failure',
+          httpStatus,
+          errorCode: timedOut
+            ? 'create_timeout'
+            : `http_${httpStatus || 'error'}`,
+          elapsedMs: Date.now() - startedAt,
+        }
+      );
+      tracer.trace('frontend_error_transition', { result: 'failure' });
+      tracer.trace('attempt_finished', { result: 'failure' });
+      // Never surface the raw server/Meta error — always the sanitized generic message (+ support reference).
+      errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
+    } finally {
+      if (!isStale(seq)) isProcessing.value = false;
+    }
   } finally {
-    if (!isStale(seq)) isProcessing.value = false;
+    // The attempt reached a terminal state on this (non-left, non-superseded) path → free the wizard so a manual
+    // retry can start a fresh attempt. If the flow was left/superseded, `cleanupOnboarding` already cleared it.
+    if (!isStale(seq)) attemptActive = false;
   }
 };
 
@@ -292,6 +311,7 @@ const cleanupOnboarding = () => {
   clearCreateTimer();
   abortCreate();
   isProcessing.value = false;
+  attemptActive = false;
 };
 onBeforeUnmount(cleanupOnboarding);
 onBeforeRouteLeave(() => {
