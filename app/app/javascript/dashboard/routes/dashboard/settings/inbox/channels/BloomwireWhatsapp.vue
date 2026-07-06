@@ -660,9 +660,10 @@ onBeforeRouteLeave(() => {
       <button
         type="button"
         data-testid="bloomwire-wa-back"
-        class="text-xs text-n-slate-11 mb-4 hover:text-n-slate-12"
+        class="inline-flex items-center gap-1 text-xs text-n-slate-11 mb-6 hover:text-n-slate-12"
         @click="backToChoose"
       >
+        <Icon icon="i-lucide-chevron-left" class="size-3.5" />
         {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.BACK') }}
       </button>
       <div class="flex flex-col items-start mb-6 text-start">
@@ -684,15 +685,16 @@ onBeforeRouteLeave(() => {
         </p>
       </div>
 
-      <form class="flex flex-col mx-0 mb-2" @submit.prevent="register">
+      <form class="flex flex-col gap-5 mx-0" @submit.prevent="register">
         <div class="flex-shrink-0 flex-grow-0">
-          <label>
+          <label class="flex flex-col gap-1.5">
             {{
               $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.INBOX_NAME.LABEL')
             }}
             <input
               v-model="inboxName"
               type="text"
+              class="mb-0"
               data-testid="bloomwire-wa-inbox-name"
               :placeholder="
                 $t(
@@ -701,7 +703,7 @@ onBeforeRouteLeave(() => {
               "
             />
           </label>
-          <p class="text-xs text-n-slate-10 -mt-2 mb-4">
+          <p class="text-xs text-n-slate-10 mt-1.5">
             {{
               $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.INBOX_NAME.HELP')
             }}
@@ -709,13 +711,14 @@ onBeforeRouteLeave(() => {
         </div>
 
         <div class="flex-shrink-0 flex-grow-0">
-          <label>
+          <label class="flex flex-col gap-1.5">
             {{
               $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.PHONE_NUMBER.LABEL')
             }}
             <input
               v-model="expectedNumber"
               type="text"
+              class="mb-0"
               data-testid="bloomwire-wa-phone-number"
               :placeholder="
                 $t(
@@ -724,13 +727,13 @@ onBeforeRouteLeave(() => {
               "
             />
           </label>
-          <p class="text-xs text-n-slate-10 -mt-2">
+          <p class="text-xs text-n-slate-10 mt-1.5">
             {{
               $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.PHONE_NUMBER.HELP')
             }}
           </p>
           <p
-            class="text-xs text-n-slate-10 mb-4"
+            class="text-xs text-n-slate-10 mt-0.5"
             data-testid="bloomwire-wa-phone-number-note"
           >
             {{
@@ -739,7 +742,7 @@ onBeforeRouteLeave(() => {
           </p>
         </div>
 
-        <div v-if="errorMessage" class="mb-4">
+        <div v-if="errorMessage">
           <p data-testid="bloomwire-wa-error" class="text-sm text-n-ruby-11">
             {{ errorMessage }}
           </p>
@@ -759,7 +762,7 @@ onBeforeRouteLeave(() => {
           </p>
         </div>
 
-        <div class="flex mt-2">
+        <div class="flex">
           <NextButton
             type="submit"
             solid
