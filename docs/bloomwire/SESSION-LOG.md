@@ -81,6 +81,15 @@
 ## C. Session journal  *(newest first — prepend new entries)*
 
 ### 2026-07-06 — Admin "Remove WhatsApp Inbox" (managed deprovision) (product code; open branch; NOT merged)
+- **GPT‑5.5 CHANGES REQUIRED (3rd pass, reviewed `44b3e3c`) — fixed:** (1) `RecordNotFound` now uses the SAME
+  fresh-state rule as `RecordNotDestroyed` — swallowed only when a fresh `Inbox.exists?` proves the inbox is gone,
+  else sanitized `removal_failed` + re-raise (the old false-positive race spec is replaced with gone-vs-surviving
+  RED→GREEN). (2) the enqueue-failure block/enqueue/restore decision is **serialized** with `setup.with_lock` and the
+  prior status is read UNDER the lock, so a failed request can never restore (reopen) routing that another accepted
+  request blocked (concurrency regression + lock-usage assertion). (3) enqueue failures (false /
+  not-`successfully_enqueued?` / raised) now emit a sanitized `removal_failed` audit. Re-validated: service 27 · job 1
+  · request 8 · component 11 · settings-gate 4; full WhatsApp backend regression **493/0** (1 pending); FE 64; ESLint
+  + RuboCop + vite build clean; no secret in diff. New head pending push; awaiting fresh GPT‑5.5 exact-head review.
 - **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `2a96f49`) — fixed:** (1) `.purge!` no longer swallows
   `RecordNotDestroyed` — a surviving inbox logs a sanitized `removal_failed` and RE-RAISES for Sidekiq retry (only a
   fresh `Inbox.exists?`=false counts as idempotent success); the `RecordNotFound` race stays a safe no-op. (2–3)

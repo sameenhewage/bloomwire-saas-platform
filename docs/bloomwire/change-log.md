@@ -17,6 +17,20 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ### Admin — Remove WhatsApp Inbox (managed deprovision) — OPEN (product code; not merged)
 - **Branch:** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c` (post‑#131 merge SHA).
+- **GPT‑5.5 CHANGES REQUIRED (3rd pass, reviewed `44b3e3c`) — fixed:**
+  1. **`RecordNotFound` gets the same fresh-state rule as `RecordNotDestroyed`.** `.purge!` now swallows
+     `RecordNotFound` ONLY when a fresh `Inbox.exists?` check proves the target inbox is gone; otherwise (a
+     surviving/partially-purged/blocked inbox) it emits a sanitized `removal_failed` and **re-raises for retry**.
+     The false-positive race spec is replaced with gone-vs-surviving cases (RED→GREEN).
+  2. **Enqueue-failure routing restoration is serialized.** `#prepare` runs the block/enqueue/restore decision under
+     a **row lock** (`setup.with_lock`) and reads the prior status **under the lock**, so a failed request can never
+     restore (reopen) routing that another already-ACCEPTED request blocked. Added a concurrency regression
+     (accepted removal blocks → later failed enqueue keeps it blocked) + a lock-usage assertion.
+  3. **Enqueue failures emit `removal_failed`.** The `false` / not-`successfully_enqueued?` / raised branches now log
+     a sanitized `removal_failed` (internal ids/actor + safe reason/error class) before returning `:enqueue_failed`;
+     audit assertions added.
+  - Re-validated: service 27 · job 1 · request 8 · component 11 · settings-gate 4; full WhatsApp backend regression
+    **493/0** (1 pending); FE 64; ESLint + RuboCop + vite build clean; no secret in diff.
 - **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `2a96f49`) — fixed:**
   1. **`RecordNotDestroyed` no longer swallowed.** `.purge!` keeps the safe `RecordNotFound` race no-op, but a
      `RecordNotDestroyed` (e.g. a halted destroy callback) is treated as success ONLY if a fresh `Inbox.exists?`

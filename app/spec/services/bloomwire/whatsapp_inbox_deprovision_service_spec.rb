@@ -76,14 +76,17 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
     end
 
     describe 'enqueue acceptance (findings 2 & 3)' do
-      # A `perform_later` that returns false (a halted enqueue callback) is a confirmed failure.
-      it 'returns :enqueue_failed and RESTORES prior routing when perform_later returns false' do
+      # A `perform_later` that returns false (a halted enqueue callback) is a confirmed failure. (finding 3) it also
+      # emits a sanitized removal_failed audit.
+      it 'returns :enqueue_failed, RESTORES prior routing, and audits removal_failed when perform_later returns false' do
         inbox, _channel, setup = managed_inbox
+        allow(Rails.logger).to receive(:warn)
         allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_return(false)
 
         expect(service(inbox).prepare.error).to eq(:enqueue_failed)
         expect(setup.reload.setup_status).to eq('ready_for_webhook') # deterministic: routing restored
         expect(Inbox.exists?(inbox.id)).to be(true)
+        expect(Rails.logger).to have_received(:warn).with(/removal_failed .*reason=enqueue_not_accepted/)
       end
 
       # A returned job that was not accepted by the adapter (successfully_enqueued? == false) is also a failure.
@@ -97,13 +100,15 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
         expect(setup.reload.setup_status).to eq('ready_for_webhook')
       end
 
-      # A RAISED enqueue (adapter/broker down) is a confirmed failure, not a 202.
-      it 'returns :enqueue_failed and restores routing when perform_later raises' do
+      # A RAISED enqueue (adapter/broker down) is a confirmed failure, not a 202; the audit carries the error class.
+      it 'returns :enqueue_failed, restores routing, and audits the error class when perform_later raises' do
         inbox, _channel, setup = managed_inbox
+        allow(Rails.logger).to receive(:warn)
         allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_raise(StandardError, 'broker down')
 
         expect(service(inbox).prepare.error).to eq(:enqueue_failed)
         expect(setup.reload.setup_status).to eq('ready_for_webhook')
+        expect(Rails.logger).to have_received(:warn).with(/removal_failed .*reason=StandardError/)
       end
 
       it 'allows a successful manual retry after an enqueue failure' do
@@ -116,6 +121,36 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
           expect(service(inbox).prepare).to be_success
         end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
         expect(setup.reload.setup_status).to eq('blocked')
+      end
+
+      # (finding 2) once an accepted removal has blocked routing, a LATER request whose enqueue fails must NOT
+      # restore/reopen routing. The block/enqueue/restore decision is serialized per setup row (with_lock) and the
+      # prior status is read UNDER the lock, so the failed request sees 'blocked' and its restore is a no-op.
+      it 'a failed enqueue cannot reopen routing blocked by another accepted removal' do
+        inbox, _channel, setup = managed_inbox
+
+        # Request A: accepted -> routing blocked.
+        expect(service(inbox).prepare).to be_success
+        expect(setup.reload.setup_status).to eq('blocked')
+
+        # Request B (later): its enqueue fails.
+        allow(Bloomwire::WhatsappInboxDeprovisionJob).to receive(:perform_later).and_return(false)
+        expect(service(inbox).prepare.error).to eq(:enqueue_failed)
+
+        # Invariant: routing stays blocked (B did not reopen A's accepted block).
+        expect(setup.reload.setup_status).to eq('blocked')
+      end
+
+      it 'serializes the block/enqueue/restore decision with a row lock on the setup' do
+        inbox, _channel, setup = managed_inbox
+        locked = Bloomwire::WhatsappSetup.find(setup.id)
+        allow(Bloomwire::WhatsappSetup).to receive(:find_by).and_call_original
+        allow(Bloomwire::WhatsappSetup).to receive(:find_by)
+          .with(channel_whatsapp_id: setup.channel_whatsapp_id).and_return(locked)
+        allow(locked).to receive(:with_lock).and_call_original
+
+        service(inbox).prepare
+        expect(locked).to have_received(:with_lock)
       end
     end
   end
@@ -230,11 +265,26 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
               "channel=#{channel.id} actor=#{admin.id}")
     end
 
-    it 'swallows a concurrent-delete race (RecordNotFound) so a duplicate job does not fail' do
+    # (finding 1) RecordNotFound gets the SAME fresh-state rule as RecordNotDestroyed.
+    it 'RE-RAISES RecordNotFound (and logs removal_failed) when the inbox still exists (not a real race)' do
+      inbox, = managed_inbox
+      allow(Rails.logger).to receive(:warn)
+      allow(Inbox).to receive(:find_by).and_call_original
+      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
+      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotFound)
+
+      expect { purge(inbox) }.to raise_error(ActiveRecord::RecordNotFound)
+      expect(Inbox.exists?(inbox.id)).to be(true) # surviving inbox not falsely marked removed
+      expect(Rails.logger).to have_received(:warn).with(/removal_failed .*reason=ActiveRecord::RecordNotFound/)
+    end
+
+    it 'swallows RecordNotFound ONLY when a fresh DB check proves the inbox is gone (true race)' do
       inbox, = managed_inbox
       allow(Inbox).to receive(:find_by).and_call_original
       allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
       allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotFound)
+      allow(Inbox).to receive(:exists?).with(inbox.id).and_return(false) # concurrent job already finished it
+
       expect { purge(inbox) }.not_to raise_error
     end
 

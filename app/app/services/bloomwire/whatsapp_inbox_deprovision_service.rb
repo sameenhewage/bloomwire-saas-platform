@@ -41,28 +41,26 @@ class Bloomwire::WhatsappInboxDeprovisionService
     @actor = actor
   end
 
-  # SYNC: short request path — authorize/verify, block routing (committed), enqueue + verify acceptance.
+  # SYNC: short request path — authorize/verify, then (SERIALIZED per setup row) block routing, enqueue, and verify
+  # acceptance. The block/enqueue/restore decision runs under a row lock so two concurrent requests cannot
+  # interleave; a failed request re-reads the CURRENT committed status under the lock, so it can never restore
+  # (reopen) routing that another already-ACCEPTED request blocked.
   def prepare
     error = precheck
     return Result.new(error: error) if error
 
-    klass = self.class
     channel = @inbox.channel
     setup = setup_for(channel)
-    prior_status = setup&.setup_status
+    # No routing row -> nothing to serialize; just enqueue + verify.
+    return finalize_enqueue(channel, setup: nil, prior_status: nil) if setup.nil?
 
-    klass.block_routing!(setup)
-
-    job = enqueue_deletion
-    unless klass.enqueue_accepted?(job)
-      # Deterministic state on a confirmed enqueue failure: restore the prior routeable status; nothing was deleted.
-      klass.restore_routing!(setup, prior_status)
-      return Result.new(error: :enqueue_failed)
+    outcome = nil
+    setup.with_lock do
+      prior_status = setup.setup_status # committed current status, read under the row lock
+      self.class.block_routing!(setup)
+      outcome = finalize_enqueue(channel, setup: setup, prior_status: prior_status)
     end
-
-    klass.audit(:removal_started, account_id: @account.id, inbox_id: @inbox.id, channel_id: channel.id,
-                                  actor_id: @actor&.id)
-    Result.new
+    outcome
   end
 
   # ASYNC (job entrypoint): idempotent, retry-safe, NO giant transaction. Safe to run twice / concurrently.
@@ -77,12 +75,11 @@ class Bloomwire::WhatsappInboxDeprovisionService
 
     delete_managed_inbox!(inbox, channel)
     audit(:removal_succeeded, account_id: account_id, inbox_id: inbox_id, channel_id: channel.id, actor_id: actor_id)
-  rescue ActiveRecord::RecordNotFound
-    # A row we were mid-deleting vanished (a concurrent delete finished it) — safe, idempotent no-op.
-    nil
-  rescue ActiveRecord::RecordNotDestroyed => e
-    # NOT proof of a concurrent success (a destroy callback may have aborted). Only OK if the inbox is truly gone;
-    # otherwise log a sanitized failure and re-raise so Sidekiq retries (never mark a surviving inbox "removed").
+  rescue ActiveRecord::RecordNotFound, ActiveRecord::RecordNotDestroyed => e
+    # Neither exception is proof that another job removed the TARGET inbox — either can come from a vanished child,
+    # a halted destroy callback, or a partial purge. Treat as idempotent success ONLY when a fresh DB check proves
+    # the inbox is truly gone; otherwise log a sanitized failure and re-raise so Sidekiq retries (never mark a
+    # surviving, partially-purged, blocked inbox "removed").
     return unless Inbox.exists?(inbox_id)
 
     audit(:removal_failed, account_id: account_id, inbox_id: inbox_id, actor_id: actor_id, reason: e.class.name)
@@ -158,12 +155,30 @@ class Bloomwire::WhatsappInboxDeprovisionService
     nil
   end
 
+  # Enqueue + verify acceptance. On a confirmed failure (false / not successfully_enqueued? / raised), restore the
+  # prior routing status (deterministic) and emit a sanitized `removal_failed` audit; return a retriable error.
+  def finalize_enqueue(channel, setup:, prior_status:)
+    job = enqueue_deletion
+    unless self.class.enqueue_accepted?(job)
+      self.class.restore_routing!(setup, prior_status)
+      self.class.audit(:removal_failed, account_id: @account.id, inbox_id: @inbox.id, channel_id: channel.id,
+                                        actor_id: @actor&.id, reason: @enqueue_error || 'enqueue_not_accepted')
+      return Result.new(error: :enqueue_failed)
+    end
+
+    self.class.audit(:removal_started, account_id: @account.id, inbox_id: @inbox.id, channel_id: channel.id,
+                                       actor_id: @actor&.id)
+    Result.new
+  end
+
   def enqueue_deletion
+    @enqueue_error = nil
     Bloomwire::WhatsappInboxDeprovisionJob.perform_later(
       account_id: @account.id, inbox_id: @inbox.id, actor_id: @actor&.id
     )
-  rescue StandardError
-    # A raised enqueue (adapter/broker error) is a confirmed failure — surface it as "not accepted".
+  rescue StandardError => e
+    # A raised enqueue (adapter/broker error) is a confirmed failure — record the class for the audit.
+    @enqueue_error = e.class.name
     nil
   end
 
