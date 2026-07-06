@@ -81,6 +81,14 @@
 ## C. Session journal  *(newest first — prepend new entries)*
 
 ### 2026-07-06 — Admin "Remove WhatsApp Inbox" (managed deprovision) (product code; open branch; NOT merged)
+- **GPT‑5.5 CHANGES REQUIRED (4th pass, reviewed `6823321`) — DOCS-ONLY:** the three production fixes were verified
+  correct at head `6823321` (no deprovision-logic change); only stale contract/documentation needed correcting:
+  the service header comment now accurately states the `RecordNotFound` fresh-`Inbox.exists?` rule (swallow only when
+  gone; else `removal_failed` + re-raise); the PR #132 body, this log, the change-log, and the ledger (`.md`+`.html`)
+  now show the authoritative current-head counts (service 27 · job 1 · request 8 · component 11 · settings-gate 4;
+  backend **493/0**; FE 64) with the initial counts labelled historical/superseded. Backend **493/0**; ESLint +
+  RuboCop + vite build clean; no secret in diff. PR remains **unmerged and undeployed**; fresh exact-head review
+  requested at the new docs-only head.
 - **GPT‑5.5 CHANGES REQUIRED (3rd pass, reviewed `44b3e3c`) — fixed:** (1) `RecordNotFound` now uses the SAME
   fresh-state rule as `RecordNotDestroyed` — swallowed only when a fresh `Inbox.exists?` proves the inbox is gone,
   else sanitized `removal_failed` + re-raise (the old false-positive race spec is replaced with gone-vs-surviving
@@ -89,7 +97,10 @@
   request blocked (concurrency regression + lock-usage assertion). (3) enqueue failures (false /
   not-`successfully_enqueued?` / raised) now emit a sanitized `removal_failed` audit. Re-validated: service 27 · job 1
   · request 8 · component 11 · settings-gate 4; full WhatsApp backend regression **493/0** (1 pending); FE 64; ESLint
-  + RuboCop + vite build clean; no secret in diff. New head pending push; awaiting fresh GPT‑5.5 exact-head review.
+  + RuboCop + vite build clean; no secret in diff. Pushed as head `682332191420646a997994221fbf6b2cd2284f66`
+  (`6823321`); GPT‑5.5 reviewed that exact head → **CHANGES REQUIRED (docs-only)** — the three production fixes were
+  **verified correct**, only stale contract-comment/validation-count docs needed correcting (see the DOCS-ONLY 4th-
+  pass bullet at the top of this entry). PR #132 remains **unmerged and undeployed**.
 - **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `2a96f49`) — fixed:** (1) `.purge!` no longer swallows
   `RecordNotDestroyed` — a surviving inbox logs a sanitized `removal_failed` and RE-RAISES for Sidekiq retry (only a
   fresh `Inbox.exists?`=false counts as idempotent success); the `RecordNotFound` race stays a safe no-op. (2–3)
@@ -99,7 +110,8 @@
   `removal_failed` audit events. (5) Settings-level gate test (`canRemoveManagedWhatsappInbox`: capability OFF hides,
   ON+managed cloud shows). (6) real 15s timeout-abort FE test. Re-validated: service 24 · job 1 · request 8 ·
   component 11 · settings-gate 4; full WhatsApp backend regression **490/0** (1 pending); FE 64; ESLint + RuboCop +
-  vite build clean; no secret in diff. New head pending push; awaiting fresh GPT‑5.5 exact-head review.
+  vite build clean; no secret in diff. _(Pushed as head `2a96f49`; reviewed → CHANGES REQUIRED; superseded by the 3rd
+  pass above.)_
 - **GPT‑5.5 CHANGES REQUIRED (1st pass, reviewed `cecac65`) — fixed:** (1–4) heavy purge moved OUT of the request into a
   dedicated idempotent job (`Bloomwire::WhatsappInboxDeprovisionJob`); the request `#prepare` now authorizes/verifies,
   blocks routing, enqueues, and returns **202 `removal_started`**; `.purge!` re-verifies state each run, uses **no
@@ -144,9 +156,9 @@
   substring symbols with **anchored regexes** so `error_code`/`status_code`/`country_code`/`phone_number_verified`
   stay visible and `website_token` is preserved, while required sensitive keys render `[FILTERED]`. Re-validated:
   service 8 · request 9 · filter 3 · wizard **45** (+4 preflight-lifecycle); WhatsApp backend **337/0**; ESLint +
-  RuboCop + vite build clean; no secret in diff. New head pending push; awaiting fresh GPT‑5.5 exact-head review.
-  **The "Remove WhatsApp Inbox" feature is intentionally out of this PR — separate focused PR after #131 is
-  approved+merged.**
+  RuboCop + vite build clean; no secret in diff. **PR #131 was GPT‑5.5-approved at head `9498ce7`, merged to
+  `version_1` (merge `a6b26e8`), and deployed to DEV.** The "Remove WhatsApp Inbox" feature followed as the separate
+  focused PR **#132** (this entry's predecessor above).
 - **Root cause (proven):** on DEV a Standard signup used a number already connected as the account‑1 fixture; the
   backend correctly returned **422 `phone_number_taken`** (safe message), but the wizard discarded the safe
   `code`/message and showed only the generic "We couldn't finish connecting WhatsApp." Separately the Meta auth
@@ -182,7 +194,8 @@
   failure still mints a fresh id; Standard flow unchanged. RED-proven (without the guard a double-submit mints 2
   tracers). Wizard spec **29 → 32**; composable 20 · trace service 8 · trace endpoint 25; WhatsApp backend **314/0**;
   ESLint + vite build clean; `git diff --check` clean; no secret; no migration; no router/Enterprise change; **no Meta
-  retry; no record mutation.** New head pending push; fresh exact-head GPT‑5.5 review requested; do not merge/deploy.
+  retry; no record mutation.** _(Historical: PR #130 was subsequently GPT‑5.5-approved at head `181d34e`, merged to
+  `version_1` (merge `209bfb0`), and deployed to DEV.)_
 - **GPT‑5.5 CHANGES REQUIRED (reviewed head `5d4f763`) — 4 blocking findings fixed:** (1) **Standard flow restored** —
   tracer created only for Coexistence (per attempt); Standard/native = no-op tracer (no attempt id, no browser trace,
   no trace endpoint, not `mode=coexistence`; Standard create payload has no `onboarding_attempt_id`). (2) **Fresh
@@ -197,7 +210,8 @@
   8 · trace endpoint 25 · backend 314/0): composable 20 · wizard 29 ·
   trace service 8 · trace endpoint 25; WhatsApp backend **314/0**; ESLint + RuboCop + vite build clean; no secret in
   diff; no migration/schema; no router/Enterprise change; Standard restored to pre-PR behavior; no Meta retry; no
-  record mutation. New head pending push; fresh exact-head GPT‑5.5 review requested; do not merge/deploy.
+  record mutation. _(Historical first-pass snapshot; superseded by the double-submit pass above. PR #130 was
+  ultimately approved at `181d34e`, merged `209bfb0`, and deployed to DEV.)_
 - **Part 1 RCA (Stage A, evidence-based, read-only):** on deployed `d21a243`, a live Coexistence attempt completed
   the Meta flow (3 Meta webhooks 04:17–04:19 today → `[BLOOMWIRE ROUTER] no handoff-safe setup`, 200 OK) but the
   browser received no signal that resolved `runEmbeddedSignup()` → the create POST was **never dispatched** (0

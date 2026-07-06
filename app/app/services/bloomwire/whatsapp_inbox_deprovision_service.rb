@@ -20,10 +20,12 @@
 # deprovisioned. Those channels SKIP `Channel::Whatsapp#teardown_webhooks` (which only fires for `embedded_signup`
 # source), so destroying them makes NO Meta call. A non-managed channel is refused (:not_managed).
 #
-# Errors / retries: `.purge!` no-ops when the inbox is already gone (concurrent/duplicate/retried job). A
-# `RecordNotFound` from a row vanishing mid-run is a safe no-op. A `RecordNotDestroyed` (e.g. a destroy callback
-# aborted) is NOT treated as success unless a fresh DB check proves the inbox is already gone — otherwise it is
-# logged (sanitized) and RE-RAISED so Sidekiq retries. All state transitions emit sanitized audit events.
+# Errors / retries: `.purge!` no-ops when the target inbox is already gone (a concurrent/duplicate/retried job). BOTH
+# `ActiveRecord::RecordNotFound` and `ActiveRecord::RecordNotDestroyed` are swallowed as idempotent success ONLY when
+# a fresh `Inbox.exists?(inbox_id)` check proves the target inbox is gone. If the inbox STILL EXISTS (a vanished
+# child, a halted destroy callback, or a partial purge), a sanitized `removal_failed` is logged and the exception is
+# RE-RAISED so Sidekiq retries — a surviving inbox is never marked "removed". All state transitions emit sanitized
+# audit events.
 class Bloomwire::WhatsappInboxDeprovisionService
   MANAGED_SOURCE = 'bloomwire_managed'.freeze
   BLOCKED_STATUS = 'blocked'.freeze

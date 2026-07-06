@@ -85,14 +85,21 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 - **Not changed / safety:** stock destroy guard; the global duplicate-number guard; the webhook router resolution;
   Enterprise. No Meta call; shared Contacts + other inboxes/tenant data untouched; the DEV account‑1 fixture is not
   deleted by tests (each test builds its own account/inbox).
-- **TDD:** service `whatsapp_inbox_deprovision_service_spec` **11** (cross-account/not-whatsapp/not-managed refusals;
-  destroys inbox+channel+setup no orphans; conversations/messages/contact_inboxes deleted; shared Contact preserved;
-  unrelated data untouched; router stops resolving; no Meta call; idempotent; number freed); request
-  `inboxes_spec` **6** (feature-off 404; admin removes; agent 403; cross-tenant 404; idempotent 404; no-secret
-  response); component `BloomwireRemoveWhatsappInbox.spec` **8** (action shown; warning/name/mode; masked number
-  only; Coexistence mode; cancel = no writes; confirm dispatches + emits; safe error; repeated-click guard). Full
-  WhatsApp backend regression **492 examples, 0 failures** (1 pending); FE `57` (removal 8 + wizard 45 + api 4);
-  ESLint + RuboCop + vite build clean; `git diff --check` clean; no secret in diff.
+- **TDD coverage areas** (spec files — for the authoritative CURRENT counts see the "3rd pass" re-validation line
+  above; the per-file numbers below are the INITIAL snapshot, **superseded**): service
+  `whatsapp_inbox_deprovision_service_spec` (cross-account/not-whatsapp/not-managed refusals; destroys
+  inbox+channel+setup no orphans; conversations/messages/contact_inboxes deleted; shared Contact preserved; unrelated
+  data untouched; router stops resolving; no Meta call; idempotent; number freed; **+ enqueue acceptance / routing
+  restore / RecordNotFound+RecordNotDestroyed fresh-state / audit events / serialized enqueue-failure**); request
+  `inboxes_spec` (feature-off 404; admin **202 removal_started**; **enqueue-failure 503**; agent 403; cross-tenant
+  404; idempotent 404; no-secret response); job `whatsapp_inbox_deprovision_job_spec`; component
+  `BloomwireRemoveWhatsappInbox.spec` (action shown; warning/name/mode; masked number only; Coexistence mode; cancel =
+  no writes; confirm dispatches + emits **"removal started"**; safe error; repeated-click guard; **route-leave /
+  unmount / 15s timeout-abort**); `Settings.canRemoveManagedWhatsappInbox.spec` (capability OFF hides / ON shows).
+  **Current exact-head counts (authoritative): service 27 · job 1 · request 8 · component 11 · settings-gate 4; full
+  WhatsApp backend regression 493 examples, 0 failures (1 pending); FE 64.**
+  - _Historical (superseded) initial snapshot: service 11 · request 6 · component 8 · backend 492/0 · FE 57 (removal
+    8 + wizard 45 + api 4)._
 
 ### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a` (current deployed SHA).
