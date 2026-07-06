@@ -33,7 +33,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
      and returns **4xx with no log** for ANY non-allow-listed top-level key (unknown or sensitive:
      `code/auth_code/access_token/token/phone/phone_number/phone_number_id/waba_id/business_id/app_id/configuration_id/url/query/message/metadata/...`);
      unknown event → 422; a logging-infra failure for an otherwise-valid request still returns 204.
-  - Re-validated: composable **22**, wizard **29**, trace service **9**, trace endpoint **17** (incl. per-sensitive-key
+  - Re-validated: composable **20**, wizard **29**, trace service **8**, trace endpoint **25** (incl. per-sensitive-key
     rejection), WhatsApp backend regression **314/0**; ESLint + RuboCop + vite build clean; no migration/schema; no
     Standard/router/Enterprise change beyond restoring Standard; no Meta retry; no record mutation. New head pending push.
 - **Incident (Part 1, evidence-based classification): Stage A** — during a live Coexistence attempt the customer

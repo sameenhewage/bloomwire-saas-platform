@@ -323,8 +323,8 @@
   (3) **lifecycle-safe create** — cancellable timer + `AbortController` (signal store→API→axios) cleared/aborted on
   success/failure/route-leave/unmount/retry + a per-attempt **stale guard** so a late response can't mutate
   UI/store/trace; (4) trace endpoint **rejects (4xx, no log)** any non-allow-listed/sensitive top-level key (raw-body
-  check before strong-params); unknown event → 422; logging failure → 204. Re-validated: composable 22 · wizard 29 ·
-  trace service 9 · trace endpoint 17; WhatsApp backend **314/0**; ESLint/RuboCop/build clean; no secret in diff.
+  check before strong-params); unknown event → 422; logging failure → 204. Re-validated: composable 20 · wizard 29 ·
+  trace service 8 · trace endpoint 25; WhatsApp backend **314/0**; ESLint/RuboCop/build clean; no secret in diff.
 - **Incident RCA (Part 1) — Stage A:** the customer completed the Meta flow (3 Meta webhooks 04:17–04:19 →
   `no handoff-safe setup`, 200), but the browser received no signal that resolved `runEmbeddedSignup()`; the create
   POST was never dispatched (0 coexistence POSTs in the current-container logs), 0 records created, and the hang was
@@ -339,7 +339,7 @@
   feature-gated (404), rate-limited endpoint `POST …/bloomwire/whatsapp/onboarding_traces` with strict event +
   metadata allow-list (unknown event → 422; logging failure → 204). Never logs code/token/phone/phone_number_id/
   WABA/business/App ID/Config ID/Meta URL. Standard/native flow untraced (no-op tracer).
-- **Validation:** composable 20 · wizard 25 · trace service 9 · trace endpoint 8; WhatsApp backend regression
+- **Validation:** composable 20 · wizard 25 · trace service 8 · trace endpoint 8; WhatsApp backend regression
   281/0; ESLint + RuboCop clean; vite build ok; no secret in diff. Runtime trace evidence deferred to Part 6
   (post-approval deploy + owner-assisted controlled retry).
 
