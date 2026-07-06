@@ -298,6 +298,15 @@ export const actions = {
       throw error;
     }
   },
+  // Advisory duplicate-number preflight for the managed WhatsApp wizard. Returns the safe DTO
+  // ({ status: 'available' | 'already_connected' }); no inbox-list mutation, no secrets.
+  checkBloomwireWhatsAppPhoneAvailability: async (
+    _store,
+    { phoneNumber } = {}
+  ) => {
+    const response = await WhatsappChannel.checkPhoneAvailability(phoneNumber);
+    return response.data;
+  },
   // Phase 17D.3: managed self-serve WhatsApp Business App Coexistence signup. Same safe-DTO contract as the
   // Standard flow (refresh the inbox list, return the DTO), but calls the dedicated coexistence endpoint
   // (connection_mode=coexistence). No secrets (api_key/token/provider_config) are ever in the payload or response.

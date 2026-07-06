@@ -788,3 +788,142 @@ describe('BloomwireWhatsapp.vue — fresh attempt id + lifecycle-safe create (fi
     expect(cancelEmbeddedSignup).toHaveBeenCalled();
   });
 });
+
+// Duplicate-number UX: advisory preflight (blocks the popup for an already-connected number) + backend error-code
+// mapping to specific safe messages. All Meta/store calls mocked; no real Meta, no real HTTP.
+describe('BloomwireWhatsapp.vue — duplicate-number preflight + error-code mapping', () => {
+  const PREFLIGHT = 'inboxes/checkBloomwireWhatsAppPhoneAvailability';
+
+  // Routes store.dispatch: the preflight action resolves the given availability; everything else (create) uses
+  // `create` (defaults to resolving the DTO).
+  const routeDispatch = ({
+    availability = { status: 'available' },
+    create,
+  } = {}) => {
+    dispatch.mockImplementation((action, payload) => {
+      if (action === PREFLIGHT) return Promise.resolve(availability);
+      return typeof create === 'function'
+        ? create(action, payload)
+        : Promise.resolve(DTO);
+    });
+  };
+
+  const typeNumber = async (wrapper, value) => {
+    await wrapper
+      .find('[data-testid="bloomwire-wa-phone-number"]')
+      .setValue(value);
+  };
+
+  const errorText = wrapper =>
+    wrapper.find('[data-testid="bloomwire-wa-error"]').text();
+
+  // (Fix 3) copy under the number field.
+  it('shows the "use a number not already connected" note under the number field', async () => {
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-phone-number-note"]').text()
+    ).toBe(`${B}.PHONE_NUMBER.NOTE`);
+  });
+
+  // (1) preflight available → Meta popup opens.
+  it('opens the Meta popup when the preflight reports the number is available', async () => {
+    routeDispatch({ availability: { status: 'available' } });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551239999');
+    await submit(wrapper);
+    expect(dispatch).toHaveBeenCalledWith(PREFLIGHT, {
+      phoneNumber: '+15551239999',
+    });
+    expect(runEmbeddedSignup).toHaveBeenCalledTimes(1); // popup opened
+  });
+
+  // (2) preflight already_connected → Meta popup does NOT open, no create POST.
+  it('does NOT open the Meta popup when the preflight reports already_connected', async () => {
+    routeDispatch({ availability: { status: 'already_connected' } });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551230001');
+    await submit(wrapper);
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    const creates = dispatch.mock.calls.filter(c =>
+      String(c[0]).includes('EmbeddedSignup')
+    );
+    expect(creates).toHaveLength(0);
+  });
+
+  // (3) preflight already_connected → duplicate warning displayed.
+  it('shows the duplicate-number warning when the preflight reports already_connected', async () => {
+    routeDispatch({ availability: { status: 'already_connected' } });
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551230001');
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe(`${B}.ERRORS.PHONE_NUMBER_TAKEN`);
+  });
+
+  // Advisory only: a preflight error fails OPEN (popup still opens).
+  it('fails open (opens the popup) when the preflight request errors', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === PREFLIGHT) return Promise.reject(new Error('network'));
+      return Promise.resolve(DTO);
+    });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await typeNumber(wrapper, '+15551239999');
+    await submit(wrapper);
+    expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
+  });
+
+  // (5) Standard 422 phone_number_taken → specific message.
+  it('maps a Standard 422 phone_number_taken to the specific message', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({
+      response: { status: 422, data: { code: 'phone_number_taken' } },
+    });
+    const wrapper = mountWizard();
+    await startRegister(wrapper); // Standard
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe(`${B}.ERRORS.PHONE_NUMBER_TAKEN`);
+  });
+
+  // (6) Coexistence 422 phone_number_taken → specific message.
+  it('maps a Coexistence 422 phone_number_taken to the specific message', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({
+      response: { status: 422, data: { code: 'phone_number_taken' } },
+    });
+    const wrapper = mountWizard();
+    await startCoexistence(wrapper); // Coexistence
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe(`${B}.ERRORS.PHONE_NUMBER_TAKEN`);
+  });
+
+  // (7) phone_number_id_conflict → specific message.
+  it('maps 422 phone_number_id_conflict to the specific message', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({
+      response: { status: 422, data: { code: 'phone_number_id_conflict' } },
+    });
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe(`${B}.ERRORS.PHONE_NUMBER_ID_CONFLICT`);
+  });
+
+  // (8) unknown/5xx → generic safe message.
+  it('falls back to the generic message for an unknown 5xx (no known code)', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockRejectedValue({
+      response: { status: 500, data: { code: 'meta_error' } },
+    });
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe(`${B}.ERROR`);
+  });
+});

@@ -15,6 +15,45 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — OPEN (product code; not merged)
+- **Branch:** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a` (current deployed SHA).
+- **Root cause (proven, prior investigation):** on DEV a Standard signup used a number already connected as the
+  account‑1 fixture; the backend correctly returned **422 `phone_number_taken`** with the safe message "This
+  WhatsApp phone number is already connected.", but the wizard **discarded** the backend `code`/message and showed
+  only the generic "We couldn't finish connecting WhatsApp." (UX defect). Separately, the Meta auth `code` was
+  logged unfiltered in the Rails Parameters line (log-hygiene defect).
+- **Fix 1 — advisory duplicate preflight:** new admin-only, account-scoped, feature-gated (404) endpoint
+  `POST …/bloomwire/whatsapp/phone_availability` (`Bloomwire::WhatsappPhoneAvailability`). Normalizes the typed
+  number to `+<digits>` (consistent with `Channel::Whatsapp` / `PhoneInfoService`) and does a **global** existence
+  check (mirrors the authoritative unique guard). Returns **only** `{ status: "available" | "already_connected" }` —
+  never another tenant's account/inbox/channel id or name, `phone_number_id`, WABA id, or any secret. The wizard
+  calls it before opening Meta; **already_connected → the Meta popup does not open** and it shows "This WhatsApp
+  number is already connected to Bloomwire. Use a different number or disconnect the existing inbox first." Advisory
+  only: it **fails open** (blank/error) and the **authoritative post-Meta guard is unchanged** (Meta may confirm a
+  different number).
+- **Fix 2 — safe backend error-code mapping (Standard + Coexistence):** the wizard now reads
+  `error.response.data.code` and maps `phone_number_taken` / `phone_number_id_conflict` / `invalid_phone_number` to
+  specific safe messages; `meta_error` / unknown / 5xx / timeout keep the generic safe message. Raw backend/Meta
+  exception strings are never shown.
+- **Fix 3 — copy:** a note under the number field — "Use a number that is not already connected to another Bloomwire
+  inbox." (does not imply "New number" means unused).
+- **Fix 4 — sensitive Rails parameter filtering:** added `code, auth_code, business_id, waba_id, phone_number_id,
+  display_phone_number, access_token, phone_number` to `config.filter_parameters` (Rails substring matching, so
+  `:phone_number` also covers `phone_number_id`/`display_phone_number` and `:code` covers `auth_code`). Intentionally
+  did **not** add a bare `:token` (the existing regex already filters `token` while preserving the `website_token`
+  exception). Verified the auth code + identifiers now render `[FILTERED]`; `website_token` still preserved.
+- **Not changed / safety:** the authoritative global duplicate guard; the existing account-1 WhatsApp fixture (not
+  deleted/modified/reassigned); the webhook router; Enterprise. No number was moved/reassigned; no Meta retry; the
+  preflight is read-only (creates/modifies no records) — account‑21 stays 0 Inbox / 0 Channel::Whatsapp / 0
+  WhatsappSetup.
+- **TDD:** service `whatsapp_phone_availability_spec` **8** (normalize/available/already_connected incl.
+  cross-account global, read-only, safe enum); request `phone_availabilities_spec` **7** (admin + account-scope +
+  feature-gate + already_connected-without-tenant-leak + read-only); `filter_parameter_logging_spec` **2** (fields
+  → `[FILTERED]`; website_token preserved); wizard `BloomwireWhatsapp.spec` **41** (+9: preflight available→popup,
+  already_connected→no popup, warning shown, fail-open, Standard/Coexistence `phone_number_taken`,
+  `phone_number_id_conflict`, unknown/5xx→generic, Fix‑3 note). WhatsApp backend regression **334/0**; ESLint +
+  RuboCop + vite build clean; `git diff --check` clean; no secret in diff.
+
 ### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`
   (base verified, current deployed SHA).

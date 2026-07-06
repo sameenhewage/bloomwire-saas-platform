@@ -314,6 +314,25 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — `Open (product code; not merged)`
+- **Branch** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a`.
+  No schema/migration · Enterprise: NO · webhook router: UNCHANGED · authoritative duplicate guard: UNCHANGED · account-1 fixture untouched.
+- **Root cause (proven):** on DEV a Standard signup used a number already connected as the account‑1 fixture; backend
+  correctly returned **422 `phone_number_taken`** (safe message), but the wizard discarded the safe `code`/message and
+  showed only the generic error. Separately the Meta auth `code` was logged unfiltered.
+- **Fix 1 (preflight):** new admin-only, account-scoped, feature-gated (404) `POST …/bloomwire/whatsapp/phone_availability`
+  (`Bloomwire::WhatsappPhoneAvailability`) — normalizes to `+<digits>`, GLOBAL existence check (mirrors the authoritative
+  guard), returns ONLY `{ status: available | already_connected }` (no tenant leak). Wizard blocks the Meta popup on
+  `already_connected` and shows the specific warning; **fails open**; authoritative post-Meta guard unchanged.
+- **Fix 2 (error mapping):** wizard maps `error.response.data.code` (`phone_number_taken` / `phone_number_id_conflict` /
+  `invalid_phone_number`) to specific safe messages for BOTH Standard + Coexistence; else generic; never raw exceptions.
+- **Fix 3 (copy):** "Use a number that is not already connected to another Bloomwire inbox." under the number field.
+- **Fix 4 (log filtering):** added `code, auth_code, business_id, waba_id, phone_number_id, display_phone_number,
+  access_token, phone_number` to `config.filter_parameters` (substring match; bare `:token` intentionally omitted to
+  preserve the `website_token` exception). Verified `[FILTERED]`.
+- **Validation:** service 8 · request 7 · filter 2 · wizard 41 (+9); WhatsApp backend **334/0**; ESLint + RuboCop +
+  vite build clean; no secret in diff. No Meta retry; preflight read-only (no record mutation); account‑21 stays 0/0/0.
+
 ### Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace — `Open (product code; not merged)`
 - **Branch** `fix/bloomwire-coexistence-onboarding-trace` off `version_1` `d21a243b614835769a3dd3c255c1d917e75dfdfc`.
   No schema/migration · Enterprise: NO · webhook router: UNCHANGED · Standard flow: UNCHANGED · account-1 fixture untouched.

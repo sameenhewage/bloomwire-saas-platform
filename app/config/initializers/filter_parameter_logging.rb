@@ -30,3 +30,12 @@ filter_regex = /\A(?!.*\bwebsite_token\b).*token/i
 
 # Apply the regex for filtering
 Rails.application.config.filter_parameters += [filter_regex]
+
+# Bloomwire (managed WhatsApp onboarding): the Meta Embedded Signup endpoints and the phone-availability preflight
+# receive the Meta authorization `code` (single-use secret, exchanges for an access token) plus WhatsApp routing
+# identifiers and the customer phone number. None of these may appear in request-parameter logs. Rails does a
+# substring match on symbol keys, so `:phone_number` also covers `phone_number_id` and `display_phone_number`,
+# and `:code` covers `auth_code`. Logging-only: controllers still read these params normally.
+Rails.application.config.filter_parameters += [
+  :code, :auth_code, :business_id, :waba_id, :phone_number_id, :display_phone_number, :access_token, :phone_number
+]

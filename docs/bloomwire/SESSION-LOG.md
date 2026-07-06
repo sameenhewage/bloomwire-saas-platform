@@ -80,6 +80,30 @@
 
 ## C. Session journal  *(newest first — prepend new entries)*
 
+### 2026-07-06 — Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering (product code; open branch; NOT merged)
+- **Root cause (proven):** on DEV a Standard signup used a number already connected as the account‑1 fixture; the
+  backend correctly returned **422 `phone_number_taken`** (safe message), but the wizard discarded the safe
+  `code`/message and showed only the generic "We couldn't finish connecting WhatsApp." Separately the Meta auth
+  `code` was logged unfiltered in the Rails Parameters line.
+- **Fix 1 — advisory preflight:** new admin-only, account-scoped, feature-gated (404) endpoint
+  `POST …/bloomwire/whatsapp/phone_availability` (`Bloomwire::WhatsappPhoneAvailability`): normalizes the typed
+  number to `+<digits>` (like `Channel::Whatsapp`/`PhoneInfoService`), GLOBAL existence check (mirrors the
+  authoritative unique guard), returns ONLY `{ status: available | already_connected }` (no tenant leak). Wizard
+  blocks the Meta popup on `already_connected` + shows the specific warning; **fails open**; authoritative post-Meta
+  guard unchanged.
+- **Fix 2 — safe error-code mapping (Standard + Coexistence):** wizard maps `error.response.data.code`
+  (`phone_number_taken`/`phone_number_id_conflict`/`invalid_phone_number`) to specific safe messages; else generic;
+  never raw exceptions.
+- **Fix 3 — copy:** "Use a number that is not already connected to another Bloomwire inbox." under the number field.
+- **Fix 4 — log filtering:** added `code, auth_code, business_id, waba_id, phone_number_id, display_phone_number,
+  access_token, phone_number` to `config.filter_parameters` (bare `:token` omitted to preserve `website_token`);
+  verified `[FILTERED]`.
+- **Validation:** service 8 · request 7 · filter 2 · wizard 41 (+9); WhatsApp backend **334/0**; ESLint + RuboCop +
+  vite build clean; `git diff --check` clean; no secret in diff. No schema/migration; authoritative guard + router +
+  Enterprise + account‑1 fixture untouched; no Meta retry; preflight read-only (account‑21 stays 0/0/0). Branch
+  `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0`; open PR — do not merge (awaiting
+  GPT‑5.5 exact-head review).
+
 ### 2026-07-06 — Coexistence onboarding infinite-wait hardening + sanitized end-to-end trace (product code; open branch; NOT merged)
 - **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed head `4d041b5`) — remaining blocker fixed: double-submit attempt
   ownership.** `register()` mutated attempt state (tracer / attempt id / support reference / `attemptSeq` /

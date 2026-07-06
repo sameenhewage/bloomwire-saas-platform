@@ -182,6 +182,47 @@ const maybeRenameInbox = async () => {
   }
 };
 
+// Advisory duplicate-number preflight. Returns 'already_connected' | 'available'. Fails OPEN ('available') on a
+// blank number or ANY error/network failure, so the authoritative post-Meta guard stays the source of truth.
+const checkPhoneAvailability = async number => {
+  const trimmed = (number || '').trim();
+  if (!trimmed) return 'available';
+  try {
+    const data = await store.dispatch(
+      'inboxes/checkBloomwireWhatsAppPhoneAvailability',
+      { phoneNumber: trimmed }
+    );
+    return data?.status === 'already_connected'
+      ? 'already_connected'
+      : 'available';
+  } catch (_) {
+    return 'available';
+  }
+};
+
+// Maps a known, SAFE backend error code (error.response.data.code) to a specific message. Anything else
+// (meta_error / unknown / 5xx / timeout / no code) falls back to the generic safe message. Never surfaces a raw
+// backend or Meta exception string. Shared by the Standard and Coexistence create flows.
+const createErrorMessage = error => {
+  const code = error?.response?.data?.code;
+  if (code === 'phone_number_taken') {
+    return t(
+      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERRORS.PHONE_NUMBER_TAKEN'
+    );
+  }
+  if (code === 'phone_number_id_conflict') {
+    return t(
+      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERRORS.PHONE_NUMBER_ID_CONFLICT'
+    );
+  }
+  if (code === 'invalid_phone_number') {
+    return t(
+      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERRORS.INVALID_PHONE_NUMBER'
+    );
+  }
+  return t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
+};
+
 const register = async () => {
   // Wizard-level active-attempt guard — MUST run before any attempt-state mutation (tracer / attempt id /
   // support reference / attemptSeq / AbortController / timer). While a signup OR create is already in flight, a
@@ -192,6 +233,20 @@ const register = async () => {
   attemptActive = true;
 
   errorMessage.value = '';
+
+  // Advisory duplicate-number preflight — never open the Meta popup for a number already connected in Bloomwire.
+  // Fails OPEN (proceeds) on blank input or any error; the authoritative global guard still runs AFTER the Meta
+  // callback (Meta may confirm a different number than the one typed). Applies to Standard and Coexistence.
+  if (
+    (await checkPhoneAvailability(expectedNumber.value)) === 'already_connected'
+  ) {
+    errorMessage.value = t(
+      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERRORS.PHONE_NUMBER_TAKEN'
+    );
+    attemptActive = false;
+    return;
+  }
+
   // Fresh tracer + attempt id PER attempt. Coexistence traces; Standard/native uses a no-op tracer (no attempt
   // id, no browser trace events, no Coexistence trace endpoint, never logged as mode=coexistence).
   const tracer = isCoexistence.value
@@ -290,8 +345,10 @@ const register = async () => {
       );
       tracer.trace('frontend_error_transition', { result: 'failure' });
       tracer.trace('attempt_finished', { result: 'failure' });
-      // Never surface the raw server/Meta error — always the sanitized generic message (+ support reference).
-      errorMessage.value = t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR');
+      // Map a known safe backend code (phone_number_taken / phone_number_id_conflict / invalid_phone_number) to a
+      // specific message; everything else (meta_error / unknown / 5xx / timeout) uses the generic safe message. A
+      // raw server/Meta error string is never surfaced.
+      errorMessage.value = createErrorMessage(error);
     } finally {
       if (!isStale(seq)) isProcessing.value = false;
     }
@@ -618,9 +675,17 @@ onBeforeRouteLeave(() => {
               "
             />
           </label>
-          <p class="text-xs text-n-slate-10 -mt-2 mb-4">
+          <p class="text-xs text-n-slate-10 -mt-2">
             {{
               $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.PHONE_NUMBER.HELP')
+            }}
+          </p>
+          <p
+            class="text-xs text-n-slate-10 mb-4"
+            data-testid="bloomwire-wa-phone-number-note"
+          >
+            {{
+              $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.PHONE_NUMBER.NOTE')
             }}
           </p>
         </div>
