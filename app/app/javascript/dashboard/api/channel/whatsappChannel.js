@@ -33,6 +33,15 @@ class WhatsappChannel extends ApiClient {
     );
   }
 
+  // Admin "Remove WhatsApp Inbox" deprovision. Permanently removes the managed WhatsApp inbox (+ channel + setup +
+  // owned data) from Bloomwire. Account-scoped + admin-gated server-side. Returns a safe result (no secrets).
+  deleteInbox(inboxId, config = {}) {
+    return axios.delete(
+      `${this.baseUrl()}/bloomwire/whatsapp/inboxes/${inboxId}`,
+      config
+    );
+  }
+
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Sends only the typed phone number and
   // receives ONLY { status: "available" | "already_connected" } — never another tenant's account/inbox/channel.
   checkPhoneAvailability(phoneNumber, config = {}) {

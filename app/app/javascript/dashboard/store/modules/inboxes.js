@@ -298,6 +298,23 @@ export const actions = {
       throw error;
     }
   },
+  // Admin "Remove WhatsApp Inbox": request the async deprovision of a managed WhatsApp inbox. The server blocks
+  // routing + enqueues the deletion (202 accepted); we optimistically drop it from the store list since it is on
+  // its way out. The optional abort `signal` bounds/cancels the request.
+  removeBloomwireWhatsAppInbox: async (
+    { commit },
+    { inboxId, signal } = {}
+  ) => {
+    commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: true });
+    try {
+      await WhatsappChannel.deleteInbox(inboxId, { signal });
+      commit(types.default.DELETE_INBOXES, inboxId);
+      commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: false });
+    } catch (error) {
+      commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: false });
+      throw error;
+    }
+  },
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Returns the safe DTO
   // ({ status: 'available' | 'already_connected' }); no inbox-list mutation, no secrets. The optional abort
   // `signal` lets the caller bound/cancel the request.

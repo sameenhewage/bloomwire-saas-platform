@@ -15,6 +15,92 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Admin — Remove WhatsApp Inbox (managed deprovision) — OPEN (product code; not merged)
+- **Branch:** `feat/bloomwire-remove-whatsapp-inbox` off `version_1` `a6b26e8404d5d81f1ac489e8db2c97c891c3e78c` (post‑#131 merge SHA).
+- **GPT‑5.5 CHANGES REQUIRED (3rd pass, reviewed `44b3e3c`) — fixed:**
+  1. **`RecordNotFound` gets the same fresh-state rule as `RecordNotDestroyed`.** `.purge!` now swallows
+     `RecordNotFound` ONLY when a fresh `Inbox.exists?` check proves the target inbox is gone; otherwise (a
+     surviving/partially-purged/blocked inbox) it emits a sanitized `removal_failed` and **re-raises for retry**.
+     The false-positive race spec is replaced with gone-vs-surviving cases (RED→GREEN).
+  2. **Enqueue-failure routing restoration is serialized.** `#prepare` runs the block/enqueue/restore decision under
+     a **row lock** (`setup.with_lock`) and reads the prior status **under the lock**, so a failed request can never
+     restore (reopen) routing that another already-ACCEPTED request blocked. Added a concurrency regression
+     (accepted removal blocks → later failed enqueue keeps it blocked) + a lock-usage assertion.
+  3. **Enqueue failures emit `removal_failed`.** The `false` / not-`successfully_enqueued?` / raised branches now log
+     a sanitized `removal_failed` (internal ids/actor + safe reason/error class) before returning `:enqueue_failed`;
+     audit assertions added.
+  - Re-validated: service 27 · job 1 · request 8 · component 11 · settings-gate 4; full WhatsApp backend regression
+    **493/0** (1 pending); FE 64; ESLint + RuboCop + vite build clean; no secret in diff.
+- **GPT‑5.5 CHANGES REQUIRED (2nd pass, reviewed `2a96f49`) — fixed:**
+  1. **`RecordNotDestroyed` no longer swallowed.** `.purge!` keeps the safe `RecordNotFound` race no-op, but a
+     `RecordNotDestroyed` (e.g. a halted destroy callback) is treated as success ONLY if a fresh `Inbox.exists?`
+     check proves the inbox is gone; otherwise it logs a sanitized `removal_failed` and **re-raises for Sidekiq
+     retry** (RED→GREEN spec: surviving inbox propagates + is not marked successful).
+  2–3. **Enqueue acceptance verified + deterministic routing.** `#prepare` now checks `perform_later` acceptance
+     (`false` / not-`successfully_enqueued?` / raised → confirmed failure); on failure it **restores the prior
+     routeable status** (deterministic — nothing deleted, fully routeable again) and returns `:enqueue_failed`
+     (controller → **503**, retriable). Success returns 202 only for a confirmed-accepted job. Tests cover
+     false/un-enqueued/raised enqueue + the successful manual retry.
+  4. **Sanitized audit events** `removal_started` (prepare), `removal_succeeded` (purge done), `removal_failed`
+     (purge error, warn) — internal ids/actor/error-class only.
+  5. **Settings-level gate test** — `Settings.vue#canRemoveManagedWhatsappInbox` proven: capability OFF hides the
+     action; capability ON + managed WhatsApp Cloud shows it (+ non-cloud / non-managed hidden).
+  6. **Real 15s timeout-abort test** — advancing the timer aborts the request and surfaces the safe error (no hang).
+  - Re-validated: service 24 · job 1 · request 8 · component 11 · settings-gate 4; full WhatsApp backend regression
+    **490/0** (1 pending); FE 64; ESLint + RuboCop + vite build clean; no secret in diff.
+- **GPT‑5.5 CHANGES REQUIRED (1st pass, reviewed `cecac65`) — fixed:**
+  1–4. **Async, retry-safe deletion.** The heavy purge moved OUT of the request into a dedicated idempotent
+     background job (`Bloomwire::WhatsappInboxDeprovisionJob`). The request path is now short — `#prepare`:
+     authorize/verify account+source, **block routing** (`setup_status -> 'blocked'`, committed), **enqueue**, and
+     return **202 `removal_started`**. `.purge!` re-verifies state each run, **no single giant transaction** (batched
+     per-record destroy!), and handles concurrent/duplicate/retried jobs (no-op when gone; rescues the
+     RecordNotFound race; lets unexpected errors propagate so Sidekiq retries). New concurrency/retry/idempotency
+     tests added.
+  5–6. **UI gated on the onboarding capability.** The Remove action is gated on `canSelfServeManagedWhatsapp` (the
+     SAME server-derived capability onboarding uses; opt-in default FALSE) → **hidden when the feature is OFF**.
+  7. **Bounded, abortable FE lifecycle.** The removal request uses an `AbortController` + a 15s timeout, aborted on
+     `onBeforeUnmount`/`onBeforeRouteLeave`; a `leftFlow` guard prevents any late alert/emit after route leave.
+  8. **Accurate wording.** Success now says **"removal started"** (accepted async job), not "removed".
+  - Re-validated: service 16 · job 1 · request 6 · component 10; full WhatsApp backend regression **481/0** (1
+    pending); ESLint + RuboCop + vite build clean; no secret in diff.
+- **Why:** in managed mode, account admins cannot remove a WhatsApp inbox — the stock `InboxesController#destroy`
+  is blocked by `restrict_managed_provider_inbox_destroy!` (403). This adds a dedicated, admin-facing deprovision.
+- **Backend — dedicated deprovision service** (`Bloomwire::WhatsappInboxDeprovisionService`) + endpoint
+  `DELETE …/bloomwire/whatsapp/inboxes/:id` (admin-only, account-scoped, feature-gated 404). It does **not** weaken
+  the stock destroy guard. Sequence: (1) **block routing first** — `Bloomwire::WhatsappSetup.setup_status ->
+  'blocked'`, committed immediately (the global router only routes `ready_for_webhook`); (2) **destroy the setup
+  mapping** explicitly (it has no dependent cleanup and would otherwise orphan); (3) **destroy the inbox**, which
+  cascades conversations/messages/contact_inboxes/inbox_members/reporting_events/webhooks + the `Channel::Whatsapp`
+  (`dependent: :destroy`). Shared **Contact records are preserved** (only ContactInbox joins go). **Idempotent**
+  (repeat → 404). **Meta boundary:** only `provider_config['source'] == 'bloomwire_managed'` channels are
+  deprovisioned, so `Channel::Whatsapp#teardown_webhooks` (a Meta unsubscribe, `embedded_signup`-only) **never
+  fires** — no WABA delete, no number deregister, no Meta call. Sanitized audit log (internal ids only). After
+  removal the local `phone_number_taken` guard no longer matches (number freed); the global uniqueness guard is
+  unchanged.
+- **Frontend:** an admin-only "Remove inbox" action on the WhatsApp inbox settings page opens a destructive
+  confirmation modal (title, irreversible warning, inbox name, **masked** phone number (last 4 only), connection
+  mode Standard/Coexistence, the Meta-boundary note, Cancel + red "Delete inbox permanently"); repeated clicks
+  disabled while deleting; safe success/failure alerts; on success it returns to the inbox list. Never renders the
+  full number, phone_number_id, WABA id, or credentials.
+- **Not changed / safety:** stock destroy guard; the global duplicate-number guard; the webhook router resolution;
+  Enterprise. No Meta call; shared Contacts + other inboxes/tenant data untouched; the DEV account‑1 fixture is not
+  deleted by tests (each test builds its own account/inbox).
+- **TDD coverage areas** (spec files — for the authoritative CURRENT counts see the "3rd pass" re-validation line
+  above; the per-file numbers below are the INITIAL snapshot, **superseded**): service
+  `whatsapp_inbox_deprovision_service_spec` (cross-account/not-whatsapp/not-managed refusals; destroys
+  inbox+channel+setup no orphans; conversations/messages/contact_inboxes deleted; shared Contact preserved; unrelated
+  data untouched; router stops resolving; no Meta call; idempotent; number freed; **+ enqueue acceptance / routing
+  restore / RecordNotFound+RecordNotDestroyed fresh-state / audit events / serialized enqueue-failure**); request
+  `inboxes_spec` (feature-off 404; admin **202 removal_started**; **enqueue-failure 503**; agent 403; cross-tenant
+  404; idempotent 404; no-secret response); job `whatsapp_inbox_deprovision_job_spec`; component
+  `BloomwireRemoveWhatsappInbox.spec` (action shown; warning/name/mode; masked number only; Coexistence mode; cancel =
+  no writes; confirm dispatches + emits **"removal started"**; safe error; repeated-click guard; **route-leave /
+  unmount / 15s timeout-abort**); `Settings.canRemoveManagedWhatsappInbox.spec` (capability OFF hides / ON shows).
+  **Current exact-head counts (authoritative): service 27 · job 1 · request 8 · component 11 · settings-gate 4; full
+  WhatsApp backend regression 493 examples, 0 failures (1 pending); FE 64.**
+  - _Historical (superseded) initial snapshot: service 11 · request 6 · component 8 · backend 492/0 · FE 57 (removal
+    8 + wizard 45 + api 4)._
+
 ### Duplicate WhatsApp-number UX (preflight + safe error mapping) + sensitive-parameter log filtering — OPEN (product code; not merged)
 - **Branch:** `fix/bloomwire-duplicate-number-ux-and-log-filtering` off `version_1` `209bfb0f7acb8674c3a9731d7ab219ed5972252a` (current deployed SHA).
 - **GPT‑5.5 CHANGES REQUIRED (reviewed `fb77e55`) — 3 items fixed:**

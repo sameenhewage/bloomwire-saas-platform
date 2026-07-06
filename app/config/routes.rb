@@ -357,6 +357,9 @@ Rails.application.routes.draw do
               # Advisory duplicate-number preflight (Standard + Coexistence). Admin-only; inert (404) unless managed
               # WhatsApp self-serve is active. Returns only { status: available | already_connected } — no tenant leak.
               resource :phone_availability, only: [:create]
+              # Admin "Remove WhatsApp Inbox" deprovision. Admin-only; inert (404) unless managed WhatsApp self-serve
+              # is active. Blocks routing + removes setup/inbox/channel + owned dependents (no orphans, no Meta call).
+              resources :inboxes, only: [:destroy]
               # Structured, sanitized browser onboarding trace sink. Admin-only; inert (404) unless managed
               # WhatsApp self-serve is active. Allow-listed events/metadata only; writes to the app log.
               resources :onboarding_traces, only: [:create]
