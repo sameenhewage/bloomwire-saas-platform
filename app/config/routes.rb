@@ -354,6 +354,9 @@ Rails.application.routes.draw do
             namespace :whatsapp do
               resource :embedded_signup, only: [:create]
               resource :coexistence_embedded_signup, only: [:create]
+              # Advisory duplicate-number preflight (Standard + Coexistence). Admin-only; inert (404) unless managed
+              # WhatsApp self-serve is active. Returns only { status: available | already_connected } — no tenant leak.
+              resource :phone_availability, only: [:create]
               # Structured, sanitized browser onboarding trace sink. Admin-only; inert (404) unless managed
               # WhatsApp self-serve is active. Allow-listed events/metadata only; writes to the app log.
               resources :onboarding_traces, only: [:create]

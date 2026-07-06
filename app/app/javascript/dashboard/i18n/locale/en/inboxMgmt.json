@@ -370,13 +370,19 @@
           "PHONE_NUMBER": {
             "LABEL": "WhatsApp number",
             "PLACEHOLDER": "e.g. +1 555 123 0001",
-            "HELP": "The number you expect to register. Meta confirms the final number during registration."
+            "HELP": "The number you expect to register. Meta confirms the final number during registration.",
+            "NOTE": "Use a number that is not already connected to another Bloomwire inbox."
           },
           "CONNECT_BUTTON": "Connect with Meta",
           "REGISTER_BUTTON": "Register WhatsApp number",
           "PROCESSING": "Registering your WhatsApp number…",
           "CANCELLED": "WhatsApp registration was cancelled.",
           "ERROR": "We couldn’t finish connecting WhatsApp. No automatic retry was performed. Please try again or contact Bloomwire support.",
+          "ERRORS": {
+            "PHONE_NUMBER_TAKEN": "This WhatsApp number is already connected to Bloomwire. Use a different number or disconnect the existing inbox first.",
+            "PHONE_NUMBER_ID_CONFLICT": "This WhatsApp number is already linked to another WhatsApp connection.",
+            "INVALID_PHONE_NUMBER": "Please enter a valid WhatsApp number and try again."
+          },
           "SUPPORT_REFERENCE": "Reference: {reference}",
           "SUCCESS": {
             "TITLE": "WhatsApp number registered",

@@ -30,3 +30,22 @@ filter_regex = /\A(?!.*\bwebsite_token\b).*token/i
 
 # Apply the regex for filtering
 Rails.application.config.filter_parameters += [filter_regex]
+
+# Bloomwire (managed WhatsApp onboarding): the Meta Embedded Signup endpoints and the phone-availability preflight
+# receive the Meta authorization `code` (single-use secret, exchanges for an access token) plus WhatsApp routing
+# identifiers and the customer phone number. None of these may appear in request-parameter logs.
+#
+# Symbol filters use SUBSTRING matching, so a bare `:code` would also redact unrelated keys like `error_code`,
+# `country_code`, and `status_code`. To filter EXACTLY these keys (and nothing else), use anchored regexes. The
+# existing token regex still filters `token`/`access_token` while preserving `website_token`; the anchored
+# `access_token` here is explicit defense-in-depth. Logging-only: controllers still read these params normally.
+Rails.application.config.filter_parameters += [
+  /\Acode\z/i,
+  /\Aauth_code\z/i,
+  /\Abusiness_id\z/i,
+  /\Awaba_id\z/i,
+  /\Aphone_number_id\z/i,
+  /\Adisplay_phone_number\z/i,
+  /\Aaccess_token\z/i,
+  /\Aphone_number\z/i
+]

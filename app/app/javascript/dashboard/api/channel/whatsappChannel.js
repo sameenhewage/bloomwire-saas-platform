@@ -33,6 +33,16 @@ class WhatsappChannel extends ApiClient {
     );
   }
 
+  // Advisory duplicate-number preflight for the managed WhatsApp wizard. Sends only the typed phone number and
+  // receives ONLY { status: "available" | "already_connected" } — never another tenant's account/inbox/channel.
+  checkPhoneAvailability(phoneNumber, config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/phone_availability`,
+      { phone_number: phoneNumber },
+      config
+    );
+  }
+
   // Structured, sanitized onboarding trace sink (managed WhatsApp / Coexistence). Sends ONLY allow-listed,
   // non-sensitive telemetry (attempt id, event, result, elapsed_ms, http_status, error_code) to the
   // account-scoped admin endpoint. Never sends the auth code / tokens / phone number / WABA / Meta identifiers.
