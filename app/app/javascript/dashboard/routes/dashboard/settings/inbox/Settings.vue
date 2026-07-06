@@ -17,7 +17,7 @@ import DuplicateInboxBanner from './channels/instagram/DuplicateInboxBanner.vue'
 import MicrosoftReauthorize from './channels/microsoft/Reauthorize.vue';
 import GoogleReauthorize from './channels/google/Reauthorize.vue';
 import WhatsappReauthorize from './channels/whatsapp/Reauthorize.vue';
-import BloomwireRemoveWhatsappInbox from './channels/BloomwireRemoveWhatsappInbox.vue';
+import BloomwireRemoveInbox from './channels/BloomwireRemoveInbox.vue';
 import InboxHealthAPI from 'dashboard/api/inboxHealth';
 import PreChatFormSettings from './PreChatForm/Settings.vue';
 import WeeklyAvailability from './components/WeeklyAvailability.vue';
@@ -70,7 +70,7 @@ export default {
     InstagramReauthorize,
     TiktokReauthorize,
     WhatsappReauthorize,
-    BloomwireRemoveWhatsappInbox,
+    BloomwireRemoveInbox,
     DuplicateInboxBanner,
     Editor,
     Avatar,
@@ -89,6 +89,7 @@ export default {
       canManageNativeWhatsappSetup,
       canRegisterProviderWebhook,
       canSelfServeManagedWhatsapp,
+      canRemoveInbox,
     } = useBloomwireCapabilities();
     return {
       v$: useVuelidate(),
@@ -96,6 +97,7 @@ export default {
       canManageNativeWhatsappSetup,
       canRegisterProviderWebhook,
       canSelfServeManagedWhatsapp,
+      canRemoveInbox,
     };
   },
   data() {
@@ -137,17 +139,6 @@ export default {
       uiFlags: 'inboxes/getUIFlags',
       portals: 'portals/allPortals',
     }),
-    // "Remove WhatsApp Inbox" action. Gated on the SAME managed WhatsApp self-serve capability used by onboarding
-    // (`canSelfServeManagedWhatsapp` — server-derived: admin + native WhatsApp restricted + managed_whatsapp_
-    // onboarding on; default FALSE so it is HIDDEN when the feature is OFF), and only for a Bloomwire-managed
-    // WhatsApp Cloud inbox. The deprovision endpoint is admin + account scoped server-side; this is a UX gate.
-    canRemoveManagedWhatsappInbox() {
-      return (
-        this.canSelfServeManagedWhatsapp &&
-        this.isAWhatsAppCloudChannel &&
-        this.inbox.provider_config?.source === 'bloomwire_managed'
-      );
-    },
     isInboundEmailEnabled() {
       return this.isFeatureEnabledonAccount(
         this.accountId,
@@ -452,8 +443,8 @@ export default {
     this.fetchSharedData();
   },
   methods: {
-    // After a managed WhatsApp inbox is deprovisioned, leave the (now-deleted) inbox settings for the inbox list.
-    onManagedWhatsappInboxRemoved() {
+    // After an inbox is removed, leave the (now-deleted) inbox settings for the inbox list.
+    onInboxRemoved() {
       this.$router.replace({ name: 'settings_inbox_list' });
     },
     async copyWebhookSecret(value) {
@@ -882,18 +873,11 @@ export default {
             </SettingsFieldSection>
 
             <SettingsFieldSection
-              v-if="canRemoveManagedWhatsappInbox"
-              :label="
-                $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.ACTION')
-              "
-              :help-text="
-                $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.REMOVE.META_NOTE')
-              "
+              v-if="canRemoveInbox"
+              :label="$t('INBOX_MGMT.BLOOMWIRE_REMOVE.ACTION')"
+              :help-text="$t('INBOX_MGMT.BLOOMWIRE_REMOVE.SECTION_HELP')"
             >
-              <BloomwireRemoveWhatsappInbox
-                :inbox="inbox"
-                @removed="onManagedWhatsappInboxRemoved"
-              />
+              <BloomwireRemoveInbox :inbox="inbox" @removed="onInboxRemoved" />
             </SettingsFieldSection>
 
             <SettingsFieldSection

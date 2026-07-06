@@ -17,6 +17,12 @@ module Bloomwire::Capabilities
       canManageProviderSetup: capability(admin, Bloomwire::Features.restrict_provider_setup?),
       canManageNativeWhatsappSetup: capability(admin, Bloomwire::Features.restrict_native_whatsapp_setup?),
       canDeleteManagedProviderInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      # Universal "Remove inbox": an administrator may permanently delete ANY of their own account's inboxes through
+      # the inbox Settings page whenever Bloomwire mode is ON (the former managed/provider destroy restriction is
+      # lifted; a WhatsApp delete is Meta-safe). With Bloomwire OFF this is false (stock — the inbox-list delete is
+      # the path). Agents are always false. The backend InboxesController#destroy (admin + account-scoped) remains
+      # the enforcement boundary; this only drives the Settings-page UI.
+      canRemoveInbox: managed_capability(admin, Bloomwire::Features.master_enabled?),
       canRegisterProviderWebhook: capability(admin, Bloomwire::Features.restrict_provider_setup?),
       # Phase 11B.7C: ALL inbox creation (incl. self-service web_widget/api) is Ops-owned in managed mode.
       canCreateInbox: capability(admin, Bloomwire::Features.restrict_provider_setup?),

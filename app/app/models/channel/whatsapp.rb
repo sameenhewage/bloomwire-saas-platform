@@ -30,6 +30,12 @@ class Channel::Whatsapp < ApplicationRecord
   # (routing keys off the phone_number column + Bloomwire::WhatsappSetup.phone_number_id).
   encrypts :provider_config if Chatwoot.encryption_configured?
 
+  # Bloomwire: when set on a channel instance before it is destroyed via the Bloomwire local inbox-removal path,
+  # the (otherwise unconditional) before_destroy webhook teardown is SKIPPED. A Bloomwire LOCAL delete must make
+  # NO Meta call (never unsubscribe a shared/global WABA webhook) for ANY source, even if the Meta assets are
+  # already gone. Stock destroys (flag unset) are unaffected — OFF == stock.
+  attr_accessor :skip_webhook_teardown
+
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
 
   # default at the moment is 360dialog lets change later.
@@ -155,6 +161,8 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def teardown_webhooks
+    return if skip_webhook_teardown
+
     Whatsapp::WebhookTeardownService.new(self).perform
   end
 
