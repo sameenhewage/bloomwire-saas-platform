@@ -314,6 +314,16 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Managed WhatsApp onboarding fail-closed readiness + same-business resolution + final-WABA subscription — `Open (PR #138; not merged)`
+- **Branch** `fix/bloomwire-whatsapp-fail-closed-readiness` off `version_1`. Standard **and** Coexistence · global-router-only boundary UNCHANGED (app-to-WABA subscribe only; never `override_waba_callback` / `subscribe_waba_webhook`) · no native `/whatsapp/authorization` · no schema/migration · tokens stay in encrypted `provider_config` · safe DTOs only · no live Meta/WhatsApp call (specs stub Meta).
+- **Fail-closed Meta phone readiness:** the whole Meta phase (token exchange, phone-info, best-effort `/register`, connection-status read) runs **before** any DB write; a number that is not `CONNECTED` and cannot be safely resolved creates **no** channel, inbox, credential, or setup — removing the earlier false success where onboarding reported OK while the number stayed `DISCONNECTED`.
+- **Safe same-business connected-registration resolution:** when the selected registration is `DISCONNECTED`, the same number may be `CONNECTED` as a duplicate under another WABA the token can message; onboarding routes to the **single** same-owner-business connected registration (live `waba_id` + `phone_number_id`), else fails closed (`no_connected_registration` / `ambiguous_connected_registration` / `cross_business_registration`). Never crosses a business/tenant boundary.
+- **Final resolved WABA subscription before persistence:** the global-router app-to-WABA subscription targets the **final resolved** WABA (not just the customer's selection), runs **before** any DB write, and is called **exactly once** (selected==resolved makes no duplicate) — subscribing only the selected WABA would leave a resolved inbox that never receives inbound.
+- **Subscription failure creates nothing:** if Meta rejects the subscription the onboarding fails closed (`subscription_failed`, sanitized `502`) with **no** channel/inbox/credential/setup persisted.
+- **Explicit Standard vs Coexistence `connection_mode`:** Coexistence inherits the same seam + gate, marks `connection_mode: coexistence`, and skips the Standard Cloud API `/register` (its numbers are already registered).
+- **Validation (cwd `app/`):** affected services/requests/integration **85/0** incl. regressions (resolved path subscribes the connected WABA not the selection + persists it/the connected `phone_number_id`; rejected subscription of the resolved WABA persists nothing; same-WABA subscribes once); RuboCop 0. `docs/bloomwire/whatsapp-multi-inbox-discovery.md` §O documents the contract (generic identifiers only).
+- **Status:** open PR into `version_1`; awaiting GPT‑5.5 exact‑head review; not merged/deployed.
+
 ### Universal Account-Admin "Remove inbox" (generalizes the managed-only removal) — `Open (product code; not merged)`
 - **Branch** `feature/bloomwire-universal-remove-inbox` off `version_1` `b6b5bfb` (post‑#132 merge). No schema/migration ·
   Enterprise: unchanged (`DeleteObjectJob` audit override intact) · admin-only (`InboxPolicy#destroy?`) + account-scoping
