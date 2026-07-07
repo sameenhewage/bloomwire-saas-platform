@@ -91,6 +91,12 @@ export const initWhatsAppEmbeddedSignup = configId => {
 
 export const setupFacebookSdk = async (appId, apiVersion) => {
   const version = apiVersion || DEFAULT_WHATSAPP_GRAPH_API_VERSION;
+  // Arm FB.init (via window.fbAsyncInit) BEFORE the SDK script loads, so the SDK invokes it as part of its own
+  // bootstrap — Meta's canonical order. Loading first and initializing after races the SDK's async readiness and
+  // can let FB.login() fire "before FB.init()". `initialized` resolves only once FB.init has actually run, and it
+  // is awaited last so callers never reach FB.login on an uninitialized SDK (cached-SDK path resolves eagerly via
+  // the `window.FB` branch in initializeFacebook).
+  const initialized = initializeFacebook(appId, version);
   await loadFacebookSdk();
-  await initializeFacebook(appId, version);
+  await initialized;
 };

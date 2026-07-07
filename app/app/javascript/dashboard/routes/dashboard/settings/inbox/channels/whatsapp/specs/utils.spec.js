@@ -3,6 +3,7 @@ import {
   setupFacebookSdk,
   DEFAULT_WHATSAPP_GRAPH_API_VERSION,
 } from '../utils';
+import { loadScript } from 'dashboard/helper/DOMHelpers';
 
 vi.mock('dashboard/helper/DOMHelpers', () => ({
   loadScript: vi.fn(() => Promise.resolve()),
@@ -53,6 +54,27 @@ describe('whatsapp/utils — Graph API version', () => {
     const init = vi.fn();
     window.FB = { init };
     await setupFacebookSdk('app-id');
+    expect(init).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 'v25.0' })
+    );
+  });
+
+  // Regression: 'FB.login() called before FB.init()'. On a fresh page (window.FB absent until the SDK
+  // bootstraps), FB.init must be armed via window.fbAsyncInit BEFORE the SDK script loads, so the SDK invokes
+  // it during its own bootstrap and callers never reach FB.login on an uninitialized SDK.
+  it('arms FB.init before the SDK script loads so FB.login can never run first', async () => {
+    const init = vi.fn();
+    loadScript.mockImplementationOnce(() => {
+      // The SDK is loading now — FB.init MUST already be armed.
+      expect(typeof window.fbAsyncInit).toBe('function');
+      // Simulate the SDK finishing: it defines window.FB and invokes fbAsyncInit.
+      window.FB = { init };
+      window.fbAsyncInit();
+      return Promise.resolve();
+    });
+
+    await setupFacebookSdk('app-id');
+
     expect(init).toHaveBeenCalledWith(
       expect.objectContaining({ version: 'v25.0' })
     );
