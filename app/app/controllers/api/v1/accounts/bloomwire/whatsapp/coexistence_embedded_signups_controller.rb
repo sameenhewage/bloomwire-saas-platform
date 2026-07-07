@@ -15,6 +15,9 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::CoexistenceEmbeddedSignupsControll
     encryption_not_configured: 'Secure credential storage is not configured. Please contact your administrator.',
     phone_number_taken: 'This WhatsApp phone number is already connected.',
     number_not_connected: 'This WhatsApp number is not connected on Meta yet. Finish linking it in the WhatsApp Business App, then try again.',
+    no_connected_registration: 'This WhatsApp number is not connected on Meta yet. Finish linking it in the WhatsApp Business App, then try again.',
+    ambiguous_connected_registration: 'This number is connected under multiple WhatsApp Business Accounts. Remove the duplicate, then try again.',
+    cross_business_registration: 'This number is connected under a different business. Connect it under your own account, then try again.',
     meta_error: 'We could not complete WhatsApp Business App coexistence setup with Meta. Please try again.'
   }.freeze
 

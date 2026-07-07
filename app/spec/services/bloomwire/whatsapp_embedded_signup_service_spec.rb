@@ -27,7 +27,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
                                          subscribe_waba_webhook: nil, register_phone_number: { 'success' => true },
-                                         phone_number_status: 'CONNECTED')
+                                         phone_number_status: 'CONNECTED',
+                                         messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -93,29 +94,84 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     end
   end
 
-  describe 'fail-closed readiness gate (number must be CONNECTED before any DB write)' do
+  # Phase 17E.2 — a DISCONNECTED selection is not an immediate dead end: the same number may be CONNECTED as a
+  # duplicate under another WABA the token can message. The safe root fix routes to that single same-business
+  # registration (so inbound/outbound use the LIVE phone_number_id), or fails closed. All lookups stubbed.
+  describe 'auto-resolves a DISCONNECTED selection to the single CONNECTED same-business registration' do
     before do
       stub_ready
       stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-CONNECTED])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+      # Same number, different formatting, CONNECTED under a sibling WABA owned by the same business.
+      allow(fb_client).to receive(:waba_registrations).with('WABA-CONNECTED')
+        .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+1 555 123 0001', 'status' => 'CONNECTED' }])
+      allow(fb_client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER')
     end
 
-    it 'returns :number_not_connected and persists nothing when Meta reports the number DISCONNECTED' do
-      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+    it 'persists the channel + setup on the CONNECTED phone_number_id / WABA (not the disconnected selection)' do
+      expect(result).to be_success
+      channel = Channel::Whatsapp.last
+      setup = Bloomwire::WhatsappSetup.last
       aggregate_failures do
-        expect(result.error).to eq(:number_not_connected)
+        expect(channel.provider_config['phone_number_id']).to eq('PNID-CONN')
+        expect(channel.provider_config['business_account_id']).to eq('WABA-CONNECTED')
+        expect(setup.phone_number_id).to eq('PNID-CONN')
+      end
+    end
+
+    it 'routes an inbound webhook carrying the CONNECTED phone_number_id to the created inbox' do
+      result
+      setup = Bloomwire::WhatsappSetup.last
+      payload = bw_inbound_text_payload(phone_number_id: 'PNID-CONN', display_phone_number: '15551230001')
+      expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)&.id).to eq(setup.id)
+    end
+  end
+
+  describe 'fails closed when a DISCONNECTED number cannot be safely resolved (creates nothing)' do
+    before do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+    end
+
+    it 'returns :no_connected_registration when no connected duplicate exists (even if /register was rejected)' do
+      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError, 'RAW (#100) owner-permission error')
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+      aggregate_failures do
+        expect(result.error).to eq(:no_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
-        expect(Bloomwire::WhatsappSetup.count).to eq(0)
         expect(account.inboxes.count).to eq(0)
       end
     end
 
-    it 'fails closed (no inbox) when registration is rejected and the number stays DISCONNECTED' do
-      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError, 'RAW (#100) owner-permission error')
-      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+    it 'returns :ambiguous_connected_registration when the number is CONNECTED on two WABAs' do
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-A WABA-B])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-A')
+        .and_return([{ 'id' => 'PNID-A', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-B')
+        .and_return([{ 'id' => 'PNID-B', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
       aggregate_failures do
-        expect(result.error).to eq(:number_not_connected)
+        expect(result.error).to eq(:ambiguous_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
-        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'returns :cross_business_registration when the only connected match is a different business' do
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-OTHER])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-OTHER')
+        .and_return([{ 'id' => 'PNID-X', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+      allow(fb_client).to receive(:waba_owner_business_id).with('WABA-1').and_return('BIZ-1')
+      allow(fb_client).to receive(:waba_owner_business_id).with('WABA-OTHER').and_return('BIZ-2')
+      aggregate_failures do
+        expect(result.error).to eq(:cross_business_registration)
+        expect(Channel::Whatsapp.count).to eq(0)
       end
     end
   end

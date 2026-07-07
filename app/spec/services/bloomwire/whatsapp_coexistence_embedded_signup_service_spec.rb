@@ -23,7 +23,8 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, register_phone_number: { 'success' => true }, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil, phone_number_status: 'CONNECTED')
+                                         subscribe_waba_webhook: nil, phone_number_status: 'CONNECTED',
+                                         messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -98,15 +99,36 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'returns :number_not_connected and persists nothing when the coexistence number is DISCONNECTED' do
+    it 'returns :no_connected_registration and persists nothing when the number is DISCONNECTED with no connected duplicate' do
       stub_ready
       stub_meta
       allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
 
       aggregate_failures do
-        expect(result.error).to eq(:number_not_connected)
+        expect(result.error).to eq(:no_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
         expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'auto-resolves a DISCONNECTED coexistence number to its single CONNECTED same-business registration' do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-CONNECTED])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-CONNECTED')
+        .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+      allow(fb_client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER')
+
+      expect(result).to be_success
+      channel = Channel::Whatsapp.last
+      aggregate_failures do
+        expect(channel.provider_config['connection_mode']).to eq('coexistence')
+        expect(channel.provider_config['phone_number_id']).to eq('PNID-CONN')
+        expect(channel.provider_config['business_account_id']).to eq('WABA-CONNECTED')
+        expect(Bloomwire::WhatsappSetup.last.phone_number_id).to eq('PNID-CONN')
       end
     end
 

@@ -70,6 +70,40 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'Phone status check failed')['status']
   end
 
+  # WABAs this token is authorized to SEND messages for (the whatsapp_business_messaging granular scope). Used to
+  # resolve a duplicate number's live registration without ever guessing beyond the token's real grants.
+  def messaging_waba_ids(input_token = @access_token)
+    data = debug_token(input_token)['data'] || {}
+    (data['granular_scopes'] || [])
+      .select { |scope| scope['scope'] == 'whatsapp_business_messaging' }
+      .flat_map { |scope| scope['target_ids'] }
+      .compact.uniq
+  end
+
+  # Phone registrations (id + display number + live status) under a WABA. `status` is requested explicitly because
+  # Meta omits it from the default phone_numbers field set.
+  def waba_registrations(waba_id)
+    response = HTTParty.get(
+      "#{BASE_URI}/#{@api_version}/#{waba_id}/phone_numbers",
+      headers: request_headers,
+      query: { fields: 'id,display_phone_number,status' }
+    )
+
+    Array(handle_response(response, 'WABA phone numbers fetch failed')['data'])
+  end
+
+  # Owner business id of a WABA — used to keep duplicate-number resolution inside the SAME business (never cross a
+  # tenant boundary silently). Returns nil when the owner is not visible to this token.
+  def waba_owner_business_id(waba_id)
+    response = HTTParty.get(
+      "#{BASE_URI}/#{@api_version}/#{waba_id}",
+      headers: request_headers,
+      query: { fields: 'owner_business_info' }
+    )
+
+    handle_response(response, 'WABA owner lookup failed').dig('owner_business_info', 'id')
+  end
+
   WEBHOOK_DEFAULT_FIELDS = %w[messages smb_message_echoes].freeze
 
   def subscribe_waba_webhook(waba_id, callback_url, verify_token, subscribed_fields: WEBHOOK_DEFAULT_FIELDS)
