@@ -14,6 +14,10 @@
 #   not configured. Meta errors are sanitized (class-only logs; a generic :meta_error) — no raw payload/token.
 # - The result DTO carries only safe, non-secret fields (ids, status, masked phone) — never api_key/provider_config.
 class Bloomwire::WhatsappEmbeddedSignupService
+  # Fail-closed readiness: a managed inbox is persisted ONLY when Meta reports the number live on the Cloud API.
+  # Any other status (e.g. DISCONNECTED) creates no channel/inbox/setup — the gate runs before any DB write.
+  CONNECTED_STATUS = 'CONNECTED'.freeze
+
   Result = Struct.new(:dto, :error, keyword_init: true) do
     def success?
       error.nil?
@@ -34,6 +38,7 @@ class Bloomwire::WhatsappEmbeddedSignupService
 
     meta = perform_meta_steps
     return Result.new(error: :meta_error) if meta.nil?
+    return Result.new(error: :number_not_connected) unless meta[:connection_status] == CONNECTED_STATUS
 
     persisted = persist(meta[:token], meta[:phone_info], meta[:verification_pin])
     return Result.new(error: persisted) if persisted.is_a?(Symbol)
@@ -72,13 +77,14 @@ class Bloomwire::WhatsappEmbeddedSignupService
     client = Whatsapp::FacebookApiClient.new(token)
     # App-to-WABA subscription only (global router). NOT override_waba_callback / subscribe_waba_webhook.
     client.subscribe_app_to_waba(@waba_id)
-    # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED and delivers inbound to
-    # the globally-subscribed webhook (mirrors native Whatsapp::WebhookSetupService and the reference WhatsWay
-    # flow). Best-effort: a registration failure (e.g. Meta (#100) when the app is not the WABA owner / an
-    # approved Tech Provider) must NOT abort onboarding — the number stays DISCONNECTED and is surfaced via the
-    # setup readiness DTO, never silently swallowed.
+    # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED (mirrors native
+    # Whatsapp::WebhookSetupService). Best-effort: a registration failure (e.g. Meta (#100) when the app is not
+    # the WABA owner) is not raised here — the readiness gate (CONNECTED check in #perform) then fails closed on a
+    # non-CONNECTED number so NO partial inbox is created.
     verification_pin = register_number(client, phone_info[:phone_number_id])
-    { token: token, phone_info: phone_info, verification_pin: verification_pin }
+    # Fail-closed readiness signal: the actual Meta connection state, checked by the caller before any DB write.
+    connection_status = client.phone_number_status(phone_info[:phone_number_id])
+    { token: token, phone_info: phone_info, verification_pin: verification_pin, connection_status: connection_status }
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] Meta step failed: #{e.class}")
     nil
@@ -139,7 +145,8 @@ class Bloomwire::WhatsappEmbeddedSignupService
       provider_config: {
         'phone_number_id' => phone_info[:phone_number_id],
         'business_account_id' => @waba_id,
-        'source' => 'bloomwire_managed'
+        'source' => 'bloomwire_managed',
+        'connection_mode' => 'standard'
       }
     )
     channel.save!(validate: false)

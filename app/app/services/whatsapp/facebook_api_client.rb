@@ -60,6 +60,16 @@ class Whatsapp::FacebookApiClient
     data['code_verification_status'] == 'VERIFIED'
   end
 
+  def phone_number_status(phone_number_id)
+    response = HTTParty.get(
+      "#{BASE_URI}/#{@api_version}/#{phone_number_id}",
+      headers: request_headers,
+      query: { fields: 'status' }
+    )
+
+    handle_response(response, 'Phone status check failed')['status']
+  end
+
   WEBHOOK_DEFAULT_FIELDS = %w[messages smb_message_echoes].freeze
 
   def subscribe_waba_webhook(waba_id, callback_url, verify_token, subscribed_fields: WEBHOOK_DEFAULT_FIELDS)

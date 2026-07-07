@@ -26,7 +26,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil, register_phone_number: { 'success' => true })
+                                         subscribe_waba_webhook: nil, register_phone_number: { 'success' => true },
+                                         phone_number_status: 'CONNECTED')
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -52,6 +53,7 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       aggregate_failures do
         expect(channel.provider).to eq('whatsapp_cloud')
         expect(channel.provider_config['source']).to eq('bloomwire_managed')
+        expect(channel.provider_config['connection_mode']).to eq('standard')
         expect(channel.provider_config['api_key']).to eq('FAKE-CUSTOMER-TOKEN')
         expect(channel.provider_config['phone_number_id']).to eq('PNID-1')
       end
@@ -91,19 +93,29 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     end
   end
 
-  describe 'phone registration is best-effort (non-fatal)' do
+  describe 'fail-closed readiness gate (number must be CONNECTED before any DB write)' do
     before do
       stub_ready
       stub_meta
     end
 
-    it 'still creates the managed inbox (number left DISCONNECTED) when Meta rejects registration' do
-      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError, 'RAW (#100) owner-permission error')
+    it 'returns :number_not_connected and persists nothing when Meta reports the number DISCONNECTED' do
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
       aggregate_failures do
-        expect(result).to be_success
-        expect(Channel::Whatsapp.count).to eq(1)
-        expect(Bloomwire::WhatsappSetup.count).to eq(1)
-        expect(Channel::Whatsapp.last.provider_config['verification_pin']).to be_nil
+        expect(result.error).to eq(:number_not_connected)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+        expect(account.inboxes.count).to eq(0)
+      end
+    end
+
+    it 'fails closed (no inbox) when registration is rejected and the number stays DISCONNECTED' do
+      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError, 'RAW (#100) owner-permission error')
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      aggregate_failures do
+        expect(result.error).to eq(:number_not_connected)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
       end
     end
   end
@@ -168,7 +180,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
-                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil))
+                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                                                 phone_number_status: 'CONNECTED'))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
                                     phone_number_id: phone_number_id }).perform

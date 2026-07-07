@@ -63,7 +63,8 @@ RSpec.describe 'Bloomwire multi-inbox runtime E2E (mocked Meta)', type: :request
                                              verified: true, business_name: business_name }))
     allow(Whatsapp::FacebookApiClient).to receive(:new)
       .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
-                                                               override_waba_callback: nil, subscribe_waba_webhook: nil))
+                                                               override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                                               phone_number_status: 'CONNECTED'))
   end
 
   # Provision a managed WhatsApp inbox via the REAL embedded-signup service with Meta stubbed. Returns the setup.
@@ -126,8 +127,8 @@ RSpec.describe 'Bloomwire multi-inbox runtime E2E (mocked Meta)', type: :request
         expect(setup1.inbox_id).not_to eq(setup2.inbox_id)
         expect(setup1.setup_status).to eq('ready_for_webhook')
         expect(setup2.setup_status).to eq('ready_for_webhook')
-        # Standard path vs Coexistence path (both available)
-        expect(setup1.channel_whatsapp.provider_config['connection_mode']).to be_nil
+        # Standard path vs Coexistence path (both available); connection_mode is always explicit (never nil)
+        expect(setup1.channel_whatsapp.provider_config['connection_mode']).to eq('standard')
         expect(setup2.channel_whatsapp.provider_config['connection_mode']).to eq('coexistence')
       end
     end

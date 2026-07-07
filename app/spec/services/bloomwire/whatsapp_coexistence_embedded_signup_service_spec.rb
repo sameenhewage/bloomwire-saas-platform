@@ -23,7 +23,7 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, register_phone_number: { 'success' => true }, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil)
+                                         subscribe_waba_webhook: nil, phone_number_status: 'CONNECTED')
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -98,6 +98,18 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
+    it 'returns :number_not_connected and persists nothing when the coexistence number is DISCONNECTED' do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+
+      aggregate_failures do
+        expect(result.error).to eq(:number_not_connected)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
     it 'returns :encryption_not_configured outside dev/test and persists nothing' do
       stub_ready
       stub_meta
@@ -127,7 +139,8 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
-                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil))
+                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                                                 phone_number_status: 'CONNECTED'))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
                                     phone_number_id: phone_number_id }).perform
