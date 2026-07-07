@@ -43,6 +43,22 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
   subscribes the connected WABA (not the selection) and persists it + the connected `phone_number_id`; a rejected
   subscription of the resolved WABA persists nothing; same-WABA happy path subscribes exactly once; RuboCop 0.
   `docs/bloomwire/whatsapp-multi-inbox-discovery.md` §O documents the contract with generic identifiers only.
+- **Status:** open PR into `version_1`; awaiting GPT-5.5 exact-head review; **not merged, not deployed.**
+
+### Bloomwire — Managed WhatsApp onboarding success screen routes to the new inbox (route-param fix) — OPEN (PR #137; not merged)
+- **Branch:** `fix/bloomwire-whatsapp-success-inbox-id-param` off `version_1`.
+- **What & why:** on the managed WhatsApp onboarding success screen, the **"Open inbox"** button linked to the
+  `inbox_dashboard` route (path `accounts/:accountId/inbox/:inbox_id`) while passing `params: { inboxId }`, so Vue
+  Router threw *"Missing required param 'inbox_id'"* and the success screen failed to render right after a successful
+  create. Fix: the success screen now routes to the inbox using the route's **own** param name —
+  `params: { inbox_id: inboxId }` for `inbox_dashboard`; the **"Inbox settings"** link keeps `params: { inboxId }`
+  because `settings_inbox_show` uses `:inboxId`. Frontend-only.
+- **Not changed:** no backend/service/controller/route change; no schema/migration; no Meta/WhatsApp call; onboarding
+  logic, safe DTOs, and the global-router boundary untouched — only the two success-screen `router-link` params in
+  `BloomwireWhatsapp.vue`.
+- **Validation (cwd `app/`):** `BloomwireWhatsapp` component spec incl. a regression asserting **Open inbox** →
+  `inbox_dashboard` with `{ inbox_id }` and **Inbox settings** → `settings_inbox_show` with `{ inboxId }` — green;
+  ESLint 0. No secret in diff; no live Meta/WhatsApp call.
 - **Status:** open PR into `version_1`; awaiting GPT‑5.5 exact‑head review; **not merged, not deployed.**
 
 ### Bloomwire — Universal Account-Admin "Remove inbox" (generalizes the managed-only removal) — OPEN (product code; not merged)
