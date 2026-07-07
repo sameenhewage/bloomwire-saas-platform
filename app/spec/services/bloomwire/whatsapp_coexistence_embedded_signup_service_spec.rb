@@ -23,7 +23,8 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, register_phone_number: { 'success' => true }, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil)
+                                         subscribe_waba_webhook: nil, phone_number_status: 'CONNECTED',
+                                         messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -69,11 +70,12 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'uses the GLOBAL router app-to-WABA subscription and never per-channel webhook override' do
+    it 'uses the GLOBAL router app-to-WABA subscription exactly once and never per-channel webhook override' do
       result
 
       aggregate_failures do
-        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
+        # Same-WABA path: exactly one subscription of the final WABA (no duplicate).
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1').once
         expect(fb_client).not_to have_received(:override_waba_callback)
         expect(fb_client).not_to have_received(:subscribe_waba_webhook)
       end
@@ -95,6 +97,44 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         expect(result.error).to eq(:not_ready)
         expect(Channel::Whatsapp.count).to eq(0)
         expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'returns :no_connected_registration and persists nothing when the number is DISCONNECTED with no connected duplicate' do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+
+      aggregate_failures do
+        expect(result.error).to eq(:no_connected_registration)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'auto-resolves a DISCONNECTED coexistence number to its single CONNECTED same-business registration' do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-CONNECTED])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-CONNECTED')
+                                                      .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'CONNECTED' }])
+      allow(fb_client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER')
+
+      expect(result).to be_success
+      channel = Channel::Whatsapp.last
+      aggregate_failures do
+        expect(channel.provider_config['connection_mode']).to eq('coexistence')
+        expect(channel.provider_config['phone_number_id']).to eq('PNID-CONN')
+        expect(channel.provider_config['business_account_id']).to eq('WABA-CONNECTED')
+        expect(Bloomwire::WhatsappSetup.last.phone_number_id).to eq('PNID-CONN')
+        # Coexistence inherits the fix: the RESOLVED WABA is the one subscribed to the Bloomwire app.
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-CONNECTED')
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba).with('WABA-1')
       end
     end
 
@@ -127,7 +167,8 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
-                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil))
+                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                                                 phone_number_status: 'CONNECTED'))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
                                     phone_number_id: phone_number_id }).perform

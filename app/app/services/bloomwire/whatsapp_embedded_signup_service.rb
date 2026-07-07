@@ -14,6 +14,12 @@
 #   not configured. Meta errors are sanitized (class-only logs; a generic :meta_error) — no raw payload/token.
 # - The result DTO carries only safe, non-secret fields (ids, status, masked phone) — never api_key/provider_config.
 class Bloomwire::WhatsappEmbeddedSignupService
+  # Fail-closed readiness: a managed inbox is persisted ONLY when the number is live on the Cloud API. When the
+  # selected registration is DISCONNECTED, the same number may be CONNECTED as a duplicate under another WABA the
+  # token can message — Bloomwire::WhatsappConnectedNumberResolver routes to that single same-business registration,
+  # or fails closed (no channel/inbox/setup). The whole gate runs before any DB write.
+  CONNECTED_STATUS = 'CONNECTED'.freeze
+
   Result = Struct.new(:dto, :error, keyword_init: true) do
     def success?
       error.nil?
@@ -35,7 +41,15 @@ class Bloomwire::WhatsappEmbeddedSignupService
     meta = perform_meta_steps
     return Result.new(error: :meta_error) if meta.nil?
 
-    persisted = persist(meta[:token], meta[:phone_info], meta[:verification_pin])
+    target = resolve_target(meta)
+    return Result.new(error: target) if target.is_a?(Symbol)
+
+    # Subscribe the FINAL resolved WABA (not just the customer's selection) to the Bloomwire app BEFORE any DB
+    # write, and fail closed if Meta rejects it — see #subscribe_final_waba.
+    subscription_error = subscribe_final_waba(meta[:client], target[:waba_id])
+    return Result.new(error: subscription_error) if subscription_error
+
+    persisted = persist(meta[:token], target[:waba_id], target[:phone_info], meta[:verification_pin])
     return Result.new(error: persisted) if persisted.is_a?(Symbol)
 
     Result.new(dto: dto_for(persisted))
@@ -70,18 +84,49 @@ class Bloomwire::WhatsappEmbeddedSignupService
     token = Whatsapp::TokenExchangeService.new(@code).perform
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
-    # App-to-WABA subscription only (global router). NOT override_waba_callback / subscribe_waba_webhook.
-    client.subscribe_app_to_waba(@waba_id)
-    # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED and delivers inbound to
-    # the globally-subscribed webhook (mirrors native Whatsapp::WebhookSetupService and the reference WhatsWay
-    # flow). Best-effort: a registration failure (e.g. Meta (#100) when the app is not the WABA owner / an
-    # approved Tech Provider) must NOT abort onboarding — the number stays DISCONNECTED and is surfaced via the
-    # setup readiness DTO, never silently swallowed.
+    # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED (mirrors native
+    # Whatsapp::WebhookSetupService). Best-effort: a registration failure (e.g. Meta (#100) when the app is not
+    # the WABA owner) is not raised here — the readiness gate (CONNECTED check in #perform) then fails closed on a
+    # non-CONNECTED number so NO partial inbox is created.
     verification_pin = register_number(client, phone_info[:phone_number_id])
-    { token: token, phone_info: phone_info, verification_pin: verification_pin }
+    # Fail-closed readiness signal: the actual Meta connection state, checked by the caller before any DB write.
+    connection_status = client.phone_number_status(phone_info[:phone_number_id])
+    { token: token, client: client, phone_info: phone_info, verification_pin: verification_pin,
+      connection_status: connection_status }
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] Meta step failed: #{e.class}")
     nil
+  end
+
+  # Chooses the (waba_id, phone_info) actually persisted. The customer's selection is used as-is when Meta reports
+  # it live. When it is DISCONNECTED, a duplicate of the same number may be CONNECTED under another WABA the token
+  # can message (Meta allows multi-WABA registration) — we route to that single same-business registration so
+  # inbound webhooks and outbound sends use the LIVE phone_number_id. Otherwise we fail closed (safe Symbol).
+  def resolve_target(meta)
+    phone_info = meta[:phone_info]
+    return { waba_id: @waba_id, phone_info: phone_info } if meta[:connection_status] == CONNECTED_STATUS
+
+    resolution = Bloomwire::WhatsappConnectedNumberResolver.new(
+      client: meta[:client], input_token: meta[:token],
+      selected_waba_id: @waba_id, selected_phone_number: phone_info[:phone_number]
+    ).resolve
+    return resolution.error unless resolution.ok?
+
+    { waba_id: resolution.waba_id, phone_info: phone_info.merge(phone_number_id: resolution.phone_number_id) }
+  end
+
+  # The app-to-WABA subscription (global router) MUST target the FINAL resolved WABA. Inbound webhooks for the
+  # connected number are only forwarded to Bloomwire's global callback when the app is subscribed to the WABA that
+  # actually owns that registration — which, after #resolve_target, can differ from the customer's originally
+  # selected WABA. Subscribing only the selected WABA would leave the resolved inbox receiving no inbound. We
+  # subscribe exactly once (the final WABA), so a selected==resolved case makes no duplicate call. Fails closed
+  # (returns a Symbol) BEFORE any DB write. NEVER override_waba_callback / subscribe_waba_webhook.
+  def subscribe_final_waba(client, waba_id)
+    client.subscribe_app_to_waba(waba_id)
+    nil
+  rescue StandardError => e
+    Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] App-to-WABA subscription failed: #{e.class}")
+    :subscription_failed
   end
 
   # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later
@@ -96,17 +141,17 @@ class Bloomwire::WhatsappEmbeddedSignupService
   end
 
   # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error.
-  def persist(token, phone_info, verification_pin)
+  def persist(token, waba_id, phone_info, verification_pin)
     return :phone_number_taken if Channel::Whatsapp.exists?(phone_number: phone_info[:phone_number])
 
     setup = nil
     error = nil
     ActiveRecord::Base.transaction do
-      channel = create_channel_shell(phone_info)
+      channel = create_channel_shell(waba_id, phone_info)
       inbox = create_inbox(channel, phone_info)
       Bloomwire::WhatsappCredentialWriter.new(channel: channel, attributes: { 'api_key' => token }).perform
       store_verification_pin(channel, verification_pin)
-      creator = create_mapping(channel, inbox, phone_info)
+      creator = create_mapping(channel, inbox, waba_id, phone_info)
       if creator.success?
         setup = creator.setup
       else
@@ -131,15 +176,16 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # Credential-less shell: source 'bloomwire_managed' skips the after_commit per-channel webhook setup; a blank
   # api_key at create-time no-ops the after_create template sync; save(validate: false) skips the remote
   # validate_provider_config credential re-check (no live Meta call). The api_key is written next, encrypted.
-  def create_channel_shell(phone_info)
+  def create_channel_shell(waba_id, phone_info)
     channel = Channel::Whatsapp.new(
       account: @account,
       phone_number: phone_info[:phone_number],
       provider: 'whatsapp_cloud',
       provider_config: {
         'phone_number_id' => phone_info[:phone_number_id],
-        'business_account_id' => @waba_id,
-        'source' => 'bloomwire_managed'
+        'business_account_id' => waba_id,
+        'source' => 'bloomwire_managed',
+        'connection_mode' => 'standard'
       }
     )
     channel.save!(validate: false)
@@ -154,13 +200,13 @@ class Bloomwire::WhatsappEmbeddedSignupService
     "#{phone_info[:business_name].presence || 'WhatsApp'} WhatsApp"
   end
 
-  def create_mapping(channel, inbox, phone_info)
+  def create_mapping(channel, inbox, waba_id, phone_info)
     Bloomwire::WhatsappSetupCreator.call(
       account: @account,
       inbox: inbox,
       channel_whatsapp: channel,
       phone_number_id: phone_info[:phone_number_id],
-      waba_id: @waba_id,
+      waba_id: waba_id,
       display_phone_number: phone_info[:phone_number]
     )
   end

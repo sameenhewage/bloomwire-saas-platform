@@ -34,7 +34,8 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(Whatsapp::FacebookApiClient).to receive(:new)
       .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
-                                                               override_waba_callback: nil, subscribe_waba_webhook: nil))
+                                                               override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                                               phone_number_status: 'CONNECTED'))
   end
 
   context 'when managed mode is active, admin, and platform ready (Meta stubbed)' do
@@ -139,7 +140,8 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
-                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil))
+                                                                 override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                                                 phone_number_status: 'CONNECTED'))
     end
 
     def register(phone_number_id:, phone_number:)

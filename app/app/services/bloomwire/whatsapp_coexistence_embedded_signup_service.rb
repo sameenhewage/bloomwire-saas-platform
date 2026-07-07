@@ -26,14 +26,14 @@ class Bloomwire::WhatsappCoexistenceEmbeddedSignupService < Bloomwire::WhatsappE
     nil
   end
 
-  def create_channel_shell(phone_info)
+  def create_channel_shell(waba_id, phone_info)
     channel = Channel::Whatsapp.new(
       account: @account,
       phone_number: phone_info[:phone_number],
       provider: 'whatsapp_cloud',
       provider_config: {
         'phone_number_id' => phone_info[:phone_number_id],
-        'business_account_id' => @waba_id,
+        'business_account_id' => waba_id,
         'source' => SOURCE,
         'connection_mode' => CONNECTION_MODE
       }

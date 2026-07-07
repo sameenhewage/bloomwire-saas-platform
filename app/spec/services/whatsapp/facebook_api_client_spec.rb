@@ -34,6 +34,7 @@ describe Whatsapp::FacebookApiClient do
       api_client.debug_token('t')
       api_client.register_phone_number('pnid', '123456')
       api_client.phone_number_verified?('pnid')
+      api_client.phone_number_status('pnid')
       api_client.subscribe_app_to_waba(waba_id)
       expect(stub).to have_been_requested.at_least_once
       expect(a_request(:any, %r{https://graph\.facebook\.com/v(1[0-9]|2[0-4])\.0/})).not_to have_been_made
@@ -178,6 +179,24 @@ describe Whatsapp::FacebookApiClient do
       it 'raises an error' do
         expect { api_client.register_phone_number(phone_number_id, pin) }.to raise_error(/Phone registration failed/)
       end
+    end
+  end
+
+  describe '#phone_number_status' do
+    let(:phone_number_id) { 'test_phone_id' }
+
+    it 'returns the Meta connection status' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{phone_number_id}")
+        .with(query: { fields: 'status' })
+        .to_return(status: 200, body: { status: 'CONNECTED' }.to_json, headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.phone_number_status(phone_number_id)).to eq('CONNECTED')
+    end
+
+    it 'raises an error when the status check fails' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{phone_number_id}")
+        .with(query: { fields: 'status' })
+        .to_return(status: 400, body: { error: 'bad' }.to_json)
+      expect { api_client.phone_number_status(phone_number_id) }.to raise_error(/Phone status check failed/)
     end
   end
 
