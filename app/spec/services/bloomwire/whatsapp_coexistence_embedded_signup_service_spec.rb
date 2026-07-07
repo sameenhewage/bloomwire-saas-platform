@@ -22,7 +22,7 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, register_phone_number: { 'success' => true }, override_waba_callback: nil,
                                          subscribe_waba_webhook: nil)
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
@@ -120,7 +120,7 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
                                     perform: { phone_number_id: phone_number_id, phone_number: phone_number,
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
-        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true,
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,

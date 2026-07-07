@@ -26,7 +26,7 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil)
+                                         subscribe_waba_webhook: nil, register_phone_number: { 'success' => true })
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -77,6 +77,33 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
         expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
         expect(fb_client).not_to have_received(:override_waba_callback)
         expect(fb_client).not_to have_received(:subscribe_waba_webhook)
+      end
+    end
+
+    it 'registers the number on Cloud API with a 6-digit PIN (so Meta connects it for inbound)' do
+      result
+      expect(fb_client).to have_received(:register_phone_number).with('PNID-1', /\A\d{6}\z/)
+    end
+
+    it 'persists the generated 2FA PIN in provider_config (so a later re-register cannot lock the number out)' do
+      result
+      expect(Channel::Whatsapp.last.provider_config['verification_pin']).to match(/\A\d{6}\z/)
+    end
+  end
+
+  describe 'phone registration is best-effort (non-fatal)' do
+    before do
+      stub_ready
+      stub_meta
+    end
+
+    it 'still creates the managed inbox (number left DISCONNECTED) when Meta rejects registration' do
+      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError, 'RAW (#100) owner-permission error')
+      aggregate_failures do
+        expect(result).to be_success
+        expect(Channel::Whatsapp.count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.count).to eq(1)
+        expect(Channel::Whatsapp.last.provider_config['verification_pin']).to be_nil
       end
     end
   end
@@ -140,7 +167,7 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
                                     perform: { phone_number_id: phone_number_id, phone_number: phone_number,
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
-        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true,
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
