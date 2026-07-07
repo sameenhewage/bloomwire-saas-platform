@@ -15,8 +15,18 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
-### Bloomwire — Sanitized structured observability for a rejected Cloud API `/register` (`bloomwire.whatsapp.phone_registration_failed`) — OPEN (PR pending; not merged)
-- **Branch:** `fix/bloomwire-whatsapp-register-observability` off `version_1` (builds on PR #139).
+### Bloomwire — TEMPORARY DEV-only runtime-token `debug_token` instrumentation (`bloomwire.whatsapp.runtime_token_debug`, Phase 5) — OPEN (PR pending; not merged)
+- **Branch:** `fix/bloomwire-whatsapp-runtime-token-debug` off `version_1` (builds on PR #140). **Temporary diagnostic — to be removed after the evidence is captured.**
+- **What & why:**
+  - Live Meta UI verification proved the human user (Full control), the WABA (owned/verified/approved), and the Bloomwire partner (full control) are all correct, yet `/register` still returns `(#100) Need either permission on WhatsApp Business Account or owner business`. The only unproven link is whether the **exact exchanged runtime token** carries `whatsapp_business_management` (not just `whatsapp_business_messaging`) with the target WABA `1029255689498274` in its granular `target_ids`.
+  - New **`Bloomwire::WhatsappRuntimeTokenDebug`** runs Meta `debug_token` on the **exact** token returned by the OAuth code exchange, **after exchange and before `/register`**, and logs a **sanitized structured** `bloomwire.whatsapp.runtime_token_debug` event: `app_id`, token type, `is_valid`, `expires_at`, `data_access_expires_at`, `scopes`, `granular_scopes` (name + `target_ids`), and booleans for management/messaging scope presence and whether the selected WABA is in each scope's targets.
+  - Gated behind a **DEV-only flag `BLOOMWIRE_WHATSAPP_TOKEN_DEBUG` (default OFF)**, hard-blocked if `BLOOMWIRE_ENV=production`. Best-effort: never raises into onboarding, never changes `/register`/readiness/resolver/subscription/persistence.
+- **Security:** the event **NEVER** contains the runtime token, app access token, app secret, OAuth code, PIN, `Authorization` header, cookies, raw request URL, or raw response body — asserted by tests (incl. a `debug_token` failure that echoes a token/secret in its message → only the exception class is logged).
+- **Validation (cwd `app/`, Meta stubbed, no live calls):** `whatsapp_runtime_token_debug` + parent + coexistence service specs → **53 examples / 0 failures**; RuboCop on changed Ruby → **0 offenses**.
+- **Status:** open PR into `version_1` pending; **not merged.** Flag will be enabled **only on DEV** for one fresh attempt, then the instrumentation + flag are removed/disabled.
+
+### Bloomwire — Sanitized structured observability for a rejected Cloud API `/register` (`bloomwire.whatsapp.phone_registration_failed`) — MERGED (PR #140 · merge `533071f`) · deployed to DEV
+- **Branch:** `fix/bloomwire-whatsapp-register-observability` off `version_1` (builds on PR #139); merged via **PR #140** (merge SHA `533071f`), deployed to DEV. Live DEV capture returned Meta `http_status 400 · code 100 · OAuthException · "(#100) Need either permission on WhatsApp Business Account or owner business"` (fbtrace `A9pVhvchpvW3JYU6w4mBALh`).
 - **What & why:**
   - Live DEV validation of PR #139 proved coexistence now calls `/register`, but **Meta rejected it** and the only log line was the exception **class** (`RuntimeError`). The specific Meta error (HTTP status / code / subcode / type / `is_transient` / `fbtrace_id`) was **discarded**, so the dual-WABA / permission / PIN root cause was **not diagnosable**.
   - New **`Whatsapp::GraphApiError`** (a `StandardError`) is raised by `Whatsapp::FacebookApiClient#register_phone_number` on failure, carrying the **parsed, allow-listed** Meta error fields. **The exception message is byte-identical to the legacy format**, so native `Whatsapp::WebhookSetupService` (which logs `e.message`) and all existing specs are unchanged.
@@ -24,7 +34,7 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 - **Security:** the event **NEVER** contains the access token, generated PIN, OAuth code, `Authorization` header, cookies, or the raw request/response body — asserted by tests.
 - **Behavior preserved (observability only):** registration failure stays **non-fatal**; the readiness gate still returns `no_connected_registration`; a DISCONNECTED number still persists **no** Channel / Inbox / WhatsappSetup; **no** polling, retry, PIN, frontend, resolver, token-exchange, or schema change. Standard **and** Coexistence behavior unchanged apart from the new log.
 - **Validation (cwd `app/`, Meta stubbed, no live Meta calls):** `graph_api_error` + `facebook_api_client` + native `webhook_setup_service` + parent + coexistence services + Bloomwire request specs → **105 examples / 0 failures**; RuboCop on changed Ruby → **0 offenses**.
-- **Status:** open PR into `version_1` pending; **not merged, not deployed.** A fresh live attempt to capture the real Meta `/register` error is the next step.
+- **Status:** **merged (PR #140 · `533071f`) and deployed to DEV.** The live capture (above) confirmed the Meta `code 100` permission error, which the Phase 5 runtime-token instrumentation (top entry) now pinpoints.
 
 ### Bloomwire — Coexistence onboarding registers the number before the readiness gate (removes the `/register` skip) — MERGED (PR #139 · merge `46045e5`) · deployed to DEV
 - **Branch:** `fix/bloomwire-coexistence-register-before-readiness` off `version_1` (builds on PR #138). Implementation commit `27af449`; merged via **PR #139** (merge SHA `46045e5`), deployed to DEV.

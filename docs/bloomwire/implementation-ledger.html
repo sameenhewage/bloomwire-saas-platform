@@ -347,14 +347,26 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Sanitized structured observability for a rejected Cloud API <code>/register</code> (<code>bloomwire.whatsapp.phone_registration_failed</code>) <span class="badge">Open (PR pending; not merged)</span> <span class="pr">branch fix/bloomwire-whatsapp-register-observability · base version_1</span></h3>
+    <div class="card"><h3>TEMPORARY runtime-token <code>debug_token</code> instrumentation (<code>bloomwire.whatsapp.runtime_token_debug</code>, Phase 5) <span class="badge">Open (PR pending; not merged)</span> <span class="pr">branch fix/bloomwire-whatsapp-runtime-token-debug · base version_1</span></h3>
+      <ul>
+        <li><b>Temporary diagnostic — removed after evidence is captured.</b> Meta-UI verification proved the human user (Full control), WABA (owned/verified/approved) and Bloomwire partner (full control) are all correct, yet <code>/register</code> still returns <code>(#100) permission-or-owner</code>. The only unproven link is whether the <b>exact exchanged runtime token</b> holds <code>whatsapp_business_management</code> (vs only <code>whatsapp_business_messaging</code>) with target WABA <code>1029255689498274</code> in its granular <code>target_ids</code>.</li>
+        <li><b>Change:</b> new <b><code>Bloomwire::WhatsappRuntimeTokenDebug</code></b>; <code>WhatsappEmbeddedSignupService#perform_meta_steps</code> calls it (flag-gated) <b>after</b> token exchange and <b>before</b> <code>/register</code>, on the exact exchanged token. Logs <code>app_id</code>/type/<code>is_valid</code>/<code>expires_at</code>/<code>data_access_expires_at</code>/<code>scopes</code>/<code>granular_scopes</code> (name + <code>target_ids</code>) + management/messaging presence + selected-WABA-in-targets booleans.</li>
+        <li><b>Gate:</b> DEV-only flag <code>BLOOMWIRE_WHATSAPP_TOKEN_DEBUG</code> (default OFF), hard-blocked if <code>BLOOMWIRE_ENV=production</code>. Best-effort: never raises, never changes <code>/register</code>/gate/resolver/subscription/persistence.</li>
+        <li><b>Never logged:</b> runtime token, app access token, app secret, OAuth code, PIN, <code>Authorization</code> header, cookies, raw request URL, raw response body (failure logs exception class only) — proven by tests.</li>
+        <li><b>Validation (cwd <code>app/</code>, Meta stubbed):</b> whatsapp_runtime_token_debug + parent + coexistence service specs <b>53/0</b>; RuboCop <b>0</b>.</li>
+        <li><b>Status:</b> open PR into <code>version_1</code> pending; not merged. Enabled <b>only on DEV</b> for one fresh attempt, then removed/disabled.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Sanitized structured observability for a rejected Cloud API <code>/register</code> (<code>bloomwire.whatsapp.phone_registration_failed</code>) <span class="badge done">Merged · PR #140 · 533071f · DEV</span> <span class="pr">branch fix/bloomwire-whatsapp-register-observability · base version_1</span></h3>
       <ul>
         <li><b>Root (proven on DEV):</b> after PR #139 coexistence calls <code>/register</code> but Meta <b>rejected</b> it; the only log was the exception <b>class</b> (<code>RuntimeError</code>) from <code>#register_number</code>'s rescue, and <code>Whatsapp::FacebookApiClient#handle_response</code> embeds the raw body in a plain <code>RuntimeError</code> <b>message</b> (never logged) with <b>no HTTP status</b> — so the Meta error code / subcode / type / <code>is_transient</code> / <code>fbtrace_id</code> were unrecoverable read-only.</li>
         <li><b>Change (smallest seam):</b> new <b><code>Whatsapp::GraphApiError &lt; StandardError</code></b> (<code>app/services/whatsapp/graph_api_error.rb</code>) parses only allow-listed Meta error fields; <code>FacebookApiClient#register_phone_number</code> raises it on failure with a <b>byte-identical message</b> (native <code>Whatsapp::WebhookSetupService</code>, which logs <code>e.message</code>, and all specs stay unchanged); <code>Bloomwire::WhatsappEmbeddedSignupService#register_number</code> emits a sanitized structured <code>bloomwire.whatsapp.phone_registration_failed</code> event.</li>
         <li><b>Never logged:</b> access token, generated PIN, OAuth code, <code>Authorization</code> header, cookies, raw request/response body — proven by tests.</li>
         <li><b>Behavior preserved:</b> registration failure stays non-fatal; readiness gate still returns <code>no_connected_registration</code>; a DISCONNECTED number persists no Channel/Inbox/WhatsappSetup; no polling / retry / PIN / frontend / resolver / token-exchange / schema change; Standard &amp; Coexistence unchanged apart from the log.</li>
         <li><b>Validation (cwd <code>app/</code>, Meta stubbed):</b> graph_api_error + facebook_api_client + native webhook_setup + parent + coexistence services + Bloomwire request specs <b>105/0</b>; RuboCop on changed Ruby <b>0</b>.</li>
-        <li><b>Status:</b> open PR into <code>version_1</code> pending; not merged/deployed. Fresh live capture of the real Meta <code>/register</code> error is the next step.</li>
+        <li><b>Live DEV capture:</b> <code>http_status 400 · code 100 · OAuthException · "(#100) Need either permission on WhatsApp Business Account or owner business"</code> (fbtrace <code>A9pVhvchpvW3JYU6w4mBALh</code>).</li>
+        <li><b>Status:</b> <b>merged (PR #140 · 533071f) and deployed to DEV.</b> Phase 5 runtime-token instrumentation (above) now pinpoints the token scope.</li>
       </ul>
     </div>
 
