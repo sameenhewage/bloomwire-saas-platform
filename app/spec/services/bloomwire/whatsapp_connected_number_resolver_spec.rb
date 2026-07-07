@@ -3,15 +3,15 @@ require 'rails_helper'
 # Phase 17E.2: the safe duplicate-registration resolver. All Meta access is stubbed via an instance_double of the
 # FacebookApiClient (no real Graph calls). Fake values only.
 RSpec.describe Bloomwire::WhatsappConnectedNumberResolver do
-  let(:client) { instance_double(Whatsapp::FacebookApiClient) }
-  let(:token) { 'FAKE-TOKEN' }
-  let(:selected_waba_id) { 'WABA-SELECTED' }
-  let(:selected_phone_number) { '+94771713273' }
-
   subject(:result) do
     described_class.new(client: client, input_token: token,
                         selected_waba_id: selected_waba_id, selected_phone_number: selected_phone_number).resolve
   end
+
+  let(:client) { instance_double(Whatsapp::FacebookApiClient) }
+  let(:token) { 'FAKE-TOKEN' }
+  let(:selected_waba_id) { 'WABA-SELECTED' }
+  let(:selected_phone_number) { '+94771713273' }
 
   # A phone registration row as Meta returns it (string keys); CONNECTED unless a status is passed.
   def reg(id, display, status = 'CONNECTED')

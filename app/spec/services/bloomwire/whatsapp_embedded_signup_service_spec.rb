@@ -104,10 +104,12 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
       allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-CONNECTED])
       allow(fb_client).to receive(:waba_registrations).with('WABA-1')
-        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
       # Same number, different formatting, CONNECTED under a sibling WABA owned by the same business.
       allow(fb_client).to receive(:waba_registrations).with('WABA-CONNECTED')
-        .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+1 555 123 0001', 'status' => 'CONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+1 555 123 0001',
+                                                                     'status' => 'CONNECTED' }])
       allow(fb_client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER')
     end
 
@@ -141,7 +143,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       allow(fb_client).to receive(:register_phone_number).and_raise(StandardError, 'RAW (#100) owner-permission error')
       allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1])
       allow(fb_client).to receive(:waba_registrations).with('WABA-1')
-        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
       aggregate_failures do
         expect(result.error).to eq(:no_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
@@ -152,9 +155,11 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     it 'returns :ambiguous_connected_registration when the number is CONNECTED on two WABAs' do
       allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-A WABA-B])
       allow(fb_client).to receive(:waba_registrations).with('WABA-A')
-        .and_return([{ 'id' => 'PNID-A', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-A', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'CONNECTED' }])
       allow(fb_client).to receive(:waba_registrations).with('WABA-B')
-        .and_return([{ 'id' => 'PNID-B', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-B', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'CONNECTED' }])
       aggregate_failures do
         expect(result.error).to eq(:ambiguous_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
@@ -164,9 +169,11 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     it 'returns :cross_business_registration when the only connected match is a different business' do
       allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-OTHER])
       allow(fb_client).to receive(:waba_registrations).with('WABA-1')
-        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
       allow(fb_client).to receive(:waba_registrations).with('WABA-OTHER')
-        .and_return([{ 'id' => 'PNID-X', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-X', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'CONNECTED' }])
       allow(fb_client).to receive(:waba_owner_business_id).with('WABA-1').and_return('BIZ-1')
       allow(fb_client).to receive(:waba_owner_business_id).with('WABA-OTHER').and_return('BIZ-2')
       aggregate_failures do

@@ -117,9 +117,11 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
       allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-CONNECTED])
       allow(fb_client).to receive(:waba_registrations).with('WABA-1')
-        .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001', 'status' => 'DISCONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
       allow(fb_client).to receive(:waba_registrations).with('WABA-CONNECTED')
-        .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+15551230001', 'status' => 'CONNECTED' }])
+                                                      .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'CONNECTED' }])
       allow(fb_client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER')
 
       expect(result).to be_success
