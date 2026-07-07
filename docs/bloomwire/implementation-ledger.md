@@ -314,6 +314,13 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Managed WhatsApp onboarding success screen routes to the new inbox (route-param fix) — `Open (PR #137; not merged)`
+- **Branch** `fix/bloomwire-whatsapp-success-inbox-id-param` off `version_1`. Frontend-only · no schema/migration · no backend/service/controller/route change · no Meta/WhatsApp call · onboarding logic / safe DTOs / global-router boundary UNCHANGED.
+- **Root cause (proven):** on the managed WhatsApp onboarding success screen the **"Open inbox"** button linked to the `inbox_dashboard` route (path `accounts/:accountId/inbox/:inbox_id`) while passing `params: { inboxId }`, so Vue Router threw *"Missing required param 'inbox_id'"* and the success screen failed to render right after a successful create.
+- **Fix:** the success screen routes to the inbox using each route's **own** param name — `params: { inbox_id: inboxId }` for `inbox_dashboard`; the **"Inbox settings"** link keeps `params: { inboxId }` because `settings_inbox_show` uses `:inboxId`. Only the two success-screen `router-link` params in `BloomwireWhatsapp.vue` changed.
+- **Validation (cwd `app/`):** `BloomwireWhatsapp` component spec **46/0** incl. a regression asserting **Open inbox** → `inbox_dashboard` with `{ inbox_id }` and **Inbox settings** → `settings_inbox_show` with `{ inboxId }`; ESLint 0. No secret in diff; no live Meta/WhatsApp call.
+- **Status:** open PR into `version_1`; awaiting GPT‑5.5 exact‑head review; not merged/deployed.
+
 ### Universal Account-Admin "Remove inbox" (generalizes the managed-only removal) — `Open (product code; not merged)`
 - **Branch** `feature/bloomwire-universal-remove-inbox` off `version_1` `b6b5bfb` (post‑#132 merge). No schema/migration ·
   Enterprise: unchanged (`DeleteObjectJob` audit override intact) · admin-only (`InboxPolicy#destroy?`) + account-scoping

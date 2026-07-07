@@ -347,6 +347,16 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Managed WhatsApp onboarding success screen routes to the new inbox (route-param fix) <span class="badge">Open (PR #137; not merged)</span> <span class="pr">branch fix/bloomwire-whatsapp-success-inbox-id-param · base version_1</span></h3>
+      <ul>
+        <li><b>Frontend-only</b> · no schema/migration · no backend/service/controller/route change · no Meta/WhatsApp call · onboarding logic / safe DTOs / global-router boundary UNCHANGED.</li>
+        <li><b>Root cause (proven):</b> on the managed WhatsApp onboarding success screen the <b>"Open inbox"</b> button linked to the <code>inbox_dashboard</code> route (path <code>accounts/:accountId/inbox/:inbox_id</code>) while passing <code>params: { inboxId }</code>, so Vue Router threw <i>"Missing required param 'inbox_id'"</i> and the success screen failed to render right after a successful create.</li>
+        <li><b>Fix:</b> the success screen routes to the inbox using each route's <b>own</b> param name — <code>params: { inbox_id: inboxId }</code> for <code>inbox_dashboard</code>; the <b>"Inbox settings"</b> link keeps <code>params: { inboxId }</code> because <code>settings_inbox_show</code> uses <code>:inboxId</code>. Only the two success-screen <code>router-link</code> params in <code>BloomwireWhatsapp.vue</code> changed.</li>
+        <li><b>Validation (cwd <code>app/</code>):</b> <code>BloomwireWhatsapp</code> component spec <b>46/0</b> incl. a regression asserting <b>Open inbox</b> → <code>inbox_dashboard</code> with <code>{ inbox_id }</code> and <b>Inbox settings</b> → <code>settings_inbox_show</code> with <code>{ inboxId }</code>; ESLint 0. No secret in diff; no live Meta/WhatsApp call.</li>
+        <li><b>Status:</b> open PR into <code>version_1</code>; awaiting GPT‑5.5 exact‑head review; not merged/deployed.</li>
+      </ul>
+    </div>
+
     <div class="card"><h3>Universal Account-Admin &quot;Remove inbox&quot; (generalizes the managed-only removal) <span class="badge">Open (product code; not merged)</span> <span class="pr">branch feature/bloomwire-universal-remove-inbox · base version_1 b6b5bfb</span></h3>
       <ul>
         <li><b>No schema/migration</b> · Enterprise: unchanged (<code>DeleteObjectJob</code> audit override intact) · admin-only (<code>InboxPolicy#destroy?</code>) + account-scoping preserved (cross‑tenant → 404) · <b>NO Meta call for any source</b> · OFF (Bloomwire master OFF) == stock.</li>
