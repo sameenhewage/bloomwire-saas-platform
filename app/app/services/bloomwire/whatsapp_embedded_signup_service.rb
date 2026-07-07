@@ -35,7 +35,7 @@ class Bloomwire::WhatsappEmbeddedSignupService
     meta = perform_meta_steps
     return Result.new(error: :meta_error) if meta.nil?
 
-    persisted = persist(meta[:token], meta[:phone_info])
+    persisted = persist(meta[:token], meta[:phone_info], meta[:verification_pin])
     return Result.new(error: persisted) if persisted.is_a?(Symbol)
 
     Result.new(dto: dto_for(persisted))
@@ -69,16 +69,34 @@ class Bloomwire::WhatsappEmbeddedSignupService
   def perform_meta_steps
     token = Whatsapp::TokenExchangeService.new(@code).perform
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
+    client = Whatsapp::FacebookApiClient.new(token)
     # App-to-WABA subscription only (global router). NOT override_waba_callback / subscribe_waba_webhook.
-    Whatsapp::FacebookApiClient.new(token).subscribe_app_to_waba(@waba_id)
-    { token: token, phone_info: phone_info }
+    client.subscribe_app_to_waba(@waba_id)
+    # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED and delivers inbound to
+    # the globally-subscribed webhook (mirrors native Whatsapp::WebhookSetupService and the reference WhatsWay
+    # flow). Best-effort: a registration failure (e.g. Meta (#100) when the app is not the WABA owner / an
+    # approved Tech Provider) must NOT abort onboarding — the number stays DISCONNECTED and is surfaced via the
+    # setup readiness DTO, never silently swallowed.
+    verification_pin = register_number(client, phone_info[:phone_number_id])
+    { token: token, phone_info: phone_info, verification_pin: verification_pin }
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] Meta step failed: #{e.class}")
     nil
   end
 
+  # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later
+  # re-register does not lock the number out), or nil when the call fails (non-fatal by design).
+  def register_number(client, phone_number_id)
+    pin = format('%06d', SecureRandom.random_number(1_000_000))
+    client.register_phone_number(phone_number_id, pin)
+    pin
+  rescue StandardError => e
+    Rails.logger.warn("[BLOOMWIRE EMBEDDED SIGNUP] Phone registration failed (continuing, stays DISCONNECTED): #{e.class}")
+    nil
+  end
+
   # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error.
-  def persist(token, phone_info)
+  def persist(token, phone_info, verification_pin)
     return :phone_number_taken if Channel::Whatsapp.exists?(phone_number: phone_info[:phone_number])
 
     setup = nil
@@ -87,6 +105,7 @@ class Bloomwire::WhatsappEmbeddedSignupService
       channel = create_channel_shell(phone_info)
       inbox = create_inbox(channel, phone_info)
       Bloomwire::WhatsappCredentialWriter.new(channel: channel, attributes: { 'api_key' => token }).perform
+      store_verification_pin(channel, verification_pin)
       creator = create_mapping(channel, inbox, phone_info)
       if creator.success?
         setup = creator.setup
@@ -98,6 +117,15 @@ class Bloomwire::WhatsappEmbeddedSignupService
     error || setup
   rescue ActiveRecord::RecordNotUnique
     :phone_number_taken
+  end
+
+  # The register step's 2FA PIN is persisted (provider_config is encrypted at rest, ADR-0006) so a later
+  # re-register does not lock out the number. Kept off the Ops credential-writer surface deliberately.
+  def store_verification_pin(channel, verification_pin)
+    return if verification_pin.blank?
+
+    channel.provider_config['verification_pin'] = verification_pin
+    channel.save!(validate: false)
   end
 
   # Credential-less shell: source 'bloomwire_managed' skips the after_commit per-channel webhook setup; a blank

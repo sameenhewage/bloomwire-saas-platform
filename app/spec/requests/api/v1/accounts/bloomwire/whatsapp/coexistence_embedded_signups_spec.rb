@@ -33,7 +33,7 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(Whatsapp::FacebookApiClient).to receive(:new)
-      .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true,
+      .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
                                                                override_waba_callback: nil, subscribe_waba_webhook: nil))
   end
 
@@ -138,7 +138,7 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
                                     perform: { phone_number_id: phone_number_id, phone_number: phone_number,
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
-        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true,
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil))
     end
 
