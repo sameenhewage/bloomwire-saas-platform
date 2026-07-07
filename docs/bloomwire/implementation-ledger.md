@@ -314,16 +314,25 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
-### Coexistence onboarding registers the number before the readiness gate (removes the `/register` skip) — `Open (PR pending; not merged)`
-- **Branch** `fix/bloomwire-coexistence-register-before-readiness` off `version_1` (builds on PR #138). Implementation commit `27af449`.
+### Sanitized structured observability for a rejected Cloud API `/register` (`bloomwire.whatsapp.phone_registration_failed`) — `Open (PR pending; not merged)`
+- **Branch** `fix/bloomwire-whatsapp-register-observability` off `version_1` (builds on PR #139).
+- **Root (proven on DEV):** after PR #139, coexistence calls `/register` but Meta **rejected** it; the only log was the exception **class** (`RuntimeError`) from `#register_number`'s rescue, and `Whatsapp::FacebookApiClient#handle_response` embeds the raw body in a plain `RuntimeError` **message** (never logged) with **no HTTP status** — so the Meta error code / subcode / type / `is_transient` / `fbtrace_id` were unrecoverable read-only.
+- **Change (smallest seam):** new **`Whatsapp::GraphApiError < StandardError`** (`app/services/whatsapp/graph_api_error.rb`) parses only allow-listed Meta error fields; `FacebookApiClient#register_phone_number` raises it on failure with a **byte-identical message** (native `Whatsapp::WebhookSetupService`, which logs `e.message`, and all specs stay unchanged); `Bloomwire::WhatsappEmbeddedSignupService#register_number` emits a sanitized structured `bloomwire.whatsapp.phone_registration_failed` event (status / code / subcode / type / `is_transient` / `fbtrace_id` / sanitized message / exception class / `phone_number_id`).
+- **Never logged:** access token, generated PIN, OAuth code, `Authorization` header, cookies, raw request/response body — proven by tests.
+- **Behavior preserved:** registration failure stays non-fatal; readiness gate still returns `no_connected_registration`; a DISCONNECTED number persists no Channel/Inbox/WhatsappSetup; no polling / retry / PIN / frontend / resolver / token-exchange / schema change; Standard **and** Coexistence unchanged apart from the log.
+- **Validation (cwd `app/`, Meta stubbed):** graph_api_error + facebook_api_client + native webhook_setup + parent + coexistence services + Bloomwire request specs **105/0**; RuboCop on changed Ruby **0**.
+- **Status:** open PR into `version_1` pending; not merged/deployed. Fresh live capture of the real Meta `/register` error is the next step.
+
+### Coexistence onboarding registers the number before the readiness gate (removes the `/register` skip) — `Merged (PR #139 · merge 46045e5) · deployed to DEV`
+- **Branch** `fix/bloomwire-coexistence-register-before-readiness` off `version_1` (builds on PR #138). Implementation commit `27af449`; merged via **PR #139** (merge SHA `46045e5`), deployed to DEV.
 - Bloomwire coexistence **previously skipped** the Cloud API phone-number `/register` operation.
 - The coexistence-specific **no-op override was removed**, so coexistence now **inherits the existing parent registration implementation** (`Bloomwire::WhatsappEmbeddedSignupService#register_number`).
 - **Registration occurs before the CONNECTED readiness check.**
 - **PR #138 fail-closed behavior remains intact:** a **DISCONNECTED result still persists no Channel, Inbox, or WhatsappSetup** (app-to-WABA subscription runs only after the gate passes).
 - **No polling was added.** **No hardcoded PIN was introduced.**
-- **Live validation still pending:** live Meta runtime validation is still pending; outbound and inbound messaging E2E have not yet been run — this does **not** resolve the live Meta issue.
+- **Live validation (DEV):** attempt on `+94771713273` confirmed `/register` **is** now called, but Meta **rejected** it (number stayed DISCONNECTED → fail-closed `no_connected_registration`, nothing persisted). The exact Meta error was not observable (class-only log) — addressed by the observability entry above.
 - **Validation (cwd `app/`, Meta stubbed):** coexistence service 15/0; parent + connected-number resolver + Facebook API client 46/0; coexistence request + multi-inbox integration 32/0; RuboCop on the two modified Ruby files 0.
-- **Status:** open PR into `version_1` pending; not merged/deployed.
+- **Status:** **merged (PR #139) and deployed to DEV.**
 
 ### Managed WhatsApp onboarding fail-closed readiness + same-business resolution + final-WABA subscription — `Open (PR #138; not merged)`
 - **Branch** `fix/bloomwire-whatsapp-fail-closed-readiness` off `version_1`. Standard **and** Coexistence · global-router-only boundary UNCHANGED (app-to-WABA subscribe only; never `override_waba_callback` / `subscribe_waba_webhook`) · no native `/whatsapp/authorization` · no schema/migration · tokens stay in encrypted `provider_config` · safe DTOs only · no live Meta/WhatsApp call (specs stub Meta).

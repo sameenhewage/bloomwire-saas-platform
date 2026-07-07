@@ -46,8 +46,12 @@ class Whatsapp::FacebookApiClient
       headers: request_headers,
       body: { messaging_product: 'whatsapp', pin: pin.to_s }.to_json
     )
+    # Same failure contract/message as #handle_response, but raised as a structured Whatsapp::GraphApiError so the
+    # managed-signup caller can log the specific Meta error (status/code/subcode/type/is_transient/fbtrace_id)
+    # without ever logging the token, PIN, or raw body. On success the parsed body is returned unchanged.
+    raise Whatsapp::GraphApiError.from_response('Phone registration failed', response) unless response.success?
 
-    handle_response(response, 'Phone registration failed')
+    response.parsed_response
   end
 
   def phone_number_verified?(phone_number_id)

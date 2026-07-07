@@ -136,8 +136,24 @@ class Bloomwire::WhatsappEmbeddedSignupService
     client.register_phone_number(phone_number_id, pin)
     pin
   rescue StandardError => e
-    Rails.logger.warn("[BLOOMWIRE EMBEDDED SIGNUP] Phone registration failed (continuing, stays DISCONNECTED): #{e.class}")
+    log_phone_registration_failure(phone_number_id, e)
     nil
+  end
+
+  # Sanitized, structured observability for a failed Cloud API /register. The failure stays non-fatal (the number
+  # remains DISCONNECTED and the readiness gate then refuses to persist), but we now record the SPECIFIC Meta error
+  # (status/code/subcode/type/is_transient/fbtrace_id/sanitized message) so a dual-WABA/permission/PIN cause is
+  # diagnosable. NEVER logs the token, PIN, OAuth code, Authorization header, cookies, or the raw request/response
+  # body — only the exception class name plus the allow-listed safe fields from Whatsapp::GraphApiError#to_safe_h.
+  def log_phone_registration_failure(phone_number_id, error)
+    event = {
+      event: 'bloomwire.whatsapp.phone_registration_failed',
+      operation: 'phone_registration',
+      phone_number_id: phone_number_id,
+      exception_class: error.class.name
+    }
+    event.merge!(error.to_safe_h) if error.is_a?(Whatsapp::GraphApiError)
+    Rails.logger.warn("[BLOOMWIRE EMBEDDED SIGNUP] #{event.to_json}")
   end
 
   # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error.

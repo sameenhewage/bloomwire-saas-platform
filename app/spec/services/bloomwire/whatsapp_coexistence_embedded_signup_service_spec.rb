@@ -147,6 +147,31 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
+    it 'records the sanitized phone_registration_failed event (inherited) and still fails closed on a Meta rejection' do
+      stub_ready
+      stub_meta
+      warn_logs = []
+      graph_error = Whatsapp::GraphApiError.from_response(
+        'Phone registration failed',
+        instance_double(HTTParty::Response, code: 400,
+                                            body: { error: { message: '(#100) not permitted', type: 'OAuthException', code: 100,
+                                                             error_subcode: 33, is_transient: false, fbtrace_id: 'SAFE_TRACE_ID' } }.to_json)
+      )
+      allow(fb_client).to receive(:register_phone_number).and_raise(graph_error)
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(Rails.logger).to receive(:warn) { |m| warn_logs << m }
+
+      aggregate_failures do
+        expect(result.error).to eq(:no_connected_registration)
+        expect(Channel::Whatsapp.count).to eq(0)
+        event = warn_logs.find { |m| m.include?('bloomwire.whatsapp.phone_registration_failed') }
+        payload = JSON.parse(event.sub('[BLOOMWIRE EMBEDDED SIGNUP] ', ''))
+        expect(payload['meta_error_code']).to eq(100)
+        expect(payload['fbtrace_id']).to eq('SAFE_TRACE_ID')
+        expect(event).not_to include('FAKE-CUSTOMER-TOKEN')
+      end
+    end
+
     it 'auto-resolves a DISCONNECTED coexistence number to its single CONNECTED same-business registration' do
       stub_ready
       stub_meta
