@@ -74,10 +74,12 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
 
-    it 'uses the GLOBAL router (app-to-WABA subscribe) and never a per-channel webhook/override' do
+    it 'uses the GLOBAL router (app-to-WABA subscribe) exactly once and never a per-channel webhook/override' do
       result
       aggregate_failures do
-        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
+        # Same-WABA path (the selected number is CONNECTED): the final WABA equals the selection, so exactly one
+        # subscription call is made — no duplicate.
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1').once
         expect(fb_client).not_to have_received(:override_waba_callback)
         expect(fb_client).not_to have_received(:subscribe_waba_webhook)
       end
@@ -129,6 +131,42 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       setup = Bloomwire::WhatsappSetup.last
       payload = bw_inbound_text_payload(phone_number_id: 'PNID-CONN', display_phone_number: '15551230001')
       expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)&.id).to eq(setup.id)
+    end
+
+    it 'subscribes the Bloomwire app to the RESOLVED WABA (WABA-CONNECTED), not the disconnected selection' do
+      result
+      aggregate_failures do
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-CONNECTED')
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba).with('WABA-1')
+      end
+    end
+  end
+
+  # The resolved WABA must be subscribed to the Bloomwire app BEFORE any DB write; if Meta rejects that
+  # subscription the whole onboarding fails closed (a resolved inbox that never receives inbound is worse than none).
+  describe 'fails closed when subscribing the RESOLVED WABA is rejected (creates nothing)' do
+    before do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1 WABA-CONNECTED])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-CONNECTED')
+                                                      .and_return([{ 'id' => 'PNID-CONN', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'CONNECTED' }])
+      allow(fb_client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER')
+      allow(fb_client).to receive(:subscribe_app_to_waba).with('WABA-CONNECTED').and_raise(StandardError, 'RAW subscribe error')
+    end
+
+    it 'returns :subscription_failed and creates no channel, inbox, credentials, or setup' do
+      aggregate_failures do
+        expect(result.error).to eq(:subscription_failed)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(account.inboxes.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
     end
   end
 

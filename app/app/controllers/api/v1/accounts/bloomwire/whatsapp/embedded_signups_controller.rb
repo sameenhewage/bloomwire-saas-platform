@@ -18,7 +18,8 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::EmbeddedSignupsController < Api::V
     no_connected_registration: 'This WhatsApp number is not connected on Meta yet. Connect it in WhatsApp Manager, then try again.',
     ambiguous_connected_registration: 'This number is connected under multiple WhatsApp Business Accounts. Remove the duplicate, then try again.',
     cross_business_registration: 'This number is connected under a different business. Connect it under your own account, then try again.',
-    meta_error: 'We could not complete WhatsApp setup with Meta. Please try again.'
+    meta_error: 'We could not complete WhatsApp setup with Meta. Please try again.',
+    subscription_failed: 'We could not connect this number to WhatsApp messaging. Please try again.'
   }.freeze
 
   def create
@@ -52,6 +53,6 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::EmbeddedSignupsController < Api::V
   end
 
   def error_status(error)
-    error == :meta_error ? :bad_gateway : :unprocessable_entity
+    %i[meta_error subscription_failed].include?(error) ? :bad_gateway : :unprocessable_entity
   end
 end

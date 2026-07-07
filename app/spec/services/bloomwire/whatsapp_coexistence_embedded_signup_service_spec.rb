@@ -70,11 +70,12 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'uses the GLOBAL router app-to-WABA subscription and never per-channel webhook override' do
+    it 'uses the GLOBAL router app-to-WABA subscription exactly once and never per-channel webhook override' do
       result
 
       aggregate_failures do
-        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
+        # Same-WABA path: exactly one subscription of the final WABA (no duplicate).
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1').once
         expect(fb_client).not_to have_received(:override_waba_callback)
         expect(fb_client).not_to have_received(:subscribe_waba_webhook)
       end
@@ -131,6 +132,9 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         expect(channel.provider_config['phone_number_id']).to eq('PNID-CONN')
         expect(channel.provider_config['business_account_id']).to eq('WABA-CONNECTED')
         expect(Bloomwire::WhatsappSetup.last.phone_number_id).to eq('PNID-CONN')
+        # Coexistence inherits the fix: the RESOLVED WABA is the one subscribed to the Bloomwire app.
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-CONNECTED')
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba).with('WABA-1')
       end
     end
 

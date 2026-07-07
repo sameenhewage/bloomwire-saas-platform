@@ -164,3 +164,34 @@ There is **no** automated coverage for the multi-inbox-per-account path:
 3. **Auto `team_id` on WhatsApp conversations:** set automatically per inbox, or leave assignment to inbox-member round-robin (already isolated)?
 4. **Reports/search surfaces:** confirm agent-facing reports/overview/search do not aggregate cross-inbox data (audit in 17E.2).
 5. **Go-live gate:** which of the 5 numbers/categories is the first owner-operated runtime E2E target (17E.3)?
+
+---
+
+## O. 17E hardening — fail-closed onboarding, safe connected-registration resolution, final-WABA subscription
+
+Landed in the 17E onboarding hardening slices; the managed **and** coexistence signups share this seam. All Meta lookups are stubbed in tests — no customer secrets, real phone numbers, or real WABA/phone IDs appear here (placeholders `WABA-A` / `WABA-B` only).
+
+### O.1 Fail-closed onboarding readiness
+A managed inbox is persisted **only** when the number is live (`CONNECTED`) on the Cloud API. The whole Meta phase (token exchange, phone-info, best-effort `/register`, connection-status read) runs **before** any DB write; a non-live number that cannot be safely resolved (§O.2) creates **no** channel, inbox, credential, or `Bloomwire::WhatsappSetup`. This removes the earlier false success where onboarding reported OK while the number stayed `DISCONNECTED`.
+
+- Owner: `Bloomwire::WhatsappEmbeddedSignupService#perform` → `#perform_meta_steps` + `#resolve_target`.
+- Coexistence inherits the gate unchanged; it only skips the Standard `/register` (its numbers are already registered on the WhatsApp Business App).
+
+### O.2 Safe same-business connected-registration resolution
+Meta allows one number to be registered under **several** WABAs at once. When the customer's selected `phone_number_id` is `DISCONNECTED`, the same display number may be `CONNECTED` as a duplicate under another WABA the exchanged token can message. `Bloomwire::WhatsappConnectedNumberResolver` enumerates **only** the WABAs in the token's `whatsapp_business_messaging` scope, matches the same normalized display number, and:
+
+- **exactly one** `CONNECTED` match, verified to belong to the **same owner business** as the selected WABA → onboarding routes to that live registration (its `waba_id` + `phone_number_id`), so inbound webhooks and outbound sends use the number that actually works;
+- **zero / multiple / different-business** → **fail closed**, nothing persisted, with an explicit code: `no_connected_registration`, `ambiguous_connected_registration`, or `cross_business_registration`.
+
+It never guesses and never crosses a business/tenant boundary.
+
+### O.3 The subscription must target the FINAL resolved WABA
+The global-router app-to-WABA subscription (`subscribe_app_to_waba`) must be made for the **final resolved WABA**, not merely the customer's original selection. If the selected WABA-A is disconnected and onboarding resolves to a connected duplicate under WABA-B (§O.2), subscribing only WABA-A would persist an inbox against WABA-B that the Bloomwire app was never subscribed to — so it would **never receive inbound**. Therefore:
+
+- the final target `(waba_id, phone_number_id)` is determined **first** (`#resolve_target`), then `#subscribe_final_waba` subscribes **that** WABA;
+- the subscription runs **before** any DB write and **fails closed** (`subscription_failed`) if Meta rejects it — no partial inbox/channel/credential/setup is ever left behind;
+- it is called **exactly once**; when the selected and resolved WABA are the same, no duplicate subscription is made;
+- it stays on the global-router path only — never `override_waba_callback` / `subscribe_waba_webhook` (ADR-0005).
+
+### O.4 Safe error surface
+Both controllers map every fail-closed code above to a sanitized, actionable `422` message (and treat `meta_error` / `subscription_failed` as an upstream `502`). No raw Meta payloads, tokens, phone numbers, or internal IDs are ever returned.

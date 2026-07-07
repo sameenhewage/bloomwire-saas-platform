@@ -44,6 +44,11 @@ class Bloomwire::WhatsappEmbeddedSignupService
     target = resolve_target(meta)
     return Result.new(error: target) if target.is_a?(Symbol)
 
+    # Subscribe the FINAL resolved WABA (not just the customer's selection) to the Bloomwire app BEFORE any DB
+    # write, and fail closed if Meta rejects it — see #subscribe_final_waba.
+    subscription_error = subscribe_final_waba(meta[:client], target[:waba_id])
+    return Result.new(error: subscription_error) if subscription_error
+
     persisted = persist(meta[:token], target[:waba_id], target[:phone_info], meta[:verification_pin])
     return Result.new(error: persisted) if persisted.is_a?(Symbol)
 
@@ -79,8 +84,6 @@ class Bloomwire::WhatsappEmbeddedSignupService
     token = Whatsapp::TokenExchangeService.new(@code).perform
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
-    # App-to-WABA subscription only (global router). NOT override_waba_callback / subscribe_waba_webhook.
-    client.subscribe_app_to_waba(@waba_id)
     # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED (mirrors native
     # Whatsapp::WebhookSetupService). Best-effort: a registration failure (e.g. Meta (#100) when the app is not
     # the WABA owner) is not raised here — the readiness gate (CONNECTED check in #perform) then fails closed on a
@@ -110,6 +113,20 @@ class Bloomwire::WhatsappEmbeddedSignupService
     return resolution.error unless resolution.ok?
 
     { waba_id: resolution.waba_id, phone_info: phone_info.merge(phone_number_id: resolution.phone_number_id) }
+  end
+
+  # The app-to-WABA subscription (global router) MUST target the FINAL resolved WABA. Inbound webhooks for the
+  # connected number are only forwarded to Bloomwire's global callback when the app is subscribed to the WABA that
+  # actually owns that registration — which, after #resolve_target, can differ from the customer's originally
+  # selected WABA. Subscribing only the selected WABA would leave the resolved inbox receiving no inbound. We
+  # subscribe exactly once (the final WABA), so a selected==resolved case makes no duplicate call. Fails closed
+  # (returns a Symbol) BEFORE any DB write. NEVER override_waba_callback / subscribe_waba_webhook.
+  def subscribe_final_waba(client, waba_id)
+    client.subscribe_app_to_waba(waba_id)
+    nil
+  rescue StandardError => e
+    Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] App-to-WABA subscription failed: #{e.class}")
+    :subscription_failed
   end
 
   # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later
