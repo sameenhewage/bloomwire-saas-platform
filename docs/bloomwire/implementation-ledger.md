@@ -314,6 +314,17 @@
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
 
+### Coexistence onboarding registers the number before the readiness gate (removes the `/register` skip) — `Open (PR pending; not merged)`
+- **Branch** `fix/bloomwire-coexistence-register-before-readiness` off `version_1` (builds on PR #138). Implementation commit `27af449`.
+- Bloomwire coexistence **previously skipped** the Cloud API phone-number `/register` operation.
+- The coexistence-specific **no-op override was removed**, so coexistence now **inherits the existing parent registration implementation** (`Bloomwire::WhatsappEmbeddedSignupService#register_number`).
+- **Registration occurs before the CONNECTED readiness check.**
+- **PR #138 fail-closed behavior remains intact:** a **DISCONNECTED result still persists no Channel, Inbox, or WhatsappSetup** (app-to-WABA subscription runs only after the gate passes).
+- **No polling was added.** **No hardcoded PIN was introduced.**
+- **Live validation still pending:** live Meta runtime validation is still pending; outbound and inbound messaging E2E have not yet been run — this does **not** resolve the live Meta issue.
+- **Validation (cwd `app/`, Meta stubbed):** coexistence service 15/0; parent + connected-number resolver + Facebook API client 46/0; coexistence request + multi-inbox integration 32/0; RuboCop on the two modified Ruby files 0.
+- **Status:** open PR into `version_1` pending; not merged/deployed.
+
 ### Managed WhatsApp onboarding fail-closed readiness + same-business resolution + final-WABA subscription — `Open (PR #138; not merged)`
 - **Branch** `fix/bloomwire-whatsapp-fail-closed-readiness` off `version_1`. Standard **and** Coexistence · global-router-only boundary UNCHANGED (app-to-WABA subscribe only; never `override_waba_callback` / `subscribe_waba_webhook`) · no native `/whatsapp/authorization` · no schema/migration · tokens stay in encrypted `provider_config` · safe DTOs only · no live Meta/WhatsApp call (specs stub Meta).
 - **Fail-closed Meta phone readiness:** the whole Meta phase (token exchange, phone-info, best-effort `/register`, connection-status read) runs **before** any DB write; a number that is not `CONNECTED` and cannot be safely resolved creates **no** channel, inbox, credential, or setup — removing the earlier false success where onboarding reported OK while the number stayed `DISCONNECTED`.

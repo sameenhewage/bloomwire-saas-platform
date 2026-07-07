@@ -15,6 +15,21 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Bloomwire — Coexistence onboarding registers the number before the readiness gate (removes the `/register` skip) — OPEN (PR pending; not merged)
+- **Branch:** `fix/bloomwire-coexistence-register-before-readiness` off `version_1` (builds on PR #138). Implementation commit `27af449`.
+- **What & why:**
+  - Bloomwire coexistence **previously skipped** the Cloud API phone-number `/register` operation.
+  - The coexistence-specific **no-op override was removed**.
+  - Coexistence now **inherits the existing parent registration implementation**.
+  - **Registration occurs before the CONNECTED readiness check.**
+  - **PR #138 fail-closed behavior remains intact.**
+  - A **DISCONNECTED result still persists no Channel, Inbox, or WhatsappSetup.**
+  - **No polling was added.**
+  - **No hardcoded PIN was introduced.**
+- **Live validation still pending:** **live Meta runtime validation is still pending**, and **outbound and inbound messaging E2E have not yet been run.** This change does **not** resolve the live Meta issue.
+- **Validation (cwd `app/`, Meta stubbed):** coexistence service **15/0**; parent + connected-number resolver + Facebook API client **46/0**; coexistence request + multi-inbox integration **32/0**; RuboCop on the two modified Ruby files **0 offenses**; docs governance green.
+- **Status:** open PR into `version_1` pending; **not merged, not deployed.**
+
 ### Bloomwire — Managed WhatsApp onboarding fail-closed readiness + same-business resolution + final-WABA subscription — OPEN (PR #138; not merged)
 - **Branch:** `fix/bloomwire-whatsapp-fail-closed-readiness` off `version_1`.
 - **What & why:** hardens managed WhatsApp onboarding (Standard **and** Coexistence) so a self-serve connection only
