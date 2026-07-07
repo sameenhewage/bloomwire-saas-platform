@@ -419,4 +419,39 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
   end
+
+  # TEMPORARY (Phase 5 diagnostic) — remove with the instrumentation. Proves the flag gates the debug_token
+  # introspection, it uses the EXACT exchanged token, and it never changes onboarding behavior.
+  describe 'runtime token debug instrumentation (temporary Phase 5)' do
+    let(:debug_data) do
+      { 'data' => { 'app_id' => '1010595458018764', 'is_valid' => true,
+                    'scopes' => ['whatsapp_business_management'],
+                    'granular_scopes' => [{ 'scope' => 'whatsapp_business_management', 'target_ids' => ['WABA-1'] }] } }
+    end
+
+    before do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:debug_token).and_return(debug_data)
+    end
+
+    it 'does NOT introspect the token when the flag is OFF (default), and onboarding still succeeds' do
+      allow(Bloomwire::WhatsappRuntimeTokenDebug).to receive(:enabled?).and_return(false)
+      aggregate_failures do
+        expect(result).to be_success
+        expect(fb_client).not_to have_received(:debug_token)
+        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', /\A\d{6}\z/)
+      end
+    end
+
+    it 'introspects the EXACT exchanged token when the flag is ON, without changing onboarding' do
+      allow(Bloomwire::WhatsappRuntimeTokenDebug).to receive(:enabled?).and_return(true)
+      aggregate_failures do
+        expect(result).to be_success
+        expect(fb_client).to have_received(:debug_token).with('FAKE-CUSTOMER-TOKEN').once
+        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', /\A\d{6}\z/)
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1').once
+      end
+    end
+  end
 end

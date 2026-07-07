@@ -84,6 +84,9 @@ class Bloomwire::WhatsappEmbeddedSignupService
     token = Whatsapp::TokenExchangeService.new(@code).perform
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
+    # TEMPORARY (Phase 5 diagnostic): flag-gated, DEV-only debug_token introspection of the EXACT exchanged token
+    # BEFORE /register. Best-effort, no secrets, no behavior change. Remove after the evidence is captured.
+    debug_runtime_token(client, token)
     # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED (mirrors native
     # Whatsapp::WebhookSetupService). Best-effort: a registration failure (e.g. Meta (#100) when the app is not
     # the WABA owner) is not raised here — the readiness gate (CONNECTED check in #perform) then fails closed on a
@@ -154,6 +157,14 @@ class Bloomwire::WhatsappEmbeddedSignupService
     }
     event.merge!(error.to_safe_h) if error.is_a?(Whatsapp::GraphApiError)
     Rails.logger.warn("[BLOOMWIRE EMBEDDED SIGNUP] #{event.to_json}")
+  end
+
+  # TEMPORARY (Phase 5 diagnostic) — remove after evidence is captured. Flag-gated, DEV-only, best-effort
+  # introspection of the EXACT exchanged runtime token (never logs secrets, never changes onboarding behavior).
+  def debug_runtime_token(client, token)
+    return unless Bloomwire::WhatsappRuntimeTokenDebug.enabled?
+
+    Bloomwire::WhatsappRuntimeTokenDebug.new(client: client, token: token, selected_waba_id: @waba_id).log
   end
 
   # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error.
