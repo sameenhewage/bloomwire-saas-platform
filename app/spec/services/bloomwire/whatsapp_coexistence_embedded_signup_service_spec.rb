@@ -78,6 +78,12 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         expect(fb_client).not_to have_received(:subscribe_waba_webhook)
       end
     end
+
+    it 'never calls the Standard Cloud API /register (coexistence numbers are already registered)' do
+      result
+
+      expect(fb_client).not_to have_received(:register_phone_number)
+    end
   end
 
   describe 'fail-closed behavior inherited from the safe managed-signup seam' do
