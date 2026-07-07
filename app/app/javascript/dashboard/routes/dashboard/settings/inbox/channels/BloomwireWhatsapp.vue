@@ -491,7 +491,7 @@ onBeforeRouteLeave(() => {
 
       <div class="flex gap-2">
         <router-link
-          :to="{ name: 'inbox_dashboard', params: { inboxId } }"
+          :to="{ name: 'inbox_dashboard', params: { inbox_id: inboxId } }"
           data-testid="bloomwire-wa-open-inbox"
         >
           <NextButton

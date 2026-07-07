@@ -266,6 +266,26 @@ describe('BloomwireWhatsapp.vue — Standard registration flow', () => {
     expect(html.toLowerCase()).not.toContain('provider_config');
   });
 
+  // Regression (post-onboarding navigation): the success screen's two links must use each route's OWN param name.
+  // `inbox_dashboard` path is `accounts/:accountId/inbox/:inbox_id` → needs snake_case `inbox_id`; passing `inboxId`
+  // threw "Missing required param inbox_id" right after a successful create. `settings_inbox_show` path is
+  // `:inboxId/:tab?` → keeps camelCase `inboxId`.
+  it('links Open inbox via inbox_dashboard with param inbox_id and Inbox settings via settings_inbox_show with param inboxId', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockResolvedValue(DTO);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await submit(wrapper);
+
+    const links = wrapper.findAllComponents(RouterLinkStub);
+    const openInbox = links.find(l => l.props('to').name === 'inbox_dashboard');
+    const inboxSettings = links.find(
+      l => l.props('to').name === 'settings_inbox_show'
+    );
+    expect(openInbox.props('to').params).toEqual({ inbox_id: 42 });
+    expect(inboxSettings.props('to').params).toEqual({ inboxId: 42 });
+  });
+
   it('honors a customer-entered inbox name via the existing inbox update API (best-effort rename)', async () => {
     runEmbeddedSignup.mockResolvedValue(CREDS);
     dispatch.mockResolvedValue(DTO);
