@@ -81,10 +81,28 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'never calls the Standard Cloud API /register (coexistence numbers are already registered)' do
+    it 'registers the selected phone number on the Cloud API exactly once, reusing the parent PIN mechanism' do
       result
 
-      expect(fb_client).not_to have_received(:register_phone_number)
+      # Coexistence now inherits the parent /register (the #136 skip is removed). The PIN is produced by the
+      # existing parent mechanism (a 6-digit string) — asserted by shape only, never the raw generated value.
+      expect(fb_client).to have_received(:register_phone_number).with('PNID-1', match(/\A\d{6}\z/)).once
+    end
+
+    it 'registers the number BEFORE the CONNECTED readiness check (the fail-closed gate sees the post-register status)' do
+      order = []
+      allow(fb_client).to receive(:register_phone_number) do |*_|
+        order << :register
+        { 'success' => true }
+      end
+      allow(fb_client).to receive(:phone_number_status) do
+        order << :status
+        'CONNECTED'
+      end
+
+      result
+
+      expect(order.index(:register)).to be < order.index(:status)
     end
   end
 
@@ -109,6 +127,23 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         expect(result.error).to eq(:no_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
         expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'fails closed and persists nothing when /register fails and the number stays DISCONNECTED' do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError.new('meta register failed'))
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+
+      aggregate_failures do
+        expect(result.error).to eq(:no_connected_registration)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(account.inboxes.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+        # App-to-WABA subscription only runs AFTER the readiness gate passes, so a failed /register can never be
+        # mistaken for successful persistence.
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba)
       end
     end
 
