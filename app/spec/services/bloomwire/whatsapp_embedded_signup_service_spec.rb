@@ -221,6 +221,83 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     end
   end
 
+  # Phase 17F — sanitized observability for a rejected Cloud API /register. The failure stays non-fatal (number
+  # remains DISCONNECTED, gate refuses to persist) but the SPECIFIC Meta error is now recorded via the structured
+  # `bloomwire.whatsapp.phone_registration_failed` event — with NO token / PIN / OAuth code / auth header / raw body.
+  describe 'sanitized phone registration failure observability' do
+    subject(:run) { described_class.new(account: account, params: params).perform }
+
+    let(:raw_body_sentinel) { 'RAW_BODY_SENTINEL_MUST_NOT_BE_LOGGED' }
+    let(:meta_error_body) do
+      { error: { message: '(#100) The number is registered on another WABA', type: 'OAuthException', code: 100,
+                 error_subcode: 2_388_004, is_transient: false, fbtrace_id: 'SAFE_TRACE_ID',
+                 error_data: { detail: raw_body_sentinel } } }.to_json
+    end
+    let(:graph_error) do
+      Whatsapp::GraphApiError.from_response('Phone registration failed',
+                                            instance_double(HTTParty::Response, body: meta_error_body, code: 400))
+    end
+    let(:warn_logs) { [] }
+
+    before do
+      stub_ready
+      stub_meta
+      allow(SecureRandom).to receive(:random_number).with(1_000_000).and_return(42) # deterministic PIN => '000042'
+      allow(fb_client).to receive(:register_phone_number).and_raise(graph_error)
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:messaging_waba_ids).and_return(%w[WABA-1])
+      allow(fb_client).to receive(:waba_registrations).with('WABA-1')
+                                                      .and_return([{ 'id' => 'PNID-1', 'display_phone_number' => '+15551230001',
+                                                                     'status' => 'DISCONNECTED' }])
+      allow(Rails.logger).to receive(:warn) { |msg| warn_logs << msg }
+    end
+
+    def registration_event
+      warn_logs.find { |m| m.include?('bloomwire.whatsapp.phone_registration_failed') }
+    end
+
+    it 'logs the sanitized structured Meta error fields (status/code/subcode/type/is_transient/fbtrace_id/message)' do
+      run
+      payload = JSON.parse(registration_event.sub('[BLOOMWIRE EMBEDDED SIGNUP] ', ''))
+      aggregate_failures do
+        expect(payload['event']).to eq('bloomwire.whatsapp.phone_registration_failed')
+        expect(payload['operation']).to eq('phone_registration')
+        expect(payload['phone_number_id']).to eq('PNID-1')
+        expect(payload['exception_class']).to eq('Whatsapp::GraphApiError')
+        expect(payload['http_status']).to eq(400)
+        expect(payload['meta_error_code']).to eq(100)
+        expect(payload['meta_error_subcode']).to eq(2_388_004)
+        expect(payload['meta_error_type']).to eq('OAuthException')
+        expect(payload['is_transient']).to be(false)
+        expect(payload['fbtrace_id']).to eq('SAFE_TRACE_ID')
+        expect(payload['meta_error_message']).to include('registered on another WABA')
+      end
+    end
+
+    it 'never logs the token, PIN, OAuth code, Authorization header, request body, or raw response body' do
+      run
+      log = registration_event
+      aggregate_failures do
+        expect(log).not_to include('FAKE-CUSTOMER-TOKEN') # access token
+        expect(log).not_to include('000042')              # generated 2FA PIN
+        expect(log).not_to include('META-CODE')           # OAuth code
+        expect(log).not_to match(/Bearer|Authorization/)  # auth header
+        expect(log).not_to include('messaging_product')   # raw request body
+        expect(log).not_to include(raw_body_sentinel)     # raw response body detail
+        expect(log).not_to include(meta_error_body)       # whole raw response body
+      end
+    end
+
+    it 'keeps the failure non-fatal: fails closed with :no_connected_registration and persists nothing' do
+      aggregate_failures do
+        expect(run.error).to eq(:no_connected_registration)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(account.inboxes.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+  end
+
   describe 'fail-closed preflight (before any Meta call / token storage)' do
     it 'returns :not_ready and persists nothing when the platform is not ready' do
       stub_ready(ready: false)

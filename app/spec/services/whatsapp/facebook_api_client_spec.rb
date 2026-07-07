@@ -180,6 +180,36 @@ describe Whatsapp::FacebookApiClient do
         expect { api_client.register_phone_number(phone_number_id, pin) }.to raise_error(/Phone registration failed/)
       end
     end
+
+    context 'when Meta returns a structured Graph error' do
+      let(:meta_body) do
+        { error: { message: '(#100) Object with ID does not exist or app lacks permission',
+                   type: 'OAuthException', code: 100, error_subcode: 33, is_transient: false,
+                   fbtrace_id: 'SAFE_TRACE_ID' } }.to_json
+      end
+
+      before do
+        stub_request(:post, "https://graph.facebook.com/#{api_version}/#{phone_number_id}/register")
+          .to_return(status: 400, body: meta_body, headers: { 'Content-Type' => 'application/json' })
+      end
+
+      it 'raises a Whatsapp::GraphApiError carrying the sanitized Meta error fields (still matching the legacy message)' do
+        api_client.register_phone_number(phone_number_id, pin)
+      rescue Whatsapp::GraphApiError => e
+        aggregate_failures do
+          expect(e.message).to match(/Phone registration failed/)
+          expect(e.http_status).to eq(400)
+          expect(e.error_code).to eq(100)
+          expect(e.error_subcode).to eq(33)
+          expect(e.error_type).to eq('OAuthException')
+          expect(e.is_transient).to be(false)
+          expect(e.fbtrace_id).to eq('SAFE_TRACE_ID')
+          expect(e.safe_message).to include('does not exist')
+        end
+      else
+        raise 'expected Whatsapp::GraphApiError to be raised'
+      end
+    end
   end
 
   describe '#phone_number_status' do

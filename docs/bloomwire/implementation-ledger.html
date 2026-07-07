@@ -347,16 +347,27 @@
       </ul>
     </div>
 
-    <div class="card"><h3>Coexistence onboarding registers the number before the readiness gate (removes the <code>/register</code> skip) <span class="badge">Open (PR pending; not merged)</span> <span class="pr">branch fix/bloomwire-coexistence-register-before-readiness · base version_1</span></h3>
+    <div class="card"><h3>Sanitized structured observability for a rejected Cloud API <code>/register</code> (<code>bloomwire.whatsapp.phone_registration_failed</code>) <span class="badge">Open (PR pending; not merged)</span> <span class="pr">branch fix/bloomwire-whatsapp-register-observability · base version_1</span></h3>
+      <ul>
+        <li><b>Root (proven on DEV):</b> after PR #139 coexistence calls <code>/register</code> but Meta <b>rejected</b> it; the only log was the exception <b>class</b> (<code>RuntimeError</code>) from <code>#register_number</code>'s rescue, and <code>Whatsapp::FacebookApiClient#handle_response</code> embeds the raw body in a plain <code>RuntimeError</code> <b>message</b> (never logged) with <b>no HTTP status</b> — so the Meta error code / subcode / type / <code>is_transient</code> / <code>fbtrace_id</code> were unrecoverable read-only.</li>
+        <li><b>Change (smallest seam):</b> new <b><code>Whatsapp::GraphApiError &lt; StandardError</code></b> (<code>app/services/whatsapp/graph_api_error.rb</code>) parses only allow-listed Meta error fields; <code>FacebookApiClient#register_phone_number</code> raises it on failure with a <b>byte-identical message</b> (native <code>Whatsapp::WebhookSetupService</code>, which logs <code>e.message</code>, and all specs stay unchanged); <code>Bloomwire::WhatsappEmbeddedSignupService#register_number</code> emits a sanitized structured <code>bloomwire.whatsapp.phone_registration_failed</code> event.</li>
+        <li><b>Never logged:</b> access token, generated PIN, OAuth code, <code>Authorization</code> header, cookies, raw request/response body — proven by tests.</li>
+        <li><b>Behavior preserved:</b> registration failure stays non-fatal; readiness gate still returns <code>no_connected_registration</code>; a DISCONNECTED number persists no Channel/Inbox/WhatsappSetup; no polling / retry / PIN / frontend / resolver / token-exchange / schema change; Standard &amp; Coexistence unchanged apart from the log.</li>
+        <li><b>Validation (cwd <code>app/</code>, Meta stubbed):</b> graph_api_error + facebook_api_client + native webhook_setup + parent + coexistence services + Bloomwire request specs <b>105/0</b>; RuboCop on changed Ruby <b>0</b>.</li>
+        <li><b>Status:</b> open PR into <code>version_1</code> pending; not merged/deployed. Fresh live capture of the real Meta <code>/register</code> error is the next step.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Coexistence onboarding registers the number before the readiness gate (removes the <code>/register</code> skip) <span class="badge done">Merged · PR #139 · 46045e5 · DEV</span> <span class="pr">branch fix/bloomwire-coexistence-register-before-readiness · base version_1</span></h3>
       <ul>
         <li>Bloomwire coexistence <b>previously skipped</b> the Cloud API phone-number <code>/register</code> operation.</li>
         <li>The coexistence-specific <b>no-op override was removed</b>, so coexistence now <b>inherits the existing parent registration implementation</b> (<code>Bloomwire::WhatsappEmbeddedSignupService#register_number</code>).</li>
         <li><b>Registration occurs before the CONNECTED readiness check.</b></li>
         <li><b>PR #138 fail-closed behavior remains intact:</b> a <b>DISCONNECTED result still persists no Channel, Inbox, or WhatsappSetup</b> (app-to-WABA subscription runs only after the gate passes).</li>
         <li><b>No polling was added.</b> <b>No hardcoded PIN was introduced.</b></li>
-        <li><b>Live validation still pending:</b> live Meta runtime validation is still pending; outbound and inbound messaging E2E have not yet been run — this does <b>not</b> resolve the live Meta issue.</li>
+        <li><b>Live validation (DEV):</b> attempt on <code>+94771713273</code> confirmed <code>/register</code> <b>is</b> now called, but Meta <b>rejected</b> it (number stayed DISCONNECTED → fail-closed <code>no_connected_registration</code>, nothing persisted). The exact Meta error was not observable (class-only log) — addressed by the observability card above.</li>
         <li><b>Validation (cwd <code>app/</code>, Meta stubbed):</b> coexistence service <b>15/0</b>; parent + connected-number resolver + Facebook API client <b>46/0</b>; coexistence request + multi-inbox integration <b>32/0</b>; RuboCop on the two modified Ruby files <b>0</b>.</li>
-        <li><b>Status:</b> open PR into <code>version_1</code> pending; not merged/deployed.</li>
+        <li><b>Status:</b> <b>merged (PR #139) and deployed to DEV.</b></li>
       </ul>
     </div>
 
