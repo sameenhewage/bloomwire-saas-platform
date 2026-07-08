@@ -36,6 +36,8 @@ RSpec.describe Bloomwire::WhatsappCapabilityRecheck do
     allow(fb_client).to receive(:waba_user_tasks).and_return(%w[VIEW_TEMPLATES])
     allow(fb_client).to receive(:assign_waba_user_tasks)
     allow(fb_client).to receive(:register_phone_number)
+    allow(fb_client).to receive(:subscribe_app_to_waba)
+    allow(fb_client).to receive(:subscribed_to_waba?).and_return(true)
   end
 
   def perform
@@ -54,6 +56,29 @@ RSpec.describe Bloomwire::WhatsappCapabilityRecheck do
         expect(setup.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
         expect(setup.status_reason).to be_nil
         expect(Whatsapp::FacebookApiClient).to have_received(:new).with(token)
+      end
+    end
+
+    # BLOCKER 2: onboarding never subscribed this Action-Required inbox, so recheck must subscribe the EXACT WABA
+    # and VERIFY it took effect BEFORE promoting (enable inbound at the same moment outbound becomes ready).
+    it 'subscribes the EXACT WABA and verifies the subscription before promoting to ready' do
+      perform
+      aggregate_failures do
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
+        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1')
+      end
+    end
+
+    it 'stays action_required (SAME records, NOT promoted) when the subscription cannot be confirmed' do
+      allow(fb_client).to receive(:subscribed_to_waba?).and_return(false)
+      result = perform
+      setup.reload
+      aggregate_failures do
+        expect(result.action_required?).to be(true)
+        expect(setup.setup_status).to eq(Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS)
+        expect(setup.status_reason).to eq('outbound_messaging_activation_incomplete')
+        expect(setup.channel_whatsapp_id).to eq(channel.id)
+        expect(setup.inbox_id).to eq(inbox.id)
       end
     end
 
@@ -87,6 +112,7 @@ RSpec.describe Bloomwire::WhatsappCapabilityRecheck do
         expect(setup.setup_status).to eq(Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS)
         expect(setup.status_reason).to eq('outbound_messaging_permission_required')
         expect(fb_client).not_to have_received(:assign_waba_user_tasks)
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba)
       end
     end
   end
@@ -102,6 +128,7 @@ RSpec.describe Bloomwire::WhatsappCapabilityRecheck do
         expect(setup.setup_status).to eq(Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS)
         expect(setup.status_reason).to eq('outbound_messaging_permission_unverifiable')
         expect(fb_client).not_to have_received(:assign_waba_user_tasks)
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba)
       end
     end
   end

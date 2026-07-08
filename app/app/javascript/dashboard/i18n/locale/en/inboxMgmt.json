@@ -395,13 +395,20 @@
             "INBOX_SETTINGS": "Inbox settings"
           },
           "ACTION_REQUIRED": {
-            "TITLE": "One more step to send messages",
-            "SUBTITLE": "Your WhatsApp inbox is connected and can receive messages. To also send replies, outbound messaging must be enabled for this number in Meta.",
+            "TITLE": "One more step to activate this inbox",
+            "SUBTITLE": "This WhatsApp number is connected to Meta, but the inbox is not active yet — it can’t receive or send messages until outbound messaging is enabled for this number.",
             "STEP_TITLE": "Enable outbound messaging in Meta",
             "STEP_DESC": "In Meta Business Settings, grant this WhatsApp Business Account the Manage task to the connected system user, then choose Recheck permission below.",
             "RECHECK_BUTTON": "Recheck permission",
-            "STILL_PENDING": "Outbound messaging isn’t enabled yet. Complete the Manage-task step in Meta, then recheck again.",
-            "RECHECK_FAILED": "We couldn’t verify with Meta just now. Please try again in a moment."
+            "STILL_PENDING": "The inbox isn’t active yet. Complete the Manage-task step in Meta, then recheck again.",
+            "RECHECK_FAILED": "We couldn’t complete the recheck just now. Please try again in a moment.",
+            "READY_TITLE": "Inbox activated",
+            "READY_SUBTITLE": "Outbound messaging is enabled — this inbox can now send and receive messages.",
+            "REASON": {
+              "PERMISSION_REQUIRED": "Outbound messaging isn’t enabled yet. Grant this WhatsApp Business Account the Manage task to the connected system user in Meta Business Settings, then Recheck.",
+              "UNVERIFIABLE": "We couldn’t verify the permission with Meta just now — this doesn’t mean it’s missing. Please Recheck again in a moment.",
+              "ACTIVATION_INCOMPLETE": "The permission is granted, but we couldn’t finish activating the inbox. Please Recheck again in a moment."
+            }
           }
         },
         "API": {

@@ -19,12 +19,13 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # token can message — Bloomwire::WhatsappConnectedNumberResolver routes to that single same-business registration,
   # or fails closed (no channel/inbox/setup). The whole gate runs before any DB write.
   CONNECTED_STATUS = 'CONNECTED'.freeze
-  # Non-secret guidance shown to the account owner so they can finish enabling OUTBOUND messaging (inbound and
-  # the CONNECTED number are already set up). The concrete Meta asset-task grant is a customer/owner action.
+  # Non-secret guidance shown to the account owner. Until this step is completed the managed inbox is NOT active
+  # in EITHER direction — it is deliberately not subscribed for inbound and cannot send outbound — so we say so
+  # plainly. The concrete Meta asset-task grant is a customer/owner action; "Recheck permission" then activates it.
   OUTBOUND_ACTION_REQUIRED_RESOLUTION =
-    'Outbound messaging needs one more Meta step: in Meta Business Settings, grant this WhatsApp Business ' \
-    'Account the Manage task to the connected system user, then use "Recheck permission" to finish enabling ' \
-    'sending.'.freeze
+    'This WhatsApp inbox is not active yet — it can neither receive nor send messages until one more Meta step ' \
+    'is completed: in Meta Business Settings, grant this WhatsApp Business Account the Manage task to the ' \
+    'connected system user, then use "Recheck permission" to activate the inbox.'.freeze
 
   Result = Struct.new(:dto, :error, keyword_init: true) do
     def success?
@@ -50,12 +51,14 @@ class Bloomwire::WhatsappEmbeddedSignupService
     target = resolve_target(meta)
     return Result.new(error: target) if target.is_a?(Symbol)
 
-    # Subscribe the FINAL resolved WABA (not just the customer's selection) to the Bloomwire app BEFORE any DB
-    # write, and fail closed if Meta rejects it — see #subscribe_final_waba.
-    subscription_error = subscribe_final_waba(meta[:client], target[:waba_id])
-    return Result.new(error: subscription_error) if subscription_error
-
+    # Outbound capability is verified BEFORE any app-to-WABA subscription. A not-ready inbox must NEVER be
+    # subscribed: Meta would forward its inbound to the global router, which discards a non-routeable setup ->
+    # lost inbound. So we subscribe ONLY on the ready path (see #activate_if_ready); an Action-Required inbox is
+    # persisted UNSUBSCRIBED — inactive for BOTH inbound and outbound until "Recheck permission" completes it.
     capability = outbound_capability(meta, target[:waba_id])
+
+    activation_error = activate_if_ready(meta[:client], target[:waba_id], capability)
+    return Result.new(error: activation_error) if activation_error
 
     persisted = persist(meta[:token], target[:waba_id], target[:phone_info], meta[:verification_pin], capability)
     return Result.new(error: persisted) if persisted.is_a?(Symbol)
@@ -129,14 +132,28 @@ class Bloomwire::WhatsappEmbeddedSignupService
     { waba_id: resolution.waba_id, phone_info: phone_info.merge(phone_number_id: resolution.phone_number_id) }
   end
 
+  # Activation = the SINGLE point where the inbox becomes live for inbound (global router) AND outbound. It runs
+  # ONLY when outbound capability is confirmed: a not-ready inbox returns nil here WITHOUT subscribing, so the
+  # Action-Required inbox persisted next is inactive in both directions (never a subscribed-but-discarded
+  # webhook). When ready, we subscribe + verify; a failed/unconfirmed subscription fails closed (Symbol) so no
+  # falsely-ready inbox is ever persisted.
+  def activate_if_ready(client, waba_id, capability)
+    return nil unless capability.ready?
+
+    subscribe_final_waba(client, waba_id)
+  end
+
   # The app-to-WABA subscription (global router) MUST target the FINAL resolved WABA. Inbound webhooks for the
   # connected number are only forwarded to Bloomwire's global callback when the app is subscribed to the WABA that
   # actually owns that registration — which, after #resolve_target, can differ from the customer's originally
   # selected WABA. Subscribing only the selected WABA would leave the resolved inbox receiving no inbound. We
-  # subscribe exactly once (the final WABA), so a selected==resolved case makes no duplicate call. Fails closed
-  # (returns a Symbol) BEFORE any DB write. NEVER override_waba_callback / subscribe_waba_webhook.
+  # subscribe exactly once (the final WABA), then VERIFY it took effect (subscribed_apps) so a silent failure
+  # never yields a ready-but-deaf inbox. Fails closed (returns a Symbol). NEVER override_waba_callback /
+  # subscribe_waba_webhook.
   def subscribe_final_waba(client, waba_id)
     client.subscribe_app_to_waba(waba_id)
+    return :subscription_failed unless client.subscribed_to_waba?(waba_id)
+
     nil
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] App-to-WABA subscription failed: #{e.class}")
@@ -144,10 +161,11 @@ class Bloomwire::WhatsappEmbeddedSignupService
   end
 
   # Outbound readiness (send-side counterpart to the CONNECTED gate): VERIFY that the EXACT stored-token actor
-  # holds the WABA asset task needed to SEND (Meta #10). Inbound rides the app subscription; outbound needs this
-  # per-actor task. The onboarding credential is the partner SYSTEM_USER token (allow_grant: false) — it can only
-  # VERIFY, never self-grant — so when the task is missing/unverifiable the caller persists an explicit
-  # Action-Required inbox (resumable via "Recheck permission"), never a silently receive-only one.
+  # holds the WABA asset task needed to SEND (Meta #10). This gate now runs BEFORE subscription and decides
+  # whether the inbox is activated at all. The onboarding credential is the partner SYSTEM_USER token
+  # (allow_grant: false) — it can only VERIFY, never self-grant — so when the task is missing/unverifiable the
+  # caller persists an explicit, UNSUBSCRIBED Action-Required inbox (resumable via "Recheck permission"), never a
+  # silently receive-only one.
   def outbound_capability(meta, waba_id)
     Bloomwire::WhatsappMessagingCapability.new(
       client: meta[:client], token: meta[:token], waba_id: waba_id, allow_grant: false

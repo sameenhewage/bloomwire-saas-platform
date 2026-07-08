@@ -98,6 +98,19 @@ RSpec.describe Bloomwire::WhatsappMessagingCapability do
         expect(client).not_to have_received(:assign_waba_user_tasks)
       end
     end
+
+    # BLOCKER 4: an actor ABSENT from a successful assigned_users read (client returns nil) is NOT proof of
+    # missing (Business-scope visibility / pagination) -> unverifiable, and never a grant even if authorized.
+    it 'is unverifiable (never verified_missing / never a grant) when the actor is ABSENT from the read (nil)' do
+      allow(client).to receive(:waba_user_tasks).with(waba_id, actor_id).and_return(nil)
+      result = run(allow_grant: true)
+      aggregate_failures do
+        expect(result.status).to eq(:action_required)
+        expect(result.verification).to eq(:unverifiable)
+        expect(result.reason).to eq('outbound_messaging_permission_unverifiable')
+        expect(client).not_to have_received(:assign_waba_user_tasks)
+      end
+    end
   end
 
   # BLOCKER 4 — never blindly self-elevate. Onboarding/recheck pass allow_grant:false; a SYSTEM_USER / unknown

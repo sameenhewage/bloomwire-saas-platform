@@ -12,6 +12,7 @@ import { required } from '@vuelidate/validators';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import TextArea from 'next/textarea/TextArea.vue';
 import WhatsappReauthorize from '../channels/whatsapp/Reauthorize.vue';
+import BloomwireWhatsappStatus from '../channels/BloomwireWhatsappStatus.vue';
 import { sanitizeAllowedDomains } from 'dashboard/helper/URLHelper';
 
 export default {
@@ -24,6 +25,7 @@ export default {
     NextButton,
     TextArea,
     WhatsappReauthorize,
+    BloomwireWhatsappStatus,
   },
   mixins: [inboxMixin],
   props: {
@@ -366,6 +368,9 @@ export default {
     <SmtpSettings v-if="inbox.imap_enabled" :inbox="inbox" />
   </div>
   <div v-else-if="isAWhatsAppChannel && !isATwilioChannel">
+    <!-- Bloomwire (Phase 5): durable managed-WhatsApp outbound-capability status + Recheck. Renders only for a
+         Bloomwire-managed inbox with an Action-Required (or freshly-activated) setup; inert otherwise. -->
+    <BloomwireWhatsappStatus :inbox="inbox" />
     <div v-if="inbox.provider_config">
       <!-- Embedded Signup Section -->
       <template v-if="isEmbeddedSignupWhatsApp">

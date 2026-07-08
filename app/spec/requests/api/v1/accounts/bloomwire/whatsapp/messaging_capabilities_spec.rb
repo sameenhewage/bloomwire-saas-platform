@@ -42,6 +42,7 @@ RSpec.describe 'Bloomwire WhatsApp messaging-capability recheck endpoint', type:
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(
       instance_double(Whatsapp::FacebookApiClient, token_actor_id: 'SYS-ACTOR-1', token_actor_type: 'SYSTEM_USER',
                                                    waba_user_tasks: tasks, assign_waba_user_tasks: nil,
+                                                   subscribe_app_to_waba: nil, subscribed_to_waba?: true,
                                                    register_phone_number: { 'success' => true })
     )
   end
@@ -91,9 +92,62 @@ RSpec.describe 'Bloomwire WhatsApp messaging-capability recheck endpoint', type:
     end
   end
 
+  # BLOCKER 3: the DURABLE status read that backs the Inbox Settings surface (survives refresh / navigation /
+  # re-login) — the persisted setup state is always loadable, so an Action-Required inbox is resumable forever.
+  context 'durable status read (GET index) for the Inbox Settings surface' do
+    let(:index_url) { "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/messaging_capabilities?inbox_id=#{inbox.id}" }
+
+    before { enable_managed_mode }
+
+    it 'returns the PERSISTED Action-Required status + sanitized reason (no secret / no raw actor id)' do
+      setup
+      get index_url, headers: admin.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['managed']).to be(true)
+        expect(response.parsed_body['ready']).to be(false)
+        expect(response.parsed_body.dig('action_required', 'reason')).to eq('outbound_messaging_permission_required')
+        expect(response.parsed_body.dig('setup', 'id')).to eq(setup.id)
+        expect(response.body).not_to include('FAKE-STORED-TOKEN')
+        expect(response.body).not_to include('SYS-ACTOR-1')
+      end
+    end
+
+    it 'returns ready:true and no action_required block for a routeable setup' do
+      setup.update!(setup_status: Bloomwire::WhatsappSetup::ROUTEABLE_STATUS, status_reason: nil)
+      get index_url, headers: admin.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['ready']).to be(true)
+        expect(response.parsed_body).not_to have_key('action_required')
+      end
+    end
+
+    it 'returns managed:false for an inbox with no Bloomwire managed setup' do
+      get "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/messaging_capabilities?inbox_id=#{inbox.id + 999_999}",
+          headers: admin.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['managed']).to be(false)
+      end
+    end
+
+    it 'denies an agent' do
+      setup
+      get index_url, headers: agent.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
+    end
+  end
+
   context 'when managed self-serve is not active (surface inert / 404)' do
     it 'is 404 when Bloomwire mode is OFF (stock)' do
       patch url, headers: admin.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'GET index is 404 when Bloomwire mode is OFF (stock)' do
+      get "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/messaging_capabilities?inbox_id=#{inbox.id}",
+          headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end
   end

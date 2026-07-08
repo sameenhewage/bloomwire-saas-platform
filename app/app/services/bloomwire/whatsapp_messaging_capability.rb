@@ -72,12 +72,18 @@ class Bloomwire::WhatsappMessagingCapability
     nil
   end
 
-  # Tri-state: a SUCCESSFUL read lacking the task is :verified_missing (real, actionable); a read that RAISES is
-  # :unverifiable (transient/visibility/auth). They must NOT collapse — only a verified-missing state may (when
-  # authorized) attempt a grant; an unverifiable one never mutates.
+  # Tri-state, authoritative-only (BLOCKER 4). The client returns the actor's task array ONLY when the actor is
+  # explicitly present in a successful read; nil when the actor is ABSENT (Business-scope visibility / pagination
+  # make absence NOT proof of being unassigned). So:
+  # - actor present WITH a send task    -> :verified_capable.
+  # - actor present WITHOUT a send task -> :verified_missing (authoritative — we saw the actor lacks it).
+  # - actor ABSENT (nil) or read RAISES -> :unverifiable (retriable). NEVER collapse absence/error into missing;
+  #   only a verified-missing state may (when authorized) attempt a grant — an unverifiable one never mutates.
   def verify(actor_id)
-    tasks = Array(@client.waba_user_tasks(@waba_id, actor_id))
-    [send_capable?(tasks) ? :verified_capable : :verified_missing, tasks]
+    tasks = @client.waba_user_tasks(@waba_id, actor_id)
+    return [:unverifiable, []] if tasks.nil?
+
+    [send_capable?(tasks) ? :verified_capable : :verified_missing, Array(tasks)]
   rescue StandardError => e
     log_failure('tasks_lookup', e)
     [:unverifiable, []]

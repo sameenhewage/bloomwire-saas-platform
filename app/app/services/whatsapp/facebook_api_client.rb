@@ -129,6 +129,19 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'App subscription to WABA failed')
   end
 
+  # Authoritative confirmation that THIS app is subscribed to the WABA — the global router only receives inbound
+  # once it is. Used to VERIFY a subscription actually took effect before an inbox is promoted to routeable, so a
+  # silent subscribe failure never yields an inbox that claims ready yet receives nothing. Raises on API failure.
+  def subscribed_to_waba?(waba_id)
+    response = HTTParty.get(
+      "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
+      headers: request_headers
+    )
+    apps = Array(handle_response(response, 'WABA subscribed apps fetch failed')['data'])
+    app_id = GlobalConfigService.load('WHATSAPP_APP_ID', '')
+    apps.any? { |app| app.dig('whatsapp_business_api_data', 'id').to_s == app_id.to_s }
+  end
+
   def override_waba_callback(waba_id, callback_url, verify_token, subscribed_fields: WEBHOOK_DEFAULT_FIELDS)
     response = HTTParty.post(
       "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
@@ -169,8 +182,14 @@ class Whatsapp::FacebookApiClient
 
   # Business-Manager asset tasks the given user/system-user holds on a WABA (e.g. MANAGE / MESSAGING /
   # VIEW_TEMPLATES) — the effective ASSET assignment, distinct from OAuth granular scopes. Scoped through the
-  # WABA's owner business so a partner system-user's assignment is visible. Returns [] when there is no
-  # assignment (or it is not visible to this token).
+  # WABA's owner business so a partner system-user's assignment is visible.
+  #
+  # Return contract (so the capability gate can be AUTHORITATIVE rather than guess):
+  # - the actor's task ARRAY (possibly []) when the actor is EXPLICITLY present in the successfully-read list — an
+  #   authoritative read of the tasks the actor does / does not hold.
+  # - nil when the actor is ABSENT from the list. Business-scope visibility / pagination mean absence is NOT proof
+  #   the actor is unassigned, so the caller treats nil as UNVERIFIABLE (retriable), never as verified-missing.
+  # Raises on an API failure (also unverifiable to the caller).
   def waba_user_tasks(waba_id, user_id)
     query = { fields: 'id,name,tasks' }
     owner_business_id = waba_owner_business_id(waba_id)
@@ -182,7 +201,7 @@ class Whatsapp::FacebookApiClient
     )
     users = Array(handle_response(response, 'WABA assigned users fetch failed')['data'])
     entry = users.find { |user| user['id'].to_s == user_id.to_s }
-    Array(entry && entry['tasks'])
+    entry ? Array(entry['tasks']) : nil
   end
 
   # Assign Business-Manager asset tasks to a user/system-user on a WABA. Used to ESTABLISH the outbound

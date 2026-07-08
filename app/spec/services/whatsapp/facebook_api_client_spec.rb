@@ -395,12 +395,39 @@ describe Whatsapp::FacebookApiClient do
       expect(api_client.waba_user_tasks(waba_id, user_id)).to contain_exactly('VIEW_TEMPLATES', 'MANAGE')
     end
 
-    it 'returns [] when the actor has no assignment on the WABA' do
+    it 'returns nil when the actor is ABSENT from the list (absence is not proof of missing -> unverifiable)' do
       stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}/assigned_users")
         .with(query: { fields: 'id,name,tasks', business: 'BIZ-OWNER' })
         .to_return(status: 200, body: { data: [{ id: 'SOMEONE-ELSE', tasks: ['MANAGE'] }] }.to_json,
                    headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.waba_user_tasks(waba_id, user_id)).to be_nil
+    end
+
+    it 'returns [] (not nil) when the actor is PRESENT but holds no tasks (authoritative verified-missing)' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}/assigned_users")
+        .with(query: { fields: 'id,name,tasks', business: 'BIZ-OWNER' })
+        .to_return(status: 200, body: { data: [{ id: user_id, tasks: [] }] }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
       expect(api_client.waba_user_tasks(waba_id, user_id)).to eq([])
+    end
+  end
+
+  describe '#subscribed_to_waba?' do
+    let(:waba_id) { 'waba-x' }
+
+    it 'is true when THIS app is present in the WABA subscribed_apps list' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}/subscribed_apps")
+        .to_return(status: 200,
+                   body: { data: [{ whatsapp_business_api_data: { id: app_id, name: 'Bloomwire' } }] }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.subscribed_to_waba?(waba_id)).to be(true)
+    end
+
+    it 'is false when this app is NOT in the subscribed_apps list' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}/subscribed_apps")
+        .to_return(status: 200, body: { data: [{ whatsapp_business_api_data: { id: 'OTHER-APP' } }] }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.subscribed_to_waba?(waba_id)).to be(false)
     end
   end
 

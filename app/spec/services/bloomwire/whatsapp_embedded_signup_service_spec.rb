@@ -25,9 +25,10 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil, register_phone_number: { 'success' => true },
-                                         messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true,
+                                         override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                         register_phone_number: { 'success' => true }, messaging_waba_ids: [],
+                                         waba_registrations: [], waba_owner_business_id: nil)
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
@@ -408,7 +409,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
                                     perform: { phone_number_id: phone_number_id, phone_number: phone_number,
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
-        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, subscribed_to_waba?: true,
+                                                                 register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                  phone_number_status: 'CONNECTED'))
       described_class.new(account: account,
@@ -487,6 +489,21 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       aggregate_failures do
         expect(Bloomwire::WhatsappSetup.last.setup_status).to eq('ready_for_webhook')
         expect(Bloomwire::WhatsappSetup.last.status_reason).to be_nil
+        # BLOCKER 2: the WABA is subscribed to the global router ONLY on the ready path, and the subscription is
+        # verified before the inbox is treated as live.
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
+        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1')
+      end
+    end
+
+    # BLOCKER 2: a capability failure fails onboarding closed (no falsely-ready inbox that never receives inbound).
+    it 'fails closed (persists nothing) when the actor CAN send but the subscription cannot be confirmed' do
+      stub_messaging_capability(status: :ready)
+      allow(fb_client).to receive(:subscribed_to_waba?).and_return(false)
+      aggregate_failures do
+        expect(result.error).to eq(:subscription_failed)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
       end
     end
 
@@ -500,6 +517,9 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
         # Records preserved for resumption, but NOT routeable-ready: the global router hands off nothing.
         expect(Channel::Whatsapp.count).to eq(1)
         expect(account.inboxes.count).to eq(1)
+        # BLOCKER 2: a not-ready inbox is NEVER subscribed — else Meta forwards inbound the router would discard
+        # (lost inbound). It is inactive in BOTH directions until Recheck completes it.
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba)
         payload = bw_inbound_text_payload(phone_number_id: 'PNID-1', display_phone_number: '15551230001')
         expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)).to be_nil
       end

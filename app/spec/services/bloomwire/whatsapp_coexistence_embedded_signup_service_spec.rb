@@ -22,8 +22,8 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, register_phone_number: { 'success' => true }, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil,
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true, register_phone_number: { 'success' => true },
+                                         override_waba_callback: nil, subscribe_waba_webhook: nil,
                                          messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
@@ -254,7 +254,8 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
                                     perform: { phone_number_id: phone_number_id, phone_number: phone_number,
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
-        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, subscribed_to_waba?: true,
+                                                                 register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                  phone_number_status: 'CONNECTED'))
       described_class.new(account: account,

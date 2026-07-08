@@ -1,18 +1,23 @@
-# Phase 5 (resume): idempotent re-verification of outbound messaging capability for an EXISTING Action-Required
-# managed WhatsApp setup. Reconnecting can NOT resume it (the number is already claimed, so a fresh signup hits
-# the duplicate guard); this is the supported resume path. After the account owner grants the WABA asset task in
-# Meta Business Settings, this re-reads the EXACT stored-token actor's task on the EXACT WABA and, when capable,
-# atomically promotes the SAME setup action_required -> ready_for_webhook (same Channel/Inbox/Setup ids, no
-# duplicate, no /register, no second inbox). Still-missing/unverifiable stays Action-Required with a refreshed
-# sanitized reason (never a false ready).
+# Phase 5 (resume): idempotent re-verification + ACTIVATION of an EXISTING Action-Required managed WhatsApp setup.
+# Reconnecting can NOT resume it (the number is already claimed, so a fresh signup hits the duplicate guard); this
+# is the supported resume path. After the account owner grants the WABA asset task in Meta Business Settings, this
+# re-reads the EXACT stored-token actor's task on the EXACT WABA and, when capable, SUBSCRIBES the WABA to the
+# global router (onboarding never subscribes an Action-Required inbox — BLOCKER 2) and VERIFIES the subscription
+# BEFORE atomically promoting the SAME setup action_required -> ready_for_webhook (same Channel/Inbox/Setup ids,
+# no duplicate, no /register, no second inbox). Still-missing/unverifiable — or a task-verified-but-subscription-
+# unconfirmed attempt — stays Action-Required with a refreshed sanitized reason (never a false ready).
 #
 # Boundary (do not weaken):
-# - Verify-only (allow_grant: false): uses ONLY the setup's stored channel token (the partner SYSTEM_USER token,
-#   which cannot self-elevate) — never a platform-admin credential, never an owner personal token, never a grant.
-# - Makes no Meta write and never re-registers the number. Reuses Bloomwire::WhatsappSetupCreator for the
-#   promotion so the ready row stays router-handoff-safe and stays the SAME record (find_or_initialize by channel).
+# - Verify-only for the TASK (allow_grant: false): uses ONLY the setup's stored channel token (the partner
+#   SYSTEM_USER token, which cannot self-elevate) — never a platform-admin credential, never an owner personal
+#   token, never a task grant. The ONLY Meta write is the idempotent app-to-WABA subscription (global router).
+# - Never re-registers the number. Reuses Bloomwire::WhatsappSetupCreator for the promotion so the ready row stays
+#   router-handoff-safe and stays the SAME record (find_or_initialize by channel).
 # - Never persists/echoes the token; capability failures are logged class-only inside the capability gate.
 class Bloomwire::WhatsappCapabilityRecheck
+  # Sanitized reason when the actor CAN send (task verified) but the app-to-WABA subscription could not be
+  # confirmed this attempt — the SAME records stay Action-Required and the owner simply retries.
+  ACTIVATION_INCOMPLETE_REASON = 'outbound_messaging_activation_incomplete'.freeze
   # Safe result: `error` is a symbol NAME only (never a value/secret); success? when no error.
   Result = Struct.new(:status, :setup, :error, keyword_init: true) do
     def success?
@@ -36,8 +41,14 @@ class Bloomwire::WhatsappCapabilityRecheck
     guard = precheck
     return guard if guard
 
-    capability = verify_capability(@token)
+    client = Whatsapp::FacebookApiClient.new(@token)
+    capability = verify_capability(client)
     return still_action_required(capability) unless capability.ready?
+
+    # Capability confirmed. Onboarding NEVER subscribes an Action-Required inbox, so recheck OWNS enabling inbound:
+    # subscribe the exact WABA (idempotent) with the SAME stored-token client and VERIFY it took effect BEFORE
+    # promoting. A failed/unconfirmed subscription keeps the SAME records Action-Required (never a false ready).
+    return activation_incomplete unless subscribe_and_verify(client)
 
     promote
   end
@@ -76,9 +87,9 @@ class Bloomwire::WhatsappCapabilityRecheck
     channel.provider_config.to_h['api_key'].presence
   end
 
-  def verify_capability(token)
+  def verify_capability(client)
     Bloomwire::WhatsappMessagingCapability.new(
-      client: Whatsapp::FacebookApiClient.new(token), token: token, waba_id: @setup.waba_id, allow_grant: false
+      client: client, token: @token, waba_id: @setup.waba_id, allow_grant: false
     ).ensure
   end
 
@@ -96,11 +107,28 @@ class Bloomwire::WhatsappCapabilityRecheck
     Result.new(status: :ready, setup: creator.setup)
   end
 
+  # Onboarding never subscribes an Action-Required inbox, so recheck OWNS enabling inbound: subscribe the exact
+  # WABA (idempotent) with the stored token and VERIFY it took effect. Class-only sanitized log on any failure.
+  def subscribe_and_verify(client)
+    client.subscribe_app_to_waba(@setup.waba_id)
+    client.subscribed_to_waba?(@setup.waba_id)
+  rescue StandardError => e
+    Rails.logger.warn("[BLOOMWIRE WHATSAPP RECHECK] subscription failed: #{e.class}")
+    false
+  end
+
   # Still not capable: keep the inbox non-routeable and refresh the sanitized reason (verified_missing vs
   # unverifiable) so the UI can guide the owner. Never a false ready.
   def still_action_required(capability)
     reason = capability.reason
     @setup.update(status_reason: reason) if reason.present? && reason != @setup.status_reason
+    Result.new(status: :action_required, setup: @setup)
+  end
+
+  # Task verified but subscription not yet confirmed: keep the SAME records Action-Required with a distinct,
+  # retriable reason (permission IS present — the owner just retries to finish activation). Never a false ready.
+  def activation_incomplete
+    @setup.update(status_reason: ACTIVATION_INCOMPLETE_REASON) if @setup.status_reason != ACTIVATION_INCOMPLETE_REASON
     Result.new(status: :action_required, setup: @setup)
   end
 end

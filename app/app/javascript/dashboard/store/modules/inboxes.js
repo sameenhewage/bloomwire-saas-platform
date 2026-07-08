@@ -332,6 +332,13 @@ export const actions = {
       throw error;
     }
   },
+  // Phase 5 (resume): DURABLE fetch of an inbox's managed outbound-messaging capability status for the Inbox
+  // Settings surface (survives refresh / navigation / re-login). Returns the safe DTO
+  // ({ managed, setup, ready, action_required? }); no secrets in the request or the response.
+  fetchBloomwireWhatsAppCapability: async (_store, { inboxId } = {}) => {
+    const response = await WhatsappChannel.fetchBloomwireCapability(inboxId);
+    return response.data;
+  },
   // Phase 5 (resume): re-verify outbound messaging capability for an existing Action-Required managed WhatsApp
   // setup. Returns the safe DTO ({ setup, inbox, ready, action_required? }); refreshes the inbox list once the
   // setup becomes routeable-ready. No secrets in the request or the response.

@@ -14,6 +14,17 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::MessagingCapabilitiesController < 
     promote_failed: 'We could not finish enabling outbound messaging. Please try again.'
   }.freeze
 
+  # GET .../bloomwire/whatsapp/messaging_capabilities?inbox_id=:inbox_id
+  # DURABLE status read for the Inbox Settings surface (survives refresh / navigation / re-login): returns the
+  # PERSISTED capability state of the inbox's managed setup so an Action-Required inbox can always be resumed —
+  # never a transient-only signal. `managed: false` when the inbox has no Bloomwire managed setup. Safe DTO only.
+  def index
+    setup = Bloomwire::WhatsappSetup.find_by(inbox_id: params[:inbox_id], account_id: Current.account.id)
+    return render(json: { managed: false }, status: :ok) if setup.blank?
+
+    render json: capability_dto(setup, routeable?(setup)), status: :ok
+  end
+
   # PATCH .../bloomwire/whatsapp/messaging_capabilities/:id  (:id = Bloomwire::WhatsappSetup id).
   def update
     setup = Bloomwire::WhatsappSetup.find_by(id: params[:id], account_id: Current.account.id)
@@ -28,6 +39,10 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::MessagingCapabilitiesController < 
 
   private
 
+  def routeable?(setup)
+    setup.setup_status == Bloomwire::WhatsappSetup::ROUTEABLE_STATUS
+  end
+
   # Same gate as the customer Embedded Signup endpoint: inert (404) unless Bloomwire managed mode + managed
   # WhatsApp onboarding + native WhatsApp restricted (the feature half; the admin half is check_admin_authorization?).
   def ensure_managed_whatsapp_self_serve!
@@ -40,6 +55,7 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::MessagingCapabilitiesController < 
   # Safe DTO — ids/status + sanitized reason only; NEVER api_key / token / provider_config / raw actor id.
   def capability_dto(setup, ready)
     dto = {
+      managed: true,
       setup: { id: setup.id, status: setup.setup_status },
       inbox: { id: setup.inbox_id, name: setup.inbox&.name },
       ready: ready

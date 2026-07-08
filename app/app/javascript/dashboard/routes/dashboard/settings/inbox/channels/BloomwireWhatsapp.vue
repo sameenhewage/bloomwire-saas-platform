@@ -198,6 +198,22 @@ const isActionRequired = computed(
     result.value?.setup?.status === 'action_required'
 );
 const setupId = computed(() => result.value?.setup?.id);
+// BLOCKER 4: the Action-Required copy MUST differ by the sanitized reason. A verified-missing task shows the Meta
+// grant step; an unverifiable / activation-incomplete state shows a neutral "couldn't verify, retry" and must NOT
+// claim the permission is missing.
+const actionReasonKey = computed(() => {
+  switch (result.value?.action_required?.reason) {
+    case 'outbound_messaging_permission_unverifiable':
+      return 'UNVERIFIABLE';
+    case 'outbound_messaging_activation_incomplete':
+      return 'ACTIVATION_INCOMPLETE';
+    default:
+      return 'PERMISSION_REQUIRED';
+  }
+});
+const showGrantStep = computed(
+  () => actionReasonKey.value === 'PERMISSION_REQUIRED'
+);
 // 'idle' before any recheck; 'pending' while re-verifying; 'still_pending' when the task is still not granted;
 // 'failed' when the recheck itself could not reach Meta. Drives the inline loading/success/failure states.
 const recheckState = ref('idle');
@@ -470,9 +486,10 @@ onBeforeRouteLeave(() => {
       :message="$t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.PROCESSING')"
     />
 
-    <!-- Action required: the inbox is created and RECEIVING, but OUTBOUND sending needs one Meta permission step.
-         We show the exact (safe) Meta instruction + a Recheck permission action — never a "reconnect" instruction
-         (reconnect cannot resume an already-connected number) and never a raw actor id / token / secret. -->
+    <!-- Action required: the number is connected to Meta but the inbox is NOT active yet (not subscribed for
+         inbound, cannot send outbound). We show the reason-specific status + (for a verified-missing task) the
+         exact safe Meta grant step + a Recheck action — never a "reconnect" instruction (reconnect cannot resume
+         an already-connected number) and never a raw actor id / token / secret. -->
     <div
       v-else-if="isComplete && isActionRequired"
       data-testid="bloomwire-wa-action-required"
@@ -504,7 +521,10 @@ onBeforeRouteLeave(() => {
         </p>
       </div>
 
-      <div class="rounded-xl border border-n-weak p-4 mb-6">
+      <div
+        v-if="showGrantStep"
+        class="rounded-xl border border-n-weak p-4 mb-6"
+      >
         <p class="mb-1 text-sm font-medium text-n-slate-12">
           {{
             $t(
@@ -520,6 +540,30 @@ onBeforeRouteLeave(() => {
           }}
         </p>
       </div>
+
+      <p class="mb-3 text-sm text-n-slate-11" data-testid="bloomwire-wa-reason">
+        <template v-if="actionReasonKey === 'UNVERIFIABLE'">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.REASON.UNVERIFIABLE'
+            )
+          }}
+        </template>
+        <template v-else-if="actionReasonKey === 'ACTIVATION_INCOMPLETE'">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.REASON.ACTIVATION_INCOMPLETE'
+            )
+          }}
+        </template>
+        <template v-else>
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.REASON.PERMISSION_REQUIRED'
+            )
+          }}
+        </template>
+      </p>
 
       <p
         v-if="recheckState === 'still_pending'"
