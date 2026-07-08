@@ -363,7 +363,13 @@ const register = async () => {
 
     let credentials;
     try {
-      credentials = await runEmbeddedSignup({ tracer });
+      // Pass the flow so Meta gets the right Embedded Signup featureType: Coexistence uses
+      // 'whatsapp_business_app_onboarding'; Standard omits it so the number is provisioned for Cloud API
+      // registration (WhatsWay parity) — otherwise the later /register returns Meta #100.
+      credentials = await runEmbeddedSignup({
+        tracer,
+        coexistence: isCoexistence.value,
+      });
     } catch (_) {
       if (isStale(seq)) return;
       // Signal-acquisition failure (SDK/one-signal/overall timeout) — the composable already traced the cause.

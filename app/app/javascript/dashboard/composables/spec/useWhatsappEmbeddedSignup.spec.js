@@ -81,7 +81,24 @@ describe('useWhatsappEmbeddedSignup', () => {
       phone_number_id: 'phone-1',
     });
     expect(setupFacebookSdk).toHaveBeenCalledWith('app-id', 'v22.0');
-    expect(initWhatsAppEmbeddedSignup).toHaveBeenCalledWith('config-id');
+    // Standard flow (default): coexistence=false is threaded through so Meta omits the coexistence featureType.
+    expect(initWhatsAppEmbeddedSignup).toHaveBeenCalledWith('config-id', false);
+  });
+
+  it('threads coexistence=true through to initWhatsAppEmbeddedSignup (Coexistence flow)', async () => {
+    initWhatsAppEmbeddedSignup.mockResolvedValue('auth-code');
+
+    const { runEmbeddedSignup } = useWhatsappEmbeddedSignup();
+    const result = runEmbeddedSignup({ coexistence: true });
+
+    await flushPromises();
+    emit({
+      event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING',
+      data: VALID_BUSINESS,
+    });
+
+    await result;
+    expect(initWhatsAppEmbeddedSignup).toHaveBeenCalledWith('config-id', true);
   });
 
   it('resolves credentials when the business data arrives before the auth code', async () => {
