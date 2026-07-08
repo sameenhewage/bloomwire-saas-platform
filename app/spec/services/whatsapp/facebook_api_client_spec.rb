@@ -92,6 +92,19 @@ describe Whatsapp::FacebookApiClient do
         .to_return(status: 400, body: { error: 'bad' }.to_json)
       expect(api_client.exchange_for_long_lived_token(short_token)).to eq(short_token)
     end
+
+    # A transient network/parse error on this OPTIONAL upgrade must NEVER break onboarding, and the class-only log
+    # must not echo the token (the exception message can carry the request URL, whose query holds the token).
+    it 'fails open (and never logs the token) when the exchange itself raises' do
+      logs = []
+      allow(Rails.logger).to receive(:warn) { |message| logs << message }
+      allow(HTTParty).to receive(:get).and_raise(StandardError, "boom #{short_token}")
+      result = api_client.exchange_for_long_lived_token(short_token)
+      aggregate_failures do
+        expect(result).to eq(short_token)
+        expect(logs.join).not_to include(short_token)
+      end
+    end
   end
 
   describe '#fetch_phone_numbers' do

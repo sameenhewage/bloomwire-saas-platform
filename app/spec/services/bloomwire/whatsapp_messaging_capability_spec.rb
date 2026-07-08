@@ -163,6 +163,20 @@ RSpec.describe Bloomwire::WhatsappMessagingCapability do
       allow(client).to receive(:waba_user_tasks).with(waba_id, actor_id).and_return(%w[MANAGE])
       expect(run.status).to eq(:ready)
     end
+
+    # Phase 6 regression guard: a SYSTEM_USER token can hold the whatsapp_business_messaging scope for the WABA yet
+    # still get Meta (#10) without the MANAGE asset task, so the scope shortcut must NEVER clear it — it must fall
+    # through to the authoritative asset-task path (here: no MANAGE -> action_required, never a false "ready").
+    it 'does NOT clear a SYSTEM_USER token via the messaging scope (falls through to the asset-task path)' do
+      allow(client).to receive(:token_actor_type).with(token).and_return('SYSTEM_USER')
+      allow(client).to receive(:messaging_waba_ids).with(token).and_return([waba_id])
+      allow(client).to receive(:waba_user_tasks).with(waba_id, actor_id).and_return(%w[VIEW_TEMPLATES])
+      result = run
+      aggregate_failures do
+        expect(result.status).to eq(:action_required)
+        expect(result.verification).to eq(:verified_missing)
+      end
+    end
   end
 
   # The gate must act on the EXACT selected WABA + the EXACT stored-token actor — no substitution.

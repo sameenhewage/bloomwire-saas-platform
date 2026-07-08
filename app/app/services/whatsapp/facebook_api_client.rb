@@ -32,6 +32,11 @@ class Whatsapp::FacebookApiClient
     return short_lived_token unless response.success?
 
     response.parsed_response['access_token'].presence || short_lived_token
+  rescue StandardError => e
+    # Fail open: a transient network/parse error on this OPTIONAL upgrade must never break onboarding. Class-only
+    # log — the exception message can echo the request URL, whose query carries the token, so never log it.
+    Rails.logger.warn("[WHATSAPP] long-lived token exchange failed: #{e.class}")
+    short_lived_token
   end
 
   def fetch_phone_numbers(waba_id)

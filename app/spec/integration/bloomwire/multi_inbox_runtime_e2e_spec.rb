@@ -66,7 +66,8 @@ RSpec.describe 'Bloomwire multi-inbox runtime E2E (mocked Meta)', type: :request
                                                                override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                register_phone_number: { 'success' => true }, phone_number_status: 'CONNECTED',
                                                                exchange_for_long_lived_token: 'FAKE-CUSTOMER-TOKEN', messaging_waba_ids: [],
-                                                               token_actor_id: 'SYS-ACTOR-1', waba_user_tasks: %w[MANAGE]))
+                                                               token_actor_id: 'SYS-ACTOR-1', token_actor_type: 'SYSTEM_USER',
+                                                               waba_user_tasks: %w[MANAGE]))
   end
 
   # Provision a managed WhatsApp inbox via the REAL embedded-signup service with Meta stubbed. Returns the setup.

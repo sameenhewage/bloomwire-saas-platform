@@ -37,7 +37,8 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
                                                                override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                register_phone_number: { 'success' => true }, phone_number_status: 'CONNECTED',
                                                                exchange_for_long_lived_token: 'FAKE-CUSTOMER-TOKEN', messaging_waba_ids: [],
-                                                               token_actor_id: 'SYS-ACTOR-1', waba_user_tasks: %w[MANAGE]))
+                                                               token_actor_id: 'SYS-ACTOR-1', token_actor_type: 'SYSTEM_USER',
+                                                               waba_user_tasks: %w[MANAGE]))
   end
 
   context 'when managed mode is active, admin, and platform ready (Meta stubbed)' do
@@ -145,7 +146,8 @@ RSpec.describe 'Bloomwire customer WhatsApp Coexistence Embedded Signup endpoint
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                  register_phone_number: { 'success' => true }, phone_number_status: 'CONNECTED',
                                                                  exchange_for_long_lived_token: 'FAKE-CUSTOMER-TOKEN', messaging_waba_ids: [],
-                                                                 token_actor_id: 'SYS-ACTOR-1', waba_user_tasks: %w[MANAGE]))
+                                                                 token_actor_id: 'SYS-ACTOR-1', token_actor_type: 'SYSTEM_USER',
+                                                                 waba_user_tasks: %w[MANAGE]))
     end
 
     def register(phone_number_id:, phone_number:)
