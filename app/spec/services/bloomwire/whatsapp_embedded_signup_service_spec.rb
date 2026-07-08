@@ -25,13 +25,24 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil, register_phone_number: { 'success' => true },
-                                         messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true,
+                                         override_waba_callback: nil, subscribe_waba_webhook: nil,
+                                         register_phone_number: { 'success' => true }, messaging_waba_ids: [],
+                                         waba_registrations: [], waba_owner_business_id: nil)
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
+    stub_messaging_capability
+  end
+
+  # The outbound capability gate is unit-tested in bloomwire/whatsapp_messaging_capability_spec.rb; here it
+  # defaults to READY so the flow reaches ready_for_webhook. The Action-Required wiring overrides this.
+  def stub_messaging_capability(status: :ready, reason: nil)
+    allow(Bloomwire::WhatsappMessagingCapability).to receive(:new).and_return(
+      instance_double(Bloomwire::WhatsappMessagingCapability,
+                      ensure: Bloomwire::WhatsappMessagingCapability::Result.new(status: status, reason: reason))
+    )
   end
 
   describe 'happy path (Meta stubbed)' do
@@ -384,7 +395,10 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
   # each distinct phone_number / phone_number_id becomes its own channel + inbox + mapping. Duplicate
   # phone_number / phone_number_id stays globally blocked. All Meta calls stubbed per-number (no real Meta).
   describe 'multiple WhatsApp inboxes per account (Phase 17E.1 contract)' do
-    before { stub_ready }
+    before do
+      stub_ready
+      stub_messaging_capability
+    end
 
     # Run the managed signup for ONE specific number, with Meta fully stubbed for this call.
     def signup(phone_number_id:, phone_number:, waba_id: 'WABA-1', token: 'FAKE-CUSTOMER-TOKEN')
@@ -395,7 +409,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
                                     perform: { phone_number_id: phone_number_id, phone_number: phone_number,
                                                verified: true, business_name: 'Acme' }))
       allow(Whatsapp::FacebookApiClient).to receive(:new)
-        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
+        .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, subscribed_to_waba?: true,
+                                                                 register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                  phone_number_status: 'CONNECTED'))
       described_class.new(account: account,
@@ -458,37 +473,66 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     end
   end
 
-  # TEMPORARY (Phase 5 diagnostic) — remove with the instrumentation. Proves the flag gates the debug_token
-  # introspection, it uses the EXACT exchanged token, and it never changes onboarding behavior.
-  describe 'runtime token debug instrumentation (temporary Phase 5)' do
-    let(:debug_data) do
-      { 'data' => { 'app_id' => '1010595458018764', 'is_valid' => true,
-                    'scopes' => ['whatsapp_business_management'],
-                    'granular_scopes' => [{ 'scope' => 'whatsapp_business_management', 'target_ids' => ['WABA-1'] }] } }
-    end
-
+  # Phase 5 — outbound messaging capability gate wiring. The capability service (unit-tested in
+  # bloomwire/whatsapp_messaging_capability_spec.rb) decides whether the stored-token actor can SEND; this
+  # asserts the embedded-signup service TRANSLATES that into the persisted setup_status + a safe DTO, and never
+  # persists a silently receive-only "ready" inbox.
+  describe 'outbound messaging capability gate (wiring)' do
     before do
       stub_ready
       stub_meta
-      allow(fb_client).to receive(:debug_token).and_return(debug_data)
     end
 
-    it 'does NOT introspect the token when the flag is OFF (default), and onboarding still succeeds' do
-      allow(Bloomwire::WhatsappRuntimeTokenDebug).to receive(:enabled?).and_return(false)
+    it 'persists a ready_for_webhook inbox with no status_reason when the actor can send (:ready)' do
+      stub_messaging_capability(status: :ready)
+      result
       aggregate_failures do
-        expect(result).to be_success
-        expect(fb_client).not_to have_received(:debug_token)
-        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', /\A\d{6}\z/)
+        expect(Bloomwire::WhatsappSetup.last.setup_status).to eq('ready_for_webhook')
+        expect(Bloomwire::WhatsappSetup.last.status_reason).to be_nil
+        # BLOCKER 2: the WABA is subscribed to the global router ONLY on the ready path, and the subscription is
+        # verified before the inbox is treated as live.
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
+        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1')
       end
     end
 
-    it 'introspects the EXACT exchanged token when the flag is ON, without changing onboarding' do
-      allow(Bloomwire::WhatsappRuntimeTokenDebug).to receive(:enabled?).and_return(true)
+    # BLOCKER 2: a capability failure fails onboarding closed (no falsely-ready inbox that never receives inbound).
+    it 'fails closed (persists nothing) when the actor CAN send but the subscription cannot be confirmed' do
+      stub_messaging_capability(status: :ready)
+      allow(fb_client).to receive(:subscribed_to_waba?).and_return(false)
+      aggregate_failures do
+        expect(result.error).to eq(:subscription_failed)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'persists an explicit Action-Required inbox (never silently receive-only) when the actor cannot send' do
+      stub_messaging_capability(status: :action_required, reason: 'outbound_messaging_permission_required')
       aggregate_failures do
         expect(result).to be_success
-        expect(fb_client).to have_received(:debug_token).with('FAKE-CUSTOMER-TOKEN').once
-        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', /\A\d{6}\z/)
-        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1').once
+        setup = Bloomwire::WhatsappSetup.last
+        expect(setup.setup_status).to eq('action_required')
+        expect(setup.status_reason).to eq('outbound_messaging_permission_required')
+        # Records preserved for resumption, but NOT routeable-ready: the global router hands off nothing.
+        expect(Channel::Whatsapp.count).to eq(1)
+        expect(account.inboxes.count).to eq(1)
+        # BLOCKER 2: a not-ready inbox is NEVER subscribed — else Meta forwards inbound the router would discard
+        # (lost inbound). It is inactive in BOTH directions until Recheck completes it.
+        expect(fb_client).not_to have_received(:subscribe_app_to_waba)
+        payload = bw_inbound_text_payload(phone_number_id: 'PNID-1', display_phone_number: '15551230001')
+        expect(Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)).to be_nil
+      end
+    end
+
+    it 'surfaces a secret-free action_required block (reason + resolution) in the DTO' do
+      stub_messaging_capability(status: :action_required, reason: 'outbound_messaging_permission_required')
+      dto = result.dto
+      aggregate_failures do
+        expect(dto.dig(:setup, :status)).to eq('action_required')
+        expect(dto.dig(:action_required, :reason)).to eq('outbound_messaging_permission_required')
+        expect(dto.dig(:action_required, :resolution)).to be_present
+        expect(dto.to_json).not_to include('FAKE-CUSTOMER-TOKEN')
       end
     end
   end

@@ -360,6 +360,11 @@ Rails.application.routes.draw do
               # Structured, sanitized browser onboarding trace sink. Admin-only; inert (404) unless managed
               # WhatsApp self-serve is active. Allow-listed events/metadata only; writes to the app log.
               resources :onboarding_traces, only: [:create]
+              # Phase 5 (resume): outbound messaging capability. GET ?inbox_id= reads the DURABLE persisted status
+              # for the Inbox Settings surface (survives refresh/nav/login); PATCH :id (= Bloomwire::WhatsappSetup
+              # id) re-verifies and, when the owner has since granted the Meta task, subscribes + promotes it to
+              # routeable-ready. Admin-only; inert (404) unless managed self-serve. Safe DTO; no /register, no dup.
+              resources :messaging_capabilities, only: [:index, :update]
             end
             # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
             # BLOOMWIRE_CATEGORY_ADMIN_UI feature is enabled. Safe DTO only; no writes; no schema; account-scoped.

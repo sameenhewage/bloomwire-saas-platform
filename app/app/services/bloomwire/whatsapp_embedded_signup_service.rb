@@ -19,6 +19,13 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # token can message — Bloomwire::WhatsappConnectedNumberResolver routes to that single same-business registration,
   # or fails closed (no channel/inbox/setup). The whole gate runs before any DB write.
   CONNECTED_STATUS = 'CONNECTED'.freeze
+  # Non-secret guidance shown to the account owner. Until this step is completed the managed inbox is NOT active
+  # in EITHER direction — it is deliberately not subscribed for inbound and cannot send outbound — so we say so
+  # plainly. The concrete Meta asset-task grant is a customer/owner action; "Recheck permission" then activates it.
+  OUTBOUND_ACTION_REQUIRED_RESOLUTION =
+    'This WhatsApp inbox is not active yet — it can neither receive nor send messages until one more Meta step ' \
+    'is completed: in Meta Business Settings, grant this WhatsApp Business Account the Manage task to the ' \
+    'connected system user, then use "Recheck permission" to activate the inbox.'.freeze
 
   Result = Struct.new(:dto, :error, keyword_init: true) do
     def success?
@@ -44,12 +51,15 @@ class Bloomwire::WhatsappEmbeddedSignupService
     target = resolve_target(meta)
     return Result.new(error: target) if target.is_a?(Symbol)
 
-    # Subscribe the FINAL resolved WABA (not just the customer's selection) to the Bloomwire app BEFORE any DB
-    # write, and fail closed if Meta rejects it — see #subscribe_final_waba.
-    subscription_error = subscribe_final_waba(meta[:client], target[:waba_id])
-    return Result.new(error: subscription_error) if subscription_error
+    # Outbound capability is verified BEFORE any subscription, and we subscribe ONLY on the ready path — a
+    # not-ready inbox must never be subscribed (Meta would forward inbound the global router then discards). So an
+    # Action-Required inbox is persisted UNSUBSCRIBED, inactive in both directions until "Recheck" completes it.
+    capability = outbound_capability(meta, target[:waba_id])
 
-    persisted = persist(meta[:token], target[:waba_id], target[:phone_info], meta[:verification_pin])
+    activation_error = subscribe_final_waba(meta[:client], target[:waba_id]) if capability.ready?
+    return Result.new(error: activation_error) if activation_error
+
+    persisted = persist(meta[:token], target[:waba_id], target[:phone_info], meta[:verification_pin], capability)
     return Result.new(error: persisted) if persisted.is_a?(Symbol)
 
     Result.new(dto: dto_for(persisted))
@@ -84,16 +94,9 @@ class Bloomwire::WhatsappEmbeddedSignupService
     token = Whatsapp::TokenExchangeService.new(@code).perform
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
-    # TEMPORARY (Phase 5 diagnostic): flag-gated, DEV-only debug_token introspection of the EXACT exchanged token
-    # BEFORE /register. Best-effort, no secrets, no behavior change. Remove after the evidence is captured.
-    debug_runtime_token(client, token)
     phone_number_id = phone_info[:phone_number_id]
-    # Check the SELECTED number's live status BEFORE registering. An already-CONNECTED number must NOT be
-    # re-registered: re-sending /register with a fresh 2FA PIN against a live, pin-enabled number is unnecessary
-    # and can disrupt the existing (owner-set) registration. We register — then re-check status — ONLY when the
-    # selected number is not already CONNECTED, mirroring native onboarding for a fresh number. A registration
-    # failure (e.g. Meta (#100) when the app is not the WABA owner) stays non-fatal: the readiness gate below
-    # then fails closed on the still-non-CONNECTED number so NO partial inbox is created.
+    # Register ONLY when the number is not already CONNECTED (re-registering a live, pin-enabled number can disrupt
+    # the owner-set registration). A /register failure stays non-fatal — the readiness gate then fails closed.
     connection_status = client.phone_number_status(phone_number_id)
     verification_pin = nil
     unless connection_status == CONNECTED_STATUS
@@ -124,18 +127,24 @@ class Bloomwire::WhatsappEmbeddedSignupService
     { waba_id: resolution.waba_id, phone_info: phone_info.merge(phone_number_id: resolution.phone_number_id) }
   end
 
-  # The app-to-WABA subscription (global router) MUST target the FINAL resolved WABA. Inbound webhooks for the
-  # connected number are only forwarded to Bloomwire's global callback when the app is subscribed to the WABA that
-  # actually owns that registration — which, after #resolve_target, can differ from the customer's originally
-  # selected WABA. Subscribing only the selected WABA would leave the resolved inbox receiving no inbound. We
-  # subscribe exactly once (the final WABA), so a selected==resolved case makes no duplicate call. Fails closed
-  # (returns a Symbol) BEFORE any DB write. NEVER override_waba_callback / subscribe_waba_webhook.
+  # Subscribe the FINAL resolved WABA (which, after #resolve_target, can differ from the selection) to the app,
+  # then VERIFY it took effect (subscribed_apps) so a silent failure never yields a ready-but-deaf inbox. Fails
+  # closed (Symbol). This is the single point the inbox becomes live for inbound (global router) AND outbound;
+  # NEVER override_waba_callback / subscribe_waba_webhook.
   def subscribe_final_waba(client, waba_id)
     client.subscribe_app_to_waba(waba_id)
-    nil
+    client.subscribed_to_waba?(waba_id) ? nil : :subscription_failed
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] App-to-WABA subscription failed: #{e.class}")
     :subscription_failed
+  end
+
+  # Outbound readiness (send-side counterpart to the CONNECTED gate): VERIFY the EXACT stored-token actor holds
+  # the WABA send task (Meta #10). Verify-only (allow_grant: false) — the partner SYSTEM_USER token never self-grants.
+  def outbound_capability(meta, waba_id)
+    Bloomwire::WhatsappMessagingCapability.new(
+      client: meta[:client], token: meta[:token], waba_id: waba_id, allow_grant: false
+    ).ensure
   end
 
   # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later
@@ -165,16 +174,9 @@ class Bloomwire::WhatsappEmbeddedSignupService
     Rails.logger.warn("[BLOOMWIRE EMBEDDED SIGNUP] #{event.to_json}")
   end
 
-  # TEMPORARY (Phase 5 diagnostic) — remove after evidence is captured. Flag-gated, DEV-only, best-effort
-  # introspection of the EXACT exchanged runtime token (never logs secrets, never changes onboarding behavior).
-  def debug_runtime_token(client, token)
-    return unless Bloomwire::WhatsappRuntimeTokenDebug.enabled?
-
-    Bloomwire::WhatsappRuntimeTokenDebug.new(client: client, token: token, selected_waba_id: @waba_id).log
-  end
-
-  # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error.
-  def persist(token, waba_id, phone_info, verification_pin)
+  # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error. The capability
+  # result decides the persisted setup_status: routeable-ready when the actor can send, else Action-Required.
+  def persist(token, waba_id, phone_info, verification_pin, capability)
     return :phone_number_taken if Channel::Whatsapp.exists?(phone_number: phone_info[:phone_number])
 
     setup = nil
@@ -184,7 +186,7 @@ class Bloomwire::WhatsappEmbeddedSignupService
       inbox = create_inbox(channel, phone_info)
       Bloomwire::WhatsappCredentialWriter.new(channel: channel, attributes: { 'api_key' => token }).perform
       store_verification_pin(channel, verification_pin)
-      creator = create_mapping(channel, inbox, waba_id, phone_info)
+      creator = create_mapping(channel, inbox, waba_id, phone_info, capability)
       if creator.success?
         setup = creator.setup
       else
@@ -233,25 +235,35 @@ class Bloomwire::WhatsappEmbeddedSignupService
     "#{phone_info[:business_name].presence || 'WhatsApp'} WhatsApp"
   end
 
-  def create_mapping(channel, inbox, waba_id, phone_info)
+  # A routeable (ready_for_webhook) mapping ONLY when outbound capability is confirmed; otherwise an explicit
+  # Action-Required mapping (with a sanitized reason) the global router will not treat as ready — so we never
+  # persist a silently receive-only inbox.
+  def create_mapping(channel, inbox, waba_id, phone_info, capability)
     Bloomwire::WhatsappSetupCreator.call(
       account: @account,
       inbox: inbox,
       channel_whatsapp: channel,
       phone_number_id: phone_info[:phone_number_id],
       waba_id: waba_id,
-      display_phone_number: phone_info[:phone_number]
+      display_phone_number: phone_info[:phone_number],
+      setup_status: capability.ready? ? Bloomwire::WhatsappSetup::ROUTEABLE_STATUS : Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS,
+      status_reason: capability.ready? ? nil : capability.reason
     )
   end
 
-  # Safe DTO — ids/status + masked phone only; NEVER api_key / token / provider_config.
+  # Safe DTO — ids/status + masked phone only; NEVER api_key / token / provider_config. When outbound is not
+  # yet enabled the DTO carries an explicit, secret-free action_required block (reason + the exact Meta step).
   def dto_for(setup)
     readiness = Bloomwire::WhatsappRealHopReadiness.new(setup).result
-    {
+    dto = {
       inbox: { id: setup.inbox_id, name: setup.inbox&.name },
       channel: { id: setup.channel_whatsapp_id, type: 'Channel::Whatsapp', source: 'bloomwire_managed' },
       setup: { id: setup.id, status: setup.setup_status, readiness: readiness[:status] },
       phone: readiness[:masked]
     }
+    if setup.setup_status == Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS
+      dto[:action_required] = { reason: setup.status_reason, resolution: OUTBOUND_ACTION_REQUIRED_RESOLUTION }
+    end
+    dto
   end
 end

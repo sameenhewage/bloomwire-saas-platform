@@ -33,6 +33,27 @@ class WhatsappChannel extends ApiClient {
     );
   }
 
+  // Phase 5 (resume): re-verify outbound messaging capability for an existing Action-Required managed WhatsApp
+  // setup (setupId = Bloomwire::WhatsappSetup id). PATCH; returns ONLY the safe DTO (ids / status / ready /
+  // sanitized reason) — never a token / secret / raw Meta payload. Backs the "Recheck permission" action.
+  recheckBloomwireCapability(setupId, config = {}) {
+    return axios.patch(
+      `${this.baseUrl()}/bloomwire/whatsapp/messaging_capabilities/${setupId}`,
+      {},
+      config
+    );
+  }
+
+  // Phase 5 (resume): DURABLE read of an inbox's managed outbound-messaging capability status (inboxId = Inbox
+  // id). GET; returns ONLY the safe DTO ({ managed, setup, ready, action_required? }) so the Inbox Settings
+  // panel can restore an Action-Required inbox after refresh / navigation / re-login. Never a token / secret.
+  fetchBloomwireCapability(inboxId, config = {}) {
+    return axios.get(
+      `${this.baseUrl()}/bloomwire/whatsapp/messaging_capabilities`,
+      { params: { inbox_id: inboxId }, ...config }
+    );
+  }
+
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Sends only the typed phone number and
   // receives ONLY { status: "available" | "already_connected" } — never another tenant's account/inbox/channel.
   checkPhoneAvailability(phoneNumber, config = {}) {
