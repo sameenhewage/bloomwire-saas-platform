@@ -15,6 +15,15 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Bloomwire — Fix Meta #100 on managed WhatsApp registration: Standard Embedded Signup must OMIT the Coexistence featureType (Phase 6.3) — OPEN (PR pending; not merged)
+- **Branch:** `fix/bloomwire-whatsapp-standard-featuretype` off `version_1` `351ecd4`. Root-caused via a live Chrome-MCP Stage-1b test + the WhatsWay client source + a live Graph WABA-owner read (no ownership mismatch).
+- **Root cause:** `initWhatsAppEmbeddedSignup` hardcoded `featureType:'whatsapp_business_app_onboarding'` (Coexistence) for ALL flows, so the Standard "Register New Number" flow ran Meta's app-onboarding path and never provisioned the number for Cloud API registration → the subsequent `POST /{phone_number_id}/register` returned Meta **#100** ("Need either permission on WhatsApp Business Account or owner business"). Masked earlier because the number was pre-registered (Phase 4 skipped `/register`).
+- **Fix (WhatsWay parity):** thread `coexistence` through so the Standard flow **OMITS** `featureType` (Meta provisions Cloud API registration) and only Coexistence uses `whatsapp_business_app_onboarding` — matching WhatsWay's `ChannelSettings.launchFBLogin`. Files: `whatsapp/utils.js`, `useWhatsappEmbeddedSignup.js`, `BloomwireWhatsapp.vue`.
+- **Diagnostic:** new DEV-gated, sanitized `Bloomwire::WhatsappSignupTokenDebug` (logs the signup token's type/actor/app/scopes + whether the selected WABA is in its whatsapp_business_management/messaging granular targets + WABA owner business; **never** the token; OFF by default via `BLOOMWIRE_WHATSAPP_TOKEN_DEBUG`, hard-blocked outside dev/test) to inspect signup-token authority for #100.
+- **Validation (cwd `app/`, Meta stubbed):** Vitest utils **9/0** + composable **21/0** + wizard **50/0**; RSpec token-debug **4/0** + embedded/coexistence signup services + embedded_signups request **69/0**; RuboCop + ESLint clean.
+- **Security:** no secrets in diff/logs/DTOs; the diagnostic never logs the token; no live Meta/WhatsApp calls in specs; no Enterprise code touched.
+- **Status:** open PR into `version_1`; not merged; not deployed.
+
 ### Bloomwire — Reconnect-preflight fix: a disconnected number is reconnectable by its own account (Phase 6.2) — OPEN (PR pending; not merged)
 - **Branch:** `feat/bloomwire-whatsapp-reconnect-preflight` off `version_1` `178961c`. Found via a live Chrome-MCP Stage-1 test on DEV (Disconnect PASSED; the Add-Inbox reconnect was then blocked by the advisory preflight).
 - **Gap:** WhatsWay-parity Disconnect KEEPS the channel record (setup `disconnected`), but `Bloomwire::WhatsappPhoneAvailability` did a GLOBAL `Channel::Whatsapp.exists?(phone_number:)` → reported the kept-but-disconnected number as `already_connected`, and the wizard `register()` refuses to open the Meta popup on `already_connected` — contradicting the disconnected panel's own "reconnect via Add Inbox" guidance.

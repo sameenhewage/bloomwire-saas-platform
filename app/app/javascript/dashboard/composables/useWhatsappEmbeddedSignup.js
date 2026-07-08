@@ -43,6 +43,7 @@ export function useWhatsappEmbeddedSignup() {
   // no trace calls, no Coexistence endpoint hit).
   const runEmbeddedSignup = ({
     tracer,
+    coexistence = false,
     timeoutMs = SIGNUP_COMPLETION_TIMEOUT_MS,
     overallTimeoutMs = OVERALL_SIGNUP_TIMEOUT_MS,
   } = {}) => {
@@ -181,7 +182,8 @@ export function useWhatsappEmbeddedSignup() {
 
         try {
           authCode = await initWhatsAppEmbeddedSignup(
-            window.chatwootConfig?.whatsappConfigurationId
+            window.chatwootConfig?.whatsappConfigurationId,
+            coexistence
           );
           if (settled) return;
           activeTracer.trace('auth_callback_received', { result: 'ok' });

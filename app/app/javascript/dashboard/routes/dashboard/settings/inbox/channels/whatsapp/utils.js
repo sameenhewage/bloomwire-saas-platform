@@ -63,7 +63,19 @@ export const createMessageHandler = onEmbeddedSignupData => {
   };
 };
 
-export const initWhatsAppEmbeddedSignup = configId => {
+// WhatsWay parity (ChannelSettings.launchFBLogin): the Coexistence flow uses featureType
+// 'whatsapp_business_app_onboarding' (connect an EXISTING WhatsApp Business App number); the Standard
+// "Register New Number" flow OMITS featureType so Meta provisions the number for Cloud API registration.
+// Passing the coexistence featureType on a Standard signup leaves the number un-provisioned for the Cloud API,
+// so the later POST /{phone_number_id}/register returns Meta (#100). Standard -> { setup, sessionInfoVersion }.
+export const initWhatsAppEmbeddedSignup = (configId, coexistence = false) => {
+  const extras = coexistence
+    ? {
+        setup: {},
+        featureType: 'whatsapp_business_app_onboarding',
+        sessionInfoVersion: '3',
+      }
+    : { setup: {}, sessionInfoVersion: '3' };
   return new Promise((resolve, reject) => {
     window.FB.login(
       response => {
@@ -79,11 +91,7 @@ export const initWhatsAppEmbeddedSignup = configId => {
         config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: 'whatsapp_business_app_onboarding',
-          sessionInfoVersion: '3',
-        },
+        extras,
       }
     );
   });

@@ -105,6 +105,9 @@ class Bloomwire::WhatsappEmbeddedSignupService
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
     phone_number_id = phone_info[:phone_number_id]
+    # DEV-only, sanitized: inspect the exact signup token's type/actor/app/scopes + WABA management/messaging
+    # targets + WABA owner before /register, to diagnose Meta #100 (never logs the token; inert unless flagged).
+    Bloomwire::WhatsappSignupTokenDebug.log(client: client, token: token, waba_id: @waba_id, phone_number_id: phone_number_id)
     # Register ONLY when the number is not already CONNECTED (re-registering a live, pin-enabled number can disrupt
     # the owner-set registration). A /register failure stays non-fatal — the readiness gate then fails closed.
     connection_status = client.phone_number_status(phone_number_id)

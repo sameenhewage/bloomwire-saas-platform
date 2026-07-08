@@ -1,6 +1,7 @@
 import {
   initializeFacebook,
   setupFacebookSdk,
+  initWhatsAppEmbeddedSignup,
   DEFAULT_WHATSAPP_GRAPH_API_VERSION,
 } from '../utils';
 import { loadScript } from 'dashboard/helper/DOMHelpers';
@@ -77,6 +78,55 @@ describe('whatsapp/utils — Graph API version', () => {
 
     expect(init).toHaveBeenCalledWith(
       expect.objectContaining({ version: 'v25.0' })
+    );
+  });
+});
+
+// WhatsWay parity: the Standard "Register New Number" flow must OMIT featureType so Meta provisions the number
+// for Cloud API registration; only Coexistence uses featureType 'whatsapp_business_app_onboarding'. Passing the
+// coexistence featureType on a Standard signup leaves the number un-provisioned, so /register returns Meta #100.
+describe('whatsapp/utils — initWhatsAppEmbeddedSignup featureType', () => {
+  afterEach(() => {
+    delete window.FB;
+  });
+
+  // Mock FB.login to capture the options it is called with and immediately resolve the auth code.
+  const captureLoginOptions = () => {
+    let options;
+    window.FB = {
+      login: (cb, opts) => {
+        options = opts;
+        cb({ authResponse: { code: 'the-code' } });
+      },
+    };
+    return () => options;
+  };
+
+  it('Standard (default) OMITS featureType so Meta provisions Cloud API registration', async () => {
+    const getOptions = captureLoginOptions();
+    await initWhatsAppEmbeddedSignup('config-123');
+    const opts = getOptions();
+    expect(opts.config_id).toBe('config-123');
+    expect(opts.response_type).toBe('code');
+    expect(opts.override_default_response_type).toBe(true);
+    expect(opts.extras).toEqual({ setup: {}, sessionInfoVersion: '3' });
+    expect(opts.extras.featureType).toBeUndefined();
+  });
+
+  it('Coexistence uses featureType whatsapp_business_app_onboarding', async () => {
+    const getOptions = captureLoginOptions();
+    await initWhatsAppEmbeddedSignup('config-123', true);
+    expect(getOptions().extras).toEqual({
+      setup: {},
+      featureType: 'whatsapp_business_app_onboarding',
+      sessionInfoVersion: '3',
+    });
+  });
+
+  it('resolves with the auth code returned by FB.login', async () => {
+    captureLoginOptions();
+    await expect(initWhatsAppEmbeddedSignup('config-123')).resolves.toBe(
+      'the-code'
     );
   });
 });
