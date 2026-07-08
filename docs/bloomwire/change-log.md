@@ -15,6 +15,13 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Bloomwire — Reconnect-preflight fix: a disconnected number is reconnectable by its own account (Phase 6.2) — OPEN (PR pending; not merged)
+- **Branch:** `feat/bloomwire-whatsapp-reconnect-preflight` off `version_1` `178961c`. Found via a live Chrome-MCP Stage-1 test on DEV (Disconnect PASSED; the Add-Inbox reconnect was then blocked by the advisory preflight).
+- **Gap:** WhatsWay-parity Disconnect KEEPS the channel record (setup `disconnected`), but `Bloomwire::WhatsappPhoneAvailability` did a GLOBAL `Channel::Whatsapp.exists?(phone_number:)` → reported the kept-but-disconnected number as `already_connected`, and the wizard `register()` refuses to open the Meta popup on `already_connected` — contradicting the disconnected panel's own "reconnect via Add Inbox" guidance.
+- **Fix:** `status_for(raw, account:)` now returns `available` when the number's ONLY WhatsApp channel(s) belong to the CURRENT account and are `disconnected` (a later Embedded Signup reuses the SAME records). Cross-account, active/other-status, or no-setup channels stay `already_connected`. The controller passes `Current.account`. Advisory-only + safe-enum contract unchanged; the authoritative post-Meta duplicate guard is untouched; no frontend change (the endpoint is session-scoped).
+- **Validation:** `whatsapp_phone_availability` service + request specs **20/0**; RuboCop clean. No secrets; read-only preflight; no live Meta calls.
+- **Status:** open PR into `version_1`; not merged; not deployed.
+
 ### Bloomwire — WhatsWay-parity Disconnect flow + long-lived-token exchange corrected to match WhatsWay exactly (Phase 6.1) — OPEN (PR pending; not merged)
 - **Branch:** `feat/bloomwire-whatsapp-disconnect-and-token-match` off `version_1` `9ce5c6c`. Behavior verified against the WhatsWay source (`whatsway/server/controllers/channels.controller.ts`), not assumed.
 - **Token exchange (correction):** WhatsWay's long-lived exchange is `longLivedToken = access_token || short` with NO try/catch — it fails open ONLY on a no-token RESPONSE; a transport error propagates. The Phase 6 `rescue StandardError` (fail-open on exceptions too) **diverged and is reverted**: `FacebookApiClient#exchange_for_long_lived_token` again fails open only on a non-token response and lets a raised error propagate (`perform_meta_steps` fails closed) — WhatsWay-exact.
