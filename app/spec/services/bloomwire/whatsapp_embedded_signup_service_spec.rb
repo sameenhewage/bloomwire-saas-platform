@@ -454,4 +454,34 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
   end
+
+  # TEMPORARY (Stage 1 controlled register-PIN test) — remove with the override. Proves register_number delegates
+  # the PIN choice to Bloomwire::WhatsappRegistrationPinOverride: the override PIN is sent to Meta when active, the
+  # existing random 6-digit PIN is preserved when it is not, and the override is consulted with the selected WABA
+  # and the resolved phone_number_id (never changing the token path).
+  describe 'DEV-only exact-target register PIN override (temporary Stage 1)' do
+    before do
+      stub_ready
+      stub_meta
+    end
+
+    it 'sends the override PIN to Cloud API /register when the override is active' do
+      allow(Bloomwire::WhatsappRegistrationPinOverride).to receive(:pin_for).and_return('123456')
+      result
+      expect(fb_client).to have_received(:register_phone_number).with('PNID-1', '123456')
+    end
+
+    it 'preserves the random 6-digit PIN when the override is inactive' do
+      allow(Bloomwire::WhatsappRegistrationPinOverride).to receive(:pin_for).and_return(nil)
+      result
+      expect(fb_client).to have_received(:register_phone_number).with('PNID-1', /\A\d{6}\z/)
+    end
+
+    it 'consults the override with the selected WABA and resolved phone_number_id' do
+      allow(Bloomwire::WhatsappRegistrationPinOverride).to receive(:pin_for).and_return(nil)
+      result
+      expect(Bloomwire::WhatsappRegistrationPinOverride).to have_received(:pin_for)
+        .with(waba_id: 'WABA-1', phone_number_id: 'PNID-1')
+    end
+  end
 end

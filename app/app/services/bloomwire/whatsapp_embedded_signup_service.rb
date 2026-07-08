@@ -135,12 +135,20 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later
   # re-register does not lock the number out), or nil when the call fails (non-fatal by design).
   def register_number(client, phone_number_id)
-    pin = format('%06d', SecureRandom.random_number(1_000_000))
+    pin = registration_pin(phone_number_id)
     client.register_phone_number(phone_number_id, pin)
     pin
   rescue StandardError => e
     log_phone_registration_failure(phone_number_id, e)
     nil
+  end
+
+  # TEMPORARY (Stage 1 controlled register-PIN test) — remove with Bloomwire::WhatsappRegistrationPinOverride.
+  # Normally a fresh random 6-digit 2FA PIN; the DEV-only, flag-gated, EXACT-TARGET override substitutes the known
+  # WhatsAway source constant so Stage 1 changes ONLY the PIN (never the SYSTEM_USER token path). Never logged.
+  def registration_pin(phone_number_id)
+    Bloomwire::WhatsappRegistrationPinOverride.pin_for(waba_id: @waba_id, phone_number_id: phone_number_id) ||
+      format('%06d', SecureRandom.random_number(1_000_000))
   end
 
   # Sanitized, structured observability for a failed Cloud API /register. The failure stays non-fatal (the number
