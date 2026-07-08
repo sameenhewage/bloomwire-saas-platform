@@ -365,6 +365,10 @@ Rails.application.routes.draw do
               # id) re-verifies and, when the owner has since granted the Meta task, subscribes + promotes it to
               # routeable-ready. Admin-only; inert (404) unless managed self-serve. Safe DTO; no /register, no dup.
               resources :messaging_capabilities, only: [:index, :update]
+              # WhatsWay-parity "Disconnect": deregister the number on Meta (-> DISCONNECTED) and mark the setup
+              # non-routeable while KEEPING the Channel/Inbox/Setup records so a later Embedded Signup reconnect reuses
+              # them. Admin-only; inert (404) unless managed self-serve. Safe DTO; never a delete/webhook unsubscribe.
+              resources :disconnections, only: [:create]
             end
             # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
             # BLOOMWIRE_CATEGORY_ADMIN_UI feature is enabled. Safe DTO only; no writes; no schema; account-scoped.

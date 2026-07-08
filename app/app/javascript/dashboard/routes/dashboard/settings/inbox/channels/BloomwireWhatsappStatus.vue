@@ -47,6 +47,15 @@ const isActionRequired = computed(
 const isReady = computed(
   () => status.value?.managed === true && status.value?.ready === true
 );
+// WhatsWay-parity "Disconnect" state: the number was deregistered on Meta but the records are KEPT
+// (setup.status === 'disconnected'), so the owner reconnects via Add Inbox (same records are reused).
+const isDisconnected = computed(
+  () =>
+    status.value?.managed === true &&
+    status.value?.setup?.status === 'disconnected'
+);
+const isDisconnecting = ref(false);
+const confirmingDisconnect = ref(false);
 
 const actionReasonKey = computed(() => {
   switch (status.value?.action_required?.reason) {
@@ -115,6 +124,28 @@ const recheck = async () => {
     if (isCurrent()) recheckState.value = 'failed';
   } finally {
     if (isCurrent()) isRechecking.value = false;
+  }
+};
+
+// WhatsWay-parity "Disconnect": deregister the number on Meta and mark the setup non-routeable while KEEPING the
+// records. Bound to the displayed inbox so a mid-request inbox switch can't apply a stale result. Best-effort:
+// on failure the panel keeps its current state and the admin can retry.
+const disconnect = async () => {
+  const requestedInboxId = props.inbox?.id;
+  if (!requestedInboxId || isDisconnecting.value) return;
+  isDisconnecting.value = true;
+  try {
+    const dto = await store.dispatch('inboxes/disconnectBloomwireWhatsApp', {
+      inboxId: requestedInboxId,
+    });
+    if (props.inbox?.id === requestedInboxId) {
+      status.value = dto;
+      confirmingDisconnect.value = false;
+    }
+  } catch (error) {
+    // best-effort — leave the panel as-is so the admin can retry
+  } finally {
+    if (props.inbox?.id === requestedInboxId) isDisconnecting.value = false;
   }
 };
 
@@ -234,24 +265,92 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
   <div
     v-else-if="isReady"
     data-testid="bloomwire-wa-status-ready"
-    class="flex gap-2 items-center p-4 mb-4 rounded-xl border border-n-weak bg-n-alpha-1"
+    class="flex flex-col items-start p-4 mb-4 rounded-xl border border-n-weak bg-n-alpha-1"
   >
-    <Icon icon="i-lucide-circle-check" class="size-5 text-n-teal-10" />
-    <div>
-      <p class="text-sm font-medium text-n-slate-12">
-        {{
-          $t(
-            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.READY_TITLE'
-          )
-        }}
-      </p>
-      <p class="text-sm text-n-slate-11">
-        {{
-          $t(
-            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.READY_SUBTITLE'
-          )
-        }}
-      </p>
+    <div class="flex gap-2 items-center">
+      <Icon icon="i-lucide-circle-check" class="size-5 text-n-teal-10" />
+      <div>
+        <p class="text-sm font-medium text-n-slate-12">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.READY_TITLE'
+            )
+          }}
+        </p>
+        <p class="text-sm text-n-slate-11">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.READY_SUBTITLE'
+            )
+          }}
+        </p>
+      </div>
     </div>
+
+    <template v-if="confirmingDisconnect">
+      <p
+        data-testid="bloomwire-wa-status-disconnect-confirm"
+        class="mt-4 mb-2 text-sm text-n-slate-11"
+      >
+        {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.CONFIRM') }}
+      </p>
+      <div class="flex gap-2">
+        <NextButton
+          solid
+          ruby
+          data-testid="bloomwire-wa-status-disconnect-confirm-button"
+          :is-loading="isDisconnecting"
+          :disabled="isDisconnecting"
+          :label="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.CONFIRM_BUTTON'
+            )
+          "
+          @click="disconnect"
+        />
+        <NextButton
+          faded
+          slate
+          :disabled="isDisconnecting"
+          :label="
+            $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.CANCEL')
+          "
+          @click="confirmingDisconnect = false"
+        />
+      </div>
+    </template>
+    <NextButton
+      v-else
+      faded
+      ruby
+      class="mt-4"
+      data-testid="bloomwire-wa-status-disconnect"
+      :label="$t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.BUTTON')"
+      @click="confirmingDisconnect = true"
+    />
+  </div>
+
+  <div
+    v-else-if="isDisconnected"
+    data-testid="bloomwire-wa-status-disconnected"
+    class="flex flex-col items-start p-4 mb-4 rounded-xl border border-n-weak bg-n-alpha-1"
+  >
+    <div class="flex gap-2 items-center mb-2">
+      <Icon icon="i-lucide-plug-zap" class="size-5 text-n-amber-10" />
+      <h4 class="text-sm font-medium text-n-slate-12">
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.DISCONNECTED_TITLE'
+          )
+        }}
+      </h4>
+    </div>
+    <p class="text-sm leading-6 text-n-slate-11">
+      {{
+        $t(
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.DISCONNECTED_SUBTITLE'
+        )
+      }}
+    </p>
   </div>
 </template>

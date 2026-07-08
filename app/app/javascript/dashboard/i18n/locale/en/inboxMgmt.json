@@ -409,6 +409,14 @@
               "UNVERIFIABLE": "We couldn’t verify the permission with Meta just now — this doesn’t mean it’s missing. Please Recheck again in a moment.",
               "ACTIVATION_INCOMPLETE": "The permission is granted, but we couldn’t finish activating the inbox. Please Recheck again in a moment."
             }
+          },
+          "DISCONNECT": {
+            "BUTTON": "Disconnect number",
+            "CONFIRM": "Disconnecting deregisters this number on WhatsApp — it will stop receiving and sending messages until you reconnect it. Your inbox, conversations and settings are kept, and reconnecting from Add Inbox reuses them.",
+            "CONFIRM_BUTTON": "Confirm disconnect",
+            "CANCEL": "Cancel",
+            "DISCONNECTED_TITLE": "Number disconnected",
+            "DISCONNECTED_SUBTITLE": "This number is deregistered on WhatsApp. Reconnect it any time from Settings → Inboxes → Add Inbox — your existing inbox and history are reused."
           }
         },
         "API": {

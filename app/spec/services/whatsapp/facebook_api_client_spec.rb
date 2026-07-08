@@ -93,17 +93,31 @@ describe Whatsapp::FacebookApiClient do
       expect(api_client.exchange_for_long_lived_token(short_token)).to eq(short_token)
     end
 
-    # A transient network/parse error on this OPTIONAL upgrade must NEVER break onboarding, and the class-only log
-    # must not echo the token (the exception message can carry the request URL, whose query holds the token).
-    it 'fails open (and never logs the token) when the exchange itself raises' do
-      logs = []
-      allow(Rails.logger).to receive(:warn) { |message| logs << message }
-      allow(HTTParty).to receive(:get).and_raise(StandardError, "boom #{short_token}")
-      result = api_client.exchange_for_long_lived_token(short_token)
-      aggregate_failures do
-        expect(result).to eq(short_token)
-        expect(logs.join).not_to include(short_token)
-      end
+    # WhatsWay-exact: WhatsWay does NOT try/catch this fetch, so a transport error PROPAGATES and the caller
+    # (perform_meta_steps) fails closed. We must NOT swallow it into a fail-open short token (that would diverge).
+    it 'propagates a transport error (does NOT fail open) — matches WhatsWay' do
+      allow(HTTParty).to receive(:get).and_raise(StandardError, 'network down')
+      expect { api_client.exchange_for_long_lived_token(short_token) }.to raise_error(StandardError, 'network down')
+    end
+  end
+
+  describe '#deregister_phone_number' do
+    let(:phone_number_id) { 'PNID-1' }
+
+    it 'POSTs /deregister with messaging_product and returns the parsed body' do
+      stub = stub_request(:post, "https://graph.facebook.com/#{api_version}/#{phone_number_id}/deregister")
+             .with(body: { messaging_product: 'whatsapp' }.to_json,
+                   headers: { 'Authorization' => "Bearer #{access_token}" })
+             .to_return(status: 200, body: { success: true }.to_json, headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.deregister_phone_number(phone_number_id)).to eq('success' => true)
+      expect(stub).to have_been_requested
+    end
+
+    it 'raises a Whatsapp::GraphApiError on failure (the caller treats it as non-fatal)' do
+      stub_request(:post, "https://graph.facebook.com/#{api_version}/#{phone_number_id}/deregister")
+        .to_return(status: 400, body: { error: { message: 'nope', code: 100 } }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect { api_client.deregister_phone_number(phone_number_id) }.to raise_error(Whatsapp::GraphApiError)
     end
   end
 
