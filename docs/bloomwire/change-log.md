@@ -15,6 +15,13 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Bloomwire — Signup-token diagnostic: run on DEV + capture the actor's WABA assigned tasks (Phase 6.3b) — OPEN (PR pending; not merged)
+- **Branch:** `fix/bloomwire-token-debug-dev-gate` off `version_1` `f94b215`. Follow-up to Phase 6.3: the featureType fix shipped but `/register` STILL returned Meta **#100** on the live re-run, and `Bloomwire::WhatsappSignupTokenDebug` produced no evidence because its gate used `Rails.env.development?` while DEV runs `RAILS_ENV=production`.
+- **Change (gate-only + requested evidence):** (1) gate now enables on the flag when `BLOOMWIRE_ENV != 'production'` (unset on DEV → works there; hard-blocked on real prod) instead of `Rails.env`; (2) the captured event now also includes `actor_waba_tasks` — the EXACT token actor's Business-Manager asset tasks on the selected WABA (`FacebookApiClient#waba_user_tasks`), which is what `/register` authority hinges on. Still sanitized: never logs the token/secret.
+- **Purpose:** a single DEV re-run to capture the proven token authority (type/actor/app/scopes + WABA management/messaging membership + actor's WABA tasks + owner) behind the #100, then state the proven root cause + exact fix. No architectural change.
+- **Validation:** RSpec `whatsapp_signup_token_debug` **6/0** (incl. prod hard-block + actor-tasks); RuboCop clean. No secrets; diagnostic OFF by default.
+- **Status:** open PR into `version_1`; not merged; not deployed.
+
 ### Bloomwire — Fix Meta #100 on managed WhatsApp registration: Standard Embedded Signup must OMIT the Coexistence featureType (Phase 6.3) — OPEN (PR pending; not merged)
 - **Branch:** `fix/bloomwire-whatsapp-standard-featuretype` off `version_1` `351ecd4`. Root-caused via a live Chrome-MCP Stage-1b test + the WhatsWay client source + a live Graph WABA-owner read (no ownership mismatch).
 - **Root cause:** `initWhatsAppEmbeddedSignup` hardcoded `featureType:'whatsapp_business_app_onboarding'` (Coexistence) for ALL flows, so the Standard "Register New Number" flow ran Meta's app-onboarding path and never provisioned the number for Cloud API registration → the subsequent `POST /{phone_number_id}/register` returned Meta **#100** ("Need either permission on WhatsApp Business Account or owner business"). Masked earlier because the number was pre-registered (Phase 4 skipped `/register`).

@@ -43,13 +43,26 @@ RSpec.describe Bloomwire::WhatsappSignupTokenDebug do
     end
   end
 
+  it 'is HARD-BLOCKED on real production even when the flag is on (BLOOMWIRE_ENV=production)' do
+    flag('true')
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:fetch).with('BLOOMWIRE_ENV', '').and_return('production')
+    allow(client).to receive(:debug_token)
+    logs = capture_logs { call }
+    aggregate_failures do
+      expect(client).not_to have_received(:debug_token)
+      expect(logs).to be_empty
+    end
+  end
+
   context 'when the flag is on (dev/test)' do
     before { flag('true') }
 
-    it 'logs the sanitized identity + WABA management/messaging flags + owner, and NEVER the token' do
+    it 'logs the sanitized identity + WABA scope flags + the actor WABA tasks + owner, and NEVER the token' do
       allow(client).to receive(:debug_token).with(token)
                                             .and_return(debug_payload(type: 'SYSTEM_USER', mgmt_targets: [], msg_targets: [waba_id]))
       allow(client).to receive(:waba_owner_business_id).with(waba_id).and_return('BIZ-OWNER-1')
+      allow(client).to receive(:waba_user_tasks).with(waba_id, 'ACTOR-1').and_return(%w[MESSAGING])
       logs = capture_logs { call }
       line = logs.find { |message| message.include?('bloomwire.whatsapp.signup_token_debug') }
       event = JSON.parse(line[line.index('{')..])
@@ -57,14 +70,25 @@ RSpec.describe Bloomwire::WhatsappSignupTokenDebug do
         expect(event['token_type']).to eq('SYSTEM_USER')
         expect(event['waba_in_management']).to be(false)
         expect(event['waba_in_messaging']).to be(true)
+        expect(event['actor_waba_tasks']).to eq(%w[MESSAGING])
         expect(event['waba_owner_business_id']).to eq('BIZ-OWNER-1')
         expect(line).not_to include(token)
       end
     end
 
+    it 'captures actor_waba_tasks null when the actor is not visible in the WABA assigned_users list' do
+      allow(client).to receive(:debug_token).and_return(debug_payload(type: 'USER', mgmt_targets: [], msg_targets: []))
+      allow(client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER-1')
+      allow(client).to receive(:waba_user_tasks).and_return(nil)
+      logs = capture_logs { call }
+      line = logs.find { |message| message.include?('signup_token_debug') }
+      expect(JSON.parse(line[line.index('{')..])['actor_waba_tasks']).to be_nil
+    end
+
     it 'reports waba_in_management true when the token holds management on the selected WABA' do
       allow(client).to receive(:debug_token).and_return(debug_payload(type: 'USER', mgmt_targets: [waba_id], msg_targets: [waba_id]))
       allow(client).to receive(:waba_owner_business_id).and_return('BIZ-OWNER-1')
+      allow(client).to receive(:waba_user_tasks).and_return(%w[MANAGE])
       logs = capture_logs { call }
       line = logs.find { |message| message.include?('signup_token_debug') }
       expect(JSON.parse(line[line.index('{')..])['waba_in_management']).to be(true)
