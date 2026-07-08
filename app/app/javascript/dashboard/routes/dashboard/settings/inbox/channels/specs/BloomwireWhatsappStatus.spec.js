@@ -187,6 +187,135 @@ describe('BloomwireWhatsappStatus (durable Inbox Settings panel)', () => {
     expect(wrapper.find(T.actionRequired).exists()).toBe(true);
   });
 
+  // ---- Stale-request race guard: switching inboxes while a request is in flight ----
+
+  it('ignores a stale Inbox A response and keeps Inbox B; Recheck targets Inbox B setup only', async () => {
+    const resolvers = {};
+    dispatch.mockImplementation((action, payload) => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return new Promise(resolve => {
+          resolvers[payload.inboxId] = resolve;
+        });
+      }
+      if (action === 'inboxes/recheckBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      return Promise.resolve();
+    });
+
+    const wrapper = mountPanel(managedInbox({ id: 1 })); // Inbox A load begins (pending)
+    await wrapper.setProps({ inbox: managedInbox({ id: 2 }) }); // switch to Inbox B (A still pending)
+
+    // Inbox B resolves FIRST
+    resolvers[2]({
+      managed: true,
+      ready: false,
+      setup: { id: 200, status: 'action_required' },
+      inbox: { id: 2 },
+      action_required: { reason: 'outbound_messaging_permission_required' },
+    });
+    await flushPromises();
+
+    // Inbox A resolves AFTER (stale) with a different reason + setup
+    resolvers[1]({
+      managed: true,
+      ready: false,
+      setup: { id: 100, status: 'action_required' },
+      inbox: { id: 1 },
+      action_required: { reason: 'outbound_messaging_permission_unverifiable' },
+    });
+    await flushPromises();
+
+    // UI still shows Inbox B (PERMISSION_REQUIRED + grant step), not the stale A (UNVERIFIABLE)
+    expect(wrapper.find(T.grantStep).exists()).toBe(true);
+    expect(wrapper.find(T.reason).text()).toBe(
+      `${B}.REASON.PERMISSION_REQUIRED`
+    );
+
+    // Recheck uses ONLY Inbox B's setup id (200), never the stale A setup (100)
+    await wrapper.find(T.recheck).trigger('click');
+    await flushPromises();
+    expect(dispatch).toHaveBeenCalledWith(
+      'inboxes/recheckBloomwireWhatsAppCapability',
+      { setupId: 200 }
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/recheckBloomwireWhatsAppCapability',
+      { setupId: 100 }
+    );
+  });
+
+  it('a late Inbox A rejection does not clear a valid Inbox B result', async () => {
+    const deferred = {};
+    dispatch.mockImplementation((action, payload) => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return new Promise((resolve, reject) => {
+          deferred[payload.inboxId] = { resolve, reject };
+        });
+      }
+      return Promise.resolve();
+    });
+
+    const wrapper = mountPanel(managedInbox({ id: 1 }));
+    await wrapper.setProps({ inbox: managedInbox({ id: 2 }) });
+
+    deferred[2].resolve({
+      managed: true,
+      ready: true,
+      setup: { id: 200, status: 'ready_for_webhook' },
+      inbox: { id: 2 },
+    });
+    await flushPromises();
+    expect(wrapper.find(T.ready).exists()).toBe(true);
+
+    deferred[1].reject(new Error('late Inbox A failure'));
+    await flushPromises();
+
+    // The stale A rejection must NOT wipe B's valid ready state
+    expect(wrapper.find(T.ready).exists()).toBe(true);
+  });
+
+  it('clears the previous inbox status immediately while the new inbox request is loading', async () => {
+    const deferred = {};
+    dispatch.mockImplementation((action, payload) => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        if (payload.inboxId === 1) {
+          return Promise.resolve({
+            managed: true,
+            ready: false,
+            setup: { id: 100, status: 'action_required' },
+            inbox: { id: 1 },
+            action_required: {
+              reason: 'outbound_messaging_permission_required',
+            },
+          });
+        }
+        return new Promise(resolve => {
+          deferred[payload.inboxId] = resolve;
+        });
+      }
+      return Promise.resolve();
+    });
+
+    const wrapper = mountPanel(managedInbox({ id: 1 }));
+    await flushPromises();
+    expect(wrapper.find(T.actionRequired).exists()).toBe(true); // Inbox A shown
+
+    await wrapper.setProps({ inbox: managedInbox({ id: 2 }) }); // switch to B (still loading)
+    // Old A status is cleared immediately; B not resolved yet → nothing shown
+    expect(wrapper.find(T.actionRequired).exists()).toBe(false);
+    expect(wrapper.find(T.ready).exists()).toBe(false);
+
+    deferred[2]({
+      managed: true,
+      ready: true,
+      setup: { id: 200, status: 'ready_for_webhook' },
+      inbox: { id: 2 },
+    });
+    await flushPromises();
+    expect(wrapper.find(T.ready).exists()).toBe(true); // B loaded
+  });
+
   it('Recheck reuses the SAME setup id and flips to ready on success', async () => {
     dispatch.mockImplementation(action => {
       if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {

@@ -62,36 +62,59 @@ const showGrantStep = computed(
   () => actionReasonKey.value === 'PERMISSION_REQUIRED'
 );
 
+// Stale-response guard: switching inboxes can leave an earlier request in flight. Each load captures the inbox
+// it was issued for plus a monotonically increasing token; a resolved/rejected request is applied ONLY when it
+// is still the latest load AND the displayed inbox is unchanged. Without this a late Inbox-A response could
+// overwrite Inbox B (and Recheck could then target Inbox A's setup).
+let latestRequestToken = 0;
+
 const loadStatus = async () => {
-  if (!shouldQuery.value || !props.inbox?.id) {
-    status.value = null;
-    return;
-  }
+  const requestedInboxId = props.inbox?.id;
+  latestRequestToken += 1;
+  const requestToken = latestRequestToken;
+  // Clear immediately so nothing from the previous inbox lingers while the new request loads.
+  status.value = null;
+  recheckState.value = 'idle';
+  isRechecking.value = false;
+  if (!shouldQuery.value || !requestedInboxId) return;
+
+  const isCurrent = () =>
+    requestToken === latestRequestToken && props.inbox?.id === requestedInboxId;
   try {
-    status.value = await store.dispatch(
+    const dto = await store.dispatch(
       'inboxes/fetchBloomwireWhatsAppCapability',
-      { inboxId: props.inbox.id }
+      { inboxId: requestedInboxId }
     );
+    if (isCurrent()) status.value = dto;
   } catch (error) {
-    status.value = null;
+    if (isCurrent()) status.value = null;
   }
 };
 
 const recheck = async () => {
-  if (!setupId.value || isRechecking.value) return;
+  const targetSetupId = setupId.value;
+  const requestedInboxId = props.inbox?.id;
+  const requestToken = latestRequestToken;
+  if (!targetSetupId || isRechecking.value) return;
   isRechecking.value = true;
   recheckState.value = 'idle';
+
+  // Bound to the load generation + inbox that owned the setup; a switch mid-recheck (which re-runs loadStatus
+  // and bumps the token) makes this result stale so it can never overwrite the newly displayed inbox.
+  const isCurrent = () =>
+    requestToken === latestRequestToken && props.inbox?.id === requestedInboxId;
   try {
     const dto = await store.dispatch(
       'inboxes/recheckBloomwireWhatsAppCapability',
-      { setupId: setupId.value }
+      { setupId: targetSetupId }
     );
+    if (!isCurrent()) return;
     status.value = dto;
     recheckState.value = dto?.ready ? 'idle' : 'still_pending';
   } catch (error) {
-    recheckState.value = 'failed';
+    if (isCurrent()) recheckState.value = 'failed';
   } finally {
-    isRechecking.value = false;
+    if (isCurrent()) isRechecking.value = false;
   }
 };
 
