@@ -19,11 +19,9 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'Token exchange failed')
   end
 
-  # Exchange a short-lived embedded-signup USER token for a long-lived one (~60 days) via the fb_exchange_token
-  # grant. This is the step (proven in the WhatsWay onboarding) that keeps a customer's token usable beyond the
-  # ~1h short-lived window; the caller stores the long-lived token as the operational channel credential. Returns
-  # the input token UNCHANGED when Meta does not return a long-lived token (fail-open to the short token — the
-  # caller still completes onboarding; readiness/capability gates remain authoritative). Never logs the token.
+  # Exchange a short-lived embedded-signup USER token for a long-lived (~60d) one (fb_exchange_token grant), as in
+  # WhatsWay. Fails OPEN to the short token when the RESPONSE has no long-lived token; a transport error propagates
+  # (the caller perform_meta_steps then fails closed) — WhatsWay does not try/catch this fetch. Never logs the token.
   def exchange_for_long_lived_token(short_lived_token)
     query = { grant_type: 'fb_exchange_token', fb_exchange_token: short_lived_token,
               client_id: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
@@ -32,11 +30,6 @@ class Whatsapp::FacebookApiClient
     return short_lived_token unless response.success?
 
     response.parsed_response['access_token'].presence || short_lived_token
-  rescue StandardError => e
-    # Fail open: a transient network/parse error on this OPTIONAL upgrade must never break onboarding. Class-only
-    # log — the exception message can echo the request URL, whose query carries the token, so never log it.
-    Rails.logger.warn("[WHATSAPP] long-lived token exchange failed: #{e.class}")
-    short_lived_token
   end
 
   def fetch_phone_numbers(waba_id)
@@ -60,18 +53,16 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'Token validation failed')
   end
 
+  # Raised as a structured Whatsapp::GraphApiError so the managed-signup caller can log the specific Meta error
+  # (status/code/subcode/type/is_transient/fbtrace_id) without ever logging the token, PIN, or raw body.
   def register_phone_number(phone_number_id, pin)
-    response = HTTParty.post(
-      "#{BASE_URI}/#{@api_version}/#{phone_number_id}/register",
-      headers: request_headers,
-      body: { messaging_product: 'whatsapp', pin: pin.to_s }.to_json
-    )
-    # Same failure contract/message as #handle_response, but raised as a structured Whatsapp::GraphApiError so the
-    # managed-signup caller can log the specific Meta error (status/code/subcode/type/is_transient/fbtrace_id)
-    # without ever logging the token, PIN, or raw body. On success the parsed body is returned unchanged.
-    raise Whatsapp::GraphApiError.from_response('Phone registration failed', response) unless response.success?
+    post_phone_messaging_product("#{phone_number_id}/register", { pin: pin.to_s }, 'Phone registration failed')
+  end
 
-    response.parsed_response
+  # Deregister the number on Meta (WhatsWay-parity "Disconnect" -> DISCONNECTED) so a reconnect re-registers it.
+  # Raises on failure; the caller (WhatsappDisconnectService) treats it as NON-FATAL, like WhatsWay's disconnectChannel.
+  def deregister_phone_number(phone_number_id)
+    post_phone_messaging_product("#{phone_number_id}/deregister", {}, 'Phone deregistration failed')
   end
 
   def phone_number_verified?(phone_number_id)
@@ -254,6 +245,16 @@ class Whatsapp::FacebookApiClient
 
   def handle_response(response, error_message)
     raise "#{error_message}: #{response.body}" unless response.success?
+
+    response.parsed_response
+  end
+
+  # POST a messaging_product body to a phone-number Cloud API path (register/deregister); raise a structured
+  # Whatsapp::GraphApiError on failure (never logging the token/PIN/body), else return the parsed body.
+  def post_phone_messaging_product(path, extra_body, error_message)
+    response = HTTParty.post("#{BASE_URI}/#{@api_version}/#{path}",
+                             headers: request_headers, body: { messaging_product: 'whatsapp', **extra_body }.to_json)
+    raise Whatsapp::GraphApiError.from_response(error_message, response) unless response.success?
 
     response.parsed_response
   end

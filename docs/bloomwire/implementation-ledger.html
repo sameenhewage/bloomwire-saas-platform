@@ -859,6 +859,15 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Phase 6.1 — WhatsWay-parity Disconnect flow + long-lived-token exchange corrected to match WhatsWay exactly <span class="badge pending">Open · PR pending</span></h3>
+      <ul>
+        <li><b>Verified against the WhatsWay source</b> (<code>whatsway/server/controllers/channels.controller.ts</code>) &mdash; matched exactly, not assumed.</li>
+        <li><b>Token exchange (correction):</b> WhatsWay's long-lived exchange (<code>access_token || short</code>, no try/catch) fails open ONLY on a no-token RESPONSE; a transport error propagates. The Phase 6 <code>rescue StandardError</code> (fail-open on exceptions) is REVERTED &mdash; <code>exchange_for_long_lived_token</code> again fails open only on a non-token response; a raised error propagates (caller <code>perform_meta_steps</code> fails closed).</li>
+        <li><b>Disconnect flow (new &mdash; was missing):</b> WhatsWay <code>disconnectChannel</code> = Meta <code>/deregister</code> (non-fatal) + keep record; Bloomwire had only a full-delete deprovision. New <code>FacebookApiClient#deregister_phone_number</code>; <code>Bloomwire::WhatsappDisconnectService</code> (deregister non-fatal + mark setup <code>disconnected</code>, KEEP records); admin/managed-gated <code>POST &hellip;/bloomwire/whatsapp/disconnections</code> (safe DTO); <code>Bloomwire::WhatsappSetup::DISCONNECTED_STATUS</code>; a 2-step Disconnect button + disconnected panel in <code>BloomwireWhatsappStatus.vue</code>. Reconnect via Embedded Signup reuses the SAME records + re-registers the DISCONNECTED number.</li>
+        <li><b>Not changed:</b> global-router app-to-WABA subscription (no unsubscribe on disconnect), full-delete deprovision, safe DTOs, native flows. <b>Validation (Meta stubbed):</b> <code>spec/services/bloomwire</code>+<code>spec/requests/&hellip;/bloomwire</code>+<code>spec/models/bloomwire</code> <b>658/0 (1 pending)</b> (<code>VITE_RUBY_AUTO_BUILD=false</code>; 13 SuperAdmin vite-manifest 500s are a local-only ViteRuby auto-build artifact, green on CI); new backend specs + Vitest panel <b>19/0</b>; RuboCop + ESLint clean. Open PR into <code>version_1</code>; not merged; not deployed.</li>
+      </ul>
+    </div>
+
     <div class="card"><h3>Phase 6 — WhatsWay-parity long-lived token + reconnect/idempotency + granular capability <span class="badge pending">Open · PR pending</span></h3>
       <ul>
         <li><b>Long-lived token (WhatsWay parity):</b> <code>Whatsapp::FacebookApiClient#exchange_for_long_lived_token</code> extends the short-lived embedded-signup <b>USER</b> token to a <b>long-lived (~60d)</b> one (<code>fb_exchange_token</code> grant); the managed <code>perform_meta_steps</code> calls it before storing the token as the encrypted channel <code>api_key</code>. Fails open to the short token; never logged.</li>

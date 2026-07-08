@@ -54,6 +54,17 @@ class WhatsappChannel extends ApiClient {
     );
   }
 
+  // WhatsWay-parity "Disconnect" (inboxId = Inbox id). POST; deregisters the number on Meta (-> DISCONNECTED) and
+  // marks the setup non-routeable while KEEPING the Channel/Inbox/Setup records so a later Embedded Signup reconnect
+  // reuses them. Returns ONLY the safe DTO ({ managed, disconnected, inbox, setup }) — never a token / secret.
+  disconnectBloomwireCapability(inboxId, config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/disconnections`,
+      { inbox_id: inboxId },
+      config
+    );
+  }
+
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Sends only the typed phone number and
   // receives ONLY { status: "available" | "already_connected" } — never another tenant's account/inbox/channel.
   checkPhoneAvailability(phoneNumber, config = {}) {

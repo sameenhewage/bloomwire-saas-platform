@@ -350,6 +350,15 @@ export const actions = {
     if (response.data?.ready) await dispatch('get');
     return response.data;
   },
+  // WhatsWay-parity "Disconnect": deregister the number on Meta (-> DISCONNECTED) and mark the setup non-routeable
+  // while KEEPING the Channel/Inbox/Setup records (a later Embedded Signup reconnect reuses them). Returns the safe
+  // DTO ({ managed, disconnected, inbox, setup }); refreshes the inbox list so the surface reflects the new state.
+  disconnectBloomwireWhatsApp: async ({ dispatch }, { inboxId } = {}) => {
+    const response =
+      await WhatsappChannel.disconnectBloomwireCapability(inboxId);
+    await dispatch('get');
+    return response.data;
+  },
   ...channelActions,
   // TODO: Extract other create channel methods to separate files to reduce file size
   // - createChannel

@@ -28,6 +28,10 @@ const T = {
   failed: '[data-testid="bloomwire-wa-status-failed"]',
   ready: '[data-testid="bloomwire-wa-status-ready"]',
   recheck: '[data-testid="bloomwire-wa-status-recheck"]',
+  disconnect: '[data-testid="bloomwire-wa-status-disconnect"]',
+  disconnectConfirmBtn:
+    '[data-testid="bloomwire-wa-status-disconnect-confirm-button"]',
+  disconnected: '[data-testid="bloomwire-wa-status-disconnected"]',
 };
 
 const managedInbox = (overrides = {}) => ({
@@ -51,6 +55,12 @@ const readyDto = () => ({
   setup: { id: 3, status: 'ready_for_webhook' },
   inbox: { id: 42 },
 });
+const disconnectedDto = () => ({
+  managed: true,
+  disconnected: true,
+  setup: { id: 3, status: 'disconnected' },
+  inbox: { id: 42 },
+});
 
 const mockFetch = dto => {
   dispatch.mockImplementation(action => {
@@ -71,7 +81,16 @@ const mountPanel = (inbox = managedInbox()) =>
         NextButton: {
           template:
             '<button class="next-button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
-          props: ['label', 'isLoading', 'disabled', 'solid', 'teal'],
+          props: [
+            'label',
+            'isLoading',
+            'disabled',
+            'solid',
+            'teal',
+            'ruby',
+            'faded',
+            'slate',
+          ],
         },
       },
     },
@@ -379,5 +398,56 @@ describe('BloomwireWhatsappStatus (durable Inbox Settings panel)', () => {
     await flushPromises();
     expect(wrapper.html()).not.toContain('api_key');
     expect(wrapper.html()).not.toMatch(/EAA[A-Za-z0-9]/); // Meta token prefix shape
+  });
+});
+
+// WhatsWay-parity "Disconnect": the ready panel offers a 2-step Disconnect that deregisters the number on Meta and
+// KEEPS the records; a persisted disconnected setup renders reconnect guidance (not ready / not action-required).
+describe('BloomwireWhatsappStatus — Disconnect (WhatsWay parity)', () => {
+  it('shows a Disconnect button on the ready panel and does NOT disconnect on the first click', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(wrapper.find(T.ready).exists()).toBe(true);
+    expect(wrapper.find(T.disconnect).exists()).toBe(true);
+    await wrapper.find(T.disconnect).trigger('click');
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/disconnectBloomwireWhatsApp',
+      expect.anything()
+    );
+  });
+
+  it('confirm dispatches disconnect for the displayed inbox and flips to the disconnected state', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/disconnectBloomwireWhatsApp') {
+        return Promise.resolve(disconnectedDto());
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await wrapper.find(T.disconnectConfirmBtn).trigger('click');
+    await flushPromises();
+    expect(dispatch).toHaveBeenCalledWith(
+      'inboxes/disconnectBloomwireWhatsApp',
+      {
+        inboxId: 42,
+      }
+    );
+    expect(wrapper.find(T.disconnected).exists()).toBe(true);
+    expect(wrapper.find(T.ready).exists()).toBe(false);
+  });
+
+  it('renders the disconnected panel for a persisted disconnected setup (not ready / not action_required)', async () => {
+    mockFetch(disconnectedDto());
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(wrapper.find(T.disconnected).exists()).toBe(true);
+    expect(wrapper.find(T.ready).exists()).toBe(false);
+    expect(wrapper.find(T.actionRequired).exists()).toBe(false);
   });
 });
