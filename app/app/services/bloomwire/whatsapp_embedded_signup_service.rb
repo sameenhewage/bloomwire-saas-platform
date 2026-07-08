@@ -87,13 +87,19 @@ class Bloomwire::WhatsappEmbeddedSignupService
     # TEMPORARY (Phase 5 diagnostic): flag-gated, DEV-only debug_token introspection of the EXACT exchanged token
     # BEFORE /register. Best-effort, no secrets, no behavior change. Remove after the evidence is captured.
     debug_runtime_token(client, token)
-    # Register the number on Cloud API so Meta moves it from DISCONNECTED to CONNECTED (mirrors native
-    # Whatsapp::WebhookSetupService). Best-effort: a registration failure (e.g. Meta (#100) when the app is not
-    # the WABA owner) is not raised here — the readiness gate (CONNECTED check in #perform) then fails closed on a
-    # non-CONNECTED number so NO partial inbox is created.
-    verification_pin = register_number(client, phone_info[:phone_number_id])
-    # Fail-closed readiness signal: the actual Meta connection state, checked by the caller before any DB write.
-    connection_status = client.phone_number_status(phone_info[:phone_number_id])
+    phone_number_id = phone_info[:phone_number_id]
+    # Check the SELECTED number's live status BEFORE registering. An already-CONNECTED number must NOT be
+    # re-registered: re-sending /register with a fresh 2FA PIN against a live, pin-enabled number is unnecessary
+    # and can disrupt the existing (owner-set) registration. We register — then re-check status — ONLY when the
+    # selected number is not already CONNECTED, mirroring native onboarding for a fresh number. A registration
+    # failure (e.g. Meta (#100) when the app is not the WABA owner) stays non-fatal: the readiness gate below
+    # then fails closed on the still-non-CONNECTED number so NO partial inbox is created.
+    connection_status = client.phone_number_status(phone_number_id)
+    verification_pin = nil
+    unless connection_status == CONNECTED_STATUS
+      verification_pin = register_number(client, phone_number_id)
+      connection_status = client.phone_number_status(phone_number_id)
+    end
     { token: token, client: client, phone_info: phone_info, verification_pin: verification_pin,
       connection_status: connection_status }
   rescue StandardError => e
