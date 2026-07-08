@@ -28,7 +28,8 @@ class Bloomwire::WhatsappSetupCreator
 
   # rubocop:disable Metrics/ParameterLists -- explicit, named, non-secret inputs are the intended interface
   def initialize(account:, inbox:, channel_whatsapp:, phone_number_id:, waba_id: nil,
-                 display_phone_number: nil, setup_status: Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+                 display_phone_number: nil, setup_status: Bloomwire::WhatsappSetup::ROUTEABLE_STATUS,
+                 status_reason: nil)
     @account = account
     @inbox = inbox
     @channel = channel_whatsapp
@@ -36,6 +37,7 @@ class Bloomwire::WhatsappSetupCreator
     @waba_id = waba_id.to_s.strip.presence
     @display_phone_number = display_phone_number.to_s.strip.presence
     @setup_status = setup_status.presence || Bloomwire::WhatsappSetup::ROUTEABLE_STATUS
+    @status_reason = status_reason.presence
   end
   # rubocop:enable Metrics/ParameterLists
 
@@ -50,7 +52,8 @@ class Bloomwire::WhatsappSetupCreator
       phone_number_id: @phone_number_id,
       waba_id: @waba_id,
       display_phone_number: @display_phone_number,
-      setup_status: @setup_status
+      setup_status: @setup_status,
+      status_reason: @status_reason
     )
     return Result.new(error: :invalid_setup) unless setup.save
 

@@ -34,7 +34,8 @@ RSpec.describe 'Bloomwire customer WhatsApp Embedded Signup endpoint', type: :re
     allow(Whatsapp::FacebookApiClient).to receive(:new)
       .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
                                                                override_waba_callback: nil, subscribe_waba_webhook: nil,
-                                                               phone_number_status: 'CONNECTED'))
+                                                               phone_number_status: 'CONNECTED',
+                                                               token_actor_id: 'SYS-ACTOR-1', waba_user_tasks: %w[MANAGE]))
   end
 
   context 'when managed mode is active, admin, and platform ready (Meta stubbed)' do
@@ -138,7 +139,8 @@ RSpec.describe 'Bloomwire customer WhatsApp Embedded Signup endpoint', type: :re
       allow(Whatsapp::FacebookApiClient).to receive(:new)
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
-                                                                 phone_number_status: 'CONNECTED'))
+                                                                 phone_number_status: 'CONNECTED',
+                                                                 token_actor_id: 'SYS-ACTOR-1', waba_user_tasks: %w[MANAGE]))
     end
 
     def register(phone_number_id:, phone_number:)

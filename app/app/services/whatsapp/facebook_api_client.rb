@@ -152,6 +152,45 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'Webhook unsubscription failed')
   end
 
+  # The system-user / user id the supplied token authenticates as (debug_token `data.user_id`). Outbound Cloud
+  # API sending is authorized per-ACTOR on the WABA, so onboarding must check the EXACT stored-token actor — not
+  # just the token's OAuth scopes (a token can hold whatsapp_business_messaging yet lack the WABA asset task and
+  # still get Meta (#10)). Returns nil when the token cannot be introspected.
+  def token_actor_id(input_token = @access_token)
+    (debug_token(input_token)['data'] || {})['user_id']
+  end
+
+  # Business-Manager asset tasks the given user/system-user holds on a WABA (e.g. MANAGE / MESSAGING /
+  # VIEW_TEMPLATES) — the effective ASSET assignment, distinct from OAuth granular scopes. Scoped through the
+  # WABA's owner business so a partner system-user's assignment is visible. Returns [] when there is no
+  # assignment (or it is not visible to this token).
+  def waba_user_tasks(waba_id, user_id)
+    query = { fields: 'id,name,tasks' }
+    owner_business_id = waba_owner_business_id(waba_id)
+    query[:business] = owner_business_id if owner_business_id.present?
+    response = HTTParty.get(
+      "#{BASE_URI}/#{@api_version}/#{waba_id}/assigned_users",
+      headers: request_headers,
+      query: query
+    )
+    users = Array(handle_response(response, 'WABA assigned users fetch failed')['data'])
+    entry = users.find { |user| user['id'].to_s == user_id.to_s }
+    Array(entry && entry['tasks'])
+  end
+
+  # Assign Business-Manager asset tasks to a user/system-user on a WABA. Used to ESTABLISH the outbound
+  # messaging task for the stored-token actor when the onboarding credential is authorized to grant it; the
+  # caller re-reads tasks to verify. Raises on a Meta rejection (e.g. a view-only token cannot self-elevate),
+  # so the capability gate fails closed to an explicit Action-Required state rather than a false "ready".
+  def assign_waba_user_tasks(waba_id, user_id, tasks)
+    response = HTTParty.post(
+      "#{BASE_URI}/#{@api_version}/#{waba_id}/assigned_users",
+      headers: request_headers,
+      query: { user: user_id, tasks: Array(tasks).to_json }
+    )
+    handle_response(response, 'WABA assigned user task assignment failed')
+  end
+
   private
 
   def request_headers

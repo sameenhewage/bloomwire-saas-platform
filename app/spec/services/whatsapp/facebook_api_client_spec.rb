@@ -347,4 +347,72 @@ describe Whatsapp::FacebookApiClient do
       end
     end
   end
+
+  describe '#token_actor_id' do
+    let(:input_token) { 'actor-token' }
+    let(:app_access_token) { "#{app_id}|#{app_secret}" }
+
+    it 'returns the debug_token data.user_id (the system-user/user the token authenticates as)' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/debug_token")
+        .with(query: { input_token: input_token, access_token: app_access_token })
+        .to_return(status: 200, body: { data: { user_id: 'SYS-USER-9', type: 'SYSTEM_USER' } }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.token_actor_id(input_token)).to eq('SYS-USER-9')
+    end
+  end
+
+  describe '#waba_user_tasks' do
+    let(:waba_id) { 'waba-x' }
+    let(:user_id) { 'ACTOR-1' }
+
+    before do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}")
+        .with(query: { fields: 'owner_business_info' })
+        .to_return(status: 200, body: { owner_business_info: { id: 'BIZ-OWNER' } }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+    end
+
+    it 'returns the asset tasks the exact actor holds on the WABA (scoped through the owner business)' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}/assigned_users")
+        .with(query: { fields: 'id,name,tasks', business: 'BIZ-OWNER' })
+        .to_return(status: 200,
+                   body: { data: [{ id: 'OTHER', tasks: ['MANAGE'] },
+                                  { id: user_id, tasks: %w[VIEW_TEMPLATES MANAGE] }] }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.waba_user_tasks(waba_id, user_id)).to contain_exactly('VIEW_TEMPLATES', 'MANAGE')
+    end
+
+    it 'returns [] when the actor has no assignment on the WABA' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{waba_id}/assigned_users")
+        .with(query: { fields: 'id,name,tasks', business: 'BIZ-OWNER' })
+        .to_return(status: 200, body: { data: [{ id: 'SOMEONE-ELSE', tasks: ['MANAGE'] }] }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.waba_user_tasks(waba_id, user_id)).to eq([])
+    end
+  end
+
+  describe '#assign_waba_user_tasks' do
+    let(:waba_id) { 'waba-x' }
+    let(:user_id) { 'ACTOR-1' }
+
+    it 'POSTs the exact user + tasks JSON and returns the parsed success body' do
+      stub = stub_request(:post, "https://graph.facebook.com/#{api_version}/#{waba_id}/assigned_users")
+             .with(query: { user: user_id, tasks: '["MANAGE"]' },
+                   headers: { 'Authorization' => "Bearer #{access_token}" })
+             .to_return(status: 200, body: { success: true }.to_json, headers: { 'Content-Type' => 'application/json' })
+      result = api_client.assign_waba_user_tasks(waba_id, user_id, %w[MANAGE])
+      aggregate_failures do
+        expect(result['success']).to be(true)
+        expect(stub).to have_been_requested
+      end
+    end
+
+    it 'raises when Meta rejects the assignment (so the capability gate fails closed)' do
+      stub_request(:post, "https://graph.facebook.com/#{api_version}/#{waba_id}/assigned_users")
+        .with(query: { user: user_id, tasks: '["MANAGE"]' })
+        .to_return(status: 400, body: { error: 'not permitted' }.to_json)
+      expect { api_client.assign_waba_user_tasks(waba_id, user_id, %w[MANAGE]) }
+        .to raise_error(/WABA assigned user task assignment failed/)
+    end
+  end
 end

@@ -29,6 +29,16 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
+    stub_messaging_capability
+  end
+
+  # Outbound capability gate defaults to READY here (unit-tested in its own spec); Coexistence inherits the
+  # parent wiring, so the Action-Required translation is asserted in the parent service spec.
+  def stub_messaging_capability(status: :ready, reason: nil)
+    allow(Bloomwire::WhatsappMessagingCapability).to receive(:new).and_return(
+      instance_double(Bloomwire::WhatsappMessagingCapability,
+                      ensure: Bloomwire::WhatsappMessagingCapability::Result.new(status: status, reason: reason))
+    )
   end
 
   describe 'happy path (Meta stubbed)' do
@@ -231,7 +241,10 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
   # standard persistence, so two different numbers become two distinct channels/inboxes/setups (both marked
   # connection_mode=coexistence); duplicate phone_number / phone_number_id stays blocked. All Meta stubbed.
   describe 'multiple Coexistence inboxes per account (Phase 17E.1 contract)' do
-    before { stub_ready }
+    before do
+      stub_ready
+      stub_messaging_capability
+    end
 
     def coexistence_signup(phone_number_id:, phone_number:, waba_id: 'WABA-1', token: 'FAKE-CUSTOMER-TOKEN')
       allow(Whatsapp::TokenExchangeService).to receive(:new)

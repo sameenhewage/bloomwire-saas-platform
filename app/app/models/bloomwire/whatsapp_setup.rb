@@ -8,8 +8,12 @@
 class Bloomwire::WhatsappSetup < ApplicationRecord
   self.table_name = 'bloomwire_whatsapp_setups'
 
-  SETUP_STATUSES = %w[pending configured ready_for_webhook blocked].freeze
+  SETUP_STATUSES = %w[pending configured ready_for_webhook action_required blocked].freeze
   ROUTEABLE_STATUS = 'ready_for_webhook'.freeze
+  # Onboarding completed the CONNECTED number + records, but the stored-token actor lacks the WABA asset task
+  # required to SEND (Meta #10). The inbox is intentionally NOT routeable-ready — an explicit Action-Required
+  # state (never a silently receive-only inbox) preserved for resumption once the task is granted.
+  ACTION_REQUIRED_STATUS = 'action_required'.freeze
 
   belongs_to :account
   belongs_to :inbox, optional: true
