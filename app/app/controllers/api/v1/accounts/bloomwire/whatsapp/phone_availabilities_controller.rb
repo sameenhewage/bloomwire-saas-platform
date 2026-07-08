@@ -14,7 +14,7 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::PhoneAvailabilitiesController < Ap
 
   def create
     # `params[:phone_number]` is filtered from request logs (config.filter_parameters); the service never logs it.
-    render json: { status: ::Bloomwire::WhatsappPhoneAvailability.status_for(params[:phone_number]) }
+    render json: { status: ::Bloomwire::WhatsappPhoneAvailability.status_for(params[:phone_number], account: Current.account) }
   end
 
   private

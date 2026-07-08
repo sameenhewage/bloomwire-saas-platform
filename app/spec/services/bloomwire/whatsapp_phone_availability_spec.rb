@@ -48,6 +48,45 @@ RSpec.describe Bloomwire::WhatsappPhoneAvailability do
       expect(described_class.status_for('+15551230001')).to eq('already_connected')
     end
 
+    # WhatsWay-parity Disconnect keeps the records (setup -> 'disconnected'); the number is then RECONNECTABLE by
+    # the SAME account (a later Embedded Signup reuses them), so the preflight reports "available" for it.
+    context 'when the number is DISCONNECTED (WhatsWay-parity reconnectable)' do
+      def disconnect_number(phone_number, on: account)
+        channel = connect_number(phone_number, on: on)
+        Bloomwire::WhatsappSetup.create!(account: on, channel_whatsapp: channel, phone_number_id: "PNID-#{channel.id}",
+                                         setup_status: Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+        channel
+      end
+
+      it 'is "available" (reconnectable) for THIS account when its only channel is disconnected' do
+        disconnect_number('+15551230001')
+        expect(described_class.status_for('+15551230001', account: account)).to eq('available')
+      end
+
+      it 'stays "already_connected" without an account context (no reconnect owner)' do
+        disconnect_number('+15551230001')
+        expect(described_class.status_for('+15551230001')).to eq('already_connected')
+      end
+
+      it 'is "already_connected" for a DIFFERENT account (never reconnectable cross-account)' do
+        other = create(:account)
+        disconnect_number('+15551230001', on: other)
+        expect(described_class.status_for('+15551230001', account: account)).to eq('already_connected')
+      end
+
+      it 'is "already_connected" for a same-account channel with NO Bloomwire setup (not a disconnect)' do
+        connect_number('+15551230001')
+        expect(described_class.status_for('+15551230001', account: account)).to eq('already_connected')
+      end
+
+      it 'is "already_connected" for a same-account setup that is NOT disconnected (e.g. action_required)' do
+        channel = connect_number('+15551230001')
+        Bloomwire::WhatsappSetup.create!(account: account, channel_whatsapp: channel, phone_number_id: 'PNID-AR',
+                                         setup_status: Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS)
+        expect(described_class.status_for('+15551230001', account: account)).to eq('already_connected')
+      end
+    end
+
     it 'is READ-ONLY — creates/modifies no records' do
       connect_number('+15551230001')
       expect { described_class.status_for('+15551230001') }
