@@ -19,6 +19,21 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'Token exchange failed')
   end
 
+  # Exchange a short-lived embedded-signup USER token for a long-lived one (~60 days) via the fb_exchange_token
+  # grant. This is the step (proven in the WhatsWay onboarding) that keeps a customer's token usable beyond the
+  # ~1h short-lived window; the caller stores the long-lived token as the operational channel credential. Returns
+  # the input token UNCHANGED when Meta does not return a long-lived token (fail-open to the short token — the
+  # caller still completes onboarding; readiness/capability gates remain authoritative). Never logs the token.
+  def exchange_for_long_lived_token(short_lived_token)
+    query = { grant_type: 'fb_exchange_token', fb_exchange_token: short_lived_token,
+              client_id: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
+              client_secret: GlobalConfigService.load('WHATSAPP_APP_SECRET', '') }
+    response = HTTParty.get("#{BASE_URI}/#{@api_version}/oauth/access_token", query: query)
+    return short_lived_token unless response.success?
+
+    response.parsed_response['access_token'].presence || short_lived_token
+  end
+
   def fetch_phone_numbers(waba_id)
     response = HTTParty.get(
       "#{BASE_URI}/#{@api_version}/#{waba_id}/phone_numbers",

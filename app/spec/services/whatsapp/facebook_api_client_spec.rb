@@ -74,6 +74,26 @@ describe Whatsapp::FacebookApiClient do
     end
   end
 
+  describe '#exchange_for_long_lived_token' do
+    let(:short_token) { 'short-lived-user-token' }
+
+    it 'exchanges via the fb_exchange_token grant and returns the long-lived token (WhatsWay-proven step)' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/oauth/access_token")
+        .with(query: { grant_type: 'fb_exchange_token', client_id: app_id, client_secret: app_secret,
+                       fb_exchange_token: short_token })
+        .to_return(status: 200, body: { access_token: 'long-lived-60d' }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.exchange_for_long_lived_token(short_token)).to eq('long-lived-60d')
+    end
+
+    it 'fails open to the input token when Meta does not return a long-lived token' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/oauth/access_token")
+        .with(query: hash_including(grant_type: 'fb_exchange_token'))
+        .to_return(status: 400, body: { error: 'bad' }.to_json)
+      expect(api_client.exchange_for_long_lived_token(short_token)).to eq(short_token)
+    end
+  end
+
   describe '#fetch_phone_numbers' do
     let(:waba_id) { 'test_waba_id' }
 

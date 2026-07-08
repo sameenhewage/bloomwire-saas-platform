@@ -12,6 +12,9 @@ RSpec.describe Bloomwire::WhatsappMessagingCapability do
   let(:actor_id) { 'ACTOR-Y' }
 
   before do
+    # Default: the token's granular messaging scope does NOT list this WABA, so the primary check falls through to
+    # the actor asset-task path these cases exercise. The granular-scope path has its own describe block below.
+    allow(client).to receive(:messaging_waba_ids).with(token).and_return([])
     allow(client).to receive(:token_actor_id).with(token).and_return(actor_id)
     allow(client).to receive(:token_actor_type).with(token).and_return('USER')
     allow(client).to receive(:waba_user_tasks)
@@ -138,6 +141,27 @@ RSpec.describe Bloomwire::WhatsappMessagingCapability do
       allow(client).to receive(:token_actor_type).and_return(nil)
       run(allow_grant: true)
       expect(client).not_to have_received(:assign_waba_user_tasks)
+    end
+  end
+
+  # Primary WhatsWay-proven signal: the token's OWN whatsapp_business_messaging granular scope lists the WABA, so a
+  # WABA-admin USER token (not enumerated in assigned_users) is capable WITHOUT any assigned_users read/grant.
+  describe 'primary: the token messaging scope authorizes the WABA (WhatsWay-proven)' do
+    it 'is :ready via the granular messaging scope and reads NO assigned_users' do
+      allow(client).to receive(:messaging_waba_ids).with(token).and_return(['WABA-OTHER', waba_id])
+      result = run
+      aggregate_failures do
+        expect(result.status).to eq(:ready)
+        expect(result.verification).to eq(:verified_capable)
+        expect(client).not_to have_received(:waba_user_tasks)
+        expect(client).not_to have_received(:assign_waba_user_tasks)
+      end
+    end
+
+    it 'falls back to the actor asset-task path (never a hard failure) when the scope read raises' do
+      allow(client).to receive(:messaging_waba_ids).and_raise(StandardError, 'RAW meta 500')
+      allow(client).to receive(:waba_user_tasks).with(waba_id, actor_id).and_return(%w[MANAGE])
+      expect(run.status).to eq(:ready)
     end
   end
 

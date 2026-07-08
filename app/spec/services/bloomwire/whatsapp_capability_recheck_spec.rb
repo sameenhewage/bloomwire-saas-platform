@@ -31,6 +31,8 @@ RSpec.describe Bloomwire::WhatsappCapabilityRecheck do
 
   before do
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
+    # Default: the granular messaging scope does not list the WABA, so recheck exercises the actor asset-task path.
+    allow(fb_client).to receive(:messaging_waba_ids).and_return([])
     allow(fb_client).to receive(:token_actor_id).and_return('ACTOR-1')
     allow(fb_client).to receive(:token_actor_type).and_return('SYSTEM_USER')
     allow(fb_client).to receive(:waba_user_tasks).and_return(%w[VIEW_TEMPLATES])

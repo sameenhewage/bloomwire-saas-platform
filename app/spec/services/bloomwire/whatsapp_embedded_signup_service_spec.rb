@@ -25,6 +25,12 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
+    stub_fb_client
+    stub_messaging_capability
+  end
+
+  # Meta client stub for the managed flow (extracted so stub_meta stays within RuboCop's AbcSize budget).
+  def stub_fb_client
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true,
                                          override_waba_callback: nil, subscribe_waba_webhook: nil,
                                          register_phone_number: { 'success' => true }, messaging_waba_ids: [],
@@ -32,8 +38,10 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
+    # The managed flow extends the short-lived signup token to a long-lived one before storing it (WhatsWay
+    # parity); the identity stub keeps the stored api_key equal to the exchanged token unless a case overrides it.
+    allow(fb_client).to receive(:exchange_for_long_lived_token) { |short| short }
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
-    stub_messaging_capability
   end
 
   # The outbound capability gate is unit-tested in bloomwire/whatsapp_messaging_capability_spec.rb; here it
@@ -412,7 +420,7 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, subscribed_to_waba?: true,
                                                                  register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
-                                                                 phone_number_status: 'CONNECTED'))
+                                                                 phone_number_status: 'CONNECTED', exchange_for_long_lived_token: token))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
                                     phone_number_id: phone_number_id }).perform
@@ -461,14 +469,119 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
 
-    it 'blocks a duplicate phone_number_id claimed by another channel (rolls back the second channel)' do
-      signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
-      dup = signup(phone_number_id: 'PNID-1', phone_number: '+15551230002')
+    it 'idempotently RESUMES the same setup when the same account re-onboards the same phone_number_id (no duplicate)' do
+      first = signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      again = signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
       aggregate_failures do
-        expect(dup).not_to be_success
-        expect(dup.error).to eq(:phone_number_id_conflict)
+        expect(first).to be_success
+        expect(again).to be_success
         expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(account.inboxes.count).to eq(1)
         expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
+      end
+    end
+  end
+
+  # WhatsWay-proven token lifecycle: the short-lived embedded-signup USER token is extended to a long-lived
+  # (~60 day) one BEFORE it is stored, and that long-lived token is the operational channel credential. Plus
+  # cross-account isolation and a 10-customer volume simulation (the expected daily onboarding load).
+  describe 'WhatsWay long-lived token lifecycle + multi-customer isolation' do
+    before { stub_ready }
+
+    it 'stores the LONG-LIVED exchanged token (not the short-lived signup token) as the operational credential' do
+      stub_meta(token: 'SHORT-LIVED')
+      allow(fb_client).to receive(:exchange_for_long_lived_token).with('SHORT-LIVED').and_return('LONG-LIVED-60D')
+      aggregate_failures do
+        expect(result).to be_success
+        expect(Channel::Whatsapp.last.provider_config['api_key']).to eq('LONG-LIVED-60D')
+        expect(result.dto.to_json).not_to include('SHORT-LIVED')
+        expect(result.dto.to_json).not_to include('LONG-LIVED-60D')
+      end
+    end
+
+    it 'fails closed (:phone_number_taken) when the SAME phone_number_id belongs to ANOTHER account (isolation)' do
+      stub_meta
+      expect(result).to be_success # account A onboards PNID-1
+      other = create(:account)
+      cross = described_class.new(account: other,
+                                  params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: 'WABA-1',
+                                            phone_number_id: 'PNID-1' }).perform
+      aggregate_failures do
+        expect(cross.error).to eq(:phone_number_taken)
+        expect(Channel::Whatsapp.where(account: other).count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.where(account: other).count).to eq(0)
+      end
+    end
+
+    it 'onboards 10 independent customers into 10 isolated Channel/Inbox/Setup with no token leakage' do
+      stub_messaging_capability
+      accounts = create_list(:account, 10)
+      results = accounts.each_with_index.map do |acct, i|
+        pnid = "PNID-SIM-#{i}"
+        phone = { phone_number_id: pnid, phone_number: "+1555000#{format('%04d', i)}", verified: true, business_name: "Biz#{i}" }
+        client_stubs = { subscribe_app_to_waba: true, subscribed_to_waba?: true, register_phone_number: { 'success' => true },
+                         override_waba_callback: nil, subscribe_waba_webhook: nil, phone_number_status: 'CONNECTED',
+                         exchange_for_long_lived_token: "LONG-#{i}" }
+        allow(Whatsapp::TokenExchangeService).to receive(:new).and_return(instance_double(Whatsapp::TokenExchangeService, perform: "SHORT-#{i}"))
+        allow(Whatsapp::PhoneInfoService).to receive(:new).and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone))
+        allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(instance_double(Whatsapp::FacebookApiClient, client_stubs))
+        described_class.new(account: acct,
+                            params: { code: "CODE-#{i}", business_id: 'BIZ', waba_id: "WABA-#{i}", phone_number_id: pnid }).perform
+      end
+      aggregate_failures do
+        expect(results).to all(be_success)
+        expect(Bloomwire::WhatsappSetup.where(account: accounts).count).to eq(10)
+        expect(Channel::Whatsapp.where(account: accounts).count).to eq(10)
+        accounts.each_with_index do |acct, i|
+          expect(Bloomwire::WhatsappSetup.find_by(account_id: acct.id, phone_number_id: "PNID-SIM-#{i}")).to be_present
+        end
+        expect(results.map { |r| r.dto.to_json }.join).not_to match(/LONG-\d|SHORT-\d/)
+      end
+    end
+  end
+
+  # WhatsWay-parity reconnect: a previously-CONNECTED managed number that later drops to DISCONNECTED must be
+  # RE-REGISTERED (Cloud API /register) on re-onboard and reconnected onto the SAME Channel/Inbox/Setup — never a
+  # silent resume (which would leave the number offline) and never a duplicate inbox. This is the Stage 1 truth.
+  describe 'reconnect of a previously-disconnected number' do
+    before { stub_ready }
+
+    it 're-registers a DISCONNECTED number and reconnects the SAME channel/inbox/setup (no duplicate)' do
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED') # first onboard: no register needed
+      expect(result).to be_success
+      first_channel_id = Channel::Whatsapp.last.id
+
+      # The number later drops offline; the SAME account re-onboards the SAME number.
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
+      again = described_class.new(account: account, params: params).perform
+
+      aggregate_failures do
+        expect(again).to be_success
+        # /register was invoked exactly once — only on the reconnect (the first onboard was already CONNECTED).
+        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', anything).once
+        expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(account.inboxes.count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
+        expect(Channel::Whatsapp.last.id).to eq(first_channel_id)
+        expect(Bloomwire::WhatsappSetup.last.setup_status).to eq('ready_for_webhook')
+      end
+    end
+
+    it 'refreshes the stored long-lived token on reconnect (same channel keeps only the newest token)' do
+      stub_meta(token: 'OLD-LONG-LIVED')
+      allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED')
+      expect(result).to be_success
+      expect(Channel::Whatsapp.last.provider_config['api_key']).to eq('OLD-LONG-LIVED')
+
+      stub_meta(token: 'NEW-LONG-LIVED')
+      allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED')
+      again = described_class.new(account: account, params: params).perform
+      aggregate_failures do
+        expect(again).to be_success
+        expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(Channel::Whatsapp.last.provider_config['api_key']).to eq('NEW-LONG-LIVED')
+        expect(again.dto.to_json).not_to include('NEW-LONG-LIVED')
       end
     end
   end

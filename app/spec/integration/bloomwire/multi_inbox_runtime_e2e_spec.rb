@@ -65,6 +65,7 @@ RSpec.describe 'Bloomwire multi-inbox runtime E2E (mocked Meta)', type: :request
       .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, subscribed_to_waba?: true,
                                                                override_waba_callback: nil, subscribe_waba_webhook: nil,
                                                                register_phone_number: { 'success' => true }, phone_number_status: 'CONNECTED',
+                                                               exchange_for_long_lived_token: 'FAKE-CUSTOMER-TOKEN', messaging_waba_ids: [],
                                                                token_actor_id: 'SYS-ACTOR-1', waba_user_tasks: %w[MANAGE]))
   end
 

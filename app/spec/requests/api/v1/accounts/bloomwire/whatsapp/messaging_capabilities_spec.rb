@@ -42,8 +42,8 @@ RSpec.describe 'Bloomwire WhatsApp messaging-capability recheck endpoint', type:
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(
       instance_double(Whatsapp::FacebookApiClient, token_actor_id: 'SYS-ACTOR-1', token_actor_type: 'SYSTEM_USER',
                                                    waba_user_tasks: tasks, assign_waba_user_tasks: nil,
-                                                   subscribe_app_to_waba: nil, subscribed_to_waba?: true,
-                                                   register_phone_number: { 'success' => true })
+                                                   messaging_waba_ids: [], subscribe_app_to_waba: nil,
+                                                   subscribed_to_waba?: true, register_phone_number: { 'success' => true })
     )
   end
 

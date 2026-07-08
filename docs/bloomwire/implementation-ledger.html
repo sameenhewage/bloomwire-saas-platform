@@ -858,6 +858,15 @@
         <li><b>Not changed</b>: no rollback, no password reset, no production, no WhatsApp/Meta/provider creds, no business/account role semantics. Migration <code>20260630000001_create_bloomwire_admin_audit_logs</code> (additive). Tests: audit (3) + 15G.2 (10) + user-flow (6) green; RuboCop clean; <code>bash -n</code> smoke OK.</li>
       </ul>
     </div>
+
+    <div class="card"><h3>Phase 6 — WhatsWay-parity long-lived token + reconnect/idempotency + granular capability <span class="badge pending">Open · PR pending</span></h3>
+      <ul>
+        <li><b>Long-lived token (WhatsWay parity):</b> <code>Whatsapp::FacebookApiClient#exchange_for_long_lived_token</code> extends the short-lived embedded-signup <b>USER</b> token to a <b>long-lived (~60d)</b> one (<code>fb_exchange_token</code> grant); the managed <code>perform_meta_steps</code> calls it before storing the token as the encrypted channel <code>api_key</code>. Fails open to the short token; never logged.</li>
+        <li><b>Reconnect + idempotency:</b> persistence (extracted to the <code>Bloomwire::WhatsappSignupPersistence</code> mixin) runs the Meta steps FIRST (re-registering a <b>DISCONNECTED</b> number), then for the SAME account + SAME number reuses the existing Channel/Inbox/Setup and refreshes the token (no duplicate, no <code>phone_number_taken</code>); same-account same-<code>phone_number_id</code> DIFFERENT phone &rarr; <code>phone_number_id_conflict</code> (ADR-0009); cross-account &rarr; fail closed.</li>
+        <li><b>Capability:</b> <code>Bloomwire::WhatsappMessagingCapability</code> treats the token's own <code>whatsapp_business_messaging</code> granular scope for the WABA as the <b>primary</b> capable signal (token-type-agnostic &mdash; a WABA-admin USER token verifies without appearing in <code>assigned_users</code>); the MANAGE asset-task path is the fallback; a scope-read error never concludes incapable.</li>
+        <li><b>Not changed:</b> CONNECTED fail-closed gate, global-router app-to-WABA subscription (no per-channel webhook/override), safe DTOs, Phase 5 capability/recheck readiness layer, native flows. <b>Validation (Meta stubbed):</b> affected suite + new reconnect regression tests green; <code>spec/services/bloomwire</code> 340/0 (1 pending); <code>spec/requests/&hellip;/bloomwire</code> 306/0; RuboCop 0; no secrets/DTO leak; no live Meta calls. Open PR into <code>version_1</code>; not merged; not deployed.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="s4">
