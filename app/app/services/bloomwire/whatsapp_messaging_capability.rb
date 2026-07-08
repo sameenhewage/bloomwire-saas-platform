@@ -1,34 +1,36 @@
 # Phase 5: outbound-messaging readiness for a managed WhatsApp signup — the send-side counterpart to the
 # CONNECTED gate. Inbound rides the app-to-WABA subscription (no per-customer token), but OUTBOUND sending is
 # authorized per-ACTOR: the stored-token actor (a partner system user) needs the WhatsApp Business Account
-# ASSET task (MANAGE / MESSAGING), NOT merely the whatsapp_business_messaging OAuth scope. A token can hold the
-# scope yet lack the asset task and still get Meta (#10) on /messages — so onboarding must verify the exact
-# actor's task on the selected WABA before presenting the inbox as fully ready.
+# ASSET task (MANAGE), NOT merely the whatsapp_business_messaging OAuth scope. A token can hold the scope yet
+# lack the asset task and still get Meta (#10) on /messages — so onboarding must verify the exact actor's task
+# on the selected WABA before presenting the inbox as fully ready.
 #
-# Behavior:
-# - A: the actor already holds a send-capable task -> :ready (no assignment call).
-# - B: the task is absent AND the onboarding credential is authorized to grant it -> grant the minimum proven
-#      task, RE-READ, and only then -> :ready.
-# - C: the task is absent and cannot be established -> :action_required (the caller persists an explicit
-#      Action-Required inbox, never a silently receive-only "ready" one).
+# Verification is TRI-STATE (a successful "missing" must never be confused with an error):
+# - verified_capable  -> the actor holds a send task              -> :ready (no assignment call).
+# - verified_missing  -> the read SUCCEEDED and the task is absent -> may grant ONLY when explicitly authorized.
+# - unverifiable      -> a lookup RAISED (network/auth/visibility) -> NEVER grant; :action_required (retriable).
 #
-# Boundary (do not weaken):
-# - Uses ONLY the onboarding token already exchanged for this signup — never a stored platform-admin credential
-#   and never an owner personal token. A view-only system-user token cannot self-elevate, so in that case the
-#   grant simply fails and the gate returns :action_required (fail-safe, never a false ready).
-# - Read-only apart from the single grant attempt, which is always re-verified by a fresh read.
+# Grant policy (never blindly self-elevate):
+# - Attempted ONLY when the CALLER declares the credential is independently authorized (allow_grant: true) AND
+#   the token introspects as a real USER token. Managed onboarding + recheck pass allow_grant: false — their
+#   stored credential is the partner SYSTEM_USER token, which provably cannot self-elevate — so they NEVER POST
+#   an assignment; they resolve to :ready (A) or :action_required (C).
+# - Uses ONLY the supplied token — never a stored platform-admin credential and never an owner personal token.
 # - Never logs the token/secret: on any Meta failure ONLY the operation + exception class name are logged.
 class Bloomwire::WhatsappMessagingCapability
-  # WABA asset tasks that authorize outbound Cloud API sending. MANAGE (full control) is the proven task that
-  # clears Meta (#10); MESSAGING is Meta's narrower send task. Either one satisfies the outbound gate.
-  SEND_TASKS = %w[MANAGE MESSAGING].freeze
-  # The minimum proven task we GRANT when the onboarding credential is authorized to establish it.
+  # WABA asset task proven (live) to clear Meta (#10) on /messages. Meta's narrower MESSAGING task is NOT yet
+  # proven sufficient in our stack, so we do NOT mark an inbox ready on it (evidence-based).
+  SEND_TASKS = %w[MANAGE].freeze
+  # The minimum proven task we GRANT when (and only when) the credential is authorized to establish it.
   GRANT_TASKS = %w[MANAGE].freeze
-  # Sanitized, stable reason code persisted on the setup + surfaced in the safe DTO (never a secret).
-  REASON = 'outbound_messaging_permission_required'.freeze
+  # debug_token actor type that MAY be trusted to assign a task; a view-only SYSTEM_USER cannot self-elevate.
+  USER_TOKEN_TYPE = 'USER'.freeze
+  # Sanitized, stable reason codes (never a secret) persisted on the setup + surfaced in the safe DTO.
+  MISSING_REASON = 'outbound_messaging_permission_required'.freeze
+  UNVERIFIABLE_REASON = 'outbound_messaging_permission_unverifiable'.freeze
   EVENT = 'bloomwire.whatsapp.messaging_capability_error'.freeze
 
-  Result = Struct.new(:status, :actor_id, :tasks, :granted, :reason, keyword_init: true) do
+  Result = Struct.new(:status, :verification, :actor_id, :tasks, :granted, :reason, keyword_init: true) do
     def ready?
       status == :ready
     end
@@ -38,24 +40,25 @@ class Bloomwire::WhatsappMessagingCapability
     end
   end
 
-  def initialize(client:, token:, waba_id:)
+  # allow_grant: the CALLER declares the supplied credential is independently authorized to ASSIGN the task
+  # (e.g. an owner-admin USER token from an explicit owner-authorized flow). Onboarding + recheck pass false.
+  def initialize(client:, token:, waba_id:, allow_grant: false)
     @client = client
     @token = token
     @waba_id = waba_id
+    @allow_grant = allow_grant
   end
 
   def ensure
     actor_id = actor_id_safe
-    return action_required(nil, nil) if actor_id.blank?
+    return unverifiable(nil, nil) if actor_id.blank? # lookup failed -> NO mutation
 
-    tasks = tasks_safe(actor_id)
-    return ready(actor_id, tasks) if send_capable?(tasks)
+    verification, tasks = verify(actor_id)
+    return ready(actor_id, tasks) if verification == :verified_capable
+    return unverifiable(actor_id, tasks) if verification == :unverifiable # error -> NEVER a grant POST
 
-    # B: attempt to establish the task with the ONBOARDING token only, then verify with a fresh read.
-    if grant_safe(actor_id)
-      tasks = tasks_safe(actor_id)
-      return ready(actor_id, tasks, granted: true) if send_capable?(tasks)
-    end
+    # verified_missing: establish the task ONLY with an authorized USER credential, then re-verify by a read.
+    return granted_ready_or_action_required(actor_id) if grant_allowed?
 
     action_required(actor_id, tasks)
   end
@@ -69,21 +72,43 @@ class Bloomwire::WhatsappMessagingCapability
     nil
   end
 
-  def tasks_safe(actor_id)
-    Array(@client.waba_user_tasks(@waba_id, actor_id))
+  # Tri-state: a SUCCESSFUL read lacking the task is :verified_missing (real, actionable); a read that RAISES is
+  # :unverifiable (transient/visibility/auth). They must NOT collapse — only a verified-missing state may (when
+  # authorized) attempt a grant; an unverifiable one never mutates.
+  def verify(actor_id)
+    tasks = Array(@client.waba_user_tasks(@waba_id, actor_id))
+    [send_capable?(tasks) ? :verified_capable : :verified_missing, tasks]
   rescue StandardError => e
     log_failure('tasks_lookup', e)
-    []
+    [:unverifiable, []]
   end
 
-  # Grants the minimum proven task using the onboarding token. Returns true only when Meta accepts the call;
-  # a view-only actor cannot self-elevate, so this returns false and the gate falls through to :action_required.
-  def grant_safe(actor_id)
+  # Grant ONLY when the caller declared authorization AND the token introspects as a real USER token (never a
+  # SYSTEM_USER, never an unknown/unintrospectable identity).
+  def grant_allowed?
+    return false unless @allow_grant
+
+    token_type_safe == USER_TOKEN_TYPE
+  end
+
+  def token_type_safe
+    @client.token_actor_type(@token)
+  rescue StandardError => e
+    log_failure('actor_type_lookup', e)
+    nil
+  end
+
+  # Assign the minimum proven task with the authorized credential, then RE-READ to verify. A grant that raises
+  # (or still verifies missing) never yields a false ready — it falls through to a safe non-routeable state.
+  def granted_ready_or_action_required(actor_id)
     @client.assign_waba_user_tasks(@waba_id, actor_id, GRANT_TASKS)
-    true
+    verification, tasks = verify(actor_id)
+    return ready(actor_id, tasks, granted: true) if verification == :verified_capable
+
+    action_required(actor_id, tasks)
   rescue StandardError => e
     log_failure('task_grant', e)
-    false
+    unverifiable(actor_id, nil)
   end
 
   def send_capable?(tasks)
@@ -91,11 +116,19 @@ class Bloomwire::WhatsappMessagingCapability
   end
 
   def ready(actor_id, tasks, granted: false)
-    Result.new(status: :ready, actor_id: actor_id, tasks: tasks, granted: granted)
+    Result.new(status: :ready, verification: :verified_capable, actor_id: actor_id, tasks: tasks, granted: granted)
   end
 
+  # verified_missing -> the owner must grant the task (then Recheck). Non-routeable, resumable.
   def action_required(actor_id, tasks)
-    Result.new(status: :action_required, actor_id: actor_id, tasks: tasks, reason: REASON)
+    Result.new(status: :action_required, verification: :verified_missing, actor_id: actor_id, tasks: tasks,
+               reason: MISSING_REASON)
+  end
+
+  # unverifiable -> we could not confirm the task (lookup/grant raised). Non-routeable, retriable via Recheck.
+  def unverifiable(actor_id, tasks)
+    Result.new(status: :action_required, verification: :unverifiable, actor_id: actor_id, tasks: tasks,
+               reason: UNVERIFIABLE_REASON)
   end
 
   # Class-only sanitized log — never the token, message, or raw body (any of which can echo the token).

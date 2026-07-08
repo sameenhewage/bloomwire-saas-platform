@@ -1059,3 +1059,102 @@ describe('BloomwireWhatsapp.vue — lifecycle-safe bounded preflight', () => {
     expect(runEmbeddedSignup).toHaveBeenCalledTimes(1);
   });
 });
+
+// Phase 5 (resume) — Action-Required completion + Recheck permission. When the backend DTO marks the completed
+// signup action_required (outbound-messaging permission not yet granted), the wizard shows the Action-Required
+// panel (NOT the Ready success), with a Recheck permission action and its loading / success / failure states. No
+// raw actor id / token / PIN / auth code / secret is ever rendered, and it never tells the user to "reconnect".
+describe('BloomwireWhatsapp.vue — Action-Required + Recheck permission (Phase 5 resume)', () => {
+  const CREATE = 'inboxes/createBloomwireWhatsAppEmbeddedSignup';
+  const RECHECK = 'inboxes/recheckBloomwireWhatsAppCapability';
+  const ACTION_DTO = {
+    inbox: { id: 42, name: 'Acme WhatsApp' },
+    channel: { id: 7, type: 'Channel::Whatsapp', source: 'bloomwire_managed' },
+    setup: { id: 3, status: 'action_required', readiness: 'blocked' },
+    phone: { display_phone_number: '••••0001' },
+    action_required: {
+      reason: 'outbound_messaging_permission_required',
+      resolution: 'SAFE-RESOLUTION',
+    },
+  };
+  const READY_DTO = {
+    setup: { id: 3, status: 'ready_for_webhook' },
+    inbox: { id: 42, name: 'Acme WhatsApp' },
+    ready: true,
+  };
+
+  // Reach the Action-Required completion screen via a Standard signup whose create resolves an action_required DTO.
+  const reachActionRequired = async recheck => {
+    dispatch.mockImplementation(action => {
+      if (action === CREATE) return Promise.resolve(ACTION_DTO);
+      if (action === RECHECK && recheck) return recheck(action);
+      return Promise.resolve({});
+    });
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    const wrapper = mountWizard();
+    await startRegister(wrapper);
+    await submit(wrapper);
+    return wrapper;
+  };
+
+  it('renders the Action-Required panel (not Ready) with a Recheck action and no secrets', async () => {
+    const wrapper = await reachActionRequired();
+    const html = wrapper.html();
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-action-required"]').exists()
+    ).toBe(true);
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      false
+    );
+    expect(wrapper.find('[data-testid="bloomwire-wa-recheck"]').exists()).toBe(
+      true
+    );
+    expect(html).not.toContain('META-CODE');
+    expect(html).not.toContain('WABA-1');
+    expect(html).not.toContain('PNID-1');
+    expect(html.toLowerCase()).not.toContain('api_key');
+    expect(html).not.toContain('SAFE-RESOLUTION');
+  });
+
+  it('promotes to the Ready panel when the recheck reports ready:true (no reconnect, no new inbox)', async () => {
+    const wrapper = await reachActionRequired(() => Promise.resolve(READY_DTO));
+    await wrapper.find('[data-testid="bloomwire-wa-recheck"]').trigger('click');
+    await flushPromises();
+    expect(dispatch).toHaveBeenCalledWith(RECHECK, { setupId: 3 });
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      true
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-action-required"]').exists()
+    ).toBe(false);
+  });
+
+  it('shows the still-pending message when the task is still not granted', async () => {
+    const wrapper = await reachActionRequired(() =>
+      Promise.resolve({ ...ACTION_DTO, ready: false })
+    );
+    await wrapper.find('[data-testid="bloomwire-wa-recheck"]').trigger('click');
+    await flushPromises();
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-recheck-pending"]').exists()
+    ).toBe(true);
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-action-required"]').exists()
+    ).toBe(true);
+  });
+
+  it('shows a safe failure message when the recheck request errors (still retryable, no leak)', async () => {
+    const wrapper = await reachActionRequired(() =>
+      Promise.reject(new Error('RAW META 500: leaked-token'))
+    );
+    await wrapper.find('[data-testid="bloomwire-wa-recheck"]').trigger('click');
+    await flushPromises();
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-recheck-failed"]').exists()
+    ).toBe(true);
+    expect(wrapper.html()).not.toContain('leaked-token');
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-action-required"]').exists()
+    ).toBe(true);
+  });
+});

@@ -188,6 +188,44 @@ const registeredNumber = computed(
     ''
 );
 
+// Phase 5 (resume): a completed inbox may still need ONE Meta step before it can SEND. When the backend DTO
+// marks it action_required (outbound-messaging permission not yet granted to the connected system user), the
+// completion screen shows an explicit "action required" panel with a Recheck permission action — NOT the Ready
+// state, and NOT a "reconnect" instruction (reconnecting cannot resume an already-connected number).
+const isActionRequired = computed(
+  () =>
+    Boolean(result.value?.action_required) ||
+    result.value?.setup?.status === 'action_required'
+);
+const setupId = computed(() => result.value?.setup?.id);
+// 'idle' before any recheck; 'pending' while re-verifying; 'still_pending' when the task is still not granted;
+// 'failed' when the recheck itself could not reach Meta. Drives the inline loading/success/failure states.
+const recheckState = ref('idle');
+const isRechecking = computed(() => recheckState.value === 'pending');
+
+// Re-verify outbound capability for the Action-Required setup. On success the backend promotes the SAME setup to
+// ready and returns ready:true → the panel flips to the Ready state (no new inbox, no reconnect, no secrets).
+// A still-missing task or a verification failure fails closed to a safe, retryable inline message.
+const recheckPermission = async () => {
+  if (!setupId.value || recheckState.value === 'pending') return;
+  recheckState.value = 'pending';
+  try {
+    const dto = await store.dispatch(
+      'inboxes/recheckBloomwireWhatsAppCapability',
+      { setupId: setupId.value }
+    );
+    // Set action_required explicitly (the ready DTO omits it) so a promotion clears the stale panel.
+    result.value = {
+      ...result.value,
+      ...dto,
+      action_required: dto?.action_required,
+    };
+    recheckState.value = dto?.ready ? 'idle' : 'still_pending';
+  } catch (_) {
+    recheckState.value = 'failed';
+  }
+};
+
 // Best-effort: honor a customer-entered inbox name via the existing inbox update API (the inbox already exists
 // with its Meta-derived name; a rename failure never blocks the completed registration).
 const maybeRenameInbox = async () => {
@@ -431,6 +469,111 @@ onBeforeRouteLeave(() => {
       v-if="showLoader"
       :message="$t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.PROCESSING')"
     />
+
+    <!-- Action required: the inbox is created and RECEIVING, but OUTBOUND sending needs one Meta permission step.
+         We show the exact (safe) Meta instruction + a Recheck permission action — never a "reconnect" instruction
+         (reconnect cannot resume an already-connected number) and never a raw actor id / token / secret. -->
+    <div
+      v-else-if="isComplete && isActionRequired"
+      data-testid="bloomwire-wa-action-required"
+    >
+      <div class="flex flex-col items-start mb-6 text-start">
+        <div class="flex justify-start mb-6">
+          <div
+            class="flex size-11 items-center justify-center rounded-full bg-n-alpha-2"
+          >
+            <Icon
+              icon="i-lucide-triangle-alert"
+              class="text-n-amber-10 size-6"
+            />
+          </div>
+        </div>
+        <h3 class="mb-2 text-base font-medium text-n-slate-12">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.TITLE'
+            )
+          }}
+        </h3>
+        <p class="text-sm leading-6 text-n-slate-11">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.SUBTITLE'
+            )
+          }}
+        </p>
+      </div>
+
+      <div class="rounded-xl border border-n-weak p-4 mb-6">
+        <p class="mb-1 text-sm font-medium text-n-slate-12">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.STEP_TITLE'
+            )
+          }}
+        </p>
+        <p class="text-sm text-n-slate-11">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.STEP_DESC'
+            )
+          }}
+        </p>
+      </div>
+
+      <p
+        v-if="recheckState === 'still_pending'"
+        data-testid="bloomwire-wa-recheck-pending"
+        class="mb-3 text-sm text-n-amber-11"
+      >
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.STILL_PENDING'
+          )
+        }}
+      </p>
+      <p
+        v-else-if="recheckState === 'failed'"
+        data-testid="bloomwire-wa-recheck-failed"
+        class="mb-3 text-sm text-n-ruby-11"
+      >
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.RECHECK_FAILED'
+          )
+        }}
+      </p>
+
+      <div class="flex gap-2">
+        <NextButton
+          solid
+          teal
+          data-testid="bloomwire-wa-recheck"
+          :is-loading="isRechecking"
+          :disabled="isRechecking"
+          :label="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ACTION_REQUIRED.RECHECK_BUTTON'
+            )
+          "
+          @click="recheckPermission"
+        />
+        <router-link
+          :to="{ name: 'settings_inbox_show', params: { inboxId } }"
+          data-testid="bloomwire-wa-inbox-settings"
+        >
+          <NextButton
+            outline
+            slate
+            :label="
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.SUCCESS.INBOX_SETTINGS'
+              )
+            "
+          />
+        </router-link>
+      </div>
+    </div>
 
     <!-- Success: safe DTO only (ids/name/masked number/status) + open/settings. No agents step. -->
     <div v-else-if="isComplete" data-testid="bloomwire-wa-success">

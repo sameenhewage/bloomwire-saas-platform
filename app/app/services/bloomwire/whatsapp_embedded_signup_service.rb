@@ -22,8 +22,9 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # Non-secret guidance shown to the account owner so they can finish enabling OUTBOUND messaging (inbound and
   # the CONNECTED number are already set up). The concrete Meta asset-task grant is a customer/owner action.
   OUTBOUND_ACTION_REQUIRED_RESOLUTION =
-    'Outbound messaging needs one more Meta step: grant this WhatsApp Business Account the Manage (or Messages) ' \
-    'task to the connected system user in Meta Business Settings, then reconnect to finish setup.'.freeze
+    'Outbound messaging needs one more Meta step: in Meta Business Settings, grant this WhatsApp Business ' \
+    'Account the Manage task to the connected system user, then use "Recheck permission" to finish enabling ' \
+    'sending.'.freeze
 
   Result = Struct.new(:dto, :error, keyword_init: true) do
     def success?
@@ -142,12 +143,15 @@ class Bloomwire::WhatsappEmbeddedSignupService
     :subscription_failed
   end
 
-  # Outbound readiness (send-side counterpart to the CONNECTED gate): verify — and, where the onboarding
-  # credential is authorized, establish — that the EXACT stored-token actor holds the WABA asset task needed to
-  # SEND (Meta #10). Inbound rides the app subscription; outbound needs this per-actor task. When missing and
-  # not grantable, the caller persists an explicit Action-Required inbox — never a silently receive-only one.
+  # Outbound readiness (send-side counterpart to the CONNECTED gate): VERIFY that the EXACT stored-token actor
+  # holds the WABA asset task needed to SEND (Meta #10). Inbound rides the app subscription; outbound needs this
+  # per-actor task. The onboarding credential is the partner SYSTEM_USER token (allow_grant: false) — it can only
+  # VERIFY, never self-grant — so when the task is missing/unverifiable the caller persists an explicit
+  # Action-Required inbox (resumable via "Recheck permission"), never a silently receive-only one.
   def outbound_capability(meta, waba_id)
-    Bloomwire::WhatsappMessagingCapability.new(client: meta[:client], token: meta[:token], waba_id: waba_id).ensure
+    Bloomwire::WhatsappMessagingCapability.new(
+      client: meta[:client], token: meta[:token], waba_id: waba_id, allow_grant: false
+    ).ensure
   end
 
   # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later

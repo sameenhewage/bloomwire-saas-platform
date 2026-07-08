@@ -361,6 +361,19 @@ describe Whatsapp::FacebookApiClient do
     end
   end
 
+  describe '#token_actor_type' do
+    let(:input_token) { 'actor-token' }
+    let(:app_access_token) { "#{app_id}|#{app_secret}" }
+
+    it 'returns the debug_token data.type (used to gate whether a token may assign a WABA task)' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/debug_token")
+        .with(query: { input_token: input_token, access_token: app_access_token })
+        .to_return(status: 200, body: { data: { user_id: 'USER-9', type: 'USER' } }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.token_actor_type(input_token)).to eq('USER')
+    end
+  end
+
   describe '#waba_user_tasks' do
     let(:waba_id) { 'waba-x' }
     let(:user_id) { 'ACTOR-1' }

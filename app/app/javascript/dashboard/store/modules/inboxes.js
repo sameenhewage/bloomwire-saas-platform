@@ -332,6 +332,17 @@ export const actions = {
       throw error;
     }
   },
+  // Phase 5 (resume): re-verify outbound messaging capability for an existing Action-Required managed WhatsApp
+  // setup. Returns the safe DTO ({ setup, inbox, ready, action_required? }); refreshes the inbox list once the
+  // setup becomes routeable-ready. No secrets in the request or the response.
+  recheckBloomwireWhatsAppCapability: async (
+    { dispatch },
+    { setupId } = {}
+  ) => {
+    const response = await WhatsappChannel.recheckBloomwireCapability(setupId);
+    if (response.data?.ready) await dispatch('get');
+    return response.data;
+  },
   ...channelActions,
   // TODO: Extract other create channel methods to separate files to reduce file size
   // - createChannel

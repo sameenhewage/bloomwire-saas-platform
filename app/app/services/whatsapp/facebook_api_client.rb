@@ -160,6 +160,13 @@ class Whatsapp::FacebookApiClient
     (debug_token(input_token)['data'] || {})['user_id']
   end
 
+  # The token's actor TYPE from debug_token (`data.type`, e.g. "USER" / "SYSTEM_USER"). Used to decide whether a
+  # credential may be trusted to ASSIGN a WABA asset task — a view-only SYSTEM_USER cannot self-elevate, so it is
+  # never used to self-grant. Returns nil when the token cannot be introspected.
+  def token_actor_type(input_token = @access_token)
+    (debug_token(input_token)['data'] || {})['type']
+  end
+
   # Business-Manager asset tasks the given user/system-user holds on a WABA (e.g. MANAGE / MESSAGING /
   # VIEW_TEMPLATES) — the effective ASSET assignment, distinct from OAuth granular scopes. Scoped through the
   # WABA's owner business so a partner system-user's assignment is visible. Returns [] when there is no
