@@ -4,17 +4,21 @@
 # business, without any manual Graph Explorer call.
 #
 # SECURITY (do not weaken): NEVER logs the token / app secret / raw body. It logs only sanitized identifiers already
-# treated as non-secret elsewhere (token type, actor/app/business ids, boolean scope-on-WABA flags). Gated OFF by
-# default (BLOOMWIRE_WHATSAPP_TOKEN_DEBUG) and hard-blocked outside dev/test, so it is inert in production and CI.
+# treated as non-secret elsewhere (token type, actor/app/business ids, boolean scope-on-WABA flags, asset-task names).
+# Gated OFF by default (BLOOMWIRE_WHATSAPP_TOKEN_DEBUG) and HARD-BLOCKED on real production (BLOOMWIRE_ENV=production),
+# so it is inert unless a non-production operator explicitly turns it on. It works on DEV (which runs RAILS_ENV=production).
 class Bloomwire::WhatsappSignupTokenDebug
   EVENT = 'bloomwire.whatsapp.signup_token_debug'.freeze
   FLAG = 'BLOOMWIRE_WHATSAPP_TOKEN_DEBUG'.freeze
   MANAGEMENT_SCOPE = 'whatsapp_business_management'.freeze
   MESSAGING_SCOPE = 'whatsapp_business_messaging'.freeze
 
-  # Enabled ONLY in dev/test AND when the flag is explicitly 'true'. Never in production.
+  # Enabled ONLY when the flag is explicitly 'true' AND this is not real production. DEV runs RAILS_ENV=production, so
+  # we gate on BLOOMWIRE_ENV (unset on DEV, set to 'production' on the real prod host) rather than Rails.env.
   def self.enabled?
-    (Rails.env.development? || Rails.env.test?) && GlobalConfigService.load(FLAG, 'false').to_s == 'true'
+    return false if ENV.fetch('BLOOMWIRE_ENV', '').to_s.casecmp?('production')
+
+    GlobalConfigService.load(FLAG, 'false').to_s == 'true'
   end
 
   # Best-effort: a debug failure never affects onboarding (it only writes a sanitized log line).
@@ -47,8 +51,19 @@ class Bloomwire::WhatsappSignupTokenDebug
       is_valid: data['is_valid'], scopes: Array(data['scopes']), granular_scopes: granular.pluck('scope'),
       waba_in_management: target_ids(granular, MANAGEMENT_SCOPE).include?(@waba_id),
       waba_in_messaging: target_ids(granular, MESSAGING_SCOPE).include?(@waba_id),
+      # The EXACT actor's Business-Manager asset tasks on the WABA (MANAGE/MESSAGING/...); [] = present-but-no-tasks,
+      # nil = actor not visible in the owner-scoped assigned_users list. This is what /register authority hinges on.
+      actor_waba_tasks: safe_actor_tasks(data['user_id']),
       selected_waba: @waba_id, phone_number_id: @phone_number_id, waba_owner_business_id: safe_waba_owner
     }
+  end
+
+  def safe_actor_tasks(actor_id)
+    return nil if actor_id.blank?
+
+    @client.waba_user_tasks(@waba_id, actor_id)
+  rescue StandardError
+    nil
   end
 
   def target_ids(granular, scope_name)
