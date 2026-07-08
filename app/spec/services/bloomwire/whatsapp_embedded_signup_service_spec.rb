@@ -27,8 +27,10 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, override_waba_callback: nil,
                                          subscribe_waba_webhook: nil, register_phone_number: { 'success' => true },
-                                         phone_number_status: 'CONNECTED',
                                          messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
+    # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
+    # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
+    allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -93,6 +95,42 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     it 'persists the generated 2FA PIN in provider_config (so a later re-register cannot lock the number out)' do
       result
       expect(Channel::Whatsapp.last.provider_config['verification_pin']).to match(/\A\d{6}\z/)
+    end
+  end
+
+  # Phase 4 (recovery) — when the customer's SELECTED number is ALREADY CONNECTED on the Cloud API (e.g. an
+  # owner-admin connected it out-of-band), Bloomwire must NOT re-register it: re-sending /register with a fresh
+  # 2FA PIN against a live, pin-enabled number is unnecessary and can disrupt the owner-set PIN. The number is
+  # persisted on the SELECTED WABA + phone_number_id (no substitution), with no Bloomwire-generated PIN.
+  describe 'skips /register when the selected number is already CONNECTED' do
+    before do
+      stub_ready
+      stub_meta
+      allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED')
+    end
+
+    it 'does NOT call /register but still persists channel/inbox/setup on the SELECTED WABA + phone_number_id' do
+      aggregate_failures do
+        expect(result).to be_success
+        expect(fb_client).not_to have_received(:register_phone_number)
+        channel = Channel::Whatsapp.last
+        expect(channel.provider_config['phone_number_id']).to eq('PNID-1')
+        expect(channel.provider_config['business_account_id']).to eq('WABA-1')
+        expect(Bloomwire::WhatsappSetup.last.phone_number_id).to eq('PNID-1')
+      end
+    end
+
+    it 'stores no Bloomwire-generated verification PIN (the owner-set PIN is left untouched)' do
+      result
+      expect(Channel::Whatsapp.last.provider_config['verification_pin']).to be_nil
+    end
+
+    it 'subscribes the Bloomwire app to the SELECTED WABA exactly once (no resolver, no substitution)' do
+      result
+      aggregate_failures do
+        expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1').once
+        expect(fb_client).not_to have_received(:messaging_waba_ids)
+      end
     end
   end
 

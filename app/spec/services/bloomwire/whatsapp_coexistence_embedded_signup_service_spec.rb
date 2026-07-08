@@ -23,8 +23,11 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true, register_phone_number: { 'success' => true }, override_waba_callback: nil,
-                                         subscribe_waba_webhook: nil, phone_number_status: 'CONNECTED',
+                                         subscribe_waba_webhook: nil,
                                          messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
+    # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
+    # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
+    allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
 
@@ -84,25 +87,37 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     it 'registers the selected phone number on the Cloud API exactly once, reusing the parent PIN mechanism' do
       result
 
-      # Coexistence now inherits the parent /register (the #136 skip is removed). The PIN is produced by the
-      # existing parent mechanism (a 6-digit string) — asserted by shape only, never the raw generated value.
+      # Coexistence inherits the parent /register path: a fresh (DISCONNECTED) number is registered exactly once
+      # with a 6-digit PIN from the parent mechanism — asserted by shape only, never the raw generated value.
       expect(fb_client).to have_received(:register_phone_number).with('PNID-1', match(/\A\d{6}\z/)).once
     end
 
-    it 'registers the number BEFORE the CONNECTED readiness check (the fail-closed gate sees the post-register status)' do
+    it 're-checks status AFTER /register for a fresh number (the fail-closed gate sees the post-register status)' do
       order = []
+      statuses = %w[DISCONNECTED CONNECTED]
       allow(fb_client).to receive(:register_phone_number) do |*_|
         order << :register
         { 'success' => true }
       end
       allow(fb_client).to receive(:phone_number_status) do
         order << :status
-        'CONNECTED'
+        statuses.shift || 'CONNECTED'
       end
 
-      result
+      expect(result).to be_success
+      # New order: status(DISCONNECTED) -> register -> status(CONNECTED); the readiness gate uses the last status.
+      expect(order).to eq(%i[status register status])
+    end
 
-      expect(order.index(:register)).to be < order.index(:status)
+    it 'inherits the parent skip: an already-CONNECTED selected number is NOT re-registered' do
+      allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED')
+
+      aggregate_failures do
+        expect(result).to be_success
+        expect(fb_client).not_to have_received(:register_phone_number)
+        expect(Channel::Whatsapp.last.provider_config['connection_mode']).to eq('coexistence')
+        expect(Channel::Whatsapp.last.provider_config['phone_number_id']).to eq('PNID-1')
+      end
     end
   end
 
