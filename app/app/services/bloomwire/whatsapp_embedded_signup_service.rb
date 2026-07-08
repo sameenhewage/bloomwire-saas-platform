@@ -51,13 +51,12 @@ class Bloomwire::WhatsappEmbeddedSignupService
     target = resolve_target(meta)
     return Result.new(error: target) if target.is_a?(Symbol)
 
-    # Outbound capability is verified BEFORE any app-to-WABA subscription. A not-ready inbox must NEVER be
-    # subscribed: Meta would forward its inbound to the global router, which discards a non-routeable setup ->
-    # lost inbound. So we subscribe ONLY on the ready path (see #activate_if_ready); an Action-Required inbox is
-    # persisted UNSUBSCRIBED — inactive for BOTH inbound and outbound until "Recheck permission" completes it.
+    # Outbound capability is verified BEFORE any subscription, and we subscribe ONLY on the ready path — a
+    # not-ready inbox must never be subscribed (Meta would forward inbound the global router then discards). So an
+    # Action-Required inbox is persisted UNSUBSCRIBED, inactive in both directions until "Recheck" completes it.
     capability = outbound_capability(meta, target[:waba_id])
 
-    activation_error = activate_if_ready(meta[:client], target[:waba_id], capability)
+    activation_error = subscribe_final_waba(meta[:client], target[:waba_id]) if capability.ready?
     return Result.new(error: activation_error) if activation_error
 
     persisted = persist(meta[:token], target[:waba_id], target[:phone_info], meta[:verification_pin], capability)
@@ -96,12 +95,8 @@ class Bloomwire::WhatsappEmbeddedSignupService
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
     phone_number_id = phone_info[:phone_number_id]
-    # Check the SELECTED number's live status BEFORE registering. An already-CONNECTED number must NOT be
-    # re-registered: re-sending /register with a fresh 2FA PIN against a live, pin-enabled number is unnecessary
-    # and can disrupt the existing (owner-set) registration. We register — then re-check status — ONLY when the
-    # selected number is not already CONNECTED, mirroring native onboarding for a fresh number. A registration
-    # failure (e.g. Meta (#100) when the app is not the WABA owner) stays non-fatal: the readiness gate below
-    # then fails closed on the still-non-CONNECTED number so NO partial inbox is created.
+    # Register ONLY when the number is not already CONNECTED (re-registering a live, pin-enabled number can disrupt
+    # the owner-set registration). A /register failure stays non-fatal — the readiness gate then fails closed.
     connection_status = client.phone_number_status(phone_number_id)
     verification_pin = nil
     unless connection_status == CONNECTED_STATUS
@@ -132,40 +127,20 @@ class Bloomwire::WhatsappEmbeddedSignupService
     { waba_id: resolution.waba_id, phone_info: phone_info.merge(phone_number_id: resolution.phone_number_id) }
   end
 
-  # Activation = the SINGLE point where the inbox becomes live for inbound (global router) AND outbound. It runs
-  # ONLY when outbound capability is confirmed: a not-ready inbox returns nil here WITHOUT subscribing, so the
-  # Action-Required inbox persisted next is inactive in both directions (never a subscribed-but-discarded
-  # webhook). When ready, we subscribe + verify; a failed/unconfirmed subscription fails closed (Symbol) so no
-  # falsely-ready inbox is ever persisted.
-  def activate_if_ready(client, waba_id, capability)
-    return nil unless capability.ready?
-
-    subscribe_final_waba(client, waba_id)
-  end
-
-  # The app-to-WABA subscription (global router) MUST target the FINAL resolved WABA. Inbound webhooks for the
-  # connected number are only forwarded to Bloomwire's global callback when the app is subscribed to the WABA that
-  # actually owns that registration — which, after #resolve_target, can differ from the customer's originally
-  # selected WABA. Subscribing only the selected WABA would leave the resolved inbox receiving no inbound. We
-  # subscribe exactly once (the final WABA), then VERIFY it took effect (subscribed_apps) so a silent failure
-  # never yields a ready-but-deaf inbox. Fails closed (returns a Symbol). NEVER override_waba_callback /
-  # subscribe_waba_webhook.
+  # Subscribe the FINAL resolved WABA (which, after #resolve_target, can differ from the selection) to the app,
+  # then VERIFY it took effect (subscribed_apps) so a silent failure never yields a ready-but-deaf inbox. Fails
+  # closed (Symbol). This is the single point the inbox becomes live for inbound (global router) AND outbound;
+  # NEVER override_waba_callback / subscribe_waba_webhook.
   def subscribe_final_waba(client, waba_id)
     client.subscribe_app_to_waba(waba_id)
-    return :subscription_failed unless client.subscribed_to_waba?(waba_id)
-
-    nil
+    client.subscribed_to_waba?(waba_id) ? nil : :subscription_failed
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] App-to-WABA subscription failed: #{e.class}")
     :subscription_failed
   end
 
-  # Outbound readiness (send-side counterpart to the CONNECTED gate): VERIFY that the EXACT stored-token actor
-  # holds the WABA asset task needed to SEND (Meta #10). This gate now runs BEFORE subscription and decides
-  # whether the inbox is activated at all. The onboarding credential is the partner SYSTEM_USER token
-  # (allow_grant: false) — it can only VERIFY, never self-grant — so when the task is missing/unverifiable the
-  # caller persists an explicit, UNSUBSCRIBED Action-Required inbox (resumable via "Recheck permission"), never a
-  # silently receive-only one.
+  # Outbound readiness (send-side counterpart to the CONNECTED gate): VERIFY the EXACT stored-token actor holds
+  # the WABA send task (Meta #10). Verify-only (allow_grant: false) — the partner SYSTEM_USER token never self-grants.
   def outbound_capability(meta, waba_id)
     Bloomwire::WhatsappMessagingCapability.new(
       client: meta[:client], token: meta[:token], waba_id: waba_id, allow_grant: false

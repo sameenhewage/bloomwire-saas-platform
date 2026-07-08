@@ -94,7 +94,7 @@ RSpec.describe 'Bloomwire WhatsApp messaging-capability recheck endpoint', type:
 
   # BLOCKER 3: the DURABLE status read that backs the Inbox Settings surface (survives refresh / navigation /
   # re-login) — the persisted setup state is always loadable, so an Action-Required inbox is resumable forever.
-  context 'durable status read (GET index) for the Inbox Settings surface' do
+  context 'when reading durable status (GET index) for the Inbox Settings surface' do
     let(:index_url) { "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/messaging_capabilities?inbox_id=#{inbox.id}" }
 
     before { enable_managed_mode }
