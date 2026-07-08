@@ -22,14 +22,21 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       .and_return(instance_double(Whatsapp::TokenExchangeService, perform: token))
     allow(Whatsapp::PhoneInfoService).to receive(:new)
       .and_return(instance_double(Whatsapp::PhoneInfoService, perform: phone_info))
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true, register_phone_number: { 'success' => true },
+    stub_fb_client
+    stub_messaging_capability
+  end
+
+  # Meta client stub for the coexistence flow (extracted so stub_meta stays within RuboCop's AbcSize budget).
+  def stub_fb_client
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true,
                                          override_waba_callback: nil, subscribe_waba_webhook: nil,
-                                         messaging_waba_ids: [], waba_registrations: [], waba_owner_business_id: nil)
+                                         register_phone_number: { 'success' => true }, messaging_waba_ids: [],
+                                         waba_registrations: [], waba_owner_business_id: nil)
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
+    allow(fb_client).to receive(:exchange_for_long_lived_token) { |short| short }
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
-    stub_messaging_capability
   end
 
   # Outbound capability gate defaults to READY here (unit-tested in its own spec); Coexistence inherits the
@@ -257,7 +264,7 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         .and_return(instance_double(Whatsapp::FacebookApiClient, subscribe_app_to_waba: true, subscribed_to_waba?: true,
                                                                  register_phone_number: { 'success' => true },
                                                                  override_waba_callback: nil, subscribe_waba_webhook: nil,
-                                                                 phone_number_status: 'CONNECTED'))
+                                                                 phone_number_status: 'CONNECTED', exchange_for_long_lived_token: token))
       described_class.new(account: account,
                           params: { code: 'META-CODE', business_id: 'BIZ-1', waba_id: waba_id,
                                     phone_number_id: phone_number_id }).perform
@@ -302,12 +309,14 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'still blocks a duplicate phone_number_id' do
-      coexistence_signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
-      dup = coexistence_signup(phone_number_id: 'PNID-1', phone_number: '+15551230002')
+    it 'idempotently RESUMES the same setup when the same account re-onboards the same phone_number_id' do
+      first = coexistence_signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
+      again = coexistence_signup(phone_number_id: 'PNID-1', phone_number: '+15551230001')
       aggregate_failures do
-        expect(dup.error).to eq(:phone_number_id_conflict)
+        expect(first).to be_success
+        expect(again).to be_success
         expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
       end
     end
   end

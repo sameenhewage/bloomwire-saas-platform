@@ -50,6 +50,12 @@ class Bloomwire::WhatsappMessagingCapability
   end
 
   def ensure
+    # Primary (WhatsWay-proven, USER-token ONLY): a real USER token whose OWN whatsapp_business_messaging granular
+    # scope lists this WABA is a WABA admin authorized to send, even when it is NOT enumerated in the WABA
+    # assigned_users. A SYSTEM_USER/unknown token can hold that scope yet still get Meta (#10) without the MANAGE
+    # asset task, so it is NEVER cleared here — it falls through to the authoritative actor asset-task path below.
+    return ready(nil, nil) if token_can_message_waba?
+
     actor_id = actor_id_safe
     return unverifiable(nil, nil) if actor_id.blank? # lookup failed -> NO mutation
 
@@ -64,6 +70,19 @@ class Bloomwire::WhatsappMessagingCapability
   end
 
   private
+
+  # The token's own messaging authorization for the WABA (debug_token granular scope) — trusted as a send signal
+  # ONLY for a real USER token (a WABA admin). A SYSTEM_USER / unknown token can hold this scope yet still get Meta
+  # (#10) without the MANAGE asset task, so it is never cleared here and falls through to the asset-task path. A read
+  # failure returns false (never raises) so an authoritative "cannot message" is only ever a successful read there.
+  def token_can_message_waba?
+    return false unless token_type_safe == USER_TOKEN_TYPE
+
+    @client.messaging_waba_ids(@token).map(&:to_s).include?(@waba_id.to_s)
+  rescue StandardError => e
+    log_failure('messaging_scope_lookup', e)
+    false
+  end
 
   def actor_id_safe
     @client.token_actor_id(@token).presence

@@ -14,6 +14,10 @@
 #   not configured. Meta errors are sanitized (class-only logs; a generic :meta_error) — no raw payload/token.
 # - The result DTO carries only safe, non-secret fields (ids, status, masked phone) — never api_key/provider_config.
 class Bloomwire::WhatsappEmbeddedSignupService
+  # DB persistence + WhatsWay-parity reconnect live in a focused mixin (keeps this orchestrator readable). The
+  # Coexistence subclass's create_channel_shell/dto_for overrides still resolve first through the ancestor chain.
+  include Bloomwire::WhatsappSignupPersistence
+
   # Fail-closed readiness: a managed inbox is persisted ONLY when the number is live on the Cloud API. When the
   # selected registration is DISCONNECTED, the same number may be CONNECTED as a duplicate under another WABA the
   # token can message — Bloomwire::WhatsappConnectedNumberResolver routes to that single same-business registration,
@@ -88,10 +92,16 @@ class Bloomwire::WhatsappEmbeddedSignupService
     Rails.env.development? || Rails.env.test?
   end
 
+  # Extend the short-lived embedded-signup USER token to a long-lived (~60 day) one — the WhatsWay-proven step
+  # that keeps the stored operational credential usable beyond ~1h. Fails open to the short token.
+  def long_lived_token(short_token)
+    Whatsapp::FacebookApiClient.new.exchange_for_long_lived_token(short_token)
+  end
+
   # All Meta calls up front (before any DB write) so a Meta failure leaves NO partial records. Returns nil on any
   # failure with a sanitized (class-only) log — never the message/body (which can carry the token or PII).
   def perform_meta_steps
-    token = Whatsapp::TokenExchangeService.new(@code).perform
+    token = long_lived_token(Whatsapp::TokenExchangeService.new(@code).perform)
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     client = Whatsapp::FacebookApiClient.new(token)
     phone_number_id = phone_info[:phone_number_id]
@@ -172,83 +182,6 @@ class Bloomwire::WhatsappEmbeddedSignupService
     }
     event.merge!(error.to_safe_h) if error.is_a?(Whatsapp::GraphApiError)
     Rails.logger.warn("[BLOOMWIRE EMBEDDED SIGNUP] #{event.to_json}")
-  end
-
-  # DB-only, atomic. Returns the created Bloomwire::WhatsappSetup, or a safe Symbol error. The capability
-  # result decides the persisted setup_status: routeable-ready when the actor can send, else Action-Required.
-  def persist(token, waba_id, phone_info, verification_pin, capability)
-    return :phone_number_taken if Channel::Whatsapp.exists?(phone_number: phone_info[:phone_number])
-
-    setup = nil
-    error = nil
-    ActiveRecord::Base.transaction do
-      channel = create_channel_shell(waba_id, phone_info)
-      inbox = create_inbox(channel, phone_info)
-      Bloomwire::WhatsappCredentialWriter.new(channel: channel, attributes: { 'api_key' => token }).perform
-      store_verification_pin(channel, verification_pin)
-      creator = create_mapping(channel, inbox, waba_id, phone_info, capability)
-      if creator.success?
-        setup = creator.setup
-      else
-        error = creator.error
-        raise ActiveRecord::Rollback
-      end
-    end
-    error || setup
-  rescue ActiveRecord::RecordNotUnique
-    :phone_number_taken
-  end
-
-  # The register step's 2FA PIN is persisted (provider_config is encrypted at rest, ADR-0006) so a later
-  # re-register does not lock out the number. Kept off the Ops credential-writer surface deliberately.
-  def store_verification_pin(channel, verification_pin)
-    return if verification_pin.blank?
-
-    channel.provider_config['verification_pin'] = verification_pin
-    channel.save!(validate: false)
-  end
-
-  # Credential-less shell: source 'bloomwire_managed' skips the after_commit per-channel webhook setup; a blank
-  # api_key at create-time no-ops the after_create template sync; save(validate: false) skips the remote
-  # validate_provider_config credential re-check (no live Meta call). The api_key is written next, encrypted.
-  def create_channel_shell(waba_id, phone_info)
-    channel = Channel::Whatsapp.new(
-      account: @account,
-      phone_number: phone_info[:phone_number],
-      provider: 'whatsapp_cloud',
-      provider_config: {
-        'phone_number_id' => phone_info[:phone_number_id],
-        'business_account_id' => waba_id,
-        'source' => 'bloomwire_managed',
-        'connection_mode' => 'standard'
-      }
-    )
-    channel.save!(validate: false)
-    channel
-  end
-
-  def create_inbox(channel, phone_info)
-    Inbox.create!(account: @account, name: inbox_name(phone_info), channel: channel)
-  end
-
-  def inbox_name(phone_info)
-    "#{phone_info[:business_name].presence || 'WhatsApp'} WhatsApp"
-  end
-
-  # A routeable (ready_for_webhook) mapping ONLY when outbound capability is confirmed; otherwise an explicit
-  # Action-Required mapping (with a sanitized reason) the global router will not treat as ready — so we never
-  # persist a silently receive-only inbox.
-  def create_mapping(channel, inbox, waba_id, phone_info, capability)
-    Bloomwire::WhatsappSetupCreator.call(
-      account: @account,
-      inbox: inbox,
-      channel_whatsapp: channel,
-      phone_number_id: phone_info[:phone_number_id],
-      waba_id: waba_id,
-      display_phone_number: phone_info[:phone_number],
-      setup_status: capability.ready? ? Bloomwire::WhatsappSetup::ROUTEABLE_STATUS : Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS,
-      status_reason: capability.ready? ? nil : capability.reason
-    )
   end
 
   # Safe DTO — ids/status + masked phone only; NEVER api_key / token / provider_config. When outbound is not
