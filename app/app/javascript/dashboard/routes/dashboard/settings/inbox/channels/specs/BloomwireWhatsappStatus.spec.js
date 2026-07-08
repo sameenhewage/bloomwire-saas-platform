@@ -156,6 +156,37 @@ describe('BloomwireWhatsappStatus (durable Inbox Settings panel)', () => {
     expect(wrapper.find(T.actionRequired).exists()).toBe(false);
   });
 
+  it('renders nothing for a non-routeable setup that is NOT action_required (no action_required block)', async () => {
+    mockFetch({
+      managed: true,
+      ready: false,
+      setup: { id: 3, status: 'pending' },
+      inbox: { id: 42 },
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(wrapper.find(T.actionRequired).exists()).toBe(false);
+    expect(wrapper.find(T.ready).exists()).toBe(false);
+  });
+
+  it('loads the status when the admin capability hydrates AFTER mount (refresh / re-login ordering)', async () => {
+    canSelfServe.value = false;
+    mockFetch(actionRequiredDto());
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/fetchBloomwireWhatsAppCapability',
+      expect.anything()
+    );
+    canSelfServe.value = true; // account payload / capability gate hydrates
+    await flushPromises();
+    expect(dispatch).toHaveBeenCalledWith(
+      'inboxes/fetchBloomwireWhatsAppCapability',
+      { inboxId: 42 }
+    );
+    expect(wrapper.find(T.actionRequired).exists()).toBe(true);
+  });
+
   it('Recheck reuses the SAME setup id and flips to ready on success', async () => {
     dispatch.mockImplementation(action => {
       if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {

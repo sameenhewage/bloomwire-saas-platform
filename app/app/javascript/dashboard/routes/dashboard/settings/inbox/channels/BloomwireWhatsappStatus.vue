@@ -39,8 +39,10 @@ const shouldQuery = computed(
   () => isManagedInbox.value && canSelfServeManagedWhatsapp.value
 );
 const setupId = computed(() => status.value?.setup?.id);
+// Only an explicit action_required setup (backend surfaces the action_required block) is recheckable permission
+// work — another non-routeable status (blocked/pending/…) must NOT show the Meta-grant panel.
 const isActionRequired = computed(
-  () => status.value?.managed === true && status.value?.ready === false
+  () => status.value?.managed === true && Boolean(status.value?.action_required)
 );
 const isReady = computed(
   () => status.value?.managed === true && status.value?.ready === true
@@ -94,7 +96,10 @@ const recheck = async () => {
 };
 
 onMounted(loadStatus);
-watch(() => props.inbox?.id, loadStatus);
+// Reload when the inbox changes OR when the admin capability gate hydrates AFTER mount: on a refresh / re-login
+// canSelfServeManagedWhatsapp can be false initially (account payload not yet loaded), so the first load is
+// skipped until it flips true — without this the durable panel would never appear until a remount.
+watch([() => props.inbox?.id, shouldQuery], loadStatus);
 </script>
 
 <template>

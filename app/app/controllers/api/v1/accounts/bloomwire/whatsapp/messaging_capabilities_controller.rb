@@ -60,7 +60,10 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::MessagingCapabilitiesController < 
       inbox: { id: setup.inbox_id, name: setup.inbox&.name },
       ready: ready
     }
-    unless ready
+    # ONLY an explicit action_required setup gets the outbound-permission block. Another non-routeable status
+    # (blocked during async removal, pending/configured, …) is not recheckable permission work — surfacing the
+    # Meta-grant prompt for it would mislead the owner (and PATCH would reject it as not_action_required).
+    if setup.setup_status == Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS
       dto[:action_required] = {
         reason: setup.status_reason,
         resolution: ::Bloomwire::WhatsappEmbeddedSignupService::OUTBOUND_ACTION_REQUIRED_RESOLUTION

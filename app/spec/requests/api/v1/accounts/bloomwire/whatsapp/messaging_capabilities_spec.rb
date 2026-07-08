@@ -123,6 +123,16 @@ RSpec.describe 'Bloomwire WhatsApp messaging-capability recheck endpoint', type:
       end
     end
 
+    it 'omits the action_required block for a non-routeable setup that is NOT action_required (e.g. pending)' do
+      setup.update!(setup_status: 'pending', status_reason: nil)
+      get index_url, headers: admin.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body['ready']).to be(false)
+        expect(response.parsed_body).not_to have_key('action_required')
+      end
+    end
+
     it 'returns managed:false for an inbox with no Bloomwire managed setup' do
       get "/api/v1/accounts/#{account.id}/bloomwire/whatsapp/messaging_capabilities?inbox_id=#{inbox.id + 999_999}",
           headers: admin.create_new_auth_token, as: :json
