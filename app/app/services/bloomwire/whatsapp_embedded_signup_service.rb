@@ -101,13 +101,14 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # All Meta calls up front (before any DB write) so a Meta failure leaves NO partial records. Returns nil on any
   # failure with a sanitized (class-only) log — never the message/body (which can carry the token or PII).
   def perform_meta_steps
-    token = long_lived_token(Whatsapp::TokenExchangeService.new(@code).perform)
-    phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
+    short_token = Whatsapp::TokenExchangeService.new(@code).perform
+    log_signup_token(stage: 'code_exchange', token: short_token, phone_number_id: @phone_number_id)
+    token = long_lived_token(short_token)
     client = Whatsapp::FacebookApiClient.new(token)
+    log_signup_token(stage: 'long_lived_exchange', token: token, phone_number_id: @phone_number_id, client: client)
+    phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     phone_number_id = phone_info[:phone_number_id]
-    # DEV-only, sanitized: inspect the exact signup token's type/actor/app/scopes + WABA management/messaging
-    # targets + WABA owner before /register, to diagnose Meta #100 (never logs the token; inert unless flagged).
-    Bloomwire::WhatsappSignupTokenDebug.log(client: client, token: token, waba_id: @waba_id, phone_number_id: phone_number_id)
+    log_signup_token(stage: 'pre_register', token: token, phone_number_id: phone_number_id, client: client)
     # Register ONLY when the number is not already CONNECTED (re-registering a live, pin-enabled number can disrupt
     # the owner-set registration). A /register failure stays non-fatal — the readiness gate then fails closed.
     connection_status = client.phone_number_status(phone_number_id)
@@ -121,6 +122,12 @@ class Bloomwire::WhatsappEmbeddedSignupService
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] Meta step failed: #{e.class}")
     nil
+  end
+
+  def log_signup_token(stage:, token:, phone_number_id:, client: Whatsapp::FacebookApiClient.new(token))
+    Bloomwire::WhatsappSignupTokenDebug.log(
+      stage: stage, client: client, token: token, waba_id: @waba_id, phone_number_id: phone_number_id
+    )
   end
 
   # Chooses the (waba_id, phone_info) actually persisted. The customer's selection is used as-is when Meta reports

@@ -499,6 +499,30 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
 
+    it 'captures both code-exchange and long-lived token authority before phone-info lookup and register' do
+      events = []
+      stub_meta(token: 'SHORT-LIVED')
+      allow(fb_client).to receive(:exchange_for_long_lived_token).with('SHORT-LIVED').and_return('LONG-LIVED-60D')
+      allow(Bloomwire::WhatsappSignupTokenDebug).to receive(:log) do |args|
+        events << [:token_debug, args[:stage], args[:token], args[:phone_number_id]]
+      end
+      allow(Whatsapp::PhoneInfoService).to receive(:new) do |waba_id, phone_number_id, token|
+        events << [:phone_info, waba_id, phone_number_id, token]
+        instance_double(Whatsapp::PhoneInfoService, perform: phone_info)
+      end
+
+      result
+
+      expected_debug_events = [
+        [:token_debug, 'code_exchange', 'SHORT-LIVED', 'PNID-1'],
+        [:token_debug, 'long_lived_exchange', 'LONG-LIVED-60D', 'PNID-1']
+      ]
+      aggregate_failures do
+        expect(events.first(2)).to eq(expected_debug_events)
+        expect(events.third).to eq([:phone_info, 'WABA-1', 'PNID-1', 'LONG-LIVED-60D'])
+      end
+    end
+
     it 'fails closed (:phone_number_taken) when the SAME phone_number_id belongs to ANOTHER account (isolation)' do
       stub_meta
       expect(result).to be_success # account A onboards PNID-1

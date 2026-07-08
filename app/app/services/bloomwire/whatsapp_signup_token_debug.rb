@@ -1,3 +1,5 @@
+require 'openssl'
+
 # DEV-only, SANITIZED inspection of the exact Embedded Signup token used for managed onboarding. Answers the Meta
 # (#10 / #100) authority question directly — "is this token a USER/SYSTEM_USER, for which app, and does it actually
 # hold whatsapp_business_management / whatsapp_business_messaging on the SELECTED WABA?" — plus the WABA's owner
@@ -22,19 +24,20 @@ class Bloomwire::WhatsappSignupTokenDebug
   end
 
   # Best-effort: a debug failure never affects onboarding (it only writes a sanitized log line).
-  def self.log(client:, token:, waba_id:, phone_number_id:)
+  def self.log(client:, token:, waba_id:, phone_number_id:, stage: nil)
     return unless enabled?
 
-    new(client: client, token: token, waba_id: waba_id, phone_number_id: phone_number_id).log
+    new(client: client, token: token, waba_id: waba_id, phone_number_id: phone_number_id, stage: stage).log
   rescue StandardError => e
     Rails.logger.warn("[BLOOMWIRE SIGNUP TOKEN DEBUG] #{{ event: EVENT, error: e.class.name }.to_json}")
   end
 
-  def initialize(client:, token:, waba_id:, phone_number_id:)
+  def initialize(client:, token:, waba_id:, phone_number_id:, stage: nil)
     @client = client
     @token = token
     @waba_id = waba_id.to_s
     @phone_number_id = phone_number_id
+    @stage = stage
   end
 
   def log
@@ -46,14 +49,17 @@ class Bloomwire::WhatsappSignupTokenDebug
   private
 
   def event_hash(data, granular)
+    management_target_ids = target_ids(granular, MANAGEMENT_SCOPE)
+    messaging_target_ids = target_ids(granular, MESSAGING_SCOPE)
+    actor_waba_tasks = safe_actor_tasks(data['user_id'])
     {
-      event: EVENT, token_type: data['type'], app_id: data['app_id'], actor_id: data['user_id'],
-      is_valid: data['is_valid'], scopes: Array(data['scopes']), granular_scopes: granular.pluck('scope'),
-      waba_in_management: target_ids(granular, MANAGEMENT_SCOPE).include?(@waba_id),
-      waba_in_messaging: target_ids(granular, MESSAGING_SCOPE).include?(@waba_id),
-      # The EXACT actor's Business-Manager asset tasks on the WABA (MANAGE/MESSAGING/...); [] = present-but-no-tasks,
-      # nil = actor not visible in the owner-scoped assigned_users list. This is what /register authority hinges on.
-      actor_waba_tasks: safe_actor_tasks(data['user_id']),
+      event: EVENT, stage: @stage, token_fingerprint: token_fingerprint, token_type: data['type'],
+      app_id: data['app_id'], actor_id: data['user_id'], is_valid: data['is_valid'],
+      scopes: Array(data['scopes']), granular_scopes: granular.pluck('scope'),
+      management_target_ids: management_target_ids, messaging_target_ids: messaging_target_ids,
+      waba_in_management: management_target_ids.include?(@waba_id),
+      waba_in_messaging: messaging_target_ids.include?(@waba_id),
+      actor_waba_tasks: actor_waba_tasks, actor_has_manage: Array(actor_waba_tasks).include?('MANAGE'),
       selected_waba: @waba_id, phone_number_id: @phone_number_id, waba_owner_business_id: safe_waba_owner
     }
   end
@@ -68,6 +74,14 @@ class Bloomwire::WhatsappSignupTokenDebug
 
   def target_ids(granular, scope_name)
     Array((granular.find { |scope| scope['scope'] == scope_name } || {})['target_ids']).map(&:to_s)
+  end
+
+  def token_fingerprint
+    OpenSSL::HMAC.hexdigest('SHA256', fingerprint_key, @token.to_s).first(16)
+  end
+
+  def fingerprint_key
+    Rails.application.secret_key_base.presence || 'bloomwire-token-debug'
   end
 
   def safe_waba_owner
