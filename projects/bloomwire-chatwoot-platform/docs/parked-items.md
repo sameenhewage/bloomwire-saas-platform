@@ -27,6 +27,7 @@ Owner types: **Bloomwire Ops** · **Meta admin** · **Product**.
 | **PARK-WA-SETUP-REQUEST** | Remove the deprecated `Bloomwire::WhatsappSetupRequest` intake queue (model + SuperAdmin views + account API) — superseded by the customer Add-Inbox wizard (Phase 17A / ADR-0008) | D. Ops/onboarding | **Parked** — remove after PR C wizard ships (code + separate data-cleanup migration; no table drop yet) | Eng | Low | **No** |
 | **PARK-INT-APIVER** | Template-management Graph version still pinned `v14.0` (`business_account_path`) | E. Internal upgrade/fallback | **Parked** — non-urgent version hardening | Eng | Low | **No** |
 | **PARK-INT-ROLLBACK** | Toggle-OFF / rollback testing for the template path | E. Internal upgrade/fallback | **Parked** — deferred by request | Bloomwire Ops + Eng | Low | **No** |
+| **PARK-ENG-ONBOARD-RESUMABLE** | Idempotent/resumable WhatsApp onboarding + Meta side-effect-after-timeout protection (async Sidekiq **or** endpoint-specific timeout; no duplicate Channel/Inbox/Setup) | F. Engineering reliability | **Parked** — post-demo hardening; do **not** change the working flow first | Eng → Bloomwire Ops | Medium | **No** |
 
 ---
 
@@ -195,7 +196,46 @@ Ops-only CREATE and OFF == stock behavior.
 
 ---
 
+## F. Engineering reliability / onboarding robustness
+
+### PARK-ENG-ONBOARD-RESUMABLE — Idempotent/resumable onboarding + Meta side-effect-after-timeout protection
+
+**One-line:** the Standard Embedded Signup runs **all** Meta steps (`/register`, subscribe app→WABA, capability check) **and** the DB writes **synchronously inside one web request** bounded by the **15s `Rack::Timeout`**. If Meta completes a side effect (e.g. `/register`) but the request is killed before persistence, Meta state and Bloomwire DB **diverge** (number CONNECTED on Meta, **0** records in Bloomwire). This is a **reliability/architecture** follow-up, not a defect blocking the demo.
+
+**Why it is parked**
+The current flow is **demo-proven** (the token-debug-OFF retry finished in ~10.8s → 201 → exactly one Channel/Inbox/Setup). Reworking it to idempotent/async is a non-trivial change to the working onboarding path and must **not** risk the demo. Deferred to a controlled post-demo hardening window with explicit owner approval. **Per owner instruction: do not change the currently working onboarding flow before the demo.**
+
+**Evidence we already have (DEV, 2026-07-09 — masked)**
+- **Split-state incident:** the **first** real Standard attempt exceeded the **15s `Rack::Timeout`** *during* Meta `/register` (`facebook_api_client.rb` `post_phone_messaging_product` → `register_phone_number`); the browser got **HTTP 500** and Bloomwire persisted **0** records (fail-closed). **But Meta had already received `/register`** → the number became **CONNECTED**. Result: Meta = CONNECTED, Bloomwire = empty (no Inbox/Channel/Setup).
+- **Mitigation, not a fix:** DEV token-debug (`BLOOMWIRE_WHATSAPP_TOKEN_DEBUG`) added ~9s of extra Graph calls; turning it **OFF** let the retry finish in **~10.8s** (`Completed 201`). A slower Meta `/register` on a genuinely **cold** path (register actually runs) could still exceed 15s.
+- **The retry converged cleanly:** it took the **warm path** (number already CONNECTED → Phase-4 skip of `/register`) and the existing Phase-6 `Bloomwire::WhatsappSignupPersistence` reconnect logic produced **exactly one** Channel/Inbox/Setup (no duplicate) for the same-account, same-number re-onboard.
+
+**What is missing**
+1. **Idempotent/resumable onboarding** — persist an onboarding attempt/intent (keyed by `phone_number_id`) **before** the Meta side effects, or make each step resumable, so a timed-out request can be safely **resumed** without re-triggering side effects or creating duplicates.
+2. **Side-effect-after-timeout protection** — move the Meta calls off the synchronous request path (preferred: an **async Sidekiq workflow** with status polling), **or** apply an **endpoint-specific timeout** large enough to bound the whole flow, so the request can't be killed mid-side-effect.
+3. **Safe retries when already CONNECTED / already subscribed** — the flow already skips `/register` when CONNECTED (Phase 4) and verifies subscription; formalize these as **explicit idempotent guards** with tests so a retry after a partial/timed-out attempt always **converges** without error or duplicate.
+4. **No duplicate Channel/Inbox/Setup** — covered today by `WhatsappSignupPersistence` reconnect; add explicit **regression tests for the timeout-then-retry path** (Meta CONNECTED + 0 records → retry → exactly one of each).
+
+**Exact unpark condition**
+After the company demo, when the owner approves onboarding-reliability hardening — **or** when a real cold-path onboarding is observed to time out (register actually runs and the request exceeds the request budget).
+
+**Next action when unparked**
+1. Design doc / **ADR**: choose **async Sidekiq workflow** (preferred — decouples from `Rack::Timeout`) vs **endpoint-specific timeout**; define the onboarding-attempt **state machine** (`pending → meta_registered → subscribed → capable → ready`) with idempotent, resumable transitions keyed by `phone_number_id`.
+2. **TDD**: specs for timeout-then-retry convergence, already-subscribed retry, already-CONNECTED retry, and the no-duplicate guarantee.
+3. Implement behind the existing managed toggles; **OFF == stock**; no schema unless the attempt state needs a table (add an **ADR** if so).
+
+**Owner type:** **Eng** (design + build) → **Bloomwire Ops** (deploy + validate).
+**Risk level:** **Medium** (touches the working, demo-proven onboarding path; async introduces polling/state — must not regress).
+**Blocks core 24h session chat?** **No.** Session chat (inbound → outbound → sent/delivered/read) is live-proven; this is onboarding-robustness only.
+
+---
+
 ## Change log
 - 2026-06-28 — Created parking lot; parked Phase 13E (13E.1 merged; 13E.2 code-ready/sync-healthy; runtime
   blocker WABA templates total=0/approved=0; 13E.3 + 13E.4 parked) and recorded the standing
   security/ops/internal follow-ups.
+- 2026-07-09 — Added **PARK-ENG-ONBOARD-RESUMABLE** (F. Engineering reliability) after the DEV Standard-onboarding
+  **split-state** incident: first attempt hit the 15s `Rack::Timeout` during Meta `/register` → Meta CONNECTED but
+  **0** Bloomwire records; the token-debug-OFF retry (warm path) finished in ~10.8s and produced exactly one
+  Channel/Inbox/Setup. Parked as **post-demo** hardening (idempotent/resumable onboarding, side-effect-after-timeout
+  protection, safe already-CONNECTED/subscribed retries, no duplicate records). The working flow is unchanged.
