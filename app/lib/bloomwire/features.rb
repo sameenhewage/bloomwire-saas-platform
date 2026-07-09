@@ -7,6 +7,9 @@ module Bloomwire::Features
   # symbol => InstallationConfig key. Read only through this service (no scattered ENV reads).
   SUB_FEATURES = {
     managed_whatsapp_onboarding: 'BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING',
+    # ADR-0010 v3: the RESUMABLE ASYNC onboarding path (attempt record + background processor). OFF == the existing
+    # synchronous embedded-signup flow. Privacy-dependent (it persists encrypted customer secrets), default OFF.
+    async_whatsapp_onboarding: 'BLOOMWIRE_ASYNC_WHATSAPP_ONBOARDING',
     global_webhook_router: 'BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER',
     restrict_native_whatsapp_setup: 'BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP',
     restrict_account_admin: 'BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN',
@@ -24,7 +27,7 @@ module Bloomwire::Features
   }.freeze
 
   # Managed-data sub-features that are inert unless privacy hardening is ON (architecture plan §4.1).
-  PRIVACY_DEPENDENT_FEATURES = %i[managed_whatsapp_onboarding global_webhook_router].freeze
+  PRIVACY_DEPENDENT_FEATURES = %i[managed_whatsapp_onboarding async_whatsapp_onboarding global_webhook_router].freeze
 
   # InstallationConfig key names for the managed-data sub-features. Used by the write-path guard so the
   # privacy prerequisite holds at ANY SuperAdmin config seam, not only the custom Bloomwire page.
