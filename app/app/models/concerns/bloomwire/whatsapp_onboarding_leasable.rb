@@ -6,13 +6,22 @@ module Bloomwire::WhatsappOnboardingLeasable
   extend ActiveSupport::Concern
 
   DEFAULT_LEASE_SECONDS = 120
-
-  # Mutation-stage lease TTL must OUTLAST the maximum bounded Graph call so the lease cannot expire mid-call.
-  # Bounded call = Graph open timeout + read timeout; a documented safety margin is added on top. Derived from the
-  # single source of truth (Whatsapp::FacebookApiClient): (5 + 25) + 30 = 60s, comfortably > the 30s max call.
-  GRAPH_MAX_CALL_SECONDS = Whatsapp::FacebookApiClient::OPEN_TIMEOUT_SECONDS + Whatsapp::FacebookApiClient::READ_TIMEOUT_SECONDS
+  # Documented safety margin added on top of the maximum bounded Graph call to form the mutation-stage lease TTL.
   LEASE_SAFETY_MARGIN_SECONDS = 30
-  MUTATION_LEASE_SECONDS = GRAPH_MAX_CALL_SECONDS + LEASE_SAFETY_MARGIN_SECONDS
+
+  class_methods do
+    # Mutation-stage lease TTL, DERIVED AT RUNTIME from the single Graph-timeout provider (open + read) plus the
+    # safety margin. A change to the Graph timeout config AUTOMATICALLY widens/narrows the lease budget (no
+    # hardcoded duplication). Always > the single-call maximum (margin is positive), so the lease cannot expire
+    # mid-call while the DB lock is released for the Meta HTTP call.
+    def mutation_lease_seconds
+      Whatsapp::GraphApiTimeouts.max_call_seconds + Bloomwire::WhatsappOnboardingLeasable::LEASE_SAFETY_MARGIN_SECONDS
+    end
+  end
+
+  def mutation_lease_seconds
+    self.class.mutation_lease_seconds
+  end
 
   # Briefly locks the row to claim ownership, then RELEASES the DB connection so the caller performs Meta HTTP
   # calls OUTSIDE any transaction/lock. Returns true if this worker now owns the lease.
@@ -53,7 +62,7 @@ module Bloomwire::WhatsappOnboardingLeasable
 
   # Briefly (short row lock) extend THIS worker's lease before a mutation/network stage, but only while it still
   # owns the lease on the current generation and the attempt is active. Returns false if the lease was lost.
-  def renew_lease!(owner:, expected_generation:, ttl_seconds: MUTATION_LEASE_SECONDS)
+  def renew_lease!(owner:, expected_generation:, ttl_seconds: mutation_lease_seconds)
     renewed = false
     with_lock do
       if active? && lease_held_by?(owner) && submission_generation == expected_generation.to_i

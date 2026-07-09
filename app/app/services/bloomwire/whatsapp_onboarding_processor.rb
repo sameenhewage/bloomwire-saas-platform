@@ -14,9 +14,10 @@
 #    only if absent, verify; not ready => do NOT subscribe (persist action_required, Recheck path preserved).
 # 6. persist exactly one Channel/Inbox/Setup (idempotent); mark_credential_persisted! (clear token); finalize.
 #
-# LEASE SAFETY (gap 3): the lease TTL (Attempt::MUTATION_LEASE_SECONDS) outlasts the max bounded Graph call; the
-# lease is renewed under a short lock BEFORE each mutation and RELEASED before the HTTP call; ownership+generation
-# are re-checked before every write; a lost lease => NO local write; release is guarded (matching owner+generation).
+# LEASE SAFETY (gap 3): the lease TTL (Attempt.mutation_lease_seconds, derived from the single Graph-timeout
+# config) outlasts the max bounded Graph call; the lease is renewed under a short lock BEFORE each mutation and
+# RELEASED before the HTTP call; ownership+generation are re-checked before every write; a lost lease => NO local
+# write; release is guarded (matching owner+generation).
 # TRANSIENT errors (timeout/5xx/network) => retain the encrypted token + stage, record a sanitized code, stay
 # resumable (never terminal). Only confirmed-terminal cases clear secrets. Sanitized errors only; no secret leakage.
 #
@@ -29,7 +30,6 @@ class Bloomwire::WhatsappOnboardingProcessor
   Attempt = Bloomwire::WhatsappOnboardingAttempt
   CONNECTED_STATUS = 'CONNECTED'.freeze
   PIN_MISMATCH_META_ERROR_CODE = 133_005
-  LEASE_TTL = Attempt::MUTATION_LEASE_SECONDS
 
   def initialize(attempt:, owner: nil, generation: nil, persister: nil)
     @attempt = attempt
@@ -41,7 +41,7 @@ class Bloomwire::WhatsappOnboardingProcessor
   end
 
   def process
-    return unless @attempt.claim_lease!(owner: @owner, ttl_seconds: LEASE_TTL, expected_generation: @generation)
+    return unless @attempt.claim_lease!(owner: @owner, ttl_seconds: Attempt.mutation_lease_seconds, expected_generation: @generation)
 
     begin
       process_owned

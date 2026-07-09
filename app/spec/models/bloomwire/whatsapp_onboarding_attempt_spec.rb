@@ -131,11 +131,18 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
     end
 
     it 'derives a mutation lease TTL that outlasts the max bounded Graph call (open+read) plus a margin' do
-      open = Whatsapp::FacebookApiClient::OPEN_TIMEOUT_SECONDS
-      read = Whatsapp::FacebookApiClient::READ_TIMEOUT_SECONDS
+      max_call = Whatsapp::GraphApiTimeouts.max_call_seconds
       aggregate_failures do
-        expect(described_class::MUTATION_LEASE_SECONDS).to be > (open + read)
-        expect(described_class::MUTATION_LEASE_SECONDS).to eq(open + read + described_class::LEASE_SAFETY_MARGIN_SECONDS)
+        expect(described_class.mutation_lease_seconds).to be > max_call
+        expect(described_class.mutation_lease_seconds).to eq(max_call + described_class::LEASE_SAFETY_MARGIN_SECONDS)
+      end
+    end
+
+    it 'lease TTL tracks the single Graph-timeout config source (Slice 5) and always exceeds the single-call max' do
+      allow(Whatsapp::GraphApiTimeouts).to receive(:max_call_seconds).and_return(100)
+      aggregate_failures do
+        expect(described_class.mutation_lease_seconds).to eq(100 + described_class::LEASE_SAFETY_MARGIN_SECONDS)
+        expect(described_class.mutation_lease_seconds).to be > 100
       end
     end
 
