@@ -33,6 +33,9 @@ class CreateBloomwireWhatsappOnboardingAttempts < ActiveRecord::Migration[7.1]
       # Temporary encrypted secrets (ADR-0006). Cleared per lifecycle; never in DTO/logs/job args.
       t.text :oauth_code
       t.text :access_token
+      # Stage of the stored access_token (nil when no token; 'short_lived' after code exchange; 'long_lived' after
+      # the long-lived upgrade). Enables resumable two-stage OAuth exchange without re-using the single-use code.
+      t.string :token_stage
       # Short-lease ownership (Guardrail 2): claim processing without holding a DB lock across Meta HTTP calls.
       t.string :processing_owner
       t.datetime :lease_expires_at
@@ -65,5 +68,13 @@ class CreateBloomwireWhatsappOnboardingAttempts < ActiveRecord::Migration[7.1]
     add_check_constraint :bloomwire_whatsapp_onboarding_attempts,
                          "status IN (#{ALL_STATUSES.map { |s| "'#{s}'" }.join(',')})",
                          name: 'bw_wa_onboarding_status_check'
+
+    # token_stage is bound to access_token presence (defence-in-depth alongside the model validation): no token =>
+    # no stage; a stored token => exactly short_lived or long_lived. Enforced on the encrypted column's presence.
+    add_check_constraint :bloomwire_whatsapp_onboarding_attempts,
+                         '(access_token IS NULL AND token_stage IS NULL) OR ' \
+                         '(access_token IS NOT NULL AND token_stage IS NOT NULL AND ' \
+                         "token_stage IN ('short_lived','long_lived'))",
+                         name: 'bw_wa_onboarding_token_stage_check'
   end
 end

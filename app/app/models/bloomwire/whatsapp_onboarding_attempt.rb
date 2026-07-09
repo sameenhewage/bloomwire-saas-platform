@@ -14,6 +14,9 @@
 class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   self.table_name = 'bloomwire_whatsapp_onboarding_attempts'
 
+  # Short ownership-lease primitives (claim/renew/release + TTL constants) live in a focused concern.
+  include Bloomwire::WhatsappOnboardingLeasable
+
   # Fail-closed: raised (with NO secret material) when a secret write is attempted while ActiveRecord encryption
   # is unavailable. oauth_code/access_token are NEVER persisted in plaintext.
   class SecretStorageUnavailableError < StandardError; end
@@ -53,7 +56,10 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   # Statuses from which the recovery worker may re-drive a job (a queued/in-flight attempt with no live worker).
   REDRIVABLE_STATUSES = [QUEUED, EXCHANGING_CODE, PROCESSING].freeze
 
-  DEFAULT_LEASE_SECONDS = 120
+  # access_token stages (Guardrail: two-stage OAuth exchange resumability). nil when no token.
+  SHORT_LIVED = 'short_lived'.freeze
+  LONG_LIVED = 'long_lived'.freeze
+  TOKEN_STAGES = [SHORT_LIVED, LONG_LIVED].freeze
 
   # Guardrail 5: phone_number_masked may only hold a masked value (e.g. "****1234") or be blank — a full number
   # must never be storable, even via a direct update that bypasses #bind_target!.
@@ -66,6 +72,7 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   validates :public_uuid, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
   validates :phone_number_masked, format: { with: MASKED_PHONE_FORMAT }, allow_blank: true
+  validate :token_stage_consistent_with_access_token
 
   scope :active, -> { where(status: ACTIVE_STATUSES) }
   scope :for_account, ->(account) { where(account_id: account.id) }
@@ -131,7 +138,24 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   def store_access_token!(token, owner:, expected_generation:)
     ensure_secret_storage_available!
     owner_guarded_write!(owner, expected_generation) do
-      update!(access_token: token, oauth_code: nil, code_exchanged_at: Time.current)
+      update!(access_token: token, token_stage: LONG_LIVED, oauth_code: nil, code_exchanged_at: Time.current)
+    end
+  end
+
+  # Stage 1 of the resumable exchange: store the SHORT-lived token AND clear the single-use OAuth code ATOMICALLY,
+  # so a retry never re-exchanges the consumed code. Guarded (owner+generation) + fail-closed on encryption.
+  def store_short_lived_token!(token, owner:, expected_generation:)
+    ensure_secret_storage_available!
+    owner_guarded_write!(owner, expected_generation) do
+      update!(access_token: token, token_stage: SHORT_LIVED, oauth_code: nil, code_exchanged_at: Time.current)
+    end
+  end
+
+  # Stage 2: upgrade the stored token to the LONG-lived one (token + stage atomically). Guarded + fail-closed.
+  def upgrade_to_long_lived_token!(token, owner:, expected_generation:)
+    ensure_secret_storage_available!
+    owner_guarded_write!(owner, expected_generation) do
+      update!(access_token: token, token_stage: LONG_LIVED)
     end
   end
 
@@ -139,14 +163,14 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   # so a stale worker cannot clear a newer submission's credential.
   def mark_credential_persisted!(owner:, expected_generation:)
     owner_guarded_write!(owner, expected_generation) do
-      update!(access_token: nil, credential_persisted_at: Time.current, secrets_cleared_at: Time.current)
+      update!(access_token: nil, token_stage: nil, credential_persisted_at: Time.current, secrets_cleared_at: Time.current)
     end
   end
 
   # Terminal cleanup — clear BOTH secrets (expiry / cancel / final failure / Slice 3 TTL sweep). Intentionally
   # UNGUARDED: clearing is always security-safe and must work for owner-less callers (TTL sweep, user cancel).
   def clear_secrets!
-    update!(oauth_code: nil, access_token: nil, secrets_cleared_at: Time.current)
+    update!(oauth_code: nil, access_token: nil, token_stage: nil, secrets_cleared_at: Time.current)
   end
 
   def secrets_present?
@@ -156,40 +180,6 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   # --- Submission generation (stale-job guard) ------------------------------------------------------------
   def bump_generation!
     update!(submission_generation: submission_generation + 1)
-  end
-
-  # --- Short ownership lease (Guardrail 2) --------------------------------------------------------------
-  # Briefly locks the row to claim/renew ownership, then RELEASES the DB connection so the caller performs Meta
-  # HTTP calls OUTSIDE any transaction/lock. Returns true if this worker now owns the lease.
-  def claim_lease!(owner:, ttl_seconds: DEFAULT_LEASE_SECONDS, expected_generation: nil)
-    claimed = false
-    with_lock do
-      if claimable?(owner, expected_generation)
-        update!(processing_owner: owner, lease_expires_at: Time.current + ttl_seconds)
-        claimed = true
-      end
-    end
-    claimed
-  rescue ActiveRecord::StaleObjectError
-    false
-  end
-
-  def claimable?(owner, expected_generation)
-    active? &&
-      (expected_generation.nil? || submission_generation == expected_generation.to_i) &&
-      !leased_by_other?(owner)
-  end
-
-  def leased_by_other?(owner)
-    processing_owner.present? && processing_owner != owner && lease_expires_at.present? && lease_expires_at.future?
-  end
-
-  def lease_held_by?(owner)
-    processing_owner == owner && lease_expires_at.present? && lease_expires_at.future?
-  end
-
-  def release_lease!
-    update!(processing_owner: nil, lease_expires_at: nil)
   end
 
   # --- Status transitions ------------------------------------------------------------------------------
@@ -218,6 +208,15 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
 
   def assign_public_uuid
     self.public_uuid ||= SecureRandom.uuid
+  end
+
+  # token_stage must be nil with no token, and short_lived/long_lived with a token (mirrors the DB CHECK).
+  def token_stage_consistent_with_access_token
+    if access_token.present?
+      errors.add(:token_stage, 'must be short_lived or long_lived when an access_token is present') unless TOKEN_STAGES.include?(token_stage)
+    elsif token_stage.present?
+      errors.add(:token_stage, 'must be nil when no access_token is present')
+    end
   end
 
   # Comprehensive fail-closed backstop: refuse to persist a NON-nil oauth_code/access_token when AR encryption is

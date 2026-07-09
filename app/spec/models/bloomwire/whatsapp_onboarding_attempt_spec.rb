@@ -61,6 +61,25 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
     end
   end
 
+  describe 'token_stage consistency (two-stage exchange / Guardrail 2)' do
+    it 'must be nil without a token, and a valid stage with a token (model validation)' do
+      aggregate_failures do
+        attempt.token_stage = 'short_lived'
+        expect(attempt).not_to be_valid # stage set but no access_token
+
+        attempt.token_stage = nil
+        attempt.access_token = 'tok'
+        expect(attempt).not_to be_valid # token present but no stage
+
+        attempt.token_stage = 'bogus'
+        expect(attempt).not_to be_valid # invalid stage
+
+        attempt.token_stage = 'short_lived'
+        expect(attempt).to be_valid
+      end
+    end
+  end
+
   describe 'phone privacy (Guardrail 5)' do
     it 'bind_target! stores ONLY a masked number, never the full number' do
       attempt.bind_target!(waba_id: 'WABA-1', phone_number_id: 'PNID-1', phone_number: '+15551230001')
@@ -109,6 +128,32 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
     it 'is not claimable in a terminal state' do
       attempt.update!(status: 'completed')
       expect(attempt.claim_lease!(owner: 'worker-a')).to be(false)
+    end
+
+    it 'derives a mutation lease TTL that outlasts the max bounded Graph call (open+read) plus a margin' do
+      open = Whatsapp::FacebookApiClient::OPEN_TIMEOUT_SECONDS
+      read = Whatsapp::FacebookApiClient::READ_TIMEOUT_SECONDS
+      aggregate_failures do
+        expect(described_class::MUTATION_LEASE_SECONDS).to be > (open + read)
+        expect(described_class::MUTATION_LEASE_SECONDS).to eq(open + read + described_class::LEASE_SAFETY_MARGIN_SECONDS)
+      end
+    end
+
+    it 'release_lease! only releases for the matching owner + generation (stale worker cannot clear a newer lease)' do
+      attempt.claim_lease!(owner: 'new-owner', expected_generation: 0)
+      attempt.release_lease!(owner: 'stale-worker', expected_generation: 0)
+      expect(attempt.reload.lease_held_by?('new-owner')).to be(true)
+      attempt.release_lease!(owner: 'new-owner', expected_generation: 0)
+      expect(attempt.reload.processing_owner).to be_nil
+    end
+
+    it 'renew_lease! extends only for the current owner + generation' do
+      attempt.claim_lease!(owner: 'worker-a', expected_generation: 0, ttl_seconds: 5)
+      aggregate_failures do
+        expect(attempt.renew_lease!(owner: 'worker-a', expected_generation: 0)).to be(true)
+        expect(attempt.renew_lease!(owner: 'worker-b', expected_generation: 0)).to be(false)
+        expect(attempt.renew_lease!(owner: 'worker-a', expected_generation: 1)).to be(false)
+      end
     end
   end
 
@@ -228,7 +273,25 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
         aggregate_failures do
           expect(attempt.reload.oauth_code).to be_nil
           expect(attempt.access_token).to be_nil
+          expect(attempt.token_stage).to be_nil
           expect(attempt.secrets_cleared_at).to be_present
+        end
+      end
+
+      it 'store_short_lived_token! then upgrade_to_long_lived_token! set token + stage atomically' do
+        attempt.store_code!('CODE-1')
+        gen = attempt.submission_generation
+        attempt.claim_lease!(owner: 'w1', expected_generation: gen)
+        attempt.store_short_lived_token!('SHORT', owner: 'w1', expected_generation: gen)
+        aggregate_failures do
+          expect(attempt.reload.access_token).to eq('SHORT')
+          expect(attempt.token_stage).to eq('short_lived')
+          expect(attempt.oauth_code).to be_nil
+        end
+        attempt.upgrade_to_long_lived_token!('LONG', owner: 'w1', expected_generation: gen)
+        aggregate_failures do
+          expect(attempt.reload.access_token).to eq('LONG')
+          expect(attempt.token_stage).to eq('long_lived')
         end
       end
     end
@@ -263,6 +326,17 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
           expect(raw.to_s).not_to include('UC-SECRET')          # stored encrypted, not as plaintext
           expect(attempt.reload.oauth_code).to eq('UC-SECRET')  # decrypts back correctly
         end
+      end
+
+      it 'enforces token_stage consistency at the DB level (CHECK) even when validation is bypassed' do
+        gen = attempt.submission_generation
+        attempt.claim_lease!(owner: 'w1', expected_generation: gen)
+        attempt.store_short_lived_token!('TOK', owner: 'w1', expected_generation: gen)
+        expect do
+          ActiveRecord::Base.connection.execute(
+            "UPDATE bloomwire_whatsapp_onboarding_attempts SET token_stage = NULL WHERE id = #{attempt.id}"
+          )
+        end.to raise_error(ActiveRecord::StatementInvalid, /bw_wa_onboarding_token_stage_check|check constraint/i)
       end
     end
 
