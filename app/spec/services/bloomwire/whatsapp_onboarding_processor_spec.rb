@@ -65,6 +65,30 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor do
     end
   end
 
+  def raise_on_exchange(error)
+    failing = instance_double(Whatsapp::TokenExchangeService)
+    allow(failing).to receive(:perform).and_raise(error)
+    allow(Whatsapp::TokenExchangeService).to receive(:new).and_return(failing)
+  end
+
+  # A structured Meta error whose MESSAGE carries a raw body marker, to prove the sanitized safe_error_code never
+  # leaks it. error_type defaults to Meta's OAuthException (an auth failure).
+  def graph_error(http_status:, error_type: 'OAuthException', is_transient: nil)
+    Whatsapp::GraphApiError.new(
+      'Token exchange failed: {"error":{"message":"RAW-META-BODY","type":"OAuthException","code":190}}',
+      http_status: http_status, error_type: error_type, is_transient: is_transient
+    )
+  end
+
+  def expect_retryable_retention
+    aggregate_failures do
+      expect(attempt.reload.status).not_to eq('expired')
+      expect(Bloomwire::WhatsappOnboardingAttempt::REDRIVABLE_STATUSES).to include(attempt.status) # redrivable -> retry
+      expect(attempt.oauth_code).to eq('OAUTH-CODE')                # code retained (not consumed)
+      expect(attempt.safe_error_code).to eq('oauth_exchange_retryable')
+    end
+  end
+
   # ---- Gap 1: two-stage OAuth token exchange resumability ------------------------------------------------
   describe 'two-stage token exchange (gap 1)' do
     it 'exchanges the code once, stores the short token + clears the code, then upgrades to long-lived' do
@@ -275,6 +299,75 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor do
         expect(attempt.safe_error_code).not_to include('long-token')
         expect(attempt.access_token).to eq('long-token') # retained for retry (transient, not terminal)
       end
+    end
+  end
+
+  # ---- Slice 2 correction: terminal vs transient OAuth-exchange error classification -------------------
+  describe 'OAuth-code exchange error classification' do
+    it 'Meta-confirmed EXPIRED code -> terminal expired, secrets cleared, not redrivable, no leak' do
+      stub_meta
+      raise_on_exchange(graph_error(http_status: 400, is_transient: false))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      aggregate_failures do
+        expect(attempt.reload.status).to eq('expired')
+        expect(attempt.safe_error_code).to eq('oauth_code_expired')
+        expect(attempt.oauth_code).to be_nil
+        expect(attempt.access_token).to be_nil
+        expect(Bloomwire::WhatsappOnboardingAttempt::REDRIVABLE_STATUSES).not_to include('expired')
+        expect(attempt.safe_error_code).not_to include('RAW-META-BODY')
+      end
+    end
+
+    it 'Meta-confirmed INVALID code (OAuthException) -> terminal expired' do
+      stub_meta
+      raise_on_exchange(graph_error(http_status: 400))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      aggregate_failures do
+        expect(attempt.reload.status).to eq('expired')
+        expect(attempt.safe_error_code).to eq('oauth_code_expired')
+      end
+    end
+
+    it 'network/connect failure -> retryable, code retained' do
+      stub_meta
+      raise_on_exchange(Errno::ECONNREFUSED.new('connection refused'))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      expect_retryable_retention
+    end
+
+    it 'Graph read timeout -> retryable, code retained' do
+      stub_meta
+      raise_on_exchange(Whatsapp::GraphApiTimeoutError.new('Graph API GET timed out (Net::ReadTimeout)'))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      expect_retryable_retention
+    end
+
+    it 'Meta 5xx -> retryable, code retained' do
+      stub_meta
+      raise_on_exchange(graph_error(http_status: 503))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      expect_retryable_retention
+    end
+
+    it 'HTTP 429 rate limit -> retryable, code retained' do
+      stub_meta
+      raise_on_exchange(graph_error(http_status: 429))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      expect_retryable_retention
+    end
+
+    it 'Meta is_transient=true (even OAuthException) -> retryable, code retained' do
+      stub_meta
+      raise_on_exchange(graph_error(http_status: 400, is_transient: true))
+      attempt.store_code!('OAUTH-CODE')
+      run
+      expect_retryable_retention
     end
   end
 end

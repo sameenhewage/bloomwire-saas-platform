@@ -20,8 +20,11 @@ class Whatsapp::FacebookApiClient
                               client_secret: GlobalConfigService.load('WHATSAPP_APP_SECRET', ''),
                               code: code
                             })
+    # Structured (message byte-identical to the legacy string) so the managed async processor can classify a
+    # Meta-confirmed invalid/expired authorization code (OAuthException) as terminal vs a transient 5xx/429.
+    raise Whatsapp::GraphApiError.from_response('Token exchange failed', response) unless response.success?
 
-    handle_response(response, 'Token exchange failed')
+    response.parsed_response
   end
 
   # Exchange a short-lived embedded-signup USER token for a long-lived (~60d) one (fb_exchange_token grant), as in

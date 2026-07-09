@@ -19,6 +19,12 @@
 # are re-checked before every write; a lost lease => NO local write; release is guarded (matching owner+generation).
 # TRANSIENT errors (timeout/5xx/network) => retain the encrypted token + stage, record a sanitized code, stay
 # resumable (never terminal). Only confirmed-terminal cases clear secrets. Sanitized errors only; no secret leakage.
+#
+# OAUTH ERROR CLASSIFICATION (no invented Meta codes — only GraphApiError safe fields is_transient/http_status/
+# error_type): TERMINAL (status=expired, safe_error_code=oauth_code_expired, secrets cleared, not redrivable, no
+# endless retry) ONLY when Meta confirms an OAuthException that is not is_transient (an invalid/expired auth code).
+# RETRYABLE (safe_error_code=oauth_exchange_retryable; oauth_code/token/stage retained) for a network/read timeout,
+# Meta's is_transient flag, an HTTP 5xx, an HTTP 429 rate limit, or any unclassifiable error.
 class Bloomwire::WhatsappOnboardingProcessor
   Attempt = Bloomwire::WhatsappOnboardingAttempt
   CONNECTED_STATUS = 'CONNECTED'.freeze
@@ -51,6 +57,7 @@ class Bloomwire::WhatsappOnboardingProcessor
   def process_owned
     return if resume_from_persisted_setup
 
+    mark_processing
     token = ensure_long_lived_token
     return if token.blank? # transient failure recorded; credential retained (resumable)
 
@@ -68,6 +75,10 @@ class Bloomwire::WhatsappOnboardingProcessor
     return unless subscribe_if_ready(client, target[:waba_id], capability)
 
     persist_and_finalize(token, target, registration[:verification_pin], capability)
+  end
+
+  def mark_processing
+    @attempt.transition!(Attempt::PROCESSING) unless @attempt.status == Attempt::PROCESSING
   end
 
   # ---- Gap 4: resume from persisted-but-not-finalized records --------------------------------------------
@@ -115,11 +126,21 @@ class Bloomwire::WhatsappOnboardingProcessor
     return @attempt.access_token if @attempt.token_stage == Attempt::SHORT_LIVED
     return terminal_missing_code if @attempt.oauth_code.blank?
 
-    short = safe_meta { Whatsapp::TokenExchangeService.new(@attempt.oauth_code).perform }
+    short = exchange_authorization_code
     return if short.blank?
 
     @attempt.store_short_lived_token!(short, owner: @owner, expected_generation: @generation)
     @attempt.access_token
+  end
+
+  # OAuth-code exchange with terminal-vs-transient classification (see the mapping in the class header). Only the
+  # TokenExchangeService call is wrapped, so guarded-write / encryption errors propagate. Never logs the code or
+  # the raw Meta response.
+  def exchange_authorization_code
+    Whatsapp::TokenExchangeService.new(@attempt.oauth_code).perform
+  rescue Whatsapp::GraphApiTimeoutError, Whatsapp::GraphApiError, StandardError => e
+    Bloomwire::WhatsappGraphErrorClassifier.terminal_oauth?(e) ? terminal_oauth_expired! : record_safe_error(:oauth_exchange_retryable)
+    nil
   end
 
   def fetch_phone_info(token)
@@ -234,6 +255,13 @@ class Bloomwire::WhatsappOnboardingProcessor
   # No code AND no stored token => nothing resumable => terminal (clear per lifecycle).
   def terminal_missing_code
     @attempt.transition!(Attempt::FAILED, error_code: 'missing_code')
+    @attempt.clear_secrets!
+    nil
+  end
+
+  # Meta confirmed the authorization code is unusable: terminal EXPIRED, both secrets cleared, not redrivable.
+  def terminal_oauth_expired!
+    @attempt.transition!(Attempt::EXPIRED, error_code: 'oauth_code_expired')
     @attempt.clear_secrets!
     nil
   end
