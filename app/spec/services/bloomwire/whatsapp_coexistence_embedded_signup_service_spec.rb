@@ -101,29 +101,23 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'registers the selected phone number on the Cloud API exactly once, reusing the parent PIN mechanism' do
+    it 'skips the Standard Cloud API /register call for coexistence onboarding' do
       result
 
-      # Coexistence inherits the parent /register path: a fresh (DISCONNECTED) number is registered exactly once
-      # with a 6-digit PIN from the parent mechanism — asserted by shape only, never the raw generated value.
-      expect(fb_client).to have_received(:register_phone_number).with('PNID-1', match(/\A\d{6}\z/)).once
+      expect(fb_client).not_to have_received(:register_phone_number)
     end
 
-    it 're-checks status AFTER /register for a fresh number (the fail-closed gate sees the post-register status)' do
+    it 're-checks status after skipping /register so the fail-closed gate sees Meta readiness' do
       order = []
       statuses = %w[DISCONNECTED CONNECTED]
-      allow(fb_client).to receive(:register_phone_number) do |*_|
-        order << :register
-        { 'success' => true }
-      end
       allow(fb_client).to receive(:phone_number_status) do
         order << :status
         statuses.shift || 'CONNECTED'
       end
 
       expect(result).to be_success
-      # New order: status(DISCONNECTED) -> register -> status(CONNECTED); the readiness gate uses the last status.
-      expect(order).to eq(%i[status register status])
+      expect(order).to eq(%i[status status])
+      expect(fb_client).not_to have_received(:register_phone_number)
     end
 
     it 'inherits the parent skip: an already-CONNECTED selected number is NOT re-registered' do
@@ -162,10 +156,9 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       end
     end
 
-    it 'fails closed and persists nothing when /register fails and the number stays DISCONNECTED' do
+    it 'fails closed and persists nothing when the selected number stays DISCONNECTED' do
       stub_ready
       stub_meta
-      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError.new('meta register failed'))
       allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
 
       aggregate_failures do
@@ -173,34 +166,24 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         expect(Channel::Whatsapp.count).to eq(0)
         expect(account.inboxes.count).to eq(0)
         expect(Bloomwire::WhatsappSetup.count).to eq(0)
-        # App-to-WABA subscription only runs AFTER the readiness gate passes, so a failed /register can never be
-        # mistaken for successful persistence.
+        expect(fb_client).not_to have_received(:register_phone_number)
         expect(fb_client).not_to have_received(:subscribe_app_to_waba)
       end
     end
 
-    it 'records the sanitized phone_registration_failed event (inherited) and still fails closed on a Meta rejection' do
+    it 'does not emit phone_registration_failed for coexistence because Standard /register is skipped' do
       stub_ready
       stub_meta
       warn_logs = []
-      graph_error = Whatsapp::GraphApiError.from_response(
-        'Phone registration failed',
-        instance_double(HTTParty::Response, code: 400,
-                                            body: { error: { message: '(#100) not permitted', type: 'OAuthException', code: 100,
-                                                             error_subcode: 33, is_transient: false, fbtrace_id: 'SAFE_TRACE_ID' } }.to_json)
-      )
-      allow(fb_client).to receive(:register_phone_number).and_raise(graph_error)
+      allow(fb_client).to receive(:register_phone_number).and_raise(StandardError.new('meta register failed'))
       allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
       allow(Rails.logger).to receive(:warn) { |m| warn_logs << m }
 
       aggregate_failures do
         expect(result.error).to eq(:no_connected_registration)
         expect(Channel::Whatsapp.count).to eq(0)
-        event = warn_logs.find { |m| m.include?('bloomwire.whatsapp.phone_registration_failed') }
-        payload = JSON.parse(event.sub('[BLOOMWIRE EMBEDDED SIGNUP] ', ''))
-        expect(payload['meta_error_code']).to eq(100)
-        expect(payload['fbtrace_id']).to eq('SAFE_TRACE_ID')
-        expect(event).not_to include('FAKE-CUSTOMER-TOKEN')
+        expect(fb_client).not_to have_received(:register_phone_number)
+        expect(warn_logs.grep(/bloomwire\.whatsapp\.phone_registration_failed/)).to be_empty
       end
     end
 

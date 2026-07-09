@@ -859,6 +859,16 @@
       </ul>
     </div>
 
+    <div class="card"><h3>Phase 6.3c — Coexistence onboarding must skip Standard Cloud API <code>/register</code> <span class="badge pending">Open · PR pending · DEV deploy/test pending</span></h3>
+      <ul>
+        <li><b>Root cause (DEV reference <code>b318dab0</code>):</b> the browser completed both Coexistence signals and the backend posted to <code>coexistence_embedded_signup</code>, but <code>Bloomwire::WhatsappCoexistenceEmbeddedSignupService</code> inherited the Standard Cloud API <code>/register</code> call. Meta returned <code>#100</code> for phone number <code>1249446648242795</code>; after that the duplicate-registration resolver scanned WABAs and Rack timed out, so the browser saw HTTP 500.</li>
+        <li><b>Fix:</b> restore the Coexistence-specific <code>register_number</code> no-op. WhatsApp Business App Coexistence now skips Standard Cloud API <code>/register</code> while retaining the inherited status re-check, fail-closed readiness gate, same-business connected-registration resolver, final-WABA subscription, global-router-only boundary, and safe DTOs.</li>
+        <li><b>Not changed:</b> Standard Embedded Signup still uses the parent <code>/register</code> path; native <code>/whatsapp/authorization</code>, per-channel webhook override, schema, Enterprise, provider credentials, and production are untouched.</li>
+        <li><b>Validation (cwd <code>app/</code>, Meta stubbed):</b> RED first — Coexistence service spec failed <b>17 examples, 4 failures</b> because <code>register_phone_number</code> was called. GREEN after the fix — Coexistence service + request specs <b>27/0</b>; Standard parent service + request specs <b>49/0</b>; RuboCop on changed Ruby/spec <b>0 offenses</b>. No secrets; no live Meta calls in specs.</li>
+        <li><b>Runtime status:</b> DEV deploy/test pending. Expected runtime proof after deploy: fresh Coexistence attempt should emit no <code>bloomwire.whatsapp.phone_registration_failed</code> event and should not 500 from <code>waba_registrations</code>; if it still stops, next owner is actor capability (<code>actor_has_manage</code>) or clean readiness/subscription evidence.</li>
+      </ul>
+    </div>
+
     <div class="card"><h3>Phase 6.1 — WhatsWay-parity Disconnect flow + long-lived-token exchange corrected to match WhatsWay exactly <span class="badge pending">Open · PR pending</span></h3>
       <ul>
         <li><b>Verified against the WhatsWay source</b> (<code>whatsway/server/controllers/channels.controller.ts</code>) &mdash; matched exactly, not assumed.</li>
