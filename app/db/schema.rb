@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_30_000001) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_10_000001) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -345,6 +345,43 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_30_000001) do
     t.datetime "updated_at", null: false
     t.index ["approved_by_id"], name: "index_bloomwire_platform_admins_on_approved_by_id"
     t.index ["user_id"], name: "index_bloomwire_platform_admins_on_user_id", unique: true
+  end
+
+  create_table "bloomwire_whatsapp_onboarding_attempts", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "public_uuid", null: false
+    t.string "status", default: "waiting_meta", null: false
+    t.string "step"
+    t.string "business_id"
+    t.string "waba_id"
+    t.string "phone_number_id"
+    t.string "phone_number_masked"
+    t.integer "submission_generation", default: 0, null: false
+    t.integer "retry_count", default: 0, null: false
+    t.string "safe_error_code"
+    t.bigint "channel_whatsapp_id"
+    t.bigint "inbox_id"
+    t.text "oauth_code"
+    t.text "access_token"
+    t.string "processing_owner"
+    t.datetime "lease_expires_at"
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "code_received_at"
+    t.datetime "code_expires_at"
+    t.datetime "code_exchanged_at"
+    t.datetime "credential_persisted_at"
+    t.datetime "secrets_cleared_at"
+    t.datetime "job_enqueued_at"
+    t.datetime "processing_started_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "phone_number_id"], name: "idx_bw_wa_onboarding_active_account_phone", unique: true, where: "((phone_number_id IS NOT NULL) AND ((status)::text = ANY ((ARRAY['waiting_meta'::character varying, 'queued'::character varying, 'exchanging_code'::character varying, 'processing'::character varying, 'action_required'::character varying])::text[])))"
+    t.index ["account_id", "status"], name: "idx_on_account_id_status_5cbf651981"
+    t.index ["account_id"], name: "index_bloomwire_whatsapp_onboarding_attempts_on_account_id"
+    t.index ["channel_whatsapp_id"], name: "idx_on_channel_whatsapp_id_385ab6258a"
+    t.index ["inbox_id"], name: "index_bloomwire_whatsapp_onboarding_attempts_on_inbox_id"
+    t.index ["public_uuid"], name: "index_bloomwire_whatsapp_onboarding_attempts_on_public_uuid", unique: true
+    t.index ["status", "updated_at"], name: "idx_on_status_updated_at_263de0c310"
   end
 
   create_table "bloomwire_whatsapp_setup_requests", force: :cascade do |t|
@@ -1466,6 +1503,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_30_000001) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "bloomwire_platform_admins", "users", column: "approved_by_id", on_delete: :nullify
   add_foreign_key "bloomwire_platform_admins", "users", on_delete: :cascade
+  add_foreign_key "bloomwire_whatsapp_onboarding_attempts", "accounts"
+  add_foreign_key "bloomwire_whatsapp_onboarding_attempts", "channel_whatsapp"
+  add_foreign_key "bloomwire_whatsapp_onboarding_attempts", "inboxes"
   add_foreign_key "bloomwire_whatsapp_setup_requests", "accounts"
   add_foreign_key "bloomwire_whatsapp_setup_requests", "bloomwire_whatsapp_setups"
   add_foreign_key "bloomwire_whatsapp_setup_requests", "users", column: "requested_by_id"
