@@ -18,7 +18,7 @@ class Bloomwire::WhatsappCoexistenceEmbeddedSignupService < Bloomwire::WhatsappE
   private
 
   def register_number(_client, _phone_number_id)
-    nil
+    RegistrationResult.new
   end
 
   def create_channel_shell(waba_id, phone_info)

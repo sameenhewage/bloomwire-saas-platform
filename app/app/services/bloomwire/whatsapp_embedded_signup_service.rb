@@ -23,6 +23,9 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # token can message — Bloomwire::WhatsappConnectedNumberResolver routes to that single same-business registration,
   # or fails closed (no channel/inbox/setup). The whole gate runs before any DB write.
   CONNECTED_STATUS = 'CONNECTED'.freeze
+  # Meta Graph API error code for a Cloud API /register two-step-verification PIN mismatch. Hitting it means the
+  # number already carries a 2SV PIN we do not hold — fail closed (never silently retry with another random PIN).
+  PIN_MISMATCH_META_ERROR_CODE = 133_005
   # Non-secret guidance shown to the account owner. Until this step is completed the managed inbox is NOT active
   # in EITHER direction — it is deliberately not subscribed for inbound and cannot send outbound — so we say so
   # plainly. The concrete Meta asset-task grant is a customer/owner action; "Recheck permission" then activates it.
@@ -36,6 +39,11 @@ class Bloomwire::WhatsappEmbeddedSignupService
       error.nil?
     end
   end
+
+  # Internal result of the Cloud API /register step. `pin` is the (secret) PIN used on success — persisted encrypted,
+  # never logged/returned. `error` is a safe Symbol surfaced to the caller ONLY when register failed in a way the
+  # owner must act on (:registration_pin_required for a 2SV PIN mismatch); nil keeps the failure non-fatal.
+  RegistrationResult = Struct.new(:pin, :error, keyword_init: true)
 
   def initialize(account:, params:)
     @account = account
@@ -51,13 +59,20 @@ class Bloomwire::WhatsappEmbeddedSignupService
 
     meta = perform_meta_steps
     return Result.new(error: :meta_error) if meta.nil?
+    return Result.new(error: meta[:registration_error]) if meta[:registration_error]
 
     target = resolve_target(meta)
     return Result.new(error: target) if target.is_a?(Symbol)
 
-    # Outbound capability is verified BEFORE any subscription, and we subscribe ONLY on the ready path — a
-    # not-ready inbox must never be subscribed (Meta would forward inbound the global router then discards). So an
-    # Action-Required inbox is persisted UNSUBSCRIBED, inactive in both directions until "Recheck" completes it.
+    finalize(meta, target)
+  end
+
+  private
+
+  # Outbound capability is verified BEFORE any subscription, and we subscribe ONLY on the ready path — a not-ready
+  # inbox must never be subscribed (Meta would forward inbound the global router then discards). So an
+  # Action-Required inbox is persisted UNSUBSCRIBED, inactive in both directions until "Recheck" completes it.
+  def finalize(meta, target)
     capability = outbound_capability(meta, target[:waba_id])
 
     activation_error = subscribe_final_waba(meta[:client], target[:waba_id]) if capability.ready?
@@ -68,8 +83,6 @@ class Bloomwire::WhatsappEmbeddedSignupService
 
     Result.new(dto: dto_for(persisted))
   end
-
-  private
 
   # Fail closed before any Meta call / token storage.
   def preflight
@@ -109,19 +122,24 @@ class Bloomwire::WhatsappEmbeddedSignupService
     phone_info = Whatsapp::PhoneInfoService.new(@waba_id, @phone_number_id, token).perform
     phone_number_id = phone_info[:phone_number_id]
     log_signup_token(stage: 'pre_register', token: token, phone_number_id: phone_number_id, client: client)
-    # Register ONLY when the number is not already CONNECTED (re-registering a live, pin-enabled number can disrupt
-    # the owner-set registration). A /register failure stays non-fatal — the readiness gate then fails closed.
-    connection_status = client.phone_number_status(phone_number_id)
-    verification_pin = nil
-    unless connection_status == CONNECTED_STATUS
-      verification_pin = register_number(client, phone_number_id)
-      connection_status = client.phone_number_status(phone_number_id)
-    end
-    { token: token, client: client, phone_info: phone_info, verification_pin: verification_pin,
-      connection_status: connection_status }
+    registration = ensure_registered(client, phone_number_id)
+    { token: token, client: client, phone_info: phone_info, **registration }
   rescue StandardError => e
     Rails.logger.error("[BLOOMWIRE EMBEDDED SIGNUP] Meta step failed: #{e.class}")
     nil
+  end
+
+  # Ensures the number is registered on the Cloud API. Registers ONLY when it is not already CONNECTED
+  # (re-registering a live, pin-enabled number can disrupt the owner-set registration). A /register failure stays
+  # non-fatal (the readiness gate then fails closed) unless it is a 2SV PIN mismatch we must surface to the owner.
+  # Returns connection_status + the verification_pin used (persisted encrypted) + any owner-facing registration_error.
+  def ensure_registered(client, phone_number_id)
+    status = client.phone_number_status(phone_number_id)
+    return { connection_status: status, verification_pin: nil, registration_error: nil } if status == CONNECTED_STATUS
+
+    registration = register_number(client, phone_number_id)
+    { connection_status: client.phone_number_status(phone_number_id),
+      verification_pin: registration.pin, registration_error: registration.error }
   end
 
   def log_signup_token(stage:, token:, phone_number_id:, client: Whatsapp::FacebookApiClient.new(token))
@@ -167,15 +185,27 @@ class Bloomwire::WhatsappEmbeddedSignupService
     ).ensure
   end
 
-  # Registers the number on Cloud API with a fresh 6-digit 2FA PIN. Returns the PIN (persisted so a later
-  # re-register does not lock the number out), or nil when the call fails (non-fatal by design).
+  # Registers the number on Cloud API using the PIN RESOLVED for it (stored-encrypted > securely-configured >
+  # fresh random), so an EXISTING number is re-registered with its KNOWN 2SV pin instead of a random one Meta
+  # rejects (#133005). Returns a RegistrationResult with the PIN on success (persisted encrypted, never logged).
+  # A 2SV PIN mismatch fails closed with :registration_pin_required (we hold no correct pin, so never a silent
+  # random retry); any other Meta error stays non-fatal (nil error) so the readiness gate fails closed generically.
   def register_number(client, phone_number_id)
-    pin = format('%06d', SecureRandom.random_number(1_000_000))
+    pin = Bloomwire::WhatsappRegistrationPin.new(account: @account, phone_number_id: phone_number_id).resolve.pin
     client.register_phone_number(phone_number_id, pin)
-    pin
+    RegistrationResult.new(pin: pin)
+  rescue Whatsapp::GraphApiError => e
+    log_phone_registration_failure(phone_number_id, e)
+    RegistrationResult.new(error: pin_mismatch?(e) ? :registration_pin_required : nil)
   rescue StandardError => e
     log_phone_registration_failure(phone_number_id, e)
-    nil
+    RegistrationResult.new
+  end
+
+  # A Cloud API /register 2SV PIN mismatch (#133005): the number already has a two-step-verification PIN we could
+  # not match. Detected on the sanitized, allow-listed Meta error code only (never the raw body).
+  def pin_mismatch?(error)
+    error.error_code.to_i == PIN_MISMATCH_META_ERROR_CODE
   end
 
   # Sanitized, structured observability for a failed Cloud API /register. The failure stays non-fatal (the number

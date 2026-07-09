@@ -355,6 +355,88 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     end
   end
 
+  # Existing-number 2SV PIN: a number that was registered before already carries a Meta two-step-verification PIN,
+  # so Bloomwire must re-register it with that KNOWN pin (stored-encrypted, else securely-configured) instead of a
+  # fresh random one — which Meta rejects with #133005. When no correct pin is available, fail CLOSED (never a
+  # silent random retry, never a partial record). The pin is a secret: never in a log or the DTO. Fake values only.
+  describe 'existing-number registration PIN (avoids Meta #133005)' do
+    let(:existing_pins_env) { 'BLOOMWIRE_WHATSAPP_EXISTING_REGISTRATION_PINS' }
+
+    def pin_mismatch_error
+      body = { error: { message: '(#133005) Two step verification PIN Mismatch', type: 'OAuthException',
+                        code: 133_005, fbtrace_id: 'SAFE_TRACE_ID' } }.to_json
+      Whatsapp::GraphApiError.from_response('Phone registration failed',
+                                            instance_double(HTTParty::Response, body: body, code: 400))
+    end
+
+    before do
+      stub_ready
+      stub_meta
+    end
+
+    it 'registers with the securely-configured existing PIN (never a random one) and stores it encrypted' do
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        aggregate_failures do
+          expect(result).to be_success
+          expect(fb_client).to have_received(:register_phone_number).with('PNID-1', '654321')
+          expect(Channel::Whatsapp.last.provider_config['verification_pin']).to eq('654321')
+          expect(result.dto.to_json).not_to include('654321')
+        end
+      end
+    end
+
+    it 'reuses the stored encrypted PIN on reconnect (no new random PIN, same single records)' do
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        expect(result).to be_success # first onboard: DISCONNECTED -> register('654321') -> CONNECTED, stores it
+      end
+      expect(Channel::Whatsapp.last.provider_config['verification_pin']).to eq('654321')
+
+      # Reconnect WITHOUT the env configured — proves the PIN now comes from encrypted storage, not the env.
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
+      again = described_class.new(account: account, params: params).perform
+      aggregate_failures do
+        expect(again).to be_success
+        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', '654321').twice
+        expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
+      end
+    end
+
+    it 'fails closed with :registration_pin_required (persists nothing) when Meta rejects a known PIN with #133005' do
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        allow(fb_client).to receive(:register_phone_number).and_raise(pin_mismatch_error)
+        allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+        aggregate_failures do
+          expect(result.error).to eq(:registration_pin_required)
+          expect(Channel::Whatsapp.count).to eq(0)
+          expect(account.inboxes.count).to eq(0)
+          expect(Bloomwire::WhatsappSetup.count).to eq(0)
+        end
+      end
+    end
+
+    it 'fails closed with :registration_pin_required for a new number on #133005 (no silent random retry)' do
+      allow(fb_client).to receive(:register_phone_number).and_raise(pin_mismatch_error)
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      aggregate_failures do
+        expect(result.error).to eq(:registration_pin_required)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'never logs the PIN when registration fails with #133005' do
+      warn_logs = []
+      allow(Rails.logger).to receive(:warn) { |m| warn_logs << m }
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        allow(fb_client).to receive(:register_phone_number).and_raise(pin_mismatch_error)
+        allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+        result
+        expect(warn_logs.join("\n")).not_to include('654321')
+      end
+    end
+  end
+
   describe 'fail-closed preflight (before any Meta call / token storage)' do
     it 'returns :not_ready and persists nothing when the platform is not ready' do
       stub_ready(ready: false)
