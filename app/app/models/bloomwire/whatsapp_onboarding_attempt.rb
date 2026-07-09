@@ -22,11 +22,13 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   # worker can never clear or clobber a newer submission's secret.
   class StaleWorkerError < StandardError; end
 
-  # TODO: remove the guard once encryption keys are mandatory (mirrors the other channel secret columns).
-  if Chatwoot.encryption_configured?
-    encrypts :oauth_code
-    encrypts :access_token
-  end
+  # oauth_code/access_token are ALWAYS encrypted (declared UNCONDITIONALLY, unlike the legacy channel columns) so
+  # the encrypted attribute TYPE guards EVERY serialization path — including callback-bypassing writes such as
+  # update_columns — not only callback paths. Without encryption keys, an attempted secret write fails at the
+  # encryption layer (privileged raw SQL / insert_all / upsert_all remain out of scope). The explicit guards below
+  # additionally raise a safe SecretStorageUnavailableError for normal lifecycle writes before storage is attempted.
+  encrypts :oauth_code
+  encrypts :access_token
   # Defence in depth: never surface either secret in log/console inspection even when decrypted in memory.
   self.filter_attributes += %i[oauth_code access_token]
 
@@ -67,6 +69,21 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
 
   scope :active, -> { where(status: ACTIVE_STATUSES) }
   scope :for_account, ->(account) { where(account_id: account.id) }
+
+  # --- Async-onboarding readiness / preflight (ADR-0010 v3) --------------------------------------------------
+  # The async flow persists encrypted secrets, so it MUST NOT be enabled or accept a submission unless AR
+  # encryption is configured. Slice 4's feature flag/controller MUST consult this gate and surface the safe,
+  # non-secret code below; the flow never silently falls back to plaintext storage.
+  READINESS_ERROR_ENCRYPTION = 'encryption_not_configured'.freeze
+
+  def self.async_onboarding_available?
+    Chatwoot.encryption_configured?
+  end
+
+  # Safe, non-secret readiness error code, or nil when ready to enable/submit.
+  def self.readiness_error_code
+    async_onboarding_available? ? nil : READINESS_ERROR_ENCRYPTION
+  end
 
   def active?
     ACTIVE_STATUSES.include?(status)

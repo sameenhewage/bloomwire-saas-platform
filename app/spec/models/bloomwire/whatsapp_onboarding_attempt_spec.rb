@@ -112,6 +112,24 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
     end
   end
 
+  describe 'async-onboarding readiness / preflight contract (encryption required)' do
+    if Chatwoot.encryption_configured?
+      it 'is available with no readiness error when AR encryption is configured' do
+        aggregate_failures do
+          expect(described_class.async_onboarding_available?).to be(true)
+          expect(described_class.readiness_error_code).to be_nil
+        end
+      end
+    else
+      it 'is NOT available and returns encryption_not_configured (no plaintext fallback)' do
+        aggregate_failures do
+          expect(described_class.async_onboarding_available?).to be(false)
+          expect(described_class.readiness_error_code).to eq('encryption_not_configured')
+        end
+      end
+    end
+  end
+
   # -- Fail-closed encryption (Fix 1): only meaningful WITHOUT AR encryption keys ------------------------------
 
   context 'when AR encryption is NOT configured (fail-closed / Fix 1)' do
@@ -145,6 +163,22 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
         expect(error).to be_present
         expect(error.message).not_to include('SUPER-SECRET-CODE')
         expect(attempt.inspect).not_to include('SUPER-SECRET-CODE')
+      end
+    end
+
+    it 'update_columns cannot silently persist a plaintext secret (encrypted attribute type guards it)' do
+      raised = nil
+      begin
+        attempt.update_columns(oauth_code: 'UC-PLAINTEXT-PROBE') # rubocop:disable Rails/SkipsModelValidations
+      rescue StandardError => e
+        raised = e
+      end
+      raw = raw_row(attempt.id, 'oauth_code')['oauth_code']
+      aggregate_failures do
+        expect(raw).to be_nil                                   # no plaintext persisted
+        expect(raw.to_s).not_to include('UC-PLAINTEXT-PROBE')
+        expect(raised).to be_present                            # encrypted type refuses to serialize without keys
+        expect(raised.message).not_to include('UC-PLAINTEXT-PROBE')
       end
     end
   end
@@ -218,6 +252,16 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
         aggregate_failures do
           expect(dump).not_to include('CODE-SECRET')
           expect(dump).to include('[FILTERED]')
+        end
+      end
+
+      it 'update_columns writes THROUGH the encrypted type (ciphertext at rest, never a plaintext column)' do
+        attempt.update_columns(oauth_code: 'UC-SECRET') # rubocop:disable Rails/SkipsModelValidations
+        raw = raw_row(attempt.id, 'oauth_code')['oauth_code']
+        aggregate_failures do
+          expect(raw).to be_present
+          expect(raw.to_s).not_to include('UC-SECRET')          # stored encrypted, not as plaintext
+          expect(attempt.reload.oauth_code).to eq('UC-SECRET')  # decrypts back correctly
         end
       end
     end
