@@ -1,5 +1,11 @@
 class Whatsapp::FacebookApiClient
   BASE_URI = 'https://graph.facebook.com'.freeze
+  # Explicit HTTP timeouts on EVERY Meta Graph call so a hung Meta request can never run out the whole request
+  # budget. On a connection/read timeout we raise a sanitized Whatsapp::GraphApiTimeoutError (verb + timeout class
+  # only — never url/token/PIN/App Secret/body). read_timeout is generous so a slow /register still completes
+  # within the onboarding endpoint budget; combined with idempotency, a timed-out READ is safely re-checked on retry.
+  OPEN_TIMEOUT_SECONDS = 5
+  READ_TIMEOUT_SECONDS = 25
 
   def initialize(access_token = nil)
     @access_token = access_token
@@ -7,14 +13,13 @@ class Whatsapp::FacebookApiClient
   end
 
   def exchange_code_for_token(code)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/oauth/access_token",
-      query: {
-        client_id: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
-        client_secret: GlobalConfigService.load('WHATSAPP_APP_SECRET', ''),
-        code: code
-      }
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/oauth/access_token",
+                            query: {
+                              client_id: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
+                              client_secret: GlobalConfigService.load('WHATSAPP_APP_SECRET', ''),
+                              code: code
+                            })
 
     handle_response(response, 'Token exchange failed')
   end
@@ -26,29 +31,27 @@ class Whatsapp::FacebookApiClient
     query = { grant_type: 'fb_exchange_token', fb_exchange_token: short_lived_token,
               client_id: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
               client_secret: GlobalConfigService.load('WHATSAPP_APP_SECRET', '') }
-    response = HTTParty.get("#{BASE_URI}/#{@api_version}/oauth/access_token", query: query)
+    response = http_request(:get, "#{BASE_URI}/#{@api_version}/oauth/access_token", query: query)
     return short_lived_token unless response.success?
 
     response.parsed_response['access_token'].presence || short_lived_token
   end
 
   def fetch_phone_numbers(waba_id)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/phone_numbers",
-      query: { access_token: @access_token }
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/phone_numbers",
+                            query: { access_token: @access_token })
 
     handle_response(response, 'WABA phone numbers fetch failed')
   end
 
   def debug_token(input_token)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/debug_token",
-      query: {
-        input_token: input_token,
-        access_token: build_app_access_token
-      }
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/debug_token",
+                            query: {
+                              input_token: input_token,
+                              access_token: build_app_access_token
+                            })
 
     handle_response(response, 'Token validation failed')
   end
@@ -66,21 +69,19 @@ class Whatsapp::FacebookApiClient
   end
 
   def phone_number_verified?(phone_number_id)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{phone_number_id}",
-      headers: request_headers
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{phone_number_id}",
+                            headers: request_headers)
 
     data = handle_response(response, 'Phone status check failed')
     data['code_verification_status'] == 'VERIFIED'
   end
 
   def phone_number_status(phone_number_id)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{phone_number_id}",
-      headers: request_headers,
-      query: { fields: 'status' }
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{phone_number_id}",
+                            headers: request_headers,
+                            query: { fields: 'status' })
 
     handle_response(response, 'Phone status check failed')['status']
   end
@@ -98,11 +99,10 @@ class Whatsapp::FacebookApiClient
   # Phone registrations (id + display number + live status) under a WABA. `status` is requested explicitly because
   # Meta omits it from the default phone_numbers field set.
   def waba_registrations(waba_id)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/phone_numbers",
-      headers: request_headers,
-      query: { fields: 'id,display_phone_number,status' }
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/phone_numbers",
+                            headers: request_headers,
+                            query: { fields: 'id,display_phone_number,status' })
 
     Array(handle_response(response, 'WABA phone numbers fetch failed')['data'])
   end
@@ -110,11 +110,10 @@ class Whatsapp::FacebookApiClient
   # Owner business id of a WABA — used to keep duplicate-number resolution inside the SAME business (never cross a
   # tenant boundary silently). Returns nil when the owner is not visible to this token.
   def waba_owner_business_id(waba_id)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}",
-      headers: request_headers,
-      query: { fields: 'owner_business_info' }
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}",
+                            headers: request_headers,
+                            query: { fields: 'owner_business_info' })
 
     handle_response(response, 'WABA owner lookup failed').dig('owner_business_info', 'id')
   end
@@ -132,10 +131,9 @@ class Whatsapp::FacebookApiClient
   end
 
   def subscribe_app_to_waba(waba_id)
-    response = HTTParty.post(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
-      headers: request_headers
-    )
+    response = http_request(:post,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
+                            headers: request_headers)
 
     handle_response(response, 'App subscription to WABA failed')
   end
@@ -144,34 +142,31 @@ class Whatsapp::FacebookApiClient
   # once it is. Used to VERIFY a subscription actually took effect before an inbox is promoted to routeable, so a
   # silent subscribe failure never yields an inbox that claims ready yet receives nothing. Raises on API failure.
   def subscribed_to_waba?(waba_id)
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
-      headers: request_headers
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
+                            headers: request_headers)
     apps = Array(handle_response(response, 'WABA subscribed apps fetch failed')['data'])
     app_id = GlobalConfigService.load('WHATSAPP_APP_ID', '')
     apps.any? { |app| app.dig('whatsapp_business_api_data', 'id').to_s == app_id.to_s }
   end
 
   def override_waba_callback(waba_id, callback_url, verify_token, subscribed_fields: WEBHOOK_DEFAULT_FIELDS)
-    response = HTTParty.post(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
-      headers: request_headers,
-      body: {
-        override_callback_uri: callback_url,
-        verify_token: verify_token,
-        subscribed_fields: subscribed_fields
-      }.to_json
-    )
+    response = http_request(:post,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
+                            headers: request_headers,
+                            body: {
+                              override_callback_uri: callback_url,
+                              verify_token: verify_token,
+                              subscribed_fields: subscribed_fields
+                            }.to_json)
 
     handle_response(response, 'Webhook callback override failed')
   end
 
   def unsubscribe_waba_webhook(waba_id)
-    response = HTTParty.delete(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
-      headers: request_headers
-    )
+    response = http_request(:delete,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/subscribed_apps",
+                            headers: request_headers)
 
     handle_response(response, 'Webhook unsubscription failed')
   end
@@ -205,11 +200,10 @@ class Whatsapp::FacebookApiClient
     query = { fields: 'id,name,tasks' }
     owner_business_id = waba_owner_business_id(waba_id)
     query[:business] = owner_business_id if owner_business_id.present?
-    response = HTTParty.get(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/assigned_users",
-      headers: request_headers,
-      query: query
-    )
+    response = http_request(:get,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/assigned_users",
+                            headers: request_headers,
+                            query: query)
     users = Array(handle_response(response, 'WABA assigned users fetch failed')['data'])
     entry = users.find { |user| user['id'].to_s == user_id.to_s }
     entry ? Array(entry['tasks']) : nil
@@ -243,6 +237,15 @@ class Whatsapp::FacebookApiClient
     "#{app_id}|#{app_secret}"
   end
 
+  # Centralized Graph HTTP call: injects the open/read timeouts on EVERY request and translates a connection/read
+  # timeout into a sanitized Whatsapp::GraphApiTimeoutError (verb + timeout class only — never url/token/PIN/body).
+  def http_request(http_method, url, **options)
+    HTTParty.public_send(http_method, url, options.merge(open_timeout: OPEN_TIMEOUT_SECONDS, read_timeout: READ_TIMEOUT_SECONDS))
+  rescue Timeout::Error => e
+    # Net::OpenTimeout / Net::ReadTimeout are subclasses of Timeout::Error, so this covers connect AND read timeouts.
+    raise Whatsapp::GraphApiTimeoutError, "Graph API #{http_method.to_s.upcase} timed out (#{e.class})"
+  end
+
   def handle_response(response, error_message)
     raise "#{error_message}: #{response.body}" unless response.success?
 
@@ -252,8 +255,8 @@ class Whatsapp::FacebookApiClient
   # POST a messaging_product body to a phone-number Cloud API path (register/deregister); raise a structured
   # Whatsapp::GraphApiError on failure (never logging the token/PIN/body), else return the parsed body.
   def post_phone_messaging_product(path, extra_body, error_message)
-    response = HTTParty.post("#{BASE_URI}/#{@api_version}/#{path}",
-                             headers: request_headers, body: { messaging_product: 'whatsapp', **extra_body }.to_json)
+    response = http_request(:post, "#{BASE_URI}/#{@api_version}/#{path}",
+                            headers: request_headers, body: { messaging_product: 'whatsapp', **extra_body }.to_json)
     raise Whatsapp::GraphApiError.from_response(error_message, response) unless response.success?
 
     response.parsed_response

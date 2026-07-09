@@ -169,7 +169,12 @@ class Bloomwire::WhatsappEmbeddedSignupService
   # then VERIFY it took effect (subscribed_apps) so a silent failure never yields a ready-but-deaf inbox. Fails
   # closed (Symbol). This is the single point the inbox becomes live for inbound (global router) AND outbound;
   # NEVER override_waba_callback / subscribe_waba_webhook.
+  #
+  # Idempotent/resumable: if a prior (e.g. timed-out) attempt already subscribed the app to this WABA, we SKIP the
+  # subscribe POST and treat the step as already done — so a retry after a subscribe-then-timeout resumes cleanly.
   def subscribe_final_waba(client, waba_id)
+    return nil if client.subscribed_to_waba?(waba_id)
+
     client.subscribe_app_to_waba(waba_id)
     client.subscribed_to_waba?(waba_id) ? nil : :subscription_failed
   rescue StandardError => e

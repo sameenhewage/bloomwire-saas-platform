@@ -31,10 +31,13 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
 
   # Meta client stub for the managed flow (extracted so stub_meta stays within RuboCop's AbcSize budget).
   def stub_fb_client
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true,
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true,
                                          override_waba_callback: nil, subscribe_waba_webhook: nil,
                                          register_phone_number: { 'success' => true }, messaging_waba_ids: [],
                                          waba_registrations: [], waba_owner_business_id: nil)
+    # Idempotent subscribe: a fresh number is NOT yet subscribed (this flow subscribes it) and is verified subscribed
+    # afterwards; a retry that finds it ALREADY subscribed skips the subscribe POST (see subscribe_final_waba).
+    allow(fb_client).to receive(:subscribed_to_waba?).and_return(false, true)
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
@@ -711,7 +714,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
         # BLOCKER 2: the WABA is subscribed to the global router ONLY on the ready path, and the subscription is
         # verified before the inbox is treated as live.
         expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
-        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1')
+        # subscribed_to_waba? is now called twice: an idempotent pre-check (skip if already subscribed) + the verify.
+        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1').at_least(:once)
       end
     end
 

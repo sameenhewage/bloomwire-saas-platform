@@ -200,6 +200,14 @@ Ops-only CREATE and OFF == stock behavior.
 
 ### PARK-ENG-ONBOARD-RESUMABLE — Idempotent/resumable onboarding + Meta side-effect-after-timeout protection
 
+**Implementation status (2026-07-09):** the **immediate synchronous hardening** is now IMPLEMENTED on branch
+`fix/bloomwire-whatsapp-onboarding-resilience` (per-call Graph HTTP timeouts + sanitized timeout error;
+endpoint-specific 75s timeout with the global Rack::Timeout untouched; subscribe-skip-if-already-subscribed; the
+existing skip-register-if-CONNECTED + reconnect-reuse; DB uniqueness already guarantees no duplicates) — see
+[`adr/0010-whatsapp-onboarding-resilience.md`](adr/0010-whatsapp-onboarding-resilience.md). Tests green, RuboCop
+clean, **not merged, not deployed**. **What remains parked here is Section B of ADR-0010: the asynchronous Sidekiq
+onboarding workflow (202 + poll).**
+
 **One-line:** the Standard Embedded Signup runs **all** Meta steps (`/register`, subscribe app→WABA, capability check) **and** the DB writes **synchronously inside one web request** bounded by the **15s `Rack::Timeout`**. If Meta completes a side effect (e.g. `/register`) but the request is killed before persistence, Meta state and Bloomwire DB **diverge** (number CONNECTED on Meta, **0** records in Bloomwire). This is a **reliability/architecture** follow-up, not a defect blocking the demo.
 
 **Why it is parked**
