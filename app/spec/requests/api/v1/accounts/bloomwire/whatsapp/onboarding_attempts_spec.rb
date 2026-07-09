@@ -17,12 +17,12 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
 
   before { GlobalConfig.clear_cache }
 
+  # No separate positive async flag: Bloomwire managed onboarding ON => async (kill switch defaults false/off).
   def enable_async_managed_mode
     bw_set_config('BLOOMWIRE_MODE_ENABLED', true)
     bw_set_config('BLOOMWIRE_PRIVACY_HARDENING', true)
     bw_set_config('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
     bw_set_config('BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING', true)
-    bw_set_config('BLOOMWIRE_ASYNC_WHATSAPP_ONBOARDING', true)
   end
 
   context 'when async managed self-serve is active (admin)' do
@@ -79,12 +79,19 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
     end
   end
 
-  context 'when the async flag is OFF (surface inert / sync fallback)' do
-    it 'is 404 even with managed mode ON but async flag OFF' do
+  context 'when the emergency kill switch is set (temporary sync fallback)' do
+    it 'is 404 (inert) even with Bloomwire managed onboarding ON' do
+      enable_async_managed_mode
+      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
+      post base, headers: admin.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  context 'when Bloomwire managed onboarding is not available' do
+    it 'is 404 when the managed_whatsapp_onboarding feature is OFF' do
       bw_set_config('BLOOMWIRE_MODE_ENABLED', true)
-      bw_set_config('BLOOMWIRE_PRIVACY_HARDENING', true)
       bw_set_config('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
-      bw_set_config('BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING', true)
       post base, headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end

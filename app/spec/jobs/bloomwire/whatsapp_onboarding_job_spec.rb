@@ -36,4 +36,14 @@ RSpec.describe Bloomwire::WhatsappOnboardingJob do
     described_class.perform_now(attempt.id, 0)
     expect(Bloomwire::WhatsappOnboardingProcessor).not_to have_received(:new)
   end
+
+  # In-flight attempts must continue even if the emergency kill switch is later flipped: the worker never gates on
+  # the flag (the flag only affects whether NEW async attempts are created at the controller).
+  it 'still processes an in-flight attempt even when the emergency kill switch is set' do
+    allow(Bloomwire::Features).to receive(:async_whatsapp_onboarding_disabled?).and_return(true)
+    processor = instance_double(Bloomwire::WhatsappOnboardingProcessor, process: nil)
+    allow(Bloomwire::WhatsappOnboardingProcessor).to receive(:new).and_return(processor)
+    described_class.perform_now(attempt.id, attempt.submission_generation)
+    expect(processor).to have_received(:process)
+  end
 end

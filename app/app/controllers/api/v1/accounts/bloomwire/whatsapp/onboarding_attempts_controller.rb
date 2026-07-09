@@ -53,10 +53,11 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::OnboardingAttemptsController < Api
     params.permit(:code, :business_id, :waba_id, :phone_number_id, :display_phone_number)
   end
 
+  # Async is the flow whenever Bloomwire managed onboarding is available for the account AND the emergency kill
+  # switch is not set (there is NO separate positive async flag). When emergency-disabled, this surface is inert
+  # (404) and the frontend falls back to the synchronous embedded-signup path.
   def ensure_async_onboarding_enabled!
-    return if ::Bloomwire::Features.restrict_native_whatsapp_setup? &&
-              ::Bloomwire::Features.enabled?(:managed_whatsapp_onboarding) &&
-              ::Bloomwire::Features.enabled?(:async_whatsapp_onboarding)
+    return if ::Bloomwire::Features.async_whatsapp_onboarding?
 
     head :not_found
   end

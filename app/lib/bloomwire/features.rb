@@ -4,12 +4,16 @@
 module Bloomwire::Features
   MASTER = 'BLOOMWIRE_MODE_ENABLED'.freeze
 
+  # Emergency-only ROLLBACK kill switch for async WhatsApp onboarding (ADR-0010 v3). Deliberately NOT a Super Admin
+  # Console toggle and NOT a SUB_FEATURE, so it never becomes a second positive customer-facing flag: it is read
+  # directly and DEFAULTS to false (async ON whenever Bloomwire onboarding is available). Set it true ONLY to force
+  # the temporary synchronous fallback for NEW onboarding during a rollback. TEMPORARY: removed (with the sync
+  # fallback + the 75s onboarding middleware) once async is proven. In-flight attempts are unaffected by it.
+  ASYNC_ONBOARDING_KILL_SWITCH = 'BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED'.freeze
+
   # symbol => InstallationConfig key. Read only through this service (no scattered ENV reads).
   SUB_FEATURES = {
     managed_whatsapp_onboarding: 'BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING',
-    # ADR-0010 v3: the RESUMABLE ASYNC onboarding path (attempt record + background processor). OFF == the existing
-    # synchronous embedded-signup flow. Privacy-dependent (it persists encrypted customer secrets), default OFF.
-    async_whatsapp_onboarding: 'BLOOMWIRE_ASYNC_WHATSAPP_ONBOARDING',
     global_webhook_router: 'BLOOMWIRE_GLOBAL_WEBHOOK_ROUTER',
     restrict_native_whatsapp_setup: 'BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP',
     restrict_account_admin: 'BLOOMWIRE_RESTRICT_ACCOUNT_ADMIN',
@@ -27,7 +31,7 @@ module Bloomwire::Features
   }.freeze
 
   # Managed-data sub-features that are inert unless privacy hardening is ON (architecture plan §4.1).
-  PRIVACY_DEPENDENT_FEATURES = %i[managed_whatsapp_onboarding async_whatsapp_onboarding global_webhook_router].freeze
+  PRIVACY_DEPENDENT_FEATURES = %i[managed_whatsapp_onboarding global_webhook_router].freeze
 
   # InstallationConfig key names for the managed-data sub-features. Used by the write-path guard so the
   # privacy prerequisite holds at ANY SuperAdmin config seam, not only the custom Bloomwire page.
@@ -59,6 +63,23 @@ module Bloomwire::Features
   # Bloomwire master mode ON AND the restrict toggle ON. The single gate the native setup guard reads.
   def restrict_native_whatsapp_setup?
     master_enabled? && raw_enabled?(:restrict_native_whatsapp_setup)
+  end
+
+  # True when managed WhatsApp self-serve onboarding is available for the account (the existing Super Admin gate):
+  # Bloomwire managed mode ON, native setup restricted, and the managed_whatsapp_onboarding feature ON.
+  def managed_whatsapp_onboarding_available?
+    restrict_native_whatsapp_setup? && enabled?(:managed_whatsapp_onboarding)
+  end
+
+  # Emergency kill switch state (default false). Not exposed in the Super Admin Console.
+  def async_whatsapp_onboarding_disabled?
+    ActiveModel::Type::Boolean.new.cast(GlobalConfigService.load(ASYNC_ONBOARDING_KILL_SWITCH, false)).present?
+  end
+
+  # Effective async rule: managed onboarding is available for the account AND the emergency kill switch is NOT set.
+  # There is NO separate positive async flag — Bloomwire onboarding ON => async, unless emergency-disabled.
+  def async_whatsapp_onboarding?
+    managed_whatsapp_onboarding_available? && !async_whatsapp_onboarding_disabled?
   end
 
   # True when business account ADMINISTRATORS must be blocked from dangerous account-admin / control-plane
