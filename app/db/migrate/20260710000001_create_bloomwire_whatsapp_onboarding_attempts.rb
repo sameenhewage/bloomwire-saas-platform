@@ -6,6 +6,9 @@
 # (`phone_number_masked`) for UI (privacy Guardrail 5). Additive table only.
 class CreateBloomwireWhatsappOnboardingAttempts < ActiveRecord::Migration[7.1]
   ACTIVE_STATUSES = %w[waiting_meta queued exchanging_code processing action_required].freeze
+  # Full status vocabulary — mirrored by the model's STATUSES and enforced here as a DB CHECK constraint so the
+  # active-attempt partial index (which keys off exact status text) cannot be undermined by an out-of-band write.
+  ALL_STATUSES = %w[waiting_meta queued exchanging_code processing completed action_required cancelled expired failed].freeze
 
   def change # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     create_table :bloomwire_whatsapp_onboarding_attempts do |t|
@@ -57,5 +60,10 @@ class CreateBloomwireWhatsappOnboardingAttempts < ActiveRecord::Migration[7.1]
               unique: true,
               where: "phone_number_id IS NOT NULL AND status IN (#{ACTIVE_STATUSES.map { |s| "'#{s}'" }.join(',')})",
               name: 'idx_bw_wa_onboarding_active_account_phone'
+
+    # DB-level defence for the approved status vocabulary (defence-in-depth alongside the model inclusion validation).
+    add_check_constraint :bloomwire_whatsapp_onboarding_attempts,
+                         "status IN (#{ALL_STATUSES.map { |s| "'#{s}'" }.join(',')})",
+                         name: 'bw_wa_onboarding_status_check'
   end
 end

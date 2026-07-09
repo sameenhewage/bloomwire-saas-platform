@@ -382,6 +382,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_10_000001) do
     t.index ["inbox_id"], name: "index_bloomwire_whatsapp_onboarding_attempts_on_inbox_id"
     t.index ["public_uuid"], name: "index_bloomwire_whatsapp_onboarding_attempts_on_public_uuid", unique: true
     t.index ["status", "updated_at"], name: "idx_on_status_updated_at_263de0c310"
+    t.check_constraint "status::text = ANY (ARRAY['waiting_meta'::character varying, 'queued'::character varying, 'exchanging_code'::character varying, 'processing'::character varying, 'completed'::character varying, 'action_required'::character varying, 'cancelled'::character varying, 'expired'::character varying, 'failed'::character varying]::text[])", name: "bw_wa_onboarding_status_check"
   end
 
   create_table "bloomwire_whatsapp_setup_requests", force: :cascade do |t|

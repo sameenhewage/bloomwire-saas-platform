@@ -11,57 +11,16 @@
 # stored — only a pre-masked value (Guardrail 5). Guardrail 1: action_required counts as ACTIVE (one active
 # attempt per account+phone). Guardrail 2: a short DB lease (with_lock) claims ownership without holding a lock
 # across Meta HTTP calls; lock_version rejects stale writers.
-# == Schema Information
-#
-# Table name: bloomwire_whatsapp_onboarding_attempts
-#
-#  id                      :bigint           not null, primary key
-#  access_token            :text
-#  code_exchanged_at       :datetime
-#  code_expires_at         :datetime
-#  code_received_at        :datetime
-#  credential_persisted_at :datetime
-#  job_enqueued_at         :datetime
-#  lease_expires_at        :datetime
-#  lock_version            :integer          default(0), not null
-#  oauth_code              :text
-#  phone_number_masked     :string
-#  processing_owner        :string
-#  processing_started_at   :datetime
-#  public_uuid             :string           not null
-#  retry_count             :integer          default(0), not null
-#  safe_error_code         :string
-#  secrets_cleared_at      :datetime
-#  status                  :string           default("waiting_meta"), not null
-#  step                    :string
-#  submission_generation   :integer          default(0), not null
-#  created_at              :datetime         not null
-#  updated_at              :datetime         not null
-#  account_id              :bigint           not null
-#  business_id             :string
-#  channel_whatsapp_id     :bigint
-#  inbox_id                :bigint
-#  phone_number_id         :string
-#  waba_id                 :string
-#
-# Indexes
-#
-#  idx_bw_wa_onboarding_active_account_phone                    (account_id,phone_number_id) UNIQUE WHERE ((phone_number_id IS NOT NULL) AND ((status)::text = ANY ((ARRAY['waiting_meta'::character varying, 'queued'::character varying, 'exchanging_code'::character varying, 'processing'::character varying, 'action_required'::character varying])::text[])))
-#  idx_on_account_id_status_5cbf651981                          (account_id,status)
-#  idx_on_channel_whatsapp_id_385ab6258a                        (channel_whatsapp_id)
-#  idx_on_status_updated_at_263de0c310                          (status,updated_at)
-#  index_bloomwire_whatsapp_onboarding_attempts_on_account_id   (account_id)
-#  index_bloomwire_whatsapp_onboarding_attempts_on_inbox_id     (inbox_id)
-#  index_bloomwire_whatsapp_onboarding_attempts_on_public_uuid  (public_uuid) UNIQUE
-#
-# Foreign Keys
-#
-#  fk_rails_...  (account_id => accounts.id)
-#  fk_rails_...  (channel_whatsapp_id => channel_whatsapp.id)
-#  fk_rails_...  (inbox_id => inboxes.id)
-#
 class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   self.table_name = 'bloomwire_whatsapp_onboarding_attempts'
+
+  # Fail-closed: raised (with NO secret material) when a secret write is attempted while ActiveRecord encryption
+  # is unavailable. oauth_code/access_token are NEVER persisted in plaintext.
+  class SecretStorageUnavailableError < StandardError; end
+
+  # Raised when a worker whose lease/generation is no longer current attempts to write credentials, so a stale
+  # worker can never clear or clobber a newer submission's secret.
+  class StaleWorkerError < StandardError; end
 
   # TODO: remove the guard once encryption keys are mandatory (mirrors the other channel secret columns).
   if Chatwoot.encryption_configured?
@@ -94,9 +53,17 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
 
   DEFAULT_LEASE_SECONDS = 120
 
+  # Guardrail 5: phone_number_masked may only hold a masked value (e.g. "****1234") or be blank — a full number
+  # must never be storable, even via a direct update that bypasses #bind_target!.
+  MASKED_PHONE_FORMAT = /\A\*{2,}\d{1,4}\z/
+  # Fail-closed refusal message (carries NO secret material).
+  SECRET_ENCRYPTION_REQUIRED = 'onboarding secret write refused: ActiveRecord encryption is not configured'.freeze
+
   before_validation :assign_public_uuid, on: :create
+  before_save :guard_secret_encryption!
   validates :public_uuid, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
+  validates :phone_number_masked, format: { with: MASKED_PHONE_FORMAT }, allow_blank: true
 
   scope :active, -> { where(status: ACTIVE_STATUSES) }
   scope :for_account, ->(account) { where(account_id: account.id) }
@@ -130,7 +97,9 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   end
 
   # --- Temporary secret lifecycle -------------------------------------------------------------------------
+  # Fail-closed on encryption for BOTH the explicit call and (via #guard_secret_encryption!) any raw write.
   def store_code!(code)
+    ensure_secret_storage_available!
     update!(oauth_code: code, code_received_at: Time.current)
   end
 
@@ -139,16 +108,26 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   end
 
   # After a successful exchange: persist the operational token (retained for retries) and IMMEDIATELY drop the code.
-  def store_access_token!(token)
-    update!(access_token: token, oauth_code: nil, code_exchanged_at: Time.current)
+  # Guarded (Guardrail 2 / stale-worker): only the current lease owner on the current submission_generation may
+  # write; the verify + write run under ONE short row lock (DB-only, no network) so a concurrent submit that
+  # bumped the generation cannot be clobbered.
+  def store_access_token!(token, owner:, expected_generation:)
+    ensure_secret_storage_available!
+    owner_guarded_write!(owner, expected_generation) do
+      update!(access_token: token, oauth_code: nil, code_exchanged_at: Time.current)
+    end
   end
 
-  # After the token is written to the Channel provider_config AND verified: drop the attempt-level token.
-  def mark_credential_persisted!
-    update!(access_token: nil, credential_persisted_at: Time.current, secrets_cleared_at: Time.current)
+  # After the token is written to the Channel provider_config AND verified: drop the attempt-level token. Guarded
+  # so a stale worker cannot clear a newer submission's credential.
+  def mark_credential_persisted!(owner:, expected_generation:)
+    owner_guarded_write!(owner, expected_generation) do
+      update!(access_token: nil, credential_persisted_at: Time.current, secrets_cleared_at: Time.current)
+    end
   end
 
-  # Terminal cleanup — clear BOTH secrets (expiry / cancel / final failure).
+  # Terminal cleanup — clear BOTH secrets (expiry / cancel / final failure / Slice 3 TTL sweep). Intentionally
+  # UNGUARDED: clearing is always security-safe and must work for owner-less callers (TTL sweep, user cancel).
   def clear_secrets!
     update!(oauth_code: nil, access_token: nil, secrets_cleared_at: Time.current)
   end
@@ -222,5 +201,41 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
 
   def assign_public_uuid
     self.public_uuid ||= SecureRandom.uuid
+  end
+
+  # Comprehensive fail-closed backstop: refuse to persist a NON-nil oauth_code/access_token when AR encryption is
+  # unavailable. Runs on EVERY save, so it also covers raw update!(oauth_code:/access_token:) — not just the
+  # lifecycle methods. Clearing a secret (writing nil) is always allowed.
+  def guard_secret_encryption!
+    return if Chatwoot.encryption_configured?
+    return unless will_persist_secret_plaintext?
+
+    raise SecretStorageUnavailableError, SECRET_ENCRYPTION_REQUIRED
+  end
+
+  def will_persist_secret_plaintext?
+    (will_save_change_to_oauth_code? && oauth_code.present?) ||
+      (will_save_change_to_access_token? && access_token.present?)
+  end
+
+  def ensure_secret_storage_available!
+    raise SecretStorageUnavailableError, SECRET_ENCRYPTION_REQUIRED unless Chatwoot.encryption_configured?
+  end
+
+  # Verify (under a short row lock, DB-only, NO network) that this worker still owns the active lease on the
+  # expected generation, then perform the credential write atomically. A stale/non-owning worker raises
+  # StaleWorkerError BEFORE any write, so a newer submission's credential is never cleared or overwritten.
+  def owner_guarded_write!(owner, expected_generation)
+    with_lock do
+      unless active_credential_owner?(owner, expected_generation)
+        raise StaleWorkerError, 'credential write refused: not the current lease owner on the current generation'
+      end
+
+      yield
+    end
+  end
+
+  def active_credential_owner?(owner, expected_generation)
+    !terminal? && submission_generation == expected_generation.to_i && lease_held_by?(owner)
   end
 end

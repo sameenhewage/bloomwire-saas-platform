@@ -12,11 +12,6 @@ require:
 
 Layout/LineLength:
   Max: 150
-  # Auto-generated `annotate` schema comments for partial (conditional) unique indexes render the full SQL
-  # predicate and can exceed the limit. These are machine-generated comment lines, never code (no real code
-  # line contains " UNIQUE WHERE "), so allowing them keeps the limit strict for actual source.
-  AllowedPatterns:
-    - ' UNIQUE WHERE '
 
 Metrics/ClassLength:
   Max: 175
