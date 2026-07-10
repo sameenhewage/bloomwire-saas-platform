@@ -280,6 +280,29 @@ describe Whatsapp::FacebookApiClient do
     end
   end
 
+  describe '#coexistence_onboarded?' do
+    let(:phone_number_id) { 'test_phone_id' }
+
+    it 'is true only when Meta reports Business App plus Cloud API readiness' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{phone_number_id}")
+        .with(query: { fields: 'is_on_biz_app,platform_type' })
+        .to_return(status: 200, body: { is_on_biz_app: true, platform_type: 'CLOUD_API' }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+      expect(api_client.coexistence_onboarded?(phone_number_id)).to be(true)
+    end
+
+    it 'is false unless both official readiness fields match' do
+      stub_request(:get, "https://graph.facebook.com/#{api_version}/#{phone_number_id}")
+        .with(query: { fields: 'is_on_biz_app,platform_type' })
+        .to_return({ status: 200, body: { is_on_biz_app: false, platform_type: 'CLOUD_API' }.to_json,
+                     headers: { 'Content-Type' => 'application/json' } },
+                   { status: 200, body: { is_on_biz_app: true, platform_type: 'NOT_APPLICABLE' }.to_json,
+                     headers: { 'Content-Type' => 'application/json' } })
+      expect([api_client.coexistence_onboarded?(phone_number_id),
+              api_client.coexistence_onboarded?(phone_number_id)]).to eq([false, false])
+    end
+  end
+
   describe '#subscribe_waba_webhook' do
     let(:waba_id) { 'test_waba_id' }
     let(:callback_url) { 'https://example.com/webhook' }

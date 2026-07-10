@@ -9,7 +9,7 @@
 # - No per-channel callback override / native webhook registration.
 # - App-to-WABA subscription only through the global router path inherited from the 17C.2 service.
 # - Token still goes only through Bloomwire::WhatsappCredentialWriter.
-# - No Standard Cloud API /register: coexistence numbers are already registered by the WhatsApp Business App flow.
+# - No Standard Cloud API /register: readiness comes from Meta's Business App + Cloud API onboarding fields.
 # - Response remains safe: no token, api_key, provider_config, app secret, verify token, or raw Meta payload.
 class Bloomwire::WhatsappCoexistenceEmbeddedSignupService < Bloomwire::WhatsappEmbeddedSignupService
   CONNECTION_MODE = 'coexistence'.freeze
@@ -19,6 +19,20 @@ class Bloomwire::WhatsappCoexistenceEmbeddedSignupService < Bloomwire::WhatsappE
 
   def register_number(_client, _phone_number_id)
     RegistrationResult.new
+  end
+
+  def ensure_registered(client, phone_number_id)
+    status = client.phone_number_status(phone_number_id)
+    status = CONNECTED_STATUS if status != CONNECTED_STATUS && client.coexistence_onboarded?(phone_number_id)
+    { connection_status: status, verification_pin: nil, registration_error: nil }
+  end
+
+  def configure_reconnected_channel(channel)
+    config = channel.provider_config.to_h.dup
+    config['source'] = SOURCE
+    config['connection_mode'] = CONNECTION_MODE
+    channel.provider_config = config
+    channel.save!(validate: false)
   end
 
   def create_channel_shell(waba_id, phone_info)

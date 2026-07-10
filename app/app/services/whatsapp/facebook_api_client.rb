@@ -87,6 +87,12 @@ class Whatsapp::FacebookApiClient
     handle_response(response, 'Phone status check failed')['status']
   end
 
+  def coexistence_onboarded?(phone_number_id)
+    path = "#{BASE_URI}/#{@api_version}/#{phone_number_id}"
+    response = http_request(:get, path, headers: request_headers, query: { fields: 'is_on_biz_app,platform_type' })
+    handle_response(response, 'Coexistence status check failed').values_at('is_on_biz_app', 'platform_type') == [true, 'CLOUD_API']
+  end
+
   # WABAs this token is authorized to SEND messages for (the whatsapp_business_messaging granular scope). Used to
   # resolve a duplicate number's live registration without ever guessing beyond the token's real grants.
   def messaging_waba_ids(input_token = @access_token)

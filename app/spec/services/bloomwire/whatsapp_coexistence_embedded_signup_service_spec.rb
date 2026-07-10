@@ -31,13 +31,14 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
     allow(fb_client).to receive_messages(subscribe_app_to_waba: true,
                                          override_waba_callback: nil, subscribe_waba_webhook: nil,
                                          register_phone_number: { 'success' => true }, messaging_waba_ids: [],
-                                         waba_registrations: [], waba_owner_business_id: nil)
+                                         waba_registrations: [], waba_owner_business_id: nil,
+                                         coexistence_onboarded?: false)
     # Idempotent subscribe: a fresh number is NOT yet subscribed (this flow subscribes it), then verified subscribed;
     # a retry that finds it ALREADY subscribed skips the subscribe POST (see subscribe_final_waba).
     allow(fb_client).to receive(:subscribed_to_waba?).and_return(false, true)
-    # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
-    # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
-    allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
+    # Default: Meta reports the popup-completed number CONNECTED. Blocks that exercise official Coexistence
+    # readiness or fail-closed resolution override :phone_number_status and :coexistence_onboarded?.
+    allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED')
     allow(fb_client).to receive(:exchange_for_long_lived_token) { |short| short }
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
   end
@@ -110,16 +111,13 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
       expect(fb_client).not_to have_received(:register_phone_number)
     end
 
-    it 're-checks status after skipping /register so the fail-closed gate sees Meta readiness' do
-      order = []
-      statuses = %w[DISCONNECTED CONNECTED]
-      allow(fb_client).to receive(:phone_number_status) do
-        order << :status
-        statuses.shift || 'CONNECTED'
-      end
+    it 'uses official Coexistence readiness when the Standard status remains DISCONNECTED' do
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:coexistence_onboarded?).with('PNID-1').and_return(true)
 
       expect(result).to be_success
-      expect(order).to eq(%i[status status])
+      expect(fb_client).to have_received(:phone_number_status).with('PNID-1').once
+      expect(fb_client).to have_received(:coexistence_onboarded?).with('PNID-1').once
       expect(fb_client).not_to have_received(:register_phone_number)
     end
 
@@ -131,6 +129,40 @@ RSpec.describe Bloomwire::WhatsappCoexistenceEmbeddedSignupService do
         expect(fb_client).not_to have_received(:register_phone_number)
         expect(Channel::Whatsapp.last.provider_config['connection_mode']).to eq('coexistence')
         expect(Channel::Whatsapp.last.provider_config['phone_number_id']).to eq('PNID-1')
+      end
+    end
+  end
+
+  describe 'reconnect of a preserved disconnected setup' do
+    it 'accepts Meta Coexistence readiness and reuses the same records as coexistence' do
+      setup = create(:bloomwire_whatsapp_setup, :ready_for_webhook, account: account,
+                                                                    aligned_phone_number_id: 'PNID-1',
+                                                                    aligned_display_phone_number: '15551230001')
+      channel = setup.channel_whatsapp
+      provider_config = channel.provider_config.merge(
+        'api_key' => 'OLD-TOKEN', 'source' => 'bloomwire_managed', 'connection_mode' => 'standard'
+      )
+      channel.update!(provider_config: provider_config)
+      setup.update!(setup_status: Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+      original_ids = [setup.inbox_id, setup.channel_whatsapp_id, setup.id]
+      stub_ready
+      stub_meta(token: 'FRESH-COEXISTENCE-TOKEN')
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      allow(fb_client).to receive(:coexistence_onboarded?).with('PNID-1').and_return(true)
+
+      expect { result }
+        .to not_change(Channel::Whatsapp, :count)
+        .and not_change(Inbox, :count)
+        .and not_change(Bloomwire::WhatsappSetup, :count)
+
+      aggregate_failures do
+        expect(result).to be_success
+        expect([result.dto.dig(:inbox, :id), result.dto.dig(:channel, :id), result.dto.dig(:setup, :id)]).to eq(original_ids)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+        expect(channel.reload.provider_config['connection_mode']).to eq('coexistence')
+        expect(channel.provider_config['api_key']).to eq('FRESH-COEXISTENCE-TOKEN')
+        expect(fb_client).not_to have_received(:register_phone_number)
+        expect(result.dto.to_json).not_to include('FRESH-COEXISTENCE-TOKEN')
       end
     end
   end

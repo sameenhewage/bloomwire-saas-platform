@@ -46,8 +46,8 @@ module Bloomwire::WhatsappSignupPersistence
   end
 
   # WhatsWay-parity reconnect + idempotency, scoped to THIS account (a phone_number_id owned by ANOTHER account is
-  # never matched here and is failed closed by the caller / SetupCreator). Runs AFTER the Meta steps, so a
-  # previously-DISCONNECTED number has already been re-registered before we resume it. Returns:
+  # never matched here and is failed closed by the caller / SetupCreator). Runs AFTER flow-specific Meta readiness,
+  # so a previously-DISCONNECTED number is confirmed usable before we resume it. Returns:
   #   - the refreshed Bloomwire::WhatsappSetup when this account re-onboards the SAME number (same phone_number_id
   #     AND same phone): the long-lived token is refreshed and the mapping re-aligned on the EXISTING channel/inbox,
   #     so a browser retry or a reconnect never duplicates the Channel/Inbox/Setup;
@@ -63,10 +63,13 @@ module Bloomwire::WhatsappSignupPersistence
 
     commit_mapping do
       Bloomwire::WhatsappCredentialWriter.new(channel: channel, attributes: { 'api_key' => token }).perform
+      configure_reconnected_channel(channel)
       store_verification_pin(channel, verification_pin)
       create_mapping(channel, setup.inbox, waba_id, phone_info, capability)
     end
   end
+
+  def configure_reconnected_channel(_channel); end
 
   # Same physical number => compare digits only (robust to +/formatting differences between the stored display
   # number and the freshly fetched phone_info).
