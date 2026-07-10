@@ -79,20 +79,47 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
     end
   end
 
-  context 'when the emergency kill switch is set (temporary sync fallback)' do
-    it 'is 404 (inert) even with Bloomwire managed onboarding ON' do
+  context 'when the emergency kill switch is set (temporary sync fallback / rollback)' do
+    before do
       enable_async_managed_mode
       bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
+    end
+
+    it 'blocks NEW attempt creation (404) so the frontend uses the synchronous path' do
       post base, headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
+    end
+
+    it 'blocks submit for a not-yet-queued attempt (404 => sync fallback)' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'STILL lets an in-flight (queued/processing) attempt be polled to completion (continue normally)' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'processing', phone_number_id: 'PNID-1')
+      get "#{base}/#{attempt.public_uuid}", headers: admin.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['status']).to eq('processing')
+      end
     end
   end
 
   context 'when Bloomwire managed onboarding is not available' do
-    it 'is 404 when the managed_whatsapp_onboarding feature is OFF' do
+    before do
       bw_set_config('BLOOMWIRE_MODE_ENABLED', true)
-      bw_set_config('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
+      bw_set_config('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true) # managed_whatsapp_onboarding stays OFF
+    end
+
+    it 'is 404 for create' do
       post base, headers: admin.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'is 404 for show as well (the read path also respects the base feature)' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'processing')
+      get "#{base}/#{attempt.public_uuid}", headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end
   end

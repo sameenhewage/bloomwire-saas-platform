@@ -1,12 +1,15 @@
-# Slice 4 (ADR-0010 v3): async managed WhatsApp onboarding API. Admin-only; inert (404) unless Bloomwire managed
-# self-serve AND the async flag are ON (frontend falls back to the synchronous EmbeddedSignupsController when OFF).
-# The request does ZERO Meta work: it only creates/updates the attempt and enqueues the background job (after the
-# DB commit). Secrets are stored ONLY via the fail-closed model methods; access is always Current.account-scoped
-# (a foreign public_uuid is a 404). Responses are the safe DTO only (no secrets).
+# Slice 4 (ADR-0010 v3): async managed WhatsApp onboarding API. Admin-only. NEW async work (create/submit) is inert
+# (404) unless Bloomwire managed onboarding is available AND the emergency kill switch is off (frontend then uses
+# the synchronous EmbeddedSignupsController). Polling an EXISTING attempt (show) is kill-switch-INDEPENDENT so an
+# in-flight attempt created before a rollback keeps completing visibly; show still requires the base feature and is
+# account-scoped. The request does ZERO Meta work: it only creates/updates the attempt and enqueues the background
+# job (after the DB commit). Secrets are stored ONLY via the fail-closed model methods; a foreign public_uuid is a
+# 404. Responses are the safe DTO only (no secrets).
 class Api::V1::Accounts::Bloomwire::Whatsapp::OnboardingAttemptsController < Api::V1::Accounts::BaseController
   Attempt = ::Bloomwire::WhatsappOnboardingAttempt
 
-  before_action :ensure_async_onboarding_enabled!
+  before_action :ensure_async_onboarding_enabled!, only: %i[create submit]
+  before_action :ensure_managed_onboarding_available!, only: %i[show]
   before_action :check_admin_authorization?
   before_action :ensure_encryption_ready!, only: %i[create submit]
 
@@ -53,11 +56,20 @@ class Api::V1::Accounts::Bloomwire::Whatsapp::OnboardingAttemptsController < Api
     params.permit(:code, :business_id, :waba_id, :phone_number_id, :display_phone_number)
   end
 
-  # Async is the flow whenever Bloomwire managed onboarding is available for the account AND the emergency kill
-  # switch is not set (there is NO separate positive async flag). When emergency-disabled, this surface is inert
-  # (404) and the frontend falls back to the synchronous embedded-signup path.
+  # Gates NEW async work (create/submit): async is the flow whenever Bloomwire managed onboarding is available AND
+  # the emergency kill switch is not set (there is NO separate positive async flag). When emergency-disabled these
+  # actions are inert (404) and the frontend falls back to the synchronous embedded-signup path.
   def ensure_async_onboarding_enabled!
     return if ::Bloomwire::Features.async_whatsapp_onboarding?
+
+    head :not_found
+  end
+
+  # Gates READING an existing attempt (show). Deliberately kill-switch-INDEPENDENT: a queued/processing attempt
+  # created before an emergency rollback must remain pollable to completion (invariant: in-flight attempts continue
+  # normally). It still requires the base Bloomwire managed-onboarding feature (feature OFF => unavailable).
+  def ensure_managed_onboarding_available!
+    return if ::Bloomwire::Features.managed_whatsapp_onboarding_available?
 
     head :not_found
   end
