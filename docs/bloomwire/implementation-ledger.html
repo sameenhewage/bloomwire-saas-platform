@@ -187,6 +187,17 @@
   <section id="s3">
     <h2><a class="anchor" href="#s3"><span class="num">3.</span>Phase-by-phase implementation log</a></h2>
 
+    <div class="card"><h3>ADR-0010 Section A — Synchronous WhatsApp onboarding timeout resilience + convergent retry <span class="badge">Implemented · PR/merge/deploy pending</span></h3>
+      <ul>
+        <li><b>Failure truth:</b> the global 15s request timeout could interrupt a cold <code>/register</code> after Meta committed but before local persistence, creating Meta CONNECTED + zero Bloomwire records; Graph calls had no explicit HTTP bounds.</li>
+        <li><b>Request ownership:</b> only Standard and Coexistence Embedded Signup POSTs bypass the global timer and receive a finite 75s ceiling; every other endpoint keeps 15s. All Graph requests use one helper with 5s open / 25s read limits and secret-free timeout translation.</li>
+        <li><b>Retry ownership:</b> fresh Meta state is authoritative. CONNECTED skips <code>/register</code>; an existing app subscription skips its POST; same-account/same-number retry reuses exactly one Channel/Inbox/Setup; DB uniqueness remains the final concurrent-write guard.</li>
+        <li><b>Review correction:</b> <code>assign_waba_user_tasks</code> was the one direct <code>HTTParty.post</code>; a RED timeout contract proved the omission, then the method moved behind the centralized helper.</li>
+        <li><b>Security / compatibility:</b> no token/PIN/code/App Secret/URL/body in timeout errors; no schema, Enterprise, native-WhatsApp, global-router, credential, DEV, or production change.</li>
+        <li><b>Validation:</b> focused review RED <b>1/1 → 1/0</b>; final hardening matrix <b>123/0</b>; full RuboCop <b>2742/0</b>; no direct <code>HTTParty.*</code> calls remain; docs governance/parity, diff check, and secret scan (<b>23 files / 0 hits</b>) passed.</li>
+      </ul>
+    </div>
+
     <div class="card green"><h3>Phase 13B — WhatsApp production hardening <span class="badge done">Completed</span></h3>
       <ul>
         <li>Encrypt the WhatsApp <b>provider config</b> at rest <b>when AR encryption keys are configured</b> (target: no plaintext token-at-rest; degrades safely if keys absent).</li>
@@ -856,6 +867,16 @@
         <li><b>Runbook §7</b>: password changes only via the Devise reset flow (never the generic Users edit); audit fields/exclusions; auth-smoke procedure.</li>
         <li><b>Dev verification</b>: deployed SHA <code>f140717</code>; owner login-ready (SuperAdmin/confirmed/owner active; recovery reset applied — fingerprint changed); <code>/super_admin/sign_in</code> = 200.</li>
         <li><b>Not changed</b>: no rollback, no password reset, no production, no WhatsApp/Meta/provider creds, no business/account role semantics. Migration <code>20260630000001_create_bloomwire_admin_audit_logs</code> (additive). Tests: audit (3) + 15G.2 (10) + user-flow (6) green; RuboCop clean; <code>bash -n</code> smoke OK.</li>
+      </ul>
+    </div>
+
+    <div class="card"><h3>Phase 6.3c — Coexistence onboarding must skip Standard Cloud API <code>/register</code> <span class="badge pending">Open · PR pending · DEV deploy/test pending</span></h3>
+      <ul>
+        <li><b>Root cause (DEV reference <code>b318dab0</code>):</b> the browser completed both Coexistence signals and the backend posted to <code>coexistence_embedded_signup</code>, but <code>Bloomwire::WhatsappCoexistenceEmbeddedSignupService</code> inherited the Standard Cloud API <code>/register</code> call. Meta returned <code>#100</code> for phone number <code>1249446648242795</code>; after that the duplicate-registration resolver scanned WABAs and Rack timed out, so the browser saw HTTP 500.</li>
+        <li><b>Fix:</b> restore the Coexistence-specific <code>register_number</code> no-op. WhatsApp Business App Coexistence now skips Standard Cloud API <code>/register</code> while retaining the inherited status re-check, fail-closed readiness gate, same-business connected-registration resolver, final-WABA subscription, global-router-only boundary, and safe DTOs.</li>
+        <li><b>Not changed:</b> Standard Embedded Signup still uses the parent <code>/register</code> path; native <code>/whatsapp/authorization</code>, per-channel webhook override, schema, Enterprise, provider credentials, and production are untouched.</li>
+        <li><b>Validation (cwd <code>app/</code>, Meta stubbed):</b> RED first — Coexistence service spec failed <b>17 examples, 4 failures</b> because <code>register_phone_number</code> was called. GREEN after the fix — Coexistence service + request specs <b>27/0</b>; Standard parent service + request specs <b>49/0</b>; RuboCop on changed Ruby/spec <b>0 offenses</b>. No secrets; no live Meta calls in specs.</li>
+        <li><b>Runtime status:</b> DEV deploy/test pending. Expected runtime proof after deploy: fresh Coexistence attempt should emit no <code>bloomwire.whatsapp.phone_registration_failed</code> event and should not 500 from <code>waba_registrations</code>; if it still stops, next owner is actor capability (<code>actor_has_manage</code>) or clean readiness/subscription evidence.</li>
       </ul>
     </div>
 

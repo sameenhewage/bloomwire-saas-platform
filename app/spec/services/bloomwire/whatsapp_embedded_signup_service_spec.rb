@@ -31,10 +31,13 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
 
   # Meta client stub for the managed flow (extracted so stub_meta stays within RuboCop's AbcSize budget).
   def stub_fb_client
-    allow(fb_client).to receive_messages(subscribe_app_to_waba: true, subscribed_to_waba?: true,
+    allow(fb_client).to receive_messages(subscribe_app_to_waba: true,
                                          override_waba_callback: nil, subscribe_waba_webhook: nil,
                                          register_phone_number: { 'success' => true }, messaging_waba_ids: [],
                                          waba_registrations: [], waba_owner_business_id: nil)
+    # Idempotent subscribe: a fresh number is NOT yet subscribed (this flow subscribes it) and is verified subscribed
+    # afterwards; a retry that finds it ALREADY subscribed skips the subscribe POST (see subscribe_final_waba).
+    allow(fb_client).to receive(:subscribed_to_waba?).and_return(false, true)
     # Default (fresh number): DISCONNECTED before Bloomwire registers it, then CONNECTED afterwards. Blocks that
     # need a different lifecycle (already-CONNECTED, or never-CONNECTED) override :phone_number_status themselves.
     allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
@@ -355,6 +358,88 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
     end
   end
 
+  # Existing-number 2SV PIN: a number that was registered before already carries a Meta two-step-verification PIN,
+  # so Bloomwire must re-register it with that KNOWN pin (stored-encrypted, else securely-configured) instead of a
+  # fresh random one — which Meta rejects with #133005. When no correct pin is available, fail CLOSED (never a
+  # silent random retry, never a partial record). The pin is a secret: never in a log or the DTO. Fake values only.
+  describe 'existing-number registration PIN (avoids Meta #133005)' do
+    let(:existing_pins_env) { 'BLOOMWIRE_WHATSAPP_EXISTING_REGISTRATION_PINS' }
+
+    def pin_mismatch_error
+      body = { error: { message: '(#133005) Two step verification PIN Mismatch', type: 'OAuthException',
+                        code: 133_005, fbtrace_id: 'SAFE_TRACE_ID' } }.to_json
+      Whatsapp::GraphApiError.from_response('Phone registration failed',
+                                            instance_double(HTTParty::Response, body: body, code: 400))
+    end
+
+    before do
+      stub_ready
+      stub_meta
+    end
+
+    it 'registers with the securely-configured existing PIN (never a random one) and stores it encrypted' do
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        aggregate_failures do
+          expect(result).to be_success
+          expect(fb_client).to have_received(:register_phone_number).with('PNID-1', '654321')
+          expect(Channel::Whatsapp.last.provider_config['verification_pin']).to eq('654321')
+          expect(result.dto.to_json).not_to include('654321')
+        end
+      end
+    end
+
+    it 'reuses the stored encrypted PIN on reconnect (no new random PIN, same single records)' do
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        expect(result).to be_success # first onboard: DISCONNECTED -> register('654321') -> CONNECTED, stores it
+      end
+      expect(Channel::Whatsapp.last.provider_config['verification_pin']).to eq('654321')
+
+      # Reconnect WITHOUT the env configured — proves the PIN now comes from encrypted storage, not the env.
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED', 'CONNECTED')
+      again = described_class.new(account: account, params: params).perform
+      aggregate_failures do
+        expect(again).to be_success
+        expect(fb_client).to have_received(:register_phone_number).with('PNID-1', '654321').twice
+        expect(Channel::Whatsapp.where(account: account).count).to eq(1)
+        expect(Bloomwire::WhatsappSetup.where(account: account).count).to eq(1)
+      end
+    end
+
+    it 'fails closed with :registration_pin_required (persists nothing) when Meta rejects a known PIN with #133005' do
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        allow(fb_client).to receive(:register_phone_number).and_raise(pin_mismatch_error)
+        allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+        aggregate_failures do
+          expect(result.error).to eq(:registration_pin_required)
+          expect(Channel::Whatsapp.count).to eq(0)
+          expect(account.inboxes.count).to eq(0)
+          expect(Bloomwire::WhatsappSetup.count).to eq(0)
+        end
+      end
+    end
+
+    it 'fails closed with :registration_pin_required for a new number on #133005 (no silent random retry)' do
+      allow(fb_client).to receive(:register_phone_number).and_raise(pin_mismatch_error)
+      allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+      aggregate_failures do
+        expect(result.error).to eq(:registration_pin_required)
+        expect(Channel::Whatsapp.count).to eq(0)
+        expect(Bloomwire::WhatsappSetup.count).to eq(0)
+      end
+    end
+
+    it 'never logs the PIN when registration fails with #133005' do
+      warn_logs = []
+      allow(Rails.logger).to receive(:warn) { |m| warn_logs << m }
+      with_modified_env(existing_pins_env => { 'PNID-1' => '654321' }.to_json) do
+        allow(fb_client).to receive(:register_phone_number).and_raise(pin_mismatch_error)
+        allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+        result
+        expect(warn_logs.join("\n")).not_to include('654321')
+      end
+    end
+  end
+
   describe 'fail-closed preflight (before any Meta call / token storage)' do
     it 'returns :not_ready and persists nothing when the platform is not ready' do
       stub_ready(ready: false)
@@ -499,6 +584,30 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
       end
     end
 
+    it 'captures both code-exchange and long-lived token authority before phone-info lookup and register' do
+      events = []
+      stub_meta(token: 'SHORT-LIVED')
+      allow(fb_client).to receive(:exchange_for_long_lived_token).with('SHORT-LIVED').and_return('LONG-LIVED-60D')
+      allow(Bloomwire::WhatsappSignupTokenDebug).to receive(:log) do |args|
+        events << [:token_debug, args[:stage], args[:token], args[:phone_number_id]]
+      end
+      allow(Whatsapp::PhoneInfoService).to receive(:new) do |waba_id, phone_number_id, token|
+        events << [:phone_info, waba_id, phone_number_id, token]
+        instance_double(Whatsapp::PhoneInfoService, perform: phone_info)
+      end
+
+      result
+
+      expected_debug_events = [
+        [:token_debug, 'code_exchange', 'SHORT-LIVED', 'PNID-1'],
+        [:token_debug, 'long_lived_exchange', 'LONG-LIVED-60D', 'PNID-1']
+      ]
+      aggregate_failures do
+        expect(events.first(2)).to eq(expected_debug_events)
+        expect(events.third).to eq([:phone_info, 'WABA-1', 'PNID-1', 'LONG-LIVED-60D'])
+      end
+    end
+
     it 'fails closed (:phone_number_taken) when the SAME phone_number_id belongs to ANOTHER account (isolation)' do
       stub_meta
       expect(result).to be_success # account A onboards PNID-1
@@ -605,7 +714,8 @@ RSpec.describe Bloomwire::WhatsappEmbeddedSignupService do
         # BLOCKER 2: the WABA is subscribed to the global router ONLY on the ready path, and the subscription is
         # verified before the inbox is treated as live.
         expect(fb_client).to have_received(:subscribe_app_to_waba).with('WABA-1')
-        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1')
+        # subscribed_to_waba? is now called twice: an idempotent pre-check (skip if already subscribed) + the verify.
+        expect(fb_client).to have_received(:subscribed_to_waba?).with('WABA-1').at_least(:once)
       end
     end
 

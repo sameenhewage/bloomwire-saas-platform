@@ -98,6 +98,14 @@
 
 ## 3. Phase-by-phase implementation log
 
+### ADR-0010 Section A — Synchronous WhatsApp onboarding timeout resilience + convergent retry — `Implemented; PR/merge/deploy pending`
+- **Failure truth:** the global 15s request timeout could interrupt a cold `/register` after Meta committed but before local persistence, creating Meta CONNECTED + zero Bloomwire records; Graph calls had no explicit HTTP bounds.
+- **Request ownership:** only Standard and Coexistence Embedded Signup POSTs bypass the global timer and receive a finite 75s ceiling; every other endpoint keeps 15s. All Graph requests use one helper with 5s open / 25s read limits and secret-free timeout translation.
+- **Retry ownership:** fresh Meta state is authoritative. CONNECTED skips `/register`; an existing app subscription skips its POST; same-account/same-number retry reuses exactly one Channel/Inbox/Setup; DB uniqueness remains the final concurrent-write guard.
+- **Review correction:** `assign_waba_user_tasks` was the one direct `HTTParty.post`; a RED timeout contract proved the omission, then the method moved behind the centralized helper.
+- **Security / compatibility:** no token/PIN/code/App Secret/URL/body in timeout errors; no schema, Enterprise, native-WhatsApp, global-router, credential, DEV, or production change.
+- **Validation:** focused review RED **1/1 → 1/0**; final hardening matrix **123/0**; full RuboCop **2742/0**; no direct `HTTParty.*` calls remain; docs governance/parity, diff check, and secret scan (**23 files / 0 hits**) passed.
+
 ### Phase 13B — WhatsApp production hardening — `Completed`
 - Encrypt the WhatsApp **provider config** at rest **when Active Record encryption keys are configured**
   (no plaintext-token-at-rest is the target; behavior degrades safely if keys are absent).
@@ -313,6 +321,13 @@
   `connection_mode=coexistence` contract, open questions, and the 17D.1/17D.2/17D.3 plan. Docs only; no code,
   route, frontend, migration, deploy, or Meta call.
 - **Validation:** docs-only; CI docs governance green on PR #106.
+
+### Phase 6.3c — Coexistence onboarding must skip Standard Cloud API `/register` — `Open · PR pending; DEV deploy/test pending` (branch `fix/bloomwire-token-debug-dev-gate` off `version_1` `f94b215`)
+- **Root cause (DEV reference `b318dab0`):** the browser completed both Coexistence signals and the backend posted to `coexistence_embedded_signup`, but `Bloomwire::WhatsappCoexistenceEmbeddedSignupService` inherited the Standard Cloud API `/register` call. Meta returned `#100` for phone number `1249446648242795`; after that the duplicate-registration resolver scanned WABAs and Rack timed out, so the browser saw HTTP 500.
+- **Fix:** restore the Coexistence-specific `register_number` no-op. WhatsApp Business App Coexistence now skips Standard Cloud API `/register` while retaining the inherited status re-check, fail-closed readiness gate, same-business connected-registration resolver, final-WABA subscription, global-router-only boundary, and safe DTOs.
+- **Not changed:** Standard Embedded Signup still uses the parent `/register` path; native `/whatsapp/authorization`, per-channel webhook override, schema, Enterprise, provider credentials, and production are untouched.
+- **Validation (cwd `app/`, Meta stubbed):** RED first — Coexistence service spec failed **17 examples, 4 failures** because `register_phone_number` was called. GREEN after the fix — Coexistence service + request specs **27/0**; Standard parent service + request specs **49/0**; RuboCop on changed Ruby/spec **0 offenses**. No secrets; no live Meta calls in specs.
+- **Runtime status:** DEV deploy/test pending. Expected runtime proof after deploy: fresh Coexistence attempt should emit no `bloomwire.whatsapp.phone_registration_failed` event and should not 500 from `waba_registrations`; if it still stops, next owner is actor capability (`actor_has_manage`) or clean readiness/subscription evidence.
 
 ### Phase 6.1 — WhatsWay-parity Disconnect flow + long-lived-token exchange corrected to match WhatsWay exactly — `Open · PR pending` (branch `feat/bloomwire-whatsapp-disconnect-and-token-match` off `version_1` `9ce5c6c`; not merged)
 - **Verified against the WhatsWay source** (`whatsway/server/controllers/channels.controller.ts`) — matched exactly, not assumed.

@@ -49,3 +49,12 @@ Rails.application.config.filter_parameters += [
   /\Aaccess_token\z/i,
   /\Aphone_number\z/i
 ]
+
+# Bloomwire (managed WhatsApp onboarding): the Cloud API /register two-step-verification PIN is a secret resolved
+# SERVER-SIDE only (stored encrypted in provider_config; already covered there by the :provider_config deep filter).
+# It is never a request parameter, but these anchored filters are defense-in-depth so a `pin` / `verification_pin`
+# key can never surface in request-parameter logs. Anchored so unrelated keys (e.g. `spin`) are untouched.
+Rails.application.config.filter_parameters += [
+  /\Apin\z/i,
+  /\Averification_pin\z/i
+]

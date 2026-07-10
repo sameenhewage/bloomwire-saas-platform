@@ -29,8 +29,8 @@ RSpec.describe Bloomwire::WhatsappSignupTokenDebug do
     logs
   end
 
-  def call
-    described_class.log(client: client, token: token, waba_id: waba_id, phone_number_id: 'PNID-1')
+  def call(stage: nil)
+    described_class.log(client: client, token: token, waba_id: waba_id, phone_number_id: 'PNID-1', stage: stage)
   end
 
   it 'is INERT when the flag is off (no Meta call, no log)' do
@@ -62,15 +62,20 @@ RSpec.describe Bloomwire::WhatsappSignupTokenDebug do
       allow(client).to receive(:debug_token).with(token)
                                             .and_return(debug_payload(type: 'SYSTEM_USER', mgmt_targets: [], msg_targets: [waba_id]))
       allow(client).to receive(:waba_owner_business_id).with(waba_id).and_return('BIZ-OWNER-1')
-      allow(client).to receive(:waba_user_tasks).with(waba_id, 'ACTOR-1').and_return(%w[MESSAGING])
-      logs = capture_logs { call }
+      allow(client).to receive(:waba_user_tasks).with(waba_id, 'ACTOR-1').and_return(%w[MANAGE MESSAGING])
+      logs = capture_logs { call(stage: 'code_exchange') }
       line = logs.find { |message| message.include?('bloomwire.whatsapp.signup_token_debug') }
       event = JSON.parse(line[line.index('{')..])
       aggregate_failures do
+        expect(event['stage']).to eq('code_exchange')
+        expect(event['token_fingerprint']).to match(/\A[0-9a-f]{16}\z/)
         expect(event['token_type']).to eq('SYSTEM_USER')
+        expect(event['management_target_ids']).to eq([])
+        expect(event['messaging_target_ids']).to eq([waba_id])
         expect(event['waba_in_management']).to be(false)
         expect(event['waba_in_messaging']).to be(true)
-        expect(event['actor_waba_tasks']).to eq(%w[MESSAGING])
+        expect(event['actor_waba_tasks']).to eq(%w[MANAGE MESSAGING])
+        expect(event['actor_has_manage']).to be(true)
         expect(event['waba_owner_business_id']).to eq('BIZ-OWNER-1')
         expect(line).not_to include(token)
       end
