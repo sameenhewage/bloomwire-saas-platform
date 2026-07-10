@@ -24,6 +24,7 @@ const makeFlow = (overrides = {}) => ({
   takingLongerThanUsual: ref(false),
   start: vi.fn(),
   resume: vi.fn(),
+  relaunch: vi.fn(),
   cancel: vi.fn(),
   checkStatus: vi.fn(),
   restart: vi.fn(),
@@ -76,11 +77,49 @@ describe('BloomwireWhatsappAsync.vue (async onboarding wizard UI)', () => {
     expect(wrapper.emitted('back')).toHaveLength(1);
   });
 
-  it('shows the processing screen (with cancel) while processing', () => {
+  it('shows a distinct waiting-for-Meta screen with relaunch and server cancellation', async () => {
+    flow = makeFlow({ state: ref(ONBOARDING_STATES.WAITING_META) });
+    const wrapper = mountAsync();
+
+    expect(has(wrapper, 'bloomwire-wa-async-waiting-meta')).toBe(true);
+    expect(has(wrapper, 'bloomwire-wa-async-relaunch')).toBe(true);
+    expect(has(wrapper, 'bloomwire-wa-async-cancel')).toBe(true);
+    expect(has(wrapper, 'bloomwire-wa-async-processing')).toBe(false);
+
+    await wrapper
+      .find('[data-testid="bloomwire-wa-async-relaunch"]')
+      .trigger('click');
+    await wrapper
+      .find('[data-testid="bloomwire-wa-async-cancel"]')
+      .trigger('click');
+
+    expect(flow.relaunch).toHaveBeenCalledTimes(1);
+    expect(flow.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels waiting recovery as Standard and shows its sanitized error reference', () => {
+    flow = makeFlow({
+      state: ref(ONBOARDING_STATES.WAITING_META),
+      errorCode: ref('meta_popup_failed'),
+    });
+    const wrapper = mountAsync();
+
+    expect(has(wrapper, 'bloomwire-wa-async-flow-label')).toBe(true);
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-flow-label"]').text()
+    ).toBe(
+      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.STANDARD_FLOW_LABEL'
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-error-code"]').text()
+    ).toContain('meta_popup_failed');
+  });
+
+  it('shows active processing without offering waiting_meta cancellation', () => {
     flow = makeFlow({ state: ref(ONBOARDING_STATES.PROCESSING) });
     const wrapper = mountAsync();
     expect(has(wrapper, 'bloomwire-wa-async-processing')).toBe(true);
-    expect(has(wrapper, 'bloomwire-wa-async-cancel')).toBe(true);
+    expect(has(wrapper, 'bloomwire-wa-async-cancel')).toBe(false);
     expect(has(wrapper, 'bloomwire-wa-async-longer')).toBe(false);
   });
 
@@ -108,6 +147,26 @@ describe('BloomwireWhatsappAsync.vue (async onboarding wizard UI)', () => {
     expect(has(wrapper, 'bloomwire-wa-async-expired')).toBe(true);
     expect(has(wrapper, 'bloomwire-wa-async-attempt-not-found')).toBe(false);
     expect(has(wrapper, 'bloomwire-wa-async-restart')).toBe(true);
+  });
+
+  it('labels a terminal failure as Standard and shows its sanitized error reference', () => {
+    flow = makeFlow({
+      state: ref(ONBOARDING_STATES.FAILED),
+      errorCode: ref('missing_code'),
+    });
+    const wrapper = mountAsync();
+
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-failed-title"]').text()
+    ).toBe('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.FAILED.TITLE');
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-flow-label"]').text()
+    ).toBe(
+      'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.STANDARD_FLOW_LABEL'
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-error-code"]').text()
+    ).toContain('missing_code');
   });
 
   it('shows a distinct recoverable attempt-not-found screen with Check status and Restart', async () => {

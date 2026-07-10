@@ -3,6 +3,8 @@
 - Status: **Accepted; merged and DEV safe-runtime validated.** The immediate synchronous hardening remains the
   protected fallback. The v3 asynchronous Sidekiq workflow is deployed for **Standard “Register New Number” only**;
   Coexistence remains on its existing synchronous flow and is never controlled by the Standard emergency switch.
+  A corrective `waiting_meta` lifecycle/reconnect implementation has local strict **QA PASS** on a feature branch but
+  is **not yet reviewed in PR, merged, deployed, or live-Meta certified**; remaining gates are recorded below.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
@@ -84,6 +86,30 @@ The emergency switch is a rollback control for **new Standard async attempt crea
 it flips remains submittable and pollable; workers/recovery remain switch-independent. The switch does not hide
 Coexistence or stop in-flight attempts.
 
+### C. `waiting_meta` lifecycle and reconnect ownership correction (Accepted — local QA PASS; review/merge pending)
+
+A confirmed DEV reconnect failure exposed three lifecycle ownership gaps: the browser mapped persisted `waiting_meta`
+to generic processing, local Cancel did not terminalize the server attempt, and the implemented recovery sweep had no
+scheduler registration. Later popup completions entered the separate Coexistence endpoint; that endpoint safely
+returned `no_connected_registration`, but it was not the owner of the Standard attempt.
+
+The corrective contract is:
+
+- `waiting_meta` has its own Standard-labelled UI state. **Relaunch Meta** first authorizes the same account-owned
+  attempt through a side-effect-free endpoint, then opens Standard Embedded Signup with `coexistence: false` and
+  submits only to that attempt's async `submit` endpoint. Relaunch never creates an attempt, advances generation, or
+  enqueues a job.
+- **Cancel setup** is server-authoritative and idempotent for `waiting_meta`: it row-locks the attempt, transitions it
+  to `cancelled`, clears temporary encrypted secrets and stale lease/enqueue ownership, preserves the row for audit,
+  and returns the existing safe DTO. Processing/terminal states other than an already-cancelled replay fail safely.
+- Every persisted attempt status maps explicitly to one UI state. Raw SDK/server messages never enter UI state;
+  only a fixed allowlist of stable non-secret codes may render as a Standard-flow error reference.
+- `Bloomwire::WhatsappOnboardingSweepJob` is registered exactly once in `schedule.yml` on `scheduled_jobs` every
+  minute. The existing recovery service remains authoritative for the generous 30-minute abandonment TTL and the
+  60-second redrive grace.
+- Existing account scope, administrator authorization, base managed-feature gate, safe DTO, encrypted-at-rest
+  attempt storage, emergency-switch continuity, and Standard/Coexistence endpoint separation remain unchanged.
+
 ## Consequences
 
 - **Positive:** no more split-state 500s on a slow `/register`; each Meta call is individually bounded; retries
@@ -122,3 +148,14 @@ Coexistence or stop in-flight attempts.
   protected-row mutation occurred. Original Postgres/Redis volumes were reused; no data volume was recreated.
 - Residual: a real successful new-number Meta signup was intentionally not run. Keep the synchronous fallback and
   its 75s middleware until that later provider certification. Legacy clean-install debt remains issue **#151**.
+- Corrective lifecycle implementation evidence (2026-07-10; all provider boundaries mocked/WebMock-blocked): relaunch
+  API RED **3/3 failures** → GREEN **3/0**; frontend lifecycle RED **44 tests / 11 failures** → GREEN **44/0**; safe
+  error/flow-label RED **41 tests / 6 failures** → GREEN **41/0**; scheduler RED **2/1** → GREEN **2/0**;
+  independent concurrency QA duplicate Start RED **31/1** → GREEN **31/0**. Final affected backend **114/0 (5
+  expected inverse-key pending)** plus encryption-absent **5/0**; frontend **134/0**; targeted RuboCop/ESLint clean;
+  translation JSON valid; production Vite build completed in **45.94s**; static secret-pattern scan **922 added lines /
+  0 hits**. No live Meta/WhatsApp call, provider-credential mutation, Enterprise change,
+  production change, or DEV data mutation occurred.
+- Corrective lifecycle residual gates: commit/PR/CI/exact-head review, merge to `version_1`,
+  exact-SHA DEV deploy, safe terminalization of the stale DEV attempt, and exactly one owner-operated Standard async
+  reconnect with inbound/outbound messaging proof. None is claimed complete by this implementation evidence.

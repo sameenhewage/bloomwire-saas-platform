@@ -4,8 +4,9 @@
 require 'rails_helper'
 
 RSpec.context 'with valid schedule.yml' do
+  let(:file) { Rails.root.join('config/schedule.yml') }
+
   it 'does not have duplicates' do
-    file = Rails.root.join('config/schedule.yml')
     schedule_keys = []
     invalid_line_starts = [' ', '#', "\n"]
     # couldn't figure out a proper solution with yaml.parse
@@ -20,5 +21,16 @@ RSpec.context 'with valid schedule.yml' do
     end
     # ensure that no duplicates exist
     expect(schedule_keys.count).to eq(schedule_keys.uniq.count)
+  end
+
+  it 'registers the WhatsApp onboarding recovery sweep exactly once' do
+    schedule = YAML.safe_load_file(file)
+    recovery_entries = schedule.values.select do |entry|
+      entry['class'] == 'Bloomwire::WhatsappOnboardingSweepJob'
+    end
+
+    expect(recovery_entries).to contain_exactly(
+      include('cron' => '*/1 * * * *', 'queue' => 'scheduled_jobs')
+    )
   end
 end

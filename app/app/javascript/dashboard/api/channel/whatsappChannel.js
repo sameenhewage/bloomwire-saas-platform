@@ -120,6 +120,22 @@ class WhatsappChannel extends ApiClient {
       config
     );
   }
+
+  relaunchBloomwireOnboardingAttempt(attemptId, config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_attempts/${attemptId}/relaunch`,
+      {},
+      config
+    );
+  }
+
+  cancelBloomwireOnboardingAttempt(attemptId, config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_attempts/${attemptId}/cancel`,
+      {},
+      config
+    );
+  }
 }
 
 export default new WhatsappChannel();

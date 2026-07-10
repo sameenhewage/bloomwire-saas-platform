@@ -26,6 +26,7 @@ export const ONBOARDING_STATES = Object.freeze({
   IDLE: 'idle',
   CREATING: 'creating',
   AWAITING_META: 'awaiting_meta',
+  WAITING_META: 'waiting_meta',
   SUBMITTING: 'submitting',
   PROCESSING: 'processing',
   COMPLETED: 'completed',
@@ -45,8 +46,37 @@ const TERMINAL_STATES = [
   ONBOARDING_STATES.CANCELLED,
 ];
 
-// Server attempt status -> UI state. Any in-progress status collapses to PROCESSING for the poller.
+const SAFE_ERROR_CODES = new Set([
+  'activation_incomplete',
+  'ambiguous_connected_registration',
+  'cross_business_registration',
+  'encryption_not_configured',
+  'meta_error',
+  'meta_popup_failed',
+  'meta_timeout',
+  'missing_code',
+  'no_connected_registration',
+  'oauth_code_expired',
+  'oauth_exchange_retryable',
+  'onboarding_abandoned',
+  'outbound_messaging_activation_incomplete',
+  'outbound_messaging_permission_required',
+  'outbound_messaging_permission_unverifiable',
+  'phone_number_id_conflict',
+  'phone_number_taken',
+  'registration_failed',
+  'registration_pin_required',
+  'subscription_failed',
+]);
+
+const sanitizedErrorCode = code => (SAFE_ERROR_CODES.has(code) ? code : null);
+
+// Server attempt status -> UI state. Every persisted status has one explicit UI owner.
 const STATUS_TO_STATE = {
+  waiting_meta: ONBOARDING_STATES.WAITING_META,
+  queued: ONBOARDING_STATES.PROCESSING,
+  exchanging_code: ONBOARDING_STATES.PROCESSING,
+  processing: ONBOARDING_STATES.PROCESSING,
   completed: ONBOARDING_STATES.COMPLETED,
   action_required: ONBOARDING_STATES.ACTION_REQUIRED,
   expired: ONBOARDING_STATES.EXPIRED,
@@ -99,8 +129,8 @@ export function useAsyncWhatsappOnboarding({
 
   const applyDto = dto => {
     attempt.value = dto;
-    errorCode.value = dto?.error_code ?? null;
-    state.value = STATUS_TO_STATE[dto?.status] || ONBOARDING_STATES.PROCESSING;
+    errorCode.value = sanitizedErrorCode(dto?.error_code);
+    state.value = STATUS_TO_STATE[dto?.status] || ONBOARDING_STATES.FAILED;
     if (isTerminal()) {
       clearTimers();
       clearStored();
@@ -143,46 +173,161 @@ export function useAsyncWhatsappOnboarding({
     return poll(generation);
   };
 
-  const cancel = () => {
-    flowGeneration += 1;
-    cancelPopup();
-    clearTimers();
+  const clearLocalAttempt = () => {
     clearStored();
     attemptId.value = null;
     attempt.value = null;
+    errorCode.value = null;
     takingLongerThanUsual.value = false;
     state.value = ONBOARDING_STATES.CANCELLED;
   };
 
+  const cancel = async () => {
+    flowGeneration += 1;
+    const generation = flowGeneration;
+    const cancelledAttemptId = attemptId.value;
+    const cancelOnServer =
+      cancelledAttemptId &&
+      [
+        ONBOARDING_STATES.AWAITING_META,
+        ONBOARDING_STATES.WAITING_META,
+      ].includes(state.value);
+    cancelPopup();
+    clearTimers();
+
+    if (cancelOnServer) {
+      try {
+        await WhatsappChannel.cancelBloomwireOnboardingAttempt(
+          cancelledAttemptId
+        );
+      } catch {
+        if (
+          generation === flowGeneration &&
+          cancelledAttemptId === attemptId.value
+        ) {
+          writeStored(cancelledAttemptId);
+          return beginPolling(generation);
+        }
+        return false;
+      }
+      if (
+        generation !== flowGeneration ||
+        cancelledAttemptId !== attemptId.value
+      )
+        return false;
+    }
+
+    clearLocalAttempt();
+    return true;
+  };
+
+  const launchMetaForAttempt = async (generation, launchedAttemptId) => {
+    state.value = ONBOARDING_STATES.AWAITING_META;
+    let credentials;
+    try {
+      credentials = await runEmbeddedSignup({
+        coexistence: false,
+        overallTimeoutMs: null,
+      });
+    } catch {
+      if (
+        generation === flowGeneration &&
+        launchedAttemptId === attemptId.value
+      ) {
+        errorCode.value = 'meta_popup_failed';
+        state.value = ONBOARDING_STATES.WAITING_META;
+        writeStored(launchedAttemptId);
+      }
+      return null;
+    }
+    if (generation !== flowGeneration || launchedAttemptId !== attemptId.value)
+      return null;
+    if (!credentials) {
+      await cancel();
+      return null;
+    }
+
+    state.value = ONBOARDING_STATES.SUBMITTING;
+    try {
+      await WhatsappChannel.submitBloomwireOnboardingAttempt(
+        launchedAttemptId,
+        credentials
+      );
+    } catch {
+      if (
+        generation === flowGeneration &&
+        launchedAttemptId === attemptId.value
+      )
+        return beginPolling(generation);
+      return null;
+    }
+    if (generation !== flowGeneration || launchedAttemptId !== attemptId.value)
+      return null;
+    beginPolling(generation);
+    return launchedAttemptId;
+  };
+
   const start = async () => {
+    if (
+      ![ONBOARDING_STATES.IDLE, ONBOARDING_STATES.CANCELLED].includes(
+        state.value
+      )
+    )
+      return false;
+
     flowGeneration += 1;
     const generation = flowGeneration;
     clearTimers();
     state.value = ONBOARDING_STATES.CREATING;
-    const { data: created } =
-      await WhatsappChannel.createBloomwireOnboardingAttempt();
+    let created;
+    try {
+      const response = await WhatsappChannel.createBloomwireOnboardingAttempt();
+      created = response.data;
+    } catch (error) {
+      if (generation !== flowGeneration) return null;
+      errorCode.value = sanitizedErrorCode(error?.response?.data?.code);
+      state.value = ONBOARDING_STATES.FAILED;
+      return null;
+    }
     if (generation !== flowGeneration) return null;
     attemptId.value = created.attempt_id;
     attempt.value = created;
     writeStored(attemptId.value);
 
+    return launchMetaForAttempt(generation, attemptId.value);
+  };
+
+  const relaunch = async () => {
+    if (!attemptId.value || state.value !== ONBOARDING_STATES.WAITING_META)
+      return false;
+
+    flowGeneration += 1;
+    const generation = flowGeneration;
+    const relaunchedAttemptId = attemptId.value;
+    clearTimers();
     state.value = ONBOARDING_STATES.AWAITING_META;
-    // overallTimeoutMs: null DISABLES the 180s popup watchdog — rely on SDK signals + the server-side TTL.
-    const credentials = await runEmbeddedSignup({ overallTimeoutMs: null });
-    if (generation !== flowGeneration) return null;
-    if (!credentials) {
-      cancel(); // user dismissed the Meta popup
-      return null;
+
+    try {
+      const { data } =
+        await WhatsappChannel.relaunchBloomwireOnboardingAttempt(
+          relaunchedAttemptId
+        );
+      if (
+        generation !== flowGeneration ||
+        relaunchedAttemptId !== attemptId.value
+      )
+        return false;
+      applyDto(data);
+    } catch {
+      if (
+        generation === flowGeneration &&
+        relaunchedAttemptId === attemptId.value
+      )
+        return beginPolling(generation);
+      return false;
     }
 
-    state.value = ONBOARDING_STATES.SUBMITTING;
-    await WhatsappChannel.submitBloomwireOnboardingAttempt(
-      attemptId.value,
-      credentials
-    );
-    if (generation !== flowGeneration) return null;
-    beginPolling(generation);
-    return attemptId.value;
+    return launchMetaForAttempt(generation, relaunchedAttemptId);
   };
 
   // On mount/reload: resume polling a persisted, still-in-flight attempt for THIS account. Returns false when none.
@@ -203,8 +348,8 @@ export function useAsyncWhatsappOnboarding({
     return beginPolling(generation);
   };
 
-  const restart = () => {
-    cancel();
+  const restart = async () => {
+    await cancel();
     return start();
   };
 
@@ -223,6 +368,7 @@ export function useAsyncWhatsappOnboarding({
     takingLongerThanUsual,
     start,
     resume,
+    relaunch,
     cancel,
     checkStatus,
     restart,
