@@ -1,8 +1,8 @@
 # ADR-0010 — WhatsApp Onboarding Resilience (synchronous fallback + asynchronous Standard flow)
 
-- Status: **Accepted.** The immediate synchronous hardening remains the protected fallback. The v3 asynchronous
-  Sidekiq workflow is implemented for **Standard “Register New Number” only**; Coexistence remains on its existing
-  synchronous flow and is never controlled by the Standard emergency switch.
+- Status: **Accepted; merged and DEV safe-runtime validated.** The immediate synchronous hardening remains the
+  protected fallback. The v3 asynchronous Sidekiq workflow is deployed for **Standard “Register New Number” only**;
+  Coexistence remains on its existing synchronous flow and is never controlled by the Standard emergency switch.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
@@ -60,7 +60,7 @@ the DEV token-debug logging reduced latency but is **not** a reliability fix —
    These GUARANTEE **exactly one** Inbox/Channel/Setup even under repeated or concurrent retries (a losing concurrent
    attempt fails closed with `:phone_number_taken` rather than duplicating).
 
-### B. Asynchronous Standard workflow (Accepted — implemented on feature branch)
+### B. Asynchronous Standard workflow (Accepted — merged and DEV-deployed)
 
 Move the Standard flow’s Meta side effects OFF the web request into a resumable **Sidekiq onboarding workflow**:
 
@@ -110,5 +110,15 @@ Coexistence or stop in-flight attempts.
   server-expired versus HTTP-404 semantics, recoverable Check status/Restart, safe DTOs, account scope, and admin
   authorization. Exact-SHA review additionally proved a stale in-flight poll could overwrite cancelled/restarted
   state; a monotonic flow generation now invalidates stale create/popup/submit/poll continuations.
-- No real Meta/WhatsApp calls, no secrets exposed, no provider-credential mutation, no Enterprise code touched, and
-  no deploy/DEV/production changes in this implementation.
+- Delivery: PR **#153** exact-reviewed head `91e1f3c`, CI **8/8**, merged as `bc6602d`; DEV deploy run
+  **29071915838** succeeded with migrations + smoke. Rails/Sidekiq exact SHA, local/public health 200, migration
+  catalog **29/7/3/2**, encryption ready, no pending migrations, queues **0/0/49 historical**, recent errors 0.
+- Authenticated safe runtime validated chooser ownership, default async routing, safe create/show/404 DTOs,
+  switch-blocked new create with pre-flip submit/poll continuity, switch-independent worker/recovery, safe terminal
+  copy + Restart fallback, stopped 3s polling with no duplicate burst, and restoration to record-absent/OFF. Three
+  unbound test attempts were deleted; zero remain.
+- The sole protected managed Channel/Setup/Inbox stayed ready and encrypted; its existing read path stayed present.
+  No live Meta/WhatsApp call, message send, provider-credential mutation, Enterprise change, production change, or
+  protected-row mutation occurred. Original Postgres/Redis volumes were reused; no data volume was recreated.
+- Residual: a real successful new-number Meta signup was intentionally not run. Keep the synchronous fallback and
+  its 75s middleware until that later provider certification. Legacy clean-install debt remains issue **#151**.
