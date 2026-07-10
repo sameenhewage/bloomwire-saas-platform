@@ -69,6 +69,7 @@ export function useAsyncWhatsappOnboarding({
 
   let pollTimer = null;
   let longerTimer = null;
+  let flowGeneration = 0;
 
   const storageKey = () => storageKeyFor(accountId);
   const readStored = () => getStoredAsyncWhatsappOnboardingAttemptId(accountId);
@@ -106,14 +107,18 @@ export function useAsyncWhatsappOnboarding({
     }
   };
 
-  const poll = async () => {
+  const poll = async generation => {
+    const polledAttemptId = attemptId.value;
     try {
-      const { data } = await WhatsappChannel.fetchBloomwireOnboardingAttempt(
-        attemptId.value
-      );
+      const { data } =
+        await WhatsappChannel.fetchBloomwireOnboardingAttempt(polledAttemptId);
+      if (generation !== flowGeneration || polledAttemptId !== attemptId.value)
+        return;
       applyDto(data);
       if (!isTerminal() && attemptId.value) writeStored(attemptId.value);
     } catch (error) {
+      if (generation !== flowGeneration || polledAttemptId !== attemptId.value)
+        return;
       if (error?.response?.status === 404) {
         clearTimers();
         clearStored();
@@ -123,22 +128,23 @@ export function useAsyncWhatsappOnboarding({
       }
       // Transient error: keep polling (the backend is resumable).
     }
-    if (!isTerminal()) {
-      pollTimer = setTimeout(poll, pollIntervalMs);
+    if (generation === flowGeneration && !isTerminal()) {
+      pollTimer = setTimeout(() => poll(generation), pollIntervalMs);
     }
   };
 
-  const beginPolling = () => {
+  const beginPolling = generation => {
     clearTimers();
     state.value = ONBOARDING_STATES.PROCESSING;
     takingLongerThanUsual.value = false;
     longerTimer = setTimeout(() => {
-      takingLongerThanUsual.value = true;
+      if (generation === flowGeneration) takingLongerThanUsual.value = true;
     }, longerThanUsualMs);
-    return poll();
+    return poll(generation);
   };
 
   const cancel = () => {
+    flowGeneration += 1;
     cancelPopup();
     clearTimers();
     clearStored();
@@ -149,10 +155,13 @@ export function useAsyncWhatsappOnboarding({
   };
 
   const start = async () => {
+    flowGeneration += 1;
+    const generation = flowGeneration;
     clearTimers();
     state.value = ONBOARDING_STATES.CREATING;
     const { data: created } =
       await WhatsappChannel.createBloomwireOnboardingAttempt();
+    if (generation !== flowGeneration) return null;
     attemptId.value = created.attempt_id;
     attempt.value = created;
     writeStored(attemptId.value);
@@ -160,6 +169,7 @@ export function useAsyncWhatsappOnboarding({
     state.value = ONBOARDING_STATES.AWAITING_META;
     // overallTimeoutMs: null DISABLES the 180s popup watchdog — rely on SDK signals + the server-side TTL.
     const credentials = await runEmbeddedSignup({ overallTimeoutMs: null });
+    if (generation !== flowGeneration) return null;
     if (!credentials) {
       cancel(); // user dismissed the Meta popup
       return null;
@@ -170,7 +180,8 @@ export function useAsyncWhatsappOnboarding({
       attemptId.value,
       credentials
     );
-    beginPolling();
+    if (generation !== flowGeneration) return null;
+    beginPolling(generation);
     return attemptId.value;
   };
 
@@ -178,14 +189,18 @@ export function useAsyncWhatsappOnboarding({
   const resume = () => {
     const stored = readStored();
     if (!stored) return false;
+    flowGeneration += 1;
+    const generation = flowGeneration;
     attemptId.value = stored;
-    beginPolling();
+    beginPolling(generation);
     return true;
   };
 
   const checkStatus = () => {
     if (!attemptId.value) return false;
-    return beginPolling();
+    flowGeneration += 1;
+    const generation = flowGeneration;
+    return beginPolling(generation);
   };
 
   const restart = () => {
@@ -195,7 +210,10 @@ export function useAsyncWhatsappOnboarding({
 
   // Stop the poll/longer timers WITHOUT clearing the persisted attempt or changing state — for component unmount /
   // route change. The attempt is server-side and resumable, so resume() re-attaches polling when the UI returns.
-  const stopPolling = () => clearTimers();
+  const stopPolling = () => {
+    flowGeneration += 1;
+    clearTimers();
+  };
 
   return {
     state,

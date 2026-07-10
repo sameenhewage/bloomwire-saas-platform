@@ -282,6 +282,29 @@ describe('useAsyncWhatsappOnboarding', () => {
     expect(cancelPopupMock).toHaveBeenCalled();
   });
 
+  it('ignores an in-flight poll response that resolves after cancellation', async () => {
+    let resolvePoll;
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockReturnValue(
+      new Promise(resolve => {
+        resolvePoll = resolve;
+      })
+    );
+    window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-STALE');
+    const flow = build();
+    flow.resume();
+    await flush();
+
+    flow.cancel();
+    resolvePoll({
+      data: { attempt_id: 'ATT-STALE', status: 'completed', channel_id: 42 },
+    });
+    await flush();
+
+    expect(flow.state.value).toBe(ONBOARDING_STATES.CANCELLED);
+    expect(flow.attempt.value).toBeNull();
+    expect(flow.attemptId.value).toBeNull();
+  });
+
   it('restart(): cancels the current attempt and opens a fresh one', async () => {
     const flow = build();
     await flow.start();
