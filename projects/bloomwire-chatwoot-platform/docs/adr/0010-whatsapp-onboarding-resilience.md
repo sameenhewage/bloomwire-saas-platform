@@ -90,5 +90,6 @@ the **currently working, demo-proven** synchronous flow is not changed before th
   `GraphApiTimeoutError`; middleware (onboarding budget + bypass + non-onboarding passthrough); in-request
   register-read-timeout recovery; retry-sees-CONNECTED-skips-register; retry-sees-subscribed-skips-subscribe;
   repeated retries = exactly one Channel/Inbox/Setup; Meta timeout fails safely (0 records); secrets never in the
-  DTO. Focused suite green; RuboCop clean. **Not deployed** — deploy is gated on explicit owner approval after the
-  demo.
+  DTO. Exact-SHA review found the assigned-user task POST still bypassed the helper; a RED timeout-options contract
+  proved it and the write now uses the same helper. Final hardening matrix **123/0**; full RuboCop **2742/0**; docs,
+  diff, and secret gates passed. **Not merged or deployed.**

@@ -214,11 +214,10 @@ class Whatsapp::FacebookApiClient
   # caller re-reads tasks to verify. Raises on a Meta rejection (e.g. a view-only token cannot self-elevate),
   # so the capability gate fails closed to an explicit Action-Required state rather than a false "ready".
   def assign_waba_user_tasks(waba_id, user_id, tasks)
-    response = HTTParty.post(
-      "#{BASE_URI}/#{@api_version}/#{waba_id}/assigned_users",
-      headers: request_headers,
-      query: { user: user_id, tasks: Array(tasks).to_json }
-    )
+    response = http_request(:post,
+                            "#{BASE_URI}/#{@api_version}/#{waba_id}/assigned_users",
+                            headers: request_headers,
+                            query: { user: user_id, tasks: Array(tasks).to_json })
     handle_response(response, 'WABA assigned user task assignment failed')
   end
 

@@ -98,6 +98,14 @@
 
 ## 3. Phase-by-phase implementation log
 
+### ADR-0010 Section A — Synchronous WhatsApp onboarding timeout resilience + convergent retry — `Implemented; PR/merge/deploy pending`
+- **Failure truth:** the global 15s request timeout could interrupt a cold `/register` after Meta committed but before local persistence, creating Meta CONNECTED + zero Bloomwire records; Graph calls had no explicit HTTP bounds.
+- **Request ownership:** only Standard and Coexistence Embedded Signup POSTs bypass the global timer and receive a finite 75s ceiling; every other endpoint keeps 15s. All Graph requests use one helper with 5s open / 25s read limits and secret-free timeout translation.
+- **Retry ownership:** fresh Meta state is authoritative. CONNECTED skips `/register`; an existing app subscription skips its POST; same-account/same-number retry reuses exactly one Channel/Inbox/Setup; DB uniqueness remains the final concurrent-write guard.
+- **Review correction:** `assign_waba_user_tasks` was the one direct `HTTParty.post`; a RED timeout contract proved the omission, then the method moved behind the centralized helper.
+- **Security / compatibility:** no token/PIN/code/App Secret/URL/body in timeout errors; no schema, Enterprise, native-WhatsApp, global-router, credential, DEV, or production change.
+- **Validation:** focused review RED **1/1 → 1/0**; final hardening matrix **123/0**; full RuboCop **2742/0**; no direct `HTTParty.*` calls remain; docs governance/parity, diff check, and secret scan (**23 files / 0 hits**) passed.
+
 ### Phase 13B — WhatsApp production hardening — `Completed`
 - Encrypt the WhatsApp **provider config** at rest **when Active Record encryption keys are configured**
   (no plaintext-token-at-rest is the target; behavior degrades safely if keys are absent).

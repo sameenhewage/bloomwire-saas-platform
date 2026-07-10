@@ -15,6 +15,14 @@ Meta/WhatsApp calls were made · whether Enterprise code was touched.**
 
 ## Unreleased / Pending Merge
 
+### Bloomwire — Synchronous WhatsApp onboarding timeout resilience + convergent retry (ADR-0010 Section A) — IMPLEMENTED (PR/merge/deploy pending)
+- **Branch:** `fix/bloomwire-whatsapp-onboarding-resilience`, rebased onto current `version_1`; PR, merge, and deploy pending.
+- **Root cause:** Standard/Coexistence onboarding performs sequential Meta calls plus persistence in one request. The global 15s `Rack::Timeout` could terminate the request after Meta committed `/register` but before Bloomwire persisted records, leaving Meta CONNECTED with zero Channel/Inbox/Setup; bare Graph calls also lacked bounded open/read timeouts.
+- **Fix:** every `Whatsapp::FacebookApiClient` Graph request uses the centralized helper with 5s open / 25s read limits and sanitized `GraphApiTimeoutError`; only the two onboarding POST endpoints receive a bounded 75s request ceiling while every other request keeps the global 15s budget. Retries reconcile Meta state, skip `/register` when CONNECTED, skip subscription when already subscribed, and reuse the same account/number records.
+- **Exact-SHA review correction:** review found `assign_waba_user_tasks` still called `HTTParty.post` directly. RED proved the task-assignment POST omitted both timeouts; it now routes through the same helper, so capability writes cannot hang outside the request budget.
+- **Security / boundaries:** timeout errors carry verb + timeout class only; no URL/query/token/PIN/App Secret/OAuth code/body. Global router, native WhatsApp, account/admin gates, Enterprise, schema, provider credentials, and production remain unchanged. No live Meta call in tests.
+- **Validation:** focused review RED **1/1 → 1/0**; final hardening matrix **123/0**; full RuboCop **2742 files / 0 offenses**; no direct `HTTParty.*` calls remain in the client; docs governance/parity, diff check, and high-signal scan (**23 files / 0 hits**) passed. **Not merged or deployed.**
+
 ### Bloomwire — Coexistence onboarding must skip Standard Cloud API `/register` (Phase 6.3c) — OPEN (PR pending; DEV deploy/test pending)
 - **Branch:** `fix/bloomwire-token-debug-dev-gate` off `version_1` `f94b215`, continuing the live DEV diagnostic path already deployed at `cd25a82`.
 - **Root cause (DEV reference `b318dab0`):** the Coexistence endpoint received both browser signals and posted to `coexistence_embedded_signup`, but the backend inherited the Standard Cloud API `/register` call. Meta returned `#100` for phone number `1249446648242795`; after that the duplicate-registration resolver scanned WABAs and hit Rack timeout, so the browser saw HTTP 500 instead of a clean outcome. This is distinct from the earlier Standard `featureType` bug.

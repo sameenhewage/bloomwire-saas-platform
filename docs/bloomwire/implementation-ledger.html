@@ -187,6 +187,17 @@
   <section id="s3">
     <h2><a class="anchor" href="#s3"><span class="num">3.</span>Phase-by-phase implementation log</a></h2>
 
+    <div class="card"><h3>ADR-0010 Section A — Synchronous WhatsApp onboarding timeout resilience + convergent retry <span class="badge">Implemented · PR/merge/deploy pending</span></h3>
+      <ul>
+        <li><b>Failure truth:</b> the global 15s request timeout could interrupt a cold <code>/register</code> after Meta committed but before local persistence, creating Meta CONNECTED + zero Bloomwire records; Graph calls had no explicit HTTP bounds.</li>
+        <li><b>Request ownership:</b> only Standard and Coexistence Embedded Signup POSTs bypass the global timer and receive a finite 75s ceiling; every other endpoint keeps 15s. All Graph requests use one helper with 5s open / 25s read limits and secret-free timeout translation.</li>
+        <li><b>Retry ownership:</b> fresh Meta state is authoritative. CONNECTED skips <code>/register</code>; an existing app subscription skips its POST; same-account/same-number retry reuses exactly one Channel/Inbox/Setup; DB uniqueness remains the final concurrent-write guard.</li>
+        <li><b>Review correction:</b> <code>assign_waba_user_tasks</code> was the one direct <code>HTTParty.post</code>; a RED timeout contract proved the omission, then the method moved behind the centralized helper.</li>
+        <li><b>Security / compatibility:</b> no token/PIN/code/App Secret/URL/body in timeout errors; no schema, Enterprise, native-WhatsApp, global-router, credential, DEV, or production change.</li>
+        <li><b>Validation:</b> focused review RED <b>1/1 → 1/0</b>; final hardening matrix <b>123/0</b>; full RuboCop <b>2742/0</b>; no direct <code>HTTParty.*</code> calls remain; docs governance/parity, diff check, and secret scan (<b>23 files / 0 hits</b>) passed.</li>
+      </ul>
+    </div>
+
     <div class="card green"><h3>Phase 13B — WhatsApp production hardening <span class="badge done">Completed</span></h3>
       <ul>
         <li>Encrypt the WhatsApp <b>provider config</b> at rest <b>when AR encryption keys are configured</b> (target: no plaintext token-at-rest; degrades safely if keys absent).</li>

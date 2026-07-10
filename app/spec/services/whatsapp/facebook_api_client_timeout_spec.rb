@@ -24,6 +24,16 @@ describe Whatsapp::FacebookApiClient do
       api_client.phone_number_status('PNID-1')
     end
 
+    it 'applies the same timeouts to assigned-user task writes' do
+      response = instance_double(HTTParty::Response, success?: true, parsed_response: { 'success' => true })
+      expect(HTTParty).to receive(:post)
+        .with(anything, hash_including(open_timeout: described_class::OPEN_TIMEOUT_SECONDS,
+                                       read_timeout: described_class::READ_TIMEOUT_SECONDS))
+        .and_return(response)
+
+      api_client.assign_waba_user_tasks('WABA-1', 'USER-1', ['MANAGE'])
+    end
+
     it 'raises a sanitized Whatsapp::GraphApiTimeoutError when a GET times out (read_timeout)' do
       stub_request(:get, %r{https://graph\.facebook\.com/#{api_version}/PNID-1}).to_timeout
       expect { api_client.phone_number_status('PNID-1') }.to raise_error(Whatsapp::GraphApiTimeoutError)
