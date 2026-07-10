@@ -86,6 +86,39 @@ describe('useAsyncWhatsappOnboarding', () => {
     }
   });
 
+  it('submits the already-created attempt when its delayed Meta popup result arrives', async () => {
+    let resolvePopup;
+    runEmbeddedSignupMock.mockReturnValue(
+      new Promise(resolve => {
+        resolvePopup = resolve;
+      })
+    );
+    const flow = build();
+    const startPromise = flow.start();
+    await flush();
+
+    expect(
+      WhatsappChannel.createBloomwireOnboardingAttempt
+    ).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)).toBe(
+      'ATT-1'
+    );
+
+    resolvePopup(CREDS);
+    await startPromise;
+    await flush();
+    try {
+      expect(
+        WhatsappChannel.submitBloomwireOnboardingAttempt
+      ).toHaveBeenCalledWith('ATT-1', CREDS);
+      expect(
+        WhatsappChannel.createBloomwireOnboardingAttempt
+      ).toHaveBeenCalledTimes(1);
+    } finally {
+      flow.cancel();
+    }
+  });
+
   it('reaches a terminal outcome and clears the persisted attempt id', async () => {
     WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
       data: { attempt_id: 'ATT-1', status: 'completed', channel_id: 42 },

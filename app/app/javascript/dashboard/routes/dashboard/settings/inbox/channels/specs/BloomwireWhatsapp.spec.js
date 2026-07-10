@@ -74,14 +74,16 @@ const DTO = {
 const B = 'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED';
 
 const mountWizard = ({ asyncStandard = false } = {}) => {
+  const asyncStandardRef =
+    typeof asyncStandard === 'object' ? asyncStandard : ref(asyncStandard);
   useWhatsappEmbeddedSignup.mockReturnValue({
     isAuthenticating: ref(false),
     runEmbeddedSignup,
     cancel: cancelEmbeddedSignup,
   });
   useBloomwireWhatsappOnboarding.mockReturnValue({
-    usesAsyncStandard: ref(asyncStandard),
-    usesSyncStandard: ref(!asyncStandard),
+    usesAsyncStandard: asyncStandardRef,
+    usesSyncStandard: ref(!asyncStandardRef.value),
   });
   return mount(BloomwireWhatsapp, {
     global: {
@@ -105,7 +107,9 @@ const mountWizard = ({ asyncStandard = false } = {}) => {
         },
         LoadingState: { template: '<div class="loading-state" />' },
         BloomwireWhatsappAsync: {
-          template: '<div data-testid="bloomwire-wa-async-standard" />',
+          props: ['canStartNewAsync'],
+          template:
+            '<div data-testid="bloomwire-wa-async-standard" :data-can-start-new="canStartNewAsync" />',
         },
         Icon: true,
       },
@@ -249,6 +253,24 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
     expect(
       wrapper.find('[data-testid="bloomwire-wa-async-standard"]').exists()
     ).toBe(false);
+  });
+
+  it('keeps an entered async Standard attempt mounted when the switch flips and disables only future new work', async () => {
+    const asyncStandard = ref(true);
+    const wrapper = mountWizard({ asyncStandard });
+    await startRegister(wrapper);
+
+    asyncStandard.value = false;
+    await flushPromises();
+
+    const asyncFlow = wrapper.find(
+      '[data-testid="bloomwire-wa-async-standard"]'
+    );
+    expect(asyncFlow.exists()).toBe(true);
+    expect(asyncFlow.attributes('data-can-start-new')).toBe('false');
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      false
+    );
   });
 
   it('resumes a persisted in-flight async Standard attempt after the emergency switch turns on', () => {

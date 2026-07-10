@@ -415,15 +415,4 @@ RSpec.describe Bloomwire::WhatsappOnboardingAttempt do
       end
     end
   end
-
-  # -- Slice 3 dependency (Fix 6): recovery/TTL is NOT implemented in Slice 1; these are executable reminders ---
-  #
-  # Temporary credentials in abandoned attempts MUST be cleared by the Slice 3 recovery/TTL worker. Pending specs
-  # (no block) keep this obligation visible and un-droppable until Slice 3 implements it.
-  describe 'Slice 3 dependency: abandoned-attempt cleanup (NOT implemented in Slice 1)' do
-    it 'clears secrets for abandoned waiting_meta attempts past their TTL (Slice 3)'
-    it 'recovers queued-but-never-enqueued attempts (Slice 3)'
-    it 'recovers stale processing attempts whose lease expired with no live worker (Slice 3)'
-    it 'sweeps terminal secret cleanup so no credential lingers (Slice 3)'
-  end
 end

@@ -64,11 +64,15 @@ the DEV token-debug logging reduced latency but is **not** a reliability fix —
 
 Move the Standard flow’s Meta side effects OFF the web request into a resumable **Sidekiq onboarding workflow**:
 
-- The admin/account-scoped controller records an encrypted onboarding attempt and returns **202 Processing**. New
-  create/submit work requires managed onboarding plus the Standard async path; show/poll requires the base managed
-  feature only, so queued/processing attempts remain visible during an emergency rollback.
+- The admin/account-scoped controller records an encrypted onboarding attempt and returns **202 Processing**. Creating
+  a new attempt requires managed onboarding plus the Standard async path. Submitting or polling an already-created
+  account-scoped attempt requires the base managed feature only, so a switch flip cannot orphan a waiting/in-flight run.
+- Submission is row-locked and replay-safe: the first valid `waiting_meta` submit persists credentials and advances one
+  generation; a replay re-enqueues that persisted generation without overwriting it; non-submittable states fail safely.
+- Sidekiq receives exactly the non-secret `[attempt_id, submission_generation]` arguments. A stale generation no-ops at
+  job entry and at the processor's authoritative lease claim. Recovery/TTL work does not depend on the emergency switch.
 - A leased Sidekiq processor reconciles real Meta state before mutation and advances idempotently through token,
-  registration, capability, subscription, and persistence. Recovery/TTL work does not depend on the emergency switch.
+  registration, capability, subscription, and persistence.
 - The authenticated account payload exposes `canUseAsyncStandardWhatsappOnboarding`. The existing managed entry
   always keeps its Standard/Coexistence chooser: Standard selects async when the capability is true and the protected
   synchronous fallback when false; Coexistence always uses its existing flow.
@@ -76,8 +80,9 @@ Move the Standard flow’s Meta side effects OFF the web request into a resumabl
   An explicit server `expired` status means Meta-session expiry. A generic poll 404 means `attempt_not_found`, clears
   stale local storage, and offers **Check status / Restart**; it never selects sync or claims Meta expiry.
 
-The emergency switch is a rollback control for **new Standard async work only**. It does not hide Coexistence or stop
-in-flight attempts.
+The emergency switch is a rollback control for **new Standard async attempt creation only**. An attempt created before
+it flips remains submittable and pollable; workers/recovery remain switch-independent. The switch does not hide
+Coexistence or stop in-flight attempts.
 
 ## Consequences
 

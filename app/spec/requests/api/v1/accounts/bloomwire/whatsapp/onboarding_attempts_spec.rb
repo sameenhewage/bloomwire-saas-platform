@@ -56,6 +56,34 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
       end
     end
 
+    it 'replays a queued submit without overwriting credentials or advancing its generation', if: Chatwoot.encryption_configured? do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      first_generation = attempt.reload.submission_generation
+
+      replay = submit_body.merge(code: 'REPLAY-CODE', display_phone_number: '+15559999999')
+      expect do
+        post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: replay, as: :json
+      end.to have_enqueued_job(Bloomwire::WhatsappOnboardingJob).with(attempt.id, first_generation)
+      aggregate_failures do
+        expect(response).to have_http_status(:accepted)
+        expect(attempt.reload.submission_generation).to eq(first_generation)
+        expect(attempt.oauth_code).to eq('META-CODE')
+        expect(attempt.masked_phone).to eq('****0001')
+      end
+    end
+
+    it 'rejects submit for a non-submittable terminal attempt without enqueueing' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'completed')
+      expect do
+        post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappOnboardingJob)
+      aggregate_failures do
+        expect(response).to have_http_status(:conflict)
+        expect(response.parsed_body['code']).to eq('attempt_not_submittable')
+      end
+    end
+
     it 'show returns the safe DTO for this account and never a secret' do
       attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'processing', phone_number_id: 'PNID-1')
       get "#{base}/#{attempt.public_uuid}", headers: admin.create_new_auth_token, as: :json
@@ -73,31 +101,52 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
-    it 'denies an agent' do
+    it 'submit is 404 for a public_uuid owned by another account' do
+      foreign = Bloomwire::WhatsappOnboardingAttempt.create!(account: create(:account), status: 'waiting_meta')
+      post "#{base}/#{foreign.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'denies an agent for create and submit' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
       post base, headers: agent.create_new_auth_token, as: :json
-      expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
+      create_status = response.status
+      post "#{base}/#{attempt.public_uuid}/submit", headers: agent.create_new_auth_token, params: submit_body, as: :json
+      aggregate_failures do
+        expect(create_status).to(satisfy { |status| [401, 403].include?(status) })
+        expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
+      end
     end
   end
 
   context 'when the emergency kill switch is set (temporary sync fallback / rollback)' do
-    before do
-      enable_async_managed_mode
-      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
-    end
+    before { enable_async_managed_mode }
 
     it 'blocks NEW attempt creation (404) so the frontend uses the synchronous path' do
+      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
       post base, headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end
 
-    it 'blocks submit for a not-yet-queued attempt (404 => sync fallback)' do
+    it 'lets an existing waiting_meta attempt submit after the switch flips and enqueues its generation',
+       if: Chatwoot.encryption_configured? do
       attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
-      post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
-      expect(response).to have_http_status(:not_found)
+      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
+
+      expect do
+        post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      end.to have_enqueued_job(Bloomwire::WhatsappOnboardingJob).with(attempt.id, 1)
+      aggregate_failures do
+        expect(response).to have_http_status(:accepted)
+        expect(attempt.reload.status).to eq('queued')
+        expect(attempt.submission_generation).to eq(1)
+        expect(response.body).not_to include('META-CODE')
+      end
     end
 
     it 'STILL lets an in-flight (queued/processing) attempt be polled to completion (continue normally)' do
       attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'processing', phone_number_id: 'PNID-1')
+      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
       get "#{base}/#{attempt.public_uuid}", headers: admin.create_new_auth_token, as: :json
       aggregate_failures do
         expect(response).to have_http_status(:success)
@@ -122,6 +171,12 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
       get "#{base}/#{attempt.public_uuid}", headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end
+
+    it 'is 404 for submit even when an account-owned waiting_meta attempt exists' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
   end
 
   context 'when AR encryption is not configured (readiness gate)' do
@@ -134,6 +189,21 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
         expect(response).to have_http_status(:unprocessable_entity)
         expect(response.parsed_body['code']).to eq('encryption_not_configured')
         expect(Bloomwire::WhatsappOnboardingAttempt.where(account: account).count).to eq(0)
+      end
+    end
+
+    it 'refuses submit without persisting or enqueueing when encryption is unavailable' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      allow(Chatwoot).to receive(:encryption_configured?).and_return(false)
+
+      expect do
+        post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappOnboardingJob)
+      aggregate_failures do
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['code']).to eq('encryption_not_configured')
+        expect(attempt.reload.status).to eq('waiting_meta')
+        expect(attempt.oauth_code).to be_nil
       end
     end
   end

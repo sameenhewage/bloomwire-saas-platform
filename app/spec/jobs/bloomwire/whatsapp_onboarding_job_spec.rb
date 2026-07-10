@@ -13,7 +13,18 @@ RSpec.describe Bloomwire::WhatsappOnboardingJob do
       .to have_enqueued_job(described_class).on_queue('high')
   end
 
-  it 'runs the processor for the attempt with the enqueued generation' do
+  it 'serializes only the attempt id and non-secret submission generation' do
+    described_class.perform_later(attempt.id, attempt.submission_generation)
+    payload = enqueued_jobs.last
+
+    aggregate_failures do
+      expect(payload[:args]).to eq([attempt.id, attempt.submission_generation])
+      expect(payload[:args]).to all(be_a(Integer))
+      expect(payload.to_json).not_to include('oauth_code', 'access_token', 'verification_pin', 'phone_number', 'provider_config')
+    end
+  end
+
+  it 'runs the processor for the attempt with the current enqueued generation' do
     processor = instance_double(Bloomwire::WhatsappOnboardingProcessor, process: nil)
     allow(Bloomwire::WhatsappOnboardingProcessor).to receive(:new).and_return(processor)
     described_class.perform_now(attempt.id, attempt.submission_generation)
@@ -22,6 +33,15 @@ RSpec.describe Bloomwire::WhatsappOnboardingJob do
         .with(hash_including(attempt: attempt, generation: attempt.submission_generation))
       expect(processor).to have_received(:process)
     end
+  end
+
+  it 'no-ops before processor construction when the enqueued generation is stale' do
+    attempt.bump_generation!
+    allow(Bloomwire::WhatsappOnboardingProcessor).to receive(:new)
+
+    described_class.perform_now(attempt.id, 0)
+
+    expect(Bloomwire::WhatsappOnboardingProcessor).not_to have_received(:new)
   end
 
   it 'no-ops for a missing attempt' do
