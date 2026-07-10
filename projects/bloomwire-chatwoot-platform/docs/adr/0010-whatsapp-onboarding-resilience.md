@@ -3,8 +3,8 @@
 - Status: **Accepted; merged and DEV safe-runtime validated.** The immediate synchronous hardening remains the
   protected fallback. The v3 asynchronous Sidekiq workflow is deployed for **Standard “Register New Number” only**;
   Coexistence remains on its existing synchronous flow and is never controlled by the Standard emergency switch.
-  A corrective `waiting_meta` lifecycle/reconnect implementation has local strict **QA PASS** on a feature branch but
-  is **not yet reviewed in PR, merged, deployed, or live-Meta certified**; remaining gates are recorded below.
+  The corrective `waiting_meta` lifecycle/reconnect change merged as `a709528` and passed DEV lifecycle proof; live
+  provider certification exposed the disconnected fast-path blocker in Section D, whose hotfix is pending review.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
@@ -86,7 +86,7 @@ The emergency switch is a rollback control for **new Standard async attempt crea
 it flips remains submittable and pollable; workers/recovery remain switch-independent. The switch does not hide
 Coexistence or stop in-flight attempts.
 
-### C. `waiting_meta` lifecycle and reconnect ownership correction (Accepted — local QA PASS; review/merge pending)
+### C. `waiting_meta` lifecycle and reconnect ownership correction (Accepted — merged `a709528`; DEV lifecycle proof)
 
 A confirmed DEV reconnect failure exposed three lifecycle ownership gaps: the browser mapped persisted `waiting_meta`
 to generic processing, local Cancel did not terminalize the server attempt, and the implemented recovery sweep had no
@@ -109,6 +109,29 @@ The corrective contract is:
   60-second redrive grace.
 - Existing account scope, administrator authorization, base managed-feature gate, safe DTO, encrypted-at-rest
   attempt storage, emergency-switch continuity, and Standard/Coexistence endpoint separation remain unchanged.
+
+### D. Disconnected reconnect is not persisted-finalized crash resume (Accepted — implementation pending review)
+
+Live DEV certification on merged/deployed `a709528` proved one additional ownership distinction. A preserved setup may
+hold its previous channel credential while `setup_status=disconnected`; that state exists specifically so a later
+Embedded Signup reconnect re-registers the same records. It is not evidence that a new submitted attempt has already
+persisted/finalized. The former fast path checked only matching setup + credential, skipped the fresh OAuth code, and
+mapped every non-ready setup to `action_required`.
+
+The corrected invariant is:
+
+- persisted crash-resume may short-circuit only when the matching setup is already a persister final outcome:
+  `ready_for_webhook` or `action_required`;
+- `disconnected`, `pending`, `configured`, or `blocked` cannot consume that shortcut and must continue through OAuth
+  exchange, register reconciliation, capability, subscription, and idempotent persistence;
+- reconnect persistence still reuses the same Channel/Inbox/Setup and never creates duplicate chat/message/contact
+  state.
+
+Runtime-shaped TDD proved the bug RED **1/1** and the guard GREEN **1/0**; processor **25/0**; adjacent lifecycle
+**58/0 with 5 expected inverse-key pending**; RuboCop **2/0**. The single live attempt's OAuth code expired before
+recovery, was safely cleared as terminal `expired`, and did not alter the disconnected number or 50/17/17 records.
+No second attempt was created. The emitted root token-shaped line was verified invalid; DEV/Meta browser sessions and
+storage were invalidated/cleared. Provider/messaging certification remains pending after review, merge, and redeploy.
 
 ## Consequences
 
@@ -156,6 +179,6 @@ The corrective contract is:
   translation JSON valid; production Vite build completed in **45.94s**; static secret-pattern scan **922 added lines /
   0 hits**. No live Meta/WhatsApp call, provider-credential mutation, Enterprise change,
   production change, or DEV data mutation occurred.
-- Corrective lifecycle residual gates: commit/PR/CI/exact-head review, merge to `version_1`,
-  exact-SHA DEV deploy, safe terminalization of the stale DEV attempt, and exactly one owner-operated Standard async
-  reconnect with inbound/outbound messaging proof. None is claimed complete by this implementation evidence.
+- Corrective lifecycle delivery: PR #155 head `f37467c`, CI 8/8, merge `a709528`, DEV run `29091137113`;
+  exact SHA, health, migrations, cron, and volumes verified. Waiting/relaunch/submit lifecycle passed on one live
+  Standard attempt; provider/messaging certification remains blocked pending Section D's hotfix and redeploy.
