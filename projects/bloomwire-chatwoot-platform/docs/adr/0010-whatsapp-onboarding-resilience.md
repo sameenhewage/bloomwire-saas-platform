@@ -5,7 +5,7 @@
   Coexistence remains on its existing synchronous flow and is never controlled by the Standard emergency switch.
   The `waiting_meta` lifecycle correction merged as `a709528`; Section D's hotfix merged as `4bbeecda` and is
   DEV-deployed. The corrected certification target exposed the Coexistence readiness gap in Section E; its focused
-  implementation is local and pending QA/review.
+  implementation has local QA PASS and is pending PR/merge/DEV runtime validation.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
