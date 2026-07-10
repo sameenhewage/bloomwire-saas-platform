@@ -3,8 +3,9 @@
 - Status: **Accepted; merged and DEV safe-runtime validated.** The immediate synchronous hardening remains the
   protected fallback. The v3 asynchronous Sidekiq workflow is deployed for **Standard “Register New Number” only**;
   Coexistence remains on its existing synchronous flow and is never controlled by the Standard emergency switch.
-  The corrective `waiting_meta` lifecycle/reconnect change merged as `a709528` and passed DEV lifecycle proof; live
-  provider certification exposed the disconnected fast-path blocker in Section D, whose hotfix is pending review.
+  The `waiting_meta` lifecycle correction merged as `a709528`; Section D's hotfix merged as `4bbeecda` and is
+  DEV-deployed. The corrected certification target exposed the Coexistence readiness gap in Section E; its focused
+  implementation is local and pending QA/review.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
@@ -110,7 +111,7 @@ The corrective contract is:
 - Existing account scope, administrator authorization, base managed-feature gate, safe DTO, encrypted-at-rest
   attempt storage, emergency-switch continuity, and Standard/Coexistence endpoint separation remain unchanged.
 
-### D. Disconnected reconnect is not persisted-finalized crash resume (Accepted — implementation pending review)
+### D. Disconnected reconnect is not persisted-finalized crash resume (Accepted — merged `4bbeecda`; DEV deployed)
 
 Live DEV certification on merged/deployed `a709528` proved one additional ownership distinction. A preserved setup may
 hold its previous channel credential while `setup_status=disconnected`; that state exists specifically so a later
@@ -131,7 +132,40 @@ Runtime-shaped TDD proved the bug RED **1/1** and the guard GREEN **1/0**; proce
 **58/0 with 5 expected inverse-key pending**; RuboCop **2/0**. The single live attempt's OAuth code expired before
 recovery, was safely cleared as terminal `expired`, and did not alter the disconnected number or 50/17/17 records.
 No second attempt was created. The emitted root token-shaped line was verified invalid; DEV/Meta browser sessions and
-storage were invalidated/cleared. Provider/messaging certification remains pending after review, merge, and redeploy.
+storage were invalidated/cleared. PR #156 exact-reviewed head `0fd8adc` passed CI 8/8, merged as `4bbeecda`, and DEV
+run `29095330302` passed exact SHA, health, migrations, cron, volumes, queues, and clean recent-log checks.
+
+### E. Coexistence reconnect uses Business App onboarding readiness (Accepted — local QA PASS; PR/deploy pending)
+
+The owner clarified that the certification target is not another Standard attempt: it is one future Coexistence
+reconnect of the same existing WhatsApp Business App number while reusing Inbox 50 / Channel 17 / Setup 17. Read-only
+DEV truth on `4bbeecda` showed one disconnected binding, zero active Standard attempts, and Channel 17 still marked
+`connection_mode=standard`. A safe live GET returned HTTP 200 with `status=DISCONNECTED`, `is_on_biz_app=false`, and
+`platform_type=CLOUD_API`, proving the official conjunction remains false before a successful Coexistence popup.
+
+The deployed Coexistence service correctly skips Standard Cloud API `/register`. Its remaining defect was readiness
+ownership: it checked only `status=CONNECTED`; a still-DISCONNECTED selection then entered the connected-duplicate
+resolver and returned `no_connected_registration`. Meta's documented post-popup Coexistence contract is instead the
+exact pair `is_on_biz_app=true` plus `platform_type=CLOUD_API`. Shared reconnect persistence also reused records without
+applying the Coexistence create override, so old mode metadata survived.
+
+The focused correction is:
+
+- add a read-only two-field Graph query behind the existing open/read timeout and sanitized error path;
+- only Coexistence checks that pair after a non-CONNECTED status and never enters Standard `/register`;
+- preserve existing capability, final-WABA subscription, safe DTO, resolver, account scope, and failure behavior;
+- run a default-no-op channel-configuration hook inside the existing reconnect transaction; Coexistence merges
+  `source=bloomwire_managed` and `connection_mode=coexistence` before the mapping write;
+- create no new Channel/Inbox/Setup and never rotate a credential without a fresh popup-derived token.
+
+Public-service TDD proved RED **1/1** → GREEN **1/0**. Coexistence **18/0**; Graph client **34/0**; Coexistence request
+plus Standard inverse **64/0**; affected matrix **170/0 with 25 expected no-key pending**; keyed processor consumer
+**25/0**. RuboCop **5/0**; independent Standards/Spec review **0/0 findings**; diff/docs/HTML/secret
+checks clean. Automated-test provider boundaries were mocked/WebMock-blocked; one read-only baseline GET occurred.
+No live attempt, provider mutation, DEV record mutation,
+production change, schema change, frontend/API change, or Enterprise change occurred. PR, merge, exact-SHA DEV
+deploy, and explicit approval for exactly one Coexistence popup remain pending. Interim verdict:
+**DEPLOYED — COEXISTENCE RECONNECT FIX STILL REQUIRED**.
 
 ## Consequences
 
@@ -140,8 +174,9 @@ storage were invalidated/cleared. Provider/messaging certification remains pendi
   errors are secret-free.
 - **Trade-offs:** the synchronous 75s endpoint budget remains while the rollback fallback exists. Async Standard adds
   an encrypted attempt lifecycle, leases, recovery, TTL sweeping, a job, polling, and operator-visible failure states.
-- **Compatibility:** Feature OFF remains stock/inert. Coexistence, native WhatsApp, global routing, existing records,
-  and the conversation/message/contact sources of truth are unchanged.
+- **Compatibility:** Feature OFF remains stock/inert. Standard async, native WhatsApp, global routing, existing record
+  identities, and conversation/message/contact sources of truth are unchanged. Coexistence gains only its official
+  readiness read and transactional mode correction for reused records.
 
 ## Validation
 
@@ -180,5 +215,5 @@ storage were invalidated/cleared. Provider/messaging certification remains pendi
   0 hits**. No live Meta/WhatsApp call, provider-credential mutation, Enterprise change,
   production change, or DEV data mutation occurred.
 - Corrective lifecycle delivery: PR #155 head `f37467c`, CI 8/8, merge `a709528`, DEV run `29091137113`;
-  exact SHA, health, migrations, cron, and volumes verified. Waiting/relaunch/submit lifecycle passed on one live
-  Standard attempt; provider/messaging certification remains blocked pending Section D's hotfix and redeploy.
+  exact SHA, health, migrations, cron, and volumes verified. Section D then merged/deployed as `4bbeecda`; provider
+  certification remains blocked pending Section E's Coexistence readiness fix and explicit owner approval.
