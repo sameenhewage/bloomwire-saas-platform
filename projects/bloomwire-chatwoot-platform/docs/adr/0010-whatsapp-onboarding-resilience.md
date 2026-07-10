@@ -101,9 +101,11 @@ Coexistence or stop in-flight attempts.
   CONNECTED/subscribed retry skips; repeated retries = exactly one Channel/Inbox/Setup; Meta timeout leaves zero
   records. Exact-SHA review found the assigned-user task POST still bypassed the helper; RED proved it and the write
   now uses the same helper. Final hardening matrix **123/0**; full RuboCop **2742/0**; docs/diff/secret gates passed.
-- Backend async suite: **189 examples, 0 failures, 43 pending** (pending only where local Active Record encryption
-  keys are unavailable). Frontend affected suite: **142 tests, 0 failures**. `pnpm eslint`: **0 errors, 371 existing
-  repository warnings**. RuboCop clean.
+- Post-rebase backend async/client suite: **202 examples, 0 failures, 5 expected no-key pending**; no-key
+  fail-closed suite **49/0 (14 expected encryption-only pending)**; shared backend **72/0**. Frontend affected suite:
+  **144 tests, 0 failures**. `pnpm eslint`: **0 errors, 371 existing repository warnings**. Full RuboCop **2759/0**.
+- The isolated merged-`version_1` upgrade audit passed baseline→apply→rollback→reapply with **29 columns / 7 indexes /
+  3 FKs / 2 checks**, then removed the audit database with zero residue.
 - Async tests cover explicit Standard routing, chooser/Coexistence preservation, feature OFF, rollback-safe polling,
   server-expired versus HTTP-404 semantics, recoverable Check status/Restart, safe DTOs, account scope, and admin
   authorization.
