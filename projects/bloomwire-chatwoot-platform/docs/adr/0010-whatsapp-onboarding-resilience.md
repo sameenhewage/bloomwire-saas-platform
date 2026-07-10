@@ -4,8 +4,8 @@
   protected fallback. The v3 asynchronous Sidekiq workflow is deployed for **Standard “Register New Number” only**;
   Coexistence remains on its existing synchronous flow and is never controlled by the Standard emergency switch.
   The `waiting_meta` lifecycle correction merged as `a709528`; Section D's hotfix merged as `4bbeecda` and is
-  DEV-deployed. The corrected certification target exposed the Coexistence readiness gap in Section E; its focused
-  implementation has local QA PASS and is pending PR/merge/DEV runtime validation.
+  DEV-deployed. Section E's Coexistence readiness correction merged as `ca6086c` and is DEV-deployed; one approved
+  provider attempt failed closed because Meta remained DISCONNECTED and the official readiness pair remained false.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
@@ -135,7 +135,7 @@ No second attempt was created. The emitted root token-shaped line was verified i
 storage were invalidated/cleared. PR #156 exact-reviewed head `0fd8adc` passed CI 8/8, merged as `4bbeecda`, and DEV
 run `29095330302` passed exact SHA, health, migrations, cron, volumes, queues, and clean recent-log checks.
 
-### E. Coexistence reconnect uses Business App onboarding readiness (Accepted — local QA PASS; PR/deploy pending)
+### E. Coexistence reconnect uses Business App onboarding readiness (Accepted — merged `ca6086c`; DEV deployed; provider certification blocked)
 
 The owner clarified that the certification target is not another Standard attempt: it is one future Coexistence
 reconnect of the same existing WhatsApp Business App number while reusing Inbox 50 / Channel 17 / Setup 17. Read-only
@@ -160,12 +160,23 @@ The focused correction is:
 
 Public-service TDD proved RED **1/1** → GREEN **1/0**. Coexistence **18/0**; Graph client **34/0**; Coexistence request
 plus Standard inverse **64/0**; affected matrix **170/0 with 25 expected no-key pending**; keyed processor consumer
-**25/0**. RuboCop **5/0**; independent Standards/Spec review **0/0 findings**; diff/docs/HTML/secret
-checks clean. Automated-test provider boundaries were mocked/WebMock-blocked; one read-only baseline GET occurred.
-No live attempt, provider mutation, DEV record mutation,
-production change, schema change, frontend/API change, or Enterprise change occurred. PR, merge, exact-SHA DEV
-deploy, and explicit approval for exactly one Coexistence popup remain pending. Interim verdict:
-**DEPLOYED — COEXISTENCE RECONNECT FIX STILL REQUIRED**.
+**25/0**. RuboCop **5/0**; independent Standards/Spec review **0/0 findings**; diff/docs/HTML/secret checks clean.
+PR #157 exact head `2becf92` passed CI **8/8**, merged as `ca6086c`, and DEV run **29102109973** passed exact
+Rails/Sidekiq SHA, health 200/200, 0 pending migrations, preserved data services, and clean encryption/queue checks.
+
+One separately approved dedicated Coexistence popup then produced both browser signals and exactly one controller
+request. The request failed closed after 6.177s with safe `422 no_connected_registration`; no automatic retry ran.
+Route/log proof found one Coexistence request, zero Standard attempt requests, zero `/register`/`deregister` markers,
+zero subscription failures, zero 5xx, and zero secret-like hits. Post-attempt Meta remained `DISCONNECTED` and the
+official readiness conjunction remained false. Setup stayed `disconnected`; Channel stayed `standard`; 50/17/17,
+all uniqueness counts, timestamps, and the encrypted credential remained unchanged; active attempts, enqueued/retries,
+and retained temporary secrets remained zero.
+
+The implementation and exact-SHA deployment pass, but provider certification is **FAILED CLOSED / BLOCKED**. A
+successful provider transition, transactional mode change, success-path record reuse, and inbound/outbound messaging
+were not reached. No second popup, message test, Standard fallback, manual provider mutation, schema/frontend/API/
+router/Enterprise/production change, duplicate, or credential rotation occurred or is approved. The exact reason
+Meta's completion UI did not yield the official readiness pair is not proven and must not be inferred.
 
 ## Consequences
 
