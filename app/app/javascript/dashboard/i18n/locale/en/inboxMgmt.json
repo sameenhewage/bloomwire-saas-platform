@@ -419,6 +419,8 @@
             "DISCONNECTED_SUBTITLE": "This number is deregistered on WhatsApp. Reconnect it any time from Settings → Inboxes → Add Inbox — your existing inbox and history are reused."
           },
           "ASYNC": {
+            "STANDARD_FLOW_LABEL": "Standard WhatsApp setup",
+            "ERROR_REFERENCE": "Error reference:",
             "CREATING": "Preparing your registration…",
             "AWAITING_META": "Complete the steps in the Meta window to continue…",
             "SUBMITTING": "Submitting your details…",
@@ -427,6 +429,16 @@
             "RESUMED": "Resuming your in-progress WhatsApp registration…",
             "CANCEL_BUTTON": "Cancel",
             "RESTART_BUTTON": "Start over",
+            "WAITING_META": {
+              "TITLE": "Finish connecting with Meta",
+              "SUBTITLE": "This setup is waiting for you to complete the Meta registration window. Relaunch it to continue this same setup attempt, or cancel it and start over later.",
+              "RELAUNCH_BUTTON": "Relaunch Meta",
+              "CANCEL_BUTTON": "Cancel setup"
+            },
+            "FAILED": {
+              "TITLE": "Standard WhatsApp setup needs attention",
+              "SUBTITLE": "We couldn’t finish this setup. Use the error reference when contacting support, or start over."
+            },
             "EXPIRED": {
               "TITLE": "Meta session expired",
               "SUBTITLE": "Your Meta registration session expired. Start again to connect your WhatsApp number.",

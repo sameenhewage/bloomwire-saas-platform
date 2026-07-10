@@ -10,6 +10,9 @@ vi.mock('dashboard/api/channel/whatsappChannel', () => ({
     createBloomwireOnboardingAttempt: vi.fn(),
     submitBloomwireOnboardingAttempt: vi.fn(),
     fetchBloomwireOnboardingAttempt: vi.fn(),
+    relaunchBloomwireOnboardingAttempt: vi.fn(),
+    cancelBloomwireOnboardingAttempt: vi.fn(),
+    createBloomwireCoexistenceEmbeddedSignup: vi.fn(),
   },
 }));
 
@@ -58,6 +61,12 @@ describe('useAsyncWhatsappOnboarding', () => {
     WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
       data: { attempt_id: 'ATT-1', status: 'processing' },
     });
+    WhatsappChannel.relaunchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-1', status: 'waiting_meta' },
+    });
+    WhatsappChannel.cancelBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-1', status: 'cancelled' },
+    });
   });
 
   it('start(): creates + persists the attempt (account-scoped), launches the popup with NO 180s watchdog, submits, then polls', async () => {
@@ -72,8 +81,12 @@ describe('useAsyncWhatsappOnboarding', () => {
         'ATT-1'
       );
       expect(runEmbeddedSignupMock).toHaveBeenCalledWith({
+        coexistence: false,
         overallTimeoutMs: null,
       });
+      expect(
+        WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup
+      ).not.toHaveBeenCalled();
       expect(
         WhatsappChannel.submitBloomwireOnboardingAttempt
       ).toHaveBeenCalledWith('ATT-1', CREDS);
@@ -84,6 +97,29 @@ describe('useAsyncWhatsappOnboarding', () => {
     } finally {
       flow.cancel();
     }
+  });
+
+  it('ignores a duplicate Start while the first server attempt is being created', async () => {
+    let resolveCreate;
+    WhatsappChannel.createBloomwireOnboardingAttempt.mockReturnValue(
+      new Promise(resolve => {
+        resolveCreate = resolve;
+      })
+    );
+    const flow = build();
+
+    const firstStart = flow.start();
+    const duplicateStart = flow.start();
+    const createCallCount =
+      WhatsappChannel.createBloomwireOnboardingAttempt.mock.calls.length;
+
+    resolveCreate({ data: { attempt_id: 'ATT-1', status: 'waiting_meta' } });
+    const [, duplicateResult] = await Promise.all([firstStart, duplicateStart]);
+    await flush();
+
+    expect(createCallCount).toBe(1);
+    expect(duplicateResult).toBe(false);
+    flow.stopPolling();
   });
 
   it('submits the already-created attempt when its delayed Meta popup result arrives', async () => {
@@ -158,13 +194,163 @@ describe('useAsyncWhatsappOnboarding', () => {
     expect(flow.errorCode.value).toBe('outbound_messaging_permission_required');
   });
 
-  it('a dismissed Meta popup cancels the flow without submitting', async () => {
+  it.each([
+    ['waiting_meta', ONBOARDING_STATES.WAITING_META],
+    ['queued', ONBOARDING_STATES.PROCESSING],
+    ['exchanging_code', ONBOARDING_STATES.PROCESSING],
+    ['processing', ONBOARDING_STATES.PROCESSING],
+    ['completed', ONBOARDING_STATES.COMPLETED],
+    ['action_required', ONBOARDING_STATES.ACTION_REQUIRED],
+    ['expired', ONBOARDING_STATES.EXPIRED],
+    ['failed', ONBOARDING_STATES.FAILED],
+    ['cancelled', ONBOARDING_STATES.CANCELLED],
+  ])(
+    'maps server status %s explicitly to %s',
+    async (status, expectedState) => {
+      WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+        data: { attempt_id: 'ATT-STORED', status },
+      });
+      window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-STORED');
+      const flow = build();
+
+      flow.resume();
+      await flush();
+
+      expect(flow.state.value).toBe(expectedState);
+      flow.stopPolling();
+    }
+  );
+
+  it('relaunches Meta for the same waiting_meta Standard attempt, then submits that attempt only', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-STORED', status: 'waiting_meta' },
+    });
+    WhatsappChannel.relaunchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-STORED', status: 'waiting_meta' },
+    });
+    window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-STORED');
+    const flow = build();
+    flow.resume();
+    await flush();
+
+    await flow.relaunch();
+    await flush();
+
+    expect(
+      WhatsappChannel.relaunchBloomwireOnboardingAttempt
+    ).toHaveBeenCalledWith('ATT-STORED');
+    expect(
+      WhatsappChannel.createBloomwireOnboardingAttempt
+    ).not.toHaveBeenCalled();
+    expect(runEmbeddedSignupMock).toHaveBeenCalledWith({
+      coexistence: false,
+      overallTimeoutMs: null,
+    });
+    expect(
+      WhatsappChannel.submitBloomwireOnboardingAttempt
+    ).toHaveBeenCalledWith('ATT-STORED', CREDS);
+    expect(
+      WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup
+    ).not.toHaveBeenCalled();
+    flow.stopPolling();
+  });
+
+  it('keeps the same waiting_meta attempt recoverable when the Standard Meta popup rejects', async () => {
+    runEmbeddedSignupMock.mockRejectedValue(
+      new Error('RAW SDK FAILURE leaked-token-xyz')
+    );
+    const flow = build();
+
+    await flow.start();
+
+    expect(flow.state.value).toBe(ONBOARDING_STATES.WAITING_META);
+    expect(flow.attemptId.value).toBe('ATT-1');
+    expect(flow.errorCode.value).toBe('meta_popup_failed');
+    expect(window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)).toBe(
+      'ATT-1'
+    );
+    expect(
+      WhatsappChannel.submitBloomwireOnboardingAttempt
+    ).not.toHaveBeenCalled();
+    expect(
+      WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the same attempt when submit fails instead of creating or routing elsewhere', async () => {
+    WhatsappChannel.submitBloomwireOnboardingAttempt.mockRejectedValue({
+      response: { status: 503, data: { message: 'RAW leaked-token-xyz' } },
+    });
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-1', status: 'waiting_meta' },
+    });
+    const flow = build();
+
+    await flow.start();
+    await flush();
+
+    expect(flow.state.value).toBe(ONBOARDING_STATES.WAITING_META);
+    expect(flow.attemptId.value).toBe('ATT-1');
+    expect(
+      WhatsappChannel.fetchBloomwireOnboardingAttempt
+    ).toHaveBeenCalledWith('ATT-1');
+    expect(
+      WhatsappChannel.createBloomwireOnboardingAttempt
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      WhatsappChannel.createBloomwireCoexistenceEmbeddedSignup
+    ).not.toHaveBeenCalled();
+    flow.stopPolling();
+  });
+
+  it('fails create with an allowlisted safe code and never exposes a raw response value', async () => {
+    WhatsappChannel.createBloomwireOnboardingAttempt.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          code: 'encryption_not_configured',
+          message: 'RAW leaked-token-xyz',
+        },
+      },
+    });
+    const flow = build();
+
+    await flow.start();
+
+    expect(flow.state.value).toBe(ONBOARDING_STATES.FAILED);
+    expect(flow.errorCode.value).toBe('encryption_not_configured');
+    expect(flow.attemptId.value).toBeNull();
+    expect(runEmbeddedSignupMock).not.toHaveBeenCalled();
+  });
+
+  it('drops a non-allowlisted server error code from the browser state', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: {
+        attempt_id: 'ATT-STORED',
+        status: 'failed',
+        error_code: 'RAW_LEAKED_TOKEN_XYZ',
+      },
+    });
+    window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-STORED');
+    const flow = build();
+
+    flow.resume();
+    await flush();
+
+    expect(flow.state.value).toBe(ONBOARDING_STATES.FAILED);
+    expect(flow.errorCode.value).toBeNull();
+  });
+
+  it('a dismissed Meta popup cancels the same server attempt without submitting', async () => {
     runEmbeddedSignupMock.mockResolvedValue(null);
     const flow = build();
     await flow.start();
     expect(
       WhatsappChannel.submitBloomwireOnboardingAttempt
     ).not.toHaveBeenCalled();
+    expect(
+      WhatsappChannel.cancelBloomwireOnboardingAttempt
+    ).toHaveBeenCalledWith('ATT-1');
     expect(flow.state.value).toBe(ONBOARDING_STATES.CANCELLED);
     expect(cancelPopupMock).toHaveBeenCalled();
     expect(
@@ -269,17 +455,52 @@ describe('useAsyncWhatsappOnboarding', () => {
     }
   });
 
-  it('cancel(): stops polling, clears state + persisted id, and cancels the popup', async () => {
+  it('cancel(): terminalizes the same waiting_meta server attempt before clearing local state', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-STORED', status: 'waiting_meta' },
+    });
+    WhatsappChannel.cancelBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-STORED', status: 'cancelled' },
+    });
+    window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-STORED');
     const flow = build();
-    await flow.start();
+    flow.resume();
     await flush();
-    flow.cancel();
+
+    await flow.cancel();
+
+    expect(
+      WhatsappChannel.cancelBloomwireOnboardingAttempt
+    ).toHaveBeenCalledWith('ATT-STORED');
     expect(flow.state.value).toBe(ONBOARDING_STATES.CANCELLED);
     expect(flow.attemptId.value).toBeNull();
     expect(
       window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)
     ).toBeNull();
     expect(cancelPopupMock).toHaveBeenCalled();
+  });
+
+  it('cancel(): preserves and rechecks the waiting_meta attempt when server cancellation fails', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-STORED', status: 'waiting_meta' },
+    });
+    WhatsappChannel.cancelBloomwireOnboardingAttempt.mockRejectedValue({
+      response: { status: 503 },
+    });
+    window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-STORED');
+    const flow = build();
+    flow.resume();
+    await flush();
+
+    await flow.cancel();
+    await flush();
+
+    expect(flow.state.value).toBe(ONBOARDING_STATES.WAITING_META);
+    expect(flow.attemptId.value).toBe('ATT-STORED');
+    expect(window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)).toBe(
+      'ATT-STORED'
+    );
+    flow.stopPolling();
   });
 
   it('ignores an in-flight poll response that resolves after cancellation', async () => {

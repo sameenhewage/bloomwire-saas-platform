@@ -1,7 +1,7 @@
 require 'rails_helper'
 
-# Slice 4 (ADR-0010 v3): async managed WhatsApp onboarding API. Admin-only; inert (404) unless managed self-serve
-# AND the async flag are ON. The request does ZERO Meta work (only creates/updates the attempt + enqueues the job);
+# Slice 4 (ADR-0010 v3): async managed WhatsApp onboarding API. Admin-only; new create is inert unless async is ON;
+# existing-attempt actions require managed self-serve. Requests do ZERO Meta work (state only; submit enqueues the job);
 # account-scoped; safe DTO only. Fake values only; no real Meta (nothing is stubbed — an accidental Graph call
 # would be WebMock-blocked).
 RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
@@ -37,6 +37,105 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
         expect(response.parsed_body['attempt_id']).to be_present
         expect(response.parsed_body['status']).to eq('waiting_meta')
         expect(Channel::Whatsapp.count).to eq(0)
+      end
+    end
+
+    it 'relaunches the same waiting_meta attempt without mutating it or enqueueing work' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      original_attributes = attempt.attributes
+
+      expect do
+        post "#{base}/#{attempt.public_uuid}/relaunch", headers: admin.create_new_auth_token, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappOnboardingJob)
+
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['attempt_id']).to eq(attempt.public_uuid)
+        expect(response.parsed_body['status']).to eq('waiting_meta')
+        expect(attempt.reload.attributes).to eq(original_attributes)
+      end
+    end
+
+    it 'rejects relaunch for a non-waiting attempt without mutating it or enqueueing work' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'queued', submission_generation: 1)
+      original_attributes = attempt.attributes
+
+      expect do
+        post "#{base}/#{attempt.public_uuid}/relaunch", headers: admin.create_new_auth_token, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappOnboardingJob)
+
+      aggregate_failures do
+        expect(response).to have_http_status(:conflict)
+        expect(response.parsed_body['code']).to eq('attempt_not_relaunchable')
+        expect(attempt.reload.attributes).to eq(original_attributes)
+      end
+    end
+
+    it 'cancels an account-owned waiting_meta attempt without deleting it' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+
+      expect do
+        post "#{base}/#{attempt.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
+      end.not_to change(Bloomwire::WhatsappOnboardingAttempt, :count)
+
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['status']).to eq('cancelled')
+        expect(response.parsed_body).not_to have_key('oauth_code')
+        expect(response.parsed_body).not_to have_key('access_token')
+        expect(attempt.reload.status).to eq('cancelled')
+      end
+    end
+
+    it 'rejects cancel after processing starts without mutating the attempt' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'queued', submission_generation: 1)
+      original_attributes = attempt.attributes
+
+      post "#{base}/#{attempt.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:conflict)
+        expect(response.parsed_body['code']).to eq('attempt_not_cancellable')
+        expect(attempt.reload.attributes).to eq(original_attributes)
+      end
+    end
+
+    it 'treats a replayed cancel as an idempotent success' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'cancelled')
+      original_updated_at = attempt.updated_at
+
+      post "#{base}/#{attempt.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['status']).to eq('cancelled')
+        expect(attempt.reload.updated_at).to eq(original_updated_at)
+      end
+    end
+
+    it 'clears temporary secrets and stale worker metadata when cancelling', if: Chatwoot.encryption_configured? do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      attempt.store_code!('CANCEL-ME')
+      code_received_at = attempt.code_received_at
+      attempt.update!(
+        processing_owner: 'stale-owner', lease_expires_at: 1.minute.ago,
+        job_enqueued_at: 2.minutes.ago, processing_started_at: 90.seconds.ago
+      )
+
+      post "#{base}/#{attempt.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
+
+      attempt.reload
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(attempt.oauth_code).to be_nil
+        expect(attempt.access_token).to be_nil
+        expect(attempt.token_stage).to be_nil
+        expect(attempt.processing_owner).to be_nil
+        expect(attempt.lease_expires_at).to be_nil
+        expect(attempt.job_enqueued_at).to be_nil
+        expect(attempt.processing_started_at).to be_nil
+        expect(attempt.code_received_at).to eq(code_received_at)
+        expect(attempt.secrets_cleared_at).to be_present
       end
     end
 
@@ -101,10 +200,40 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
+    it 'cancel is 404 for a public_uuid owned by another account' do
+      foreign = Bloomwire::WhatsappOnboardingAttempt.create!(account: create(:account), status: 'waiting_meta')
+      post "#{base}/#{foreign.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'relaunch is 404 for a public_uuid owned by another account' do
+      foreign = Bloomwire::WhatsappOnboardingAttempt.create!(account: create(:account), status: 'waiting_meta')
+      post "#{base}/#{foreign.public_uuid}/relaunch", headers: admin.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
     it 'submit is 404 for a public_uuid owned by another account' do
       foreign = Bloomwire::WhatsappOnboardingAttempt.create!(account: create(:account), status: 'waiting_meta')
       post "#{base}/#{foreign.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
       expect(response).to have_http_status(:not_found)
+    end
+
+    it 'denies an agent for cancel' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/cancel", headers: agent.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
+        expect(attempt.reload.status).to eq('waiting_meta')
+      end
+    end
+
+    it 'denies an agent for relaunch' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/relaunch", headers: agent.create_new_auth_token, as: :json
+      aggregate_failures do
+        expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
+        expect(attempt.reload.status).to eq('waiting_meta')
+      end
     end
 
     it 'denies an agent for create and submit' do
@@ -126,6 +255,35 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
       bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
       post base, headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
+    end
+
+    it 'lets an existing waiting_meta attempt relaunch after the switch flips without enqueueing work' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
+
+      expect do
+        post "#{base}/#{attempt.public_uuid}/relaunch", headers: admin.create_new_auth_token, as: :json
+      end.not_to have_enqueued_job(Bloomwire::WhatsappOnboardingJob)
+
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['attempt_id']).to eq(attempt.public_uuid)
+        expect(attempt.reload.status).to eq('waiting_meta')
+        expect(attempt.submission_generation).to eq(0)
+      end
+    end
+
+    it 'lets an existing waiting_meta attempt cancel after the switch flips' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      bw_set_config('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
+
+      post "#{base}/#{attempt.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['status']).to eq('cancelled')
+        expect(attempt.reload.status).to eq('cancelled')
+      end
     end
 
     it 'lets an existing waiting_meta attempt submit after the switch flips and enqueues its generation',
@@ -175,6 +333,18 @@ RSpec.describe 'Bloomwire async WhatsApp onboarding attempts', type: :request do
     it 'is 404 for submit even when an account-owned waiting_meta attempt exists' do
       attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
       post "#{base}/#{attempt.public_uuid}/submit", headers: admin.create_new_auth_token, params: submit_body, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'is 404 for relaunch even when an account-owned waiting_meta attempt exists' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/relaunch", headers: admin.create_new_auth_token, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it 'is 404 for cancel even when an account-owned waiting_meta attempt exists' do
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(account: account, status: 'waiting_meta')
+      post "#{base}/#{attempt.public_uuid}/cancel", headers: admin.create_new_auth_token, as: :json
       expect(response).to have_http_status(:not_found)
     end
   end

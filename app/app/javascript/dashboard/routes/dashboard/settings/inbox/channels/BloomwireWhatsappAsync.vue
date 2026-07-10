@@ -33,6 +33,7 @@ const {
   takingLongerThanUsual,
   start,
   resume,
+  relaunch,
   cancel,
   checkStatus,
   restart,
@@ -78,9 +79,9 @@ const startOnCurrentPath = () => {
   return undefined;
 };
 
-const restartOnCurrentPath = () => {
+const restartOnCurrentPath = async () => {
   if (props.canStartNewAsync) return restart();
-  cancel();
+  await cancel();
   emit('useSyncFallback');
   return undefined;
 };
@@ -98,8 +99,73 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="h-full">
+    <div
+      v-if="state === S.WAITING_META"
+      class="flex flex-col items-start py-8"
+      data-testid="bloomwire-wa-async-waiting-meta"
+    >
+      <p
+        class="mb-2 text-xs font-medium uppercase text-n-slate-10"
+        data-testid="bloomwire-wa-async-flow-label"
+      >
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.STANDARD_FLOW_LABEL'
+          )
+        }}
+      </p>
+      <h3 class="mb-2 text-base font-medium text-n-slate-12">
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.WAITING_META.TITLE'
+          )
+        }}
+      </h3>
+      <p class="mb-4 text-sm leading-6 text-n-slate-11">
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.WAITING_META.SUBTITLE'
+          )
+        }}
+      </p>
+      <p
+        v-if="errorCode"
+        class="mb-6 text-xs text-n-slate-10"
+        data-testid="bloomwire-wa-async-error-code"
+      >
+        {{
+          $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.ERROR_REFERENCE')
+        }}
+        <code>{{ errorCode }}</code>
+      </p>
+      <div class="flex gap-2">
+        <NextButton
+          solid
+          teal
+          :label="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.WAITING_META.RELAUNCH_BUTTON'
+            )
+          "
+          data-testid="bloomwire-wa-async-relaunch"
+          @click="relaunch"
+        />
+        <NextButton
+          outline
+          slate
+          :label="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.WAITING_META.CANCEL_BUTTON'
+            )
+          "
+          data-testid="bloomwire-wa-async-cancel"
+          @click="cancel"
+        />
+      </div>
+    </div>
+
     <!-- Launch + processing: the attempt exists server-side and is being polled; never an infinite spinner. -->
-    <div v-if="showLoader" data-testid="bloomwire-wa-async-processing">
+    <div v-else-if="showLoader" data-testid="bloomwire-wa-async-processing">
       <LoadingState :message="statusMessage" />
       <p
         v-if="isProcessing && takingLongerThanUsual"
@@ -112,17 +178,6 @@ onBeforeUnmount(() => {
           )
         }}
       </p>
-      <div v-if="isProcessing" class="flex justify-center mt-6">
-        <NextButton
-          outline
-          slate
-          :label="
-            $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.CANCEL_BUTTON')
-          "
-          data-testid="bloomwire-wa-async-cancel"
-          @click="cancel"
-        />
-      </div>
     </div>
 
     <!-- Completed: the inbox is live. -->
@@ -320,8 +375,36 @@ onBeforeUnmount(() => {
       class="flex flex-col items-start py-8"
       data-testid="bloomwire-wa-async-failed"
     >
-      <p class="mb-6 text-sm leading-6 text-n-slate-11">
-        {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ERROR') }}
+      <p
+        class="mb-2 text-xs font-medium uppercase text-n-slate-10"
+        data-testid="bloomwire-wa-async-flow-label"
+      >
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.STANDARD_FLOW_LABEL'
+          )
+        }}
+      </p>
+      <h3
+        class="mb-2 text-base font-medium text-n-slate-12"
+        data-testid="bloomwire-wa-async-failed-title"
+      >
+        {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.FAILED.TITLE') }}
+      </h3>
+      <p class="mb-4 text-sm leading-6 text-n-slate-11">
+        {{
+          $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.FAILED.SUBTITLE')
+        }}
+      </p>
+      <p
+        v-if="errorCode"
+        class="mb-6 text-xs text-n-slate-10"
+        data-testid="bloomwire-wa-async-error-code"
+      >
+        {{
+          $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.ASYNC.ERROR_REFERENCE')
+        }}
+        <code>{{ errorCode }}</code>
       </p>
       <NextButton
         solid

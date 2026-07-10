@@ -16,6 +16,10 @@ describe('#whatsappChannel', () => {
     expect(whatsappChannel).toHaveProperty('createBloomwireOnboardingAttempt');
     expect(whatsappChannel).toHaveProperty('submitBloomwireOnboardingAttempt');
     expect(whatsappChannel).toHaveProperty('fetchBloomwireOnboardingAttempt');
+    expect(whatsappChannel).toHaveProperty(
+      'relaunchBloomwireOnboardingAttempt'
+    );
+    expect(whatsappChannel).toHaveProperty('cancelBloomwireOnboardingAttempt');
   });
 
   describe('API calls', () => {
@@ -110,6 +114,24 @@ describe('#whatsappChannel', () => {
       whatsappChannel.fetchBloomwireOnboardingAttempt('ATT-UUID');
       expect(axiosMock.get).toHaveBeenCalledWith(
         '/api/v1/bloomwire/whatsapp/onboarding_attempts/ATT-UUID',
+        {}
+      );
+    });
+
+    it('#relaunchBloomwireOnboardingAttempt authorizes relaunch of the same attempt without credentials', () => {
+      whatsappChannel.relaunchBloomwireOnboardingAttempt('ATT-UUID');
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/bloomwire/whatsapp/onboarding_attempts/ATT-UUID/relaunch',
+        {},
+        {}
+      );
+    });
+
+    it('#cancelBloomwireOnboardingAttempt cancels the same server attempt without credentials', () => {
+      whatsappChannel.cancelBloomwireOnboardingAttempt('ATT-UUID');
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/bloomwire/whatsapp/onboarding_attempts/ATT-UUID/cancel',
+        {},
         {}
       );
     });
