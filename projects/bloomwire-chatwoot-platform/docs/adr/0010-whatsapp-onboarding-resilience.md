@@ -1,7 +1,8 @@
-# ADR-0010 — WhatsApp Onboarding Resilience (timeout + idempotency; sync now, async later)
+# ADR-0010 — WhatsApp Onboarding Resilience (synchronous fallback + asynchronous Standard flow)
 
-- Status: **Accepted** for the **immediate synchronous hardening** (Phase: onboarding resilience). The **asynchronous
-  Sidekiq onboarding workflow** is **Proposed** (durable design) and deferred to a controlled post-demo phase.
+- Status: **Accepted.** The immediate synchronous hardening remains the protected fallback. The v3 asynchronous
+  Sidekiq workflow is implemented for **Standard “Register New Number” only**; Coexistence remains on its existing
+  synchronous flow and is never controlled by the Standard emergency switch.
 - Extends: ADR-0004 (`Bloomwire::WhatsappSetup` mapping — unchanged), ADR-0005 (global webhook router — unchanged),
   ADR-0006 (provider secret at rest — unchanged), ADR-0008 (onboarding responsibility pivot — unchanged),
   ADR-0009 (multi-inbox model + global uniqueness keys — unchanged).
@@ -9,7 +10,7 @@
 
 ## Context
 
-The Standard/Coexistence WhatsApp Embedded Signup runs **all** Meta Graph steps **and** the DB writes
+Before v3, Standard and Coexistence WhatsApp Embedded Signup ran **all** Meta Graph steps **and** the DB writes
 **synchronously inside one web request**: code exchange → long-lived token → phone info → `/register` (only when
 not already CONNECTED) → status re-check → resolve target → outbound-capability check → subscribe app→WABA + verify
 → persist `Channel::Whatsapp` + `Inbox` + `Bloomwire::WhatsappSetup`.
@@ -59,37 +60,47 @@ the DEV token-debug logging reduced latency but is **not** a reliability fix —
    These GUARANTEE **exactly one** Inbox/Channel/Setup even under repeated or concurrent retries (a losing concurrent
    attempt fails closed with `:phone_number_taken` rather than duplicating).
 
-### B. Durable design (Proposed — deferred)
+### B. Asynchronous Standard workflow (Accepted — implemented on feature branch)
 
-Move the Meta side effects OFF the web request into an **asynchronous Sidekiq onboarding workflow**:
+Move the Standard flow’s Meta side effects OFF the web request into a resumable **Sidekiq onboarding workflow**:
 
-- The controller validates + records an **onboarding attempt** and returns **202 Processing** with an attempt id.
-- A Sidekiq job runs the resumable state machine `pending → meta_registered → subscribed → capable → ready`, each
-  transition **idempotent** and keyed by `phone_number_id`, safe to retry from the real Meta state (register only if
-  not CONNECTED; subscribe only if not already subscribed; persist reusing existing records).
-- The frontend **polls** the attempt status (the Phase 6 watchdog/polling UI already exists) and shows
-  ready / action-required / a sanitized failure with manual retry.
+- The admin/account-scoped controller records an encrypted onboarding attempt and returns **202 Processing**. New
+  create/submit work requires managed onboarding plus the Standard async path; show/poll requires the base managed
+  feature only, so queued/processing attempts remain visible during an emergency rollback.
+- A leased Sidekiq processor reconciles real Meta state before mutation and advances idempotently through token,
+  registration, capability, subscription, and persistence. Recovery/TTL work does not depend on the emergency switch.
+- The authenticated account payload exposes `canUseAsyncStandardWhatsappOnboarding`. The existing managed entry
+  always keeps its Standard/Coexistence chooser: Standard selects async when the capability is true and the protected
+  synchronous fallback when false; Coexistence always uses its existing flow.
+- A persisted account-scoped Standard attempt resumes the async poller even if the emergency switch later changes.
+  An explicit server `expired` status means Meta-session expiry. A generic poll 404 means `attempt_not_found`, clears
+  stale local storage, and offers **Check status / Restart**; it never selects sync or claims Meta expiry.
 
-This removes the request-timeout coupling entirely and makes onboarding fully crash/deploy-safe. It is deferred so
-the **currently working, demo-proven** synchronous flow is not changed before the company demo.
+The emergency switch is a rollback control for **new Standard async work only**. It does not hide Coexistence or stop
+in-flight attempts.
 
 ## Consequences
 
 - **Positive:** no more split-state 500s on a slow `/register`; each Meta call is individually bounded; retries
   converge to exactly one set of records; the global request budget is untouched for all other traffic; timeout
   errors are secret-free.
-- **Trade-offs:** the 75s ceiling uses the same `Timeout` mechanism `Rack::Timeout` uses (a known Ruby caveat) — it
-  is a backstop; the primary protection is the per-call Graph timeouts + idempotency. The endpoint ceiling is active
-  wherever `Rack::Timeout` is (production/DEV); if `Rack::Timeout` were removed, the per-call Graph timeouts still
-  bound the request.
-- **Follow-up:** `PARK-ENG-ONBOARD-RESUMABLE` in `../parked-items.md` tracks the async Sidekiq workflow (Section B).
+- **Trade-offs:** the synchronous 75s endpoint budget remains while the rollback fallback exists. Async Standard adds
+  an encrypted attempt lifecycle, leases, recovery, TTL sweeping, a job, polling, and operator-visible failure states.
+- **Compatibility:** Feature OFF remains stock/inert. Coexistence, native WhatsApp, global routing, existing records,
+  and the conversation/message/contact sources of truth are unchanged.
 
 ## Validation
 
-- New/updated specs (all Meta stubbed, WebMock-blocked, no real Graph calls): Graph timeout → sanitized
-  `GraphApiTimeoutError`; middleware (onboarding budget + bypass + non-onboarding passthrough); in-request
-  register-read-timeout recovery; retry-sees-CONNECTED-skips-register; retry-sees-subscribed-skips-subscribe;
-  repeated retries = exactly one Channel/Inbox/Setup; Meta timeout fails safely (0 records); secrets never in the
-  DTO. Exact-SHA review found the assigned-user task POST still bypassed the helper; a RED timeout-options contract
-  proved it and the write now uses the same helper. Final hardening matrix **123/0**; full RuboCop **2742/0**; docs,
-  diff, and secret gates passed. **Not merged or deployed.**
+- New/updated synchronous-hardening specs (all Meta stubbed, WebMock-blocked, no real Graph calls): Graph timeout →
+  sanitized `GraphApiTimeoutError`; middleware budget/bypass/passthrough; register-read-timeout recovery;
+  CONNECTED/subscribed retry skips; repeated retries = exactly one Channel/Inbox/Setup; Meta timeout leaves zero
+  records. Exact-SHA review found the assigned-user task POST still bypassed the helper; RED proved it and the write
+  now uses the same helper. Final hardening matrix **123/0**; full RuboCop **2742/0**; docs/diff/secret gates passed.
+- Backend async suite: **189 examples, 0 failures, 43 pending** (pending only where local Active Record encryption
+  keys are unavailable). Frontend affected suite: **142 tests, 0 failures**. `pnpm eslint`: **0 errors, 371 existing
+  repository warnings**. RuboCop clean.
+- Async tests cover explicit Standard routing, chooser/Coexistence preservation, feature OFF, rollback-safe polling,
+  server-expired versus HTTP-404 semantics, recoverable Check status/Restart, safe DTOs, account scope, and admin
+  authorization.
+- No real Meta/WhatsApp calls, no secrets exposed, no provider-credential mutation, no Enterprise code touched, and
+  no deploy/DEV/production changes in this implementation.

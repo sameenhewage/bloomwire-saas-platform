@@ -70,6 +70,12 @@ export function useBloomwireCapabilities() {
       'canSelfServeManagedWhatsapp',
       false
     ),
+    // ADR-0010 v3: explicit async-vs-sync routing for Standard onboarding only (never inferred from a 404).
+    // Coexistence stays on its existing flow. Opt-in/default FALSE keeps older backends on synchronous Standard.
+    canUseAsyncStandardWhatsappOnboarding: buildCapability(
+      'canUseAsyncStandardWhatsappOnboarding',
+      false
+    ),
     // Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Opt-in (default FALSE) — the
     // page/nav only appear on an explicit server `true` (admin + BLOOMWIRE_CATEGORY_ADMIN_UI on). The backend
     // controller (admin-only + feature-gated 404) remains the enforcement boundary; this only drives UI gating.

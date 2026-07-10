@@ -34,6 +34,7 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
                                          canManageNativeWhatsappSetup canDeleteManagedProviderInbox
                                          canRegisterProviderWebhook canCreateInbox canManageBots
                                          canAccessIntegrations canSelfServeManagedWhatsapp
+                                         canUseAsyncStandardWhatsappOnboarding
                                          canAccessCategoryAdmin canRemoveInbox
                                        ])
       expect(caps.values).to all(be_in([true, false]))
@@ -211,6 +212,58 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
           expect(caps['canSelfServeManagedWhatsapp']).to be(false)
           expect(caps['canManageNativeWhatsappSetup']).to be(true)
           expect(caps['canCreateInbox']).to be(true)
+        end
+      end
+    end
+  end
+
+  # ADR-0010 v3 — explicit async-vs-sync routing for Standard onboarding only; never inferred from an HTTP 404.
+  # Coexistence remains available through its existing flow regardless of the Standard emergency switch.
+  describe 'canUseAsyncStandardWhatsappOnboarding' do
+    def enable_managed_onboarding
+      set_toggle('BLOOMWIRE_MODE_ENABLED', true)
+      set_toggle('BLOOMWIRE_PRIVACY_HARDENING', true)
+      set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
+      set_toggle('BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING', true)
+    end
+
+    context 'when managed onboarding is available and the emergency kill switch is OFF (default)' do
+      before { enable_managed_onboarding }
+
+      it 'is true for a business administrator (async is the path)' do
+        caps = caps_for(administrator)
+        aggregate_failures do
+          expect(caps['canSelfServeManagedWhatsapp']).to be(true)
+          expect(caps['canUseAsyncStandardWhatsappOnboarding']).to be(true)
+        end
+      end
+
+      it 'is false for an agent' do
+        expect(caps_for(agent)['canUseAsyncStandardWhatsappOnboarding']).to be(false)
+      end
+    end
+
+    context 'when the emergency kill switch is ON (temporary sync fallback)' do
+      before do
+        enable_managed_onboarding
+        set_toggle('BLOOMWIRE_WHATSAPP_ASYNC_ONBOARDING_DISABLED', true)
+      end
+
+      it 'reports available but NOT async, so the admin UI uses the synchronous fallback (not a 404)' do
+        caps = caps_for(administrator)
+        aggregate_failures do
+          expect(caps['canSelfServeManagedWhatsapp']).to be(true)
+          expect(caps['canUseAsyncStandardWhatsappOnboarding']).to be(false)
+        end
+      end
+    end
+
+    context 'when Bloomwire managed onboarding is unavailable (feature OFF)' do
+      it 'is false (both onboarding paths blocked) for an administrator' do
+        caps = caps_for(administrator)
+        aggregate_failures do
+          expect(caps['canSelfServeManagedWhatsapp']).to be(false)
+          expect(caps['canUseAsyncStandardWhatsappOnboarding']).to be(false)
         end
       end
     end

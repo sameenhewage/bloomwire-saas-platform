@@ -99,6 +99,17 @@ describe('useAsyncWhatsappOnboarding', () => {
     ).toBeNull();
   });
 
+  it('maps an explicit server expired status to the expired state', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
+      data: { attempt_id: 'ATT-1', status: 'expired' },
+    });
+    const flow = build();
+    await flow.start();
+    await flush();
+    expect(flow.state.value).toBe(ONBOARDING_STATES.EXPIRED);
+    expect(flow.state.value).not.toBe(ONBOARDING_STATES.ATTEMPT_NOT_FOUND);
+  });
+
   it('maps action_required and surfaces the safe error code', async () => {
     WhatsappChannel.fetchBloomwireOnboardingAttempt.mockResolvedValue({
       data: {
@@ -148,7 +159,7 @@ describe('useAsyncWhatsappOnboarding', () => {
     expect(build().resume()).toBe(false);
   });
 
-  it('a 404 while polling stops and surfaces expired (attempt gone / foreign)', async () => {
+  it('maps a generic polling 404 to attempt_not_found, never expired or a sync fallback, and clears stale storage', async () => {
     WhatsappChannel.fetchBloomwireOnboardingAttempt.mockRejectedValue({
       response: { status: 404 },
     });
@@ -156,7 +167,57 @@ describe('useAsyncWhatsappOnboarding', () => {
     const flow = build();
     flow.resume();
     await flush();
-    expect(flow.state.value).toBe(ONBOARDING_STATES.EXPIRED);
+    expect(flow.state.value).toBe(ONBOARDING_STATES.ATTEMPT_NOT_FOUND);
+    expect(flow.state.value).not.toBe(ONBOARDING_STATES.EXPIRED);
+    expect(flow.state.value).not.toBe('sync');
+    expect(flow.errorCode.value).toBe('attempt_not_found');
+    expect(
+      window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)
+    ).toBeNull();
+  });
+
+  it('checkStatus(): retries the same in-memory UUID and restores resumability when the server confirms it is processing', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockResolvedValueOnce({
+        data: { attempt_id: 'ATT-GONE', status: 'processing' },
+      });
+    window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}:7`, 'ATT-GONE');
+    const flow = build();
+    flow.resume();
+    await flush();
+
+    await flow.checkStatus();
+
+    expect(
+      WhatsappChannel.fetchBloomwireOnboardingAttempt
+    ).toHaveBeenNthCalledWith(2, 'ATT-GONE');
+    expect(flow.state.value).toBe(ONBOARDING_STATES.PROCESSING);
+    expect(window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)).toBe(
+      'ATT-GONE'
+    );
+    flow.cancel();
+  });
+
+  // Requirement #4: an in-flight attempt stays visible and reaches its final state while polling keeps returning
+  // 200 (the backend keeps show available through an emergency rollback — proven server-side). The poller never
+  // switches paths or drops to expired on a legitimate 200 sequence.
+  it('keeps an in-flight attempt visible and drives it to its final (completed) state across polls', async () => {
+    WhatsappChannel.fetchBloomwireOnboardingAttempt
+      .mockResolvedValueOnce({
+        data: { attempt_id: 'ATT-1', status: 'processing' },
+      })
+      .mockResolvedValue({
+        data: { attempt_id: 'ATT-1', status: 'completed', channel_id: 42 },
+      });
+    const flow = build({ pollIntervalMs: 5, longerThanUsualMs: 100000 });
+    await flow.start();
+    await flush();
+    expect(flow.state.value).toBe(ONBOARDING_STATES.PROCESSING); // still visible mid-flight
+    await new Promise(resolve => {
+      setTimeout(resolve, 30);
+    });
+    expect(flow.state.value).toBe(ONBOARDING_STATES.COMPLETED); // reaches its final state
     expect(
       window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}:7`)
     ).toBeNull();

@@ -11,6 +11,17 @@ export const POLL_INTERVAL_MS = 3000;
 export const LONGER_THAN_USUAL_MS = 30000;
 export const ATTEMPT_STORAGE_PREFIX = 'bloomwire_wa_onboarding_attempt';
 
+const storageKeyFor = accountId =>
+  `${ATTEMPT_STORAGE_PREFIX}:${accountId ?? 'unknown'}`;
+
+export const getStoredAsyncWhatsappOnboardingAttemptId = accountId => {
+  try {
+    return window.localStorage?.getItem(storageKeyFor(accountId));
+  } catch {
+    return null;
+  }
+};
+
 export const ONBOARDING_STATES = Object.freeze({
   IDLE: 'idle',
   CREATING: 'creating',
@@ -20,6 +31,7 @@ export const ONBOARDING_STATES = Object.freeze({
   COMPLETED: 'completed',
   ACTION_REQUIRED: 'action_required',
   EXPIRED: 'expired',
+  ATTEMPT_NOT_FOUND: 'attempt_not_found',
   FAILED: 'failed',
   CANCELLED: 'cancelled',
 });
@@ -28,6 +40,7 @@ const TERMINAL_STATES = [
   ONBOARDING_STATES.COMPLETED,
   ONBOARDING_STATES.ACTION_REQUIRED,
   ONBOARDING_STATES.EXPIRED,
+  ONBOARDING_STATES.ATTEMPT_NOT_FOUND,
   ONBOARDING_STATES.FAILED,
   ONBOARDING_STATES.CANCELLED,
 ];
@@ -57,15 +70,8 @@ export function useAsyncWhatsappOnboarding({
   let pollTimer = null;
   let longerTimer = null;
 
-  const storageKey = () =>
-    `${ATTEMPT_STORAGE_PREFIX}:${accountId ?? 'unknown'}`;
-  const readStored = () => {
-    try {
-      return window.localStorage?.getItem(storageKey());
-    } catch {
-      return null;
-    }
-  };
+  const storageKey = () => storageKeyFor(accountId);
+  const readStored = () => getStoredAsyncWhatsappOnboardingAttemptId(accountId);
   const writeStored = id => {
     try {
       window.localStorage?.setItem(storageKey(), id);
@@ -106,12 +112,13 @@ export function useAsyncWhatsappOnboarding({
         attemptId.value
       );
       applyDto(data);
+      if (!isTerminal() && attemptId.value) writeStored(attemptId.value);
     } catch (error) {
-      // A 404 means the attempt is gone for this account (swept/foreign) — stop and surface expired.
       if (error?.response?.status === 404) {
         clearTimers();
         clearStored();
-        state.value = ONBOARDING_STATES.EXPIRED;
+        errorCode.value = 'attempt_not_found';
+        state.value = ONBOARDING_STATES.ATTEMPT_NOT_FOUND;
         return;
       }
       // Transient error: keep polling (the backend is resumable).
@@ -128,7 +135,7 @@ export function useAsyncWhatsappOnboarding({
     longerTimer = setTimeout(() => {
       takingLongerThanUsual.value = true;
     }, longerThanUsualMs);
-    poll();
+    return poll();
   };
 
   const cancel = () => {
@@ -176,10 +183,19 @@ export function useAsyncWhatsappOnboarding({
     return true;
   };
 
+  const checkStatus = () => {
+    if (!attemptId.value) return false;
+    return beginPolling();
+  };
+
   const restart = () => {
     cancel();
     return start();
   };
+
+  // Stop the poll/longer timers WITHOUT clearing the persisted attempt or changing state — for component unmount /
+  // route change. The attempt is server-side and resumable, so resume() re-attaches polling when the UI returns.
+  const stopPolling = () => clearTimers();
 
   return {
     state,
@@ -190,7 +206,9 @@ export function useAsyncWhatsappOnboarding({
     start,
     resume,
     cancel,
+    checkStatus,
     restart,
+    stopPolling,
     ONBOARDING_STATES,
   };
 }

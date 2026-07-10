@@ -15,6 +15,7 @@ import Instagram from './channels/Instagram.vue';
 import Tiktok from './channels/Tiktok.vue';
 import Voice from './channels/Voice.vue';
 import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
+import { useBloomwireWhatsappOnboarding } from 'dashboard/composables/useBloomwireWhatsappOnboarding';
 
 const props = defineProps({
   channelName: {
@@ -28,12 +29,11 @@ const props = defineProps({
 // is still reached directly, show a safe managed-by-ops state instead of the create form. 11B.7C:
 // in managed mode ALL inbox creation is Ops-owned, so even website/api direct routes are blocked.
 // Backend remains the 403 enforcement.
-const {
-  canManageProviderSetup,
-  canManageNativeWhatsappSetup,
-  canCreateInbox,
-  canSelfServeManagedWhatsapp,
-} = useBloomwireCapabilities();
+const { canManageProviderSetup, canManageNativeWhatsappSetup, canCreateInbox } =
+  useBloomwireCapabilities();
+
+const { isAvailable: isManagedWhatsappOnboardingAvailable } =
+  useBloomwireWhatsappOnboarding();
 
 const SELF_SERVICE_CHANNELS = ['website', 'api'];
 const NATIVE_WHATSAPP_CHANNELS = ['whatsapp', 'whatsapp_call'];
@@ -42,7 +42,9 @@ const NATIVE_WHATSAPP_CHANNELS = ['whatsapp', 'whatsapp_call'];
 // (replacing the native manual/embedded setup). Only the 'whatsapp' channel is swapped; 'whatsapp_call' stays
 // native. This is UX only — the backend endpoint remains the enforcement boundary.
 const isManagedWhatsapp = computed(
-  () => props.channelName === 'whatsapp' && canSelfServeManagedWhatsapp.value
+  () =>
+    props.channelName === 'whatsapp' &&
+    isManagedWhatsappOnboardingAvailable.value
 );
 
 const channelViewList = {
@@ -62,6 +64,8 @@ const channelViewList = {
 };
 
 const channelComponent = computed(() => {
+  // The managed entry always owns the Standard/Coexistence chooser. Only its Standard selection may choose the
+  // async implementation or protected synchronous fallback; Coexistence is independent of that decision.
   if (isManagedWhatsapp.value) return BloomwireWhatsapp;
   return channelViewList[props.channelName] ?? null;
 });

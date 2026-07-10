@@ -15,6 +15,9 @@ import { useStore } from 'vuex';
 import { useI18n } from 'vue-i18n';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbeddedSignup';
+import { useBloomwireWhatsappOnboarding } from 'dashboard/composables/useBloomwireWhatsappOnboarding';
+import { useStoreGetters } from 'dashboard/composables/store';
+import { getStoredAsyncWhatsappOnboardingAttemptId } from 'dashboard/composables/useAsyncWhatsappOnboarding';
 import {
   createOnboardingTracer,
   createNoopTracer,
@@ -22,6 +25,7 @@ import {
 import Icon from 'next/icon/Icon.vue';
 import NextButton from 'next/button/Button.vue';
 import LoadingState from 'dashboard/components/widgets/LoadingState.vue';
+import BloomwireWhatsappAsync from './BloomwireWhatsappAsync.vue';
 
 // The backend create must never leave the UI pending forever (the "POST started and stayed pending" class).
 // Bound it and fail closed with a safe recoverable error.
@@ -32,11 +36,15 @@ const PREFLIGHT_TIMEOUT_MS = 8000;
 
 const store = useStore();
 const { t } = useI18n();
+const getters = useStoreGetters();
+const accountId = getters.getCurrentAccountId?.value;
 const {
   isAuthenticating,
   runEmbeddedSignup,
   cancel: cancelEmbeddedSignup,
 } = useWhatsappEmbeddedSignup();
+const { usesAsyncStandard: useAsyncStandardOnboarding } =
+  useBloomwireWhatsappOnboarding();
 // Short, non-sensitive support reference for the CURRENT attempt (set per attempt; changes on every retry).
 const attemptRef = ref('');
 
@@ -91,8 +99,13 @@ const abortPreflight = () => {
 // True when this attempt no longer owns the flow — the component left, or a newer attempt superseded it.
 const isStale = seq => leftFlow || seq !== attemptSeq;
 
-// 'choose' = connection-choice screen (default); 'register' = the number/connect form (shared by both flows).
-const mode = ref('choose');
+// A persisted async Standard attempt takes precedence over the emergency switch so an in-flight attempt remains
+// visible and pollable after a rollback. With no in-flight attempt, every owner starts at the two-mode chooser.
+const mode = ref(
+  getStoredAsyncWhatsappOnboardingAttemptId(accountId)
+    ? 'async_standard'
+    : 'choose'
+);
 // 'standard' = Register New Number (Cloud API); 'coexistence' = Connect Existing WhatsApp Business App (17D.3).
 // Both reuse the same credential-free form + Meta Embedded Signup; only the target endpoint differs.
 const flow = ref('standard');
@@ -136,7 +149,7 @@ const coexistenceRequirements = computed(() => [
 const startRegister = () => {
   errorMessage.value = '';
   flow.value = 'standard';
-  mode.value = 'register';
+  mode.value = useAsyncStandardOnboarding.value ? 'async_standard' : 'register';
 };
 
 // Phase 17D.3: enter the same credential-free form for the Coexistence flow (existing WhatsApp Business App).
@@ -149,6 +162,12 @@ const startCoexistence = () => {
 const backToChoose = () => {
   errorMessage.value = '';
   mode.value = 'choose';
+};
+
+const useSyncStandardFallback = () => {
+  errorMessage.value = '';
+  flow.value = 'standard';
+  mode.value = 'register';
 };
 
 const isCoexistence = computed(() => flow.value === 'coexistence');
@@ -847,6 +866,13 @@ onBeforeRouteLeave(() => {
         </div>
       </div>
     </div>
+
+    <BloomwireWhatsappAsync
+      v-else-if="mode === 'async_standard'"
+      :can-start-new-async="useAsyncStandardOnboarding"
+      @back="backToChoose"
+      @use-sync-fallback="useSyncStandardFallback"
+    />
 
     <!-- Registration form: number + inbox name only. NO credentials fields. -->
     <div v-else>

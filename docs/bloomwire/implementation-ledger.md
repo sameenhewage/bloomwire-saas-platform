@@ -85,6 +85,7 @@
 | 17E.1 | Multiple WhatsApp Inbox **backend contract tests** (RSpec: Standard+Coexistence service/request → 2 numbers = 2 channels/inboxes/setups per account, dup `phone_number`/`phone_number_id` blocked; router 2 pnids→2 inboxes in one account, unknown/crossed fail-closed; NEW category contract: ConversationFinder+ConversationPolicy agent-isolation + team-filtered assignment) — **test-only, no product code** | #113 | Merged (`5df9f9d`) |
 | 17E.2 | **Contact isolation & UI/permission polish** (gated backend fix — new `BLOOMWIRE_RESTRICT_AGENT_CONTACT_VISIBILITY` + `Bloomwire::ContactVisibility` seam; agent contact list/search/show scoped to contacts reachable via assigned inboxes through `contact_inboxes`; admins see all; **OFF == stock**; routed through ContactsController/FilterService/SearchService/contacts base_controller) — **product code YES, no migration/frontend** | #114 | Open (ready for review, not merged) |
 | 17F.2A | Managed WhatsApp onboarding entry restoration (New Inbox entry + non-blank Add Inbox surface; admin/agent + feature-OFF/stock-compatible behavior preserved) — frontend product code | #122 | Merged (`6894d93`) · DEV PASS for UI/runtime scope; Real Meta Coexistence certification BLOCKED/DEFERRED |
+| ADR-0010 v3 | Resumable async **Standard** WhatsApp onboarding (leased Sidekiq attempt + recovery/TTL + explicit Standard capability + chooser-preserving UI; Coexistence unchanged) | _pending_ | Implemented on feature branch; not deployed |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -97,6 +98,15 @@
 ---
 
 ## 3. Phase-by-phase implementation log
+
+### ADR-0010 v3 — Resumable asynchronous Standard WhatsApp onboarding — `Implemented; PR/merge/deploy pending`
+- **Why:** synchronous Standard onboarding could time out after Meta committed a remote mutation but before Bloomwire persisted its mapping. v3 adds an encrypted, account-scoped attempt, leased/recoverable Sidekiq processor, retry/TTL recovery, config-driven Graph timeouts, and a polling UI.
+- **Routing ownership:** the managed `BloomwireWhatsapp` entry always owns and displays the **Standard + Coexistence chooser**. `canUseAsyncStandardWhatsappOnboarding` controls Standard only: true → async; false while managed onboarding is available → protected synchronous Standard fallback. Coexistence always remains on its existing flow and is independent of the Standard emergency switch.
+- **Rollback behavior:** the switch blocks new async create/submit but not show/poll. Workers/recovery are switch-independent. A persisted in-flight Standard attempt resumes and remains pollable after a switch change; any later Start/Restart honors the current switch.
+- **Status truth:** only explicit server `status=expired` shows **Meta session expired**. A generic poll HTTP 404 maps to `attempt_not_found`, clears stale account-scoped local storage, and offers **Check status / Restart**; it never silently selects sync or claims Meta expiry.
+- **Security / source of truth:** admin authorization and account scope remain backend-enforced; safe DTOs expose no OAuth code/token/provider config/raw phone; no duplicate conversations/messages/contacts; existing Channel/Inbox/Setup persistence and global routing remain authoritative.
+- **Validation:** frontend affected Vitest **142/0**; backend async suite **189/0 (43 pending only without local AR-encryption keys)**; `pnpm eslint` **0 errors / 371 existing repository warnings**; RuboCop **2 files / 0 offenses**. No live Meta/WhatsApp calls; no secrets exposed; no provider-credential mutation; no Enterprise code; no deploy/DEV/production change.
+- **Residual:** authenticated browser/Network proof is pending a separately approved deploy. The synchronous Standard fallback and its 75s middleware remain temporarily until async rollout is proven.
 
 ### ADR-0010 Section A — Synchronous WhatsApp onboarding timeout resilience + convergent retry — `Implemented; PR/merge/deploy pending`
 - **Failure truth:** the global 15s request timeout could interrupt a cold `/register` after Meta committed but before local persistence, creating Meta CONNECTED + zero Bloomwire records; Graph calls had no explicit HTTP bounds.
