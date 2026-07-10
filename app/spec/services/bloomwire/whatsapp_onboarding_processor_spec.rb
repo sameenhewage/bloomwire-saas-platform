@@ -254,6 +254,40 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor do
     end
   end
 
+  describe 'reconnect from a preserved disconnected setup' do
+    it 'processes the fresh OAuth code and reuses the same records instead of taking crash-resume' do
+      setup = create(:bloomwire_whatsapp_setup, :ready_for_webhook, account: account,
+                                                                    aligned_phone_number_id: 'PNID-1',
+                                                                    aligned_display_phone_number: '15551230001')
+      setup.update!(setup_status: Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+      reconnect = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'queued', waba_id: 'WABA-1', phone_number_id: 'PNID-1'
+      )
+      reconnect.store_code!('OAUTH-CODE')
+      stub_meta(connected: false, persist: setup)
+      allow(persister).to receive(:call) do
+        setup.update!(setup_status: Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+        setup
+      end
+
+      expect { run(reconnect) }
+        .to not_change(Channel::Whatsapp, :count)
+        .and not_change(Inbox, :count)
+        .and not_change(Bloomwire::WhatsappSetup, :count)
+
+      aggregate_failures do
+        expect(Whatsapp::TokenExchangeService).to have_received(:new).once
+        expect(client).to have_received(:register_phone_number).once
+        expect(persister).to have_received(:call).once
+        expect(reconnect.reload.status).to eq('completed')
+        expect(reconnect.oauth_code).to be_nil
+        expect(reconnect.access_token).to be_nil
+        expect(reconnect.credential_persisted_at).to be_present
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      end
+    end
+  end
+
   # ---- Existing kept cases ----------------------------------------------------------------------------
   describe 'existing reconcile + guard + error cases' do
     it 'skips /register when the phone is already CONNECTED' do

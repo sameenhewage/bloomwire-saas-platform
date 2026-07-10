@@ -3,8 +3,8 @@
 # guarded by (owner + submission_generation). Corrected step machine (v3 + four correctness gaps):
 #
 # 0. claim_lease! (short with_lock) — not claimable (stale/owned/terminal) => no-op.
-# 1. RESUME-FROM-PERSISTED (gap 4): matching Channel/Inbox/Setup + present channel credential => bind ids and
-#    FINALIZE (completed for ready_for_webhook, action_required otherwise) with NO exchange/register/subscribe.
+# 1. RESUME-FROM-PERSISTED (gap 4): matching finalized Setup (ready/action-required) + channel credential =>
+#    bind ids and FINALIZE with NO exchange/register/subscribe. Disconnected reconnects continue through OAuth.
 # 2. TWO-STAGE TOKEN (gap 1): exchange code -> SHORT token (store + clear code atomically); then SHORT -> LONG
 #    (upgrade). On a transient long-exchange failure the SHORT token is RETAINED (retry only step 2); the consumed
 #    OAuth code is never re-exchanged.
@@ -84,7 +84,8 @@ class Bloomwire::WhatsappOnboardingProcessor
   # ---- Gap 4: resume from persisted-but-not-finalized records --------------------------------------------
   def resume_from_persisted_setup
     setup = Bloomwire::WhatsappSetup.find_by(account_id: @account.id, phone_number_id: @attempt.phone_number_id)
-    return false unless setup && channel_credential_present?(setup)
+    finalized_statuses = [Bloomwire::WhatsappSetup::ROUTEABLE_STATUS, Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS]
+    return false unless setup&.setup_status.in?(finalized_statuses) && channel_credential_present?(setup)
 
     bind_attempt_to_setup(setup)
     @attempt.mark_credential_persisted!(owner: @owner, expected_generation: @generation) if @attempt.access_token.present?
