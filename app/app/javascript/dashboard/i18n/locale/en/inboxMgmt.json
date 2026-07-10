@@ -417,6 +417,27 @@
             "CANCEL": "Cancel",
             "DISCONNECTED_TITLE": "Number disconnected",
             "DISCONNECTED_SUBTITLE": "This number is deregistered on WhatsApp. Reconnect it any time from Settings → Inboxes → Add Inbox — your existing inbox and history are reused."
+          },
+          "ASYNC": {
+            "CREATING": "Preparing your registration…",
+            "AWAITING_META": "Complete the steps in the Meta window to continue…",
+            "SUBMITTING": "Submitting your details…",
+            "PROCESSING": "Setting up your WhatsApp number — this can take a little while. You can keep this page open.",
+            "LONGER_THAN_USUAL": "This is taking a little longer than usual. We’re still working on it — you don’t need to do anything.",
+            "RESUMED": "Resuming your in-progress WhatsApp registration…",
+            "CANCEL_BUTTON": "Cancel",
+            "RESTART_BUTTON": "Start over",
+            "EXPIRED": {
+              "TITLE": "Meta session expired",
+              "SUBTITLE": "Your Meta registration session expired. Start again to connect your WhatsApp number.",
+              "RESTART_BUTTON": "Start again"
+            },
+            "ATTEMPT_NOT_FOUND": {
+              "TITLE": "We couldn’t find this setup attempt",
+              "SUBTITLE": "The attempt may have been removed or may not belong to this account. Check its status again or restart setup.",
+              "CHECK_BUTTON": "Check status",
+              "RESTART_BUTTON": "Restart"
+            }
           }
         },
         "API": {

@@ -2,10 +2,8 @@ class Whatsapp::FacebookApiClient
   BASE_URI = 'https://graph.facebook.com'.freeze
   # Explicit HTTP timeouts on EVERY Meta Graph call so a hung Meta request can never run out the whole request
   # budget. On a connection/read timeout we raise a sanitized Whatsapp::GraphApiTimeoutError (verb + timeout class
-  # only — never url/token/PIN/App Secret/body). read_timeout is generous so a slow /register still completes
-  # within the onboarding endpoint budget; combined with idempotency, a timed-out READ is safely re-checked on retry.
-  OPEN_TIMEOUT_SECONDS = 5
-  READ_TIMEOUT_SECONDS = 25
+  # only — never url/token/PIN/App Secret/body). The open/read values are the CONFIG-DRIVEN single source in
+  # Whatsapp::GraphApiTimeouts; the async onboarding lease budget derives from that same provider (no duplication).
 
   def initialize(access_token = nil)
     @access_token = access_token
@@ -20,8 +18,11 @@ class Whatsapp::FacebookApiClient
                               client_secret: GlobalConfigService.load('WHATSAPP_APP_SECRET', ''),
                               code: code
                             })
+    # Structured (message byte-identical to the legacy string) so the managed async processor can classify a
+    # Meta-confirmed invalid/expired authorization code (OAuthException) as terminal vs a transient 5xx/429.
+    raise Whatsapp::GraphApiError.from_response('Token exchange failed', response) unless response.success?
 
-    handle_response(response, 'Token exchange failed')
+    response.parsed_response
   end
 
   # Exchange a short-lived embedded-signup USER token for a long-lived (~60d) one (fb_exchange_token grant), as in
@@ -239,7 +240,9 @@ class Whatsapp::FacebookApiClient
   # Centralized Graph HTTP call: injects the open/read timeouts on EVERY request and translates a connection/read
   # timeout into a sanitized Whatsapp::GraphApiTimeoutError (verb + timeout class only — never url/token/PIN/body).
   def http_request(http_method, url, **options)
-    HTTParty.public_send(http_method, url, options.merge(open_timeout: OPEN_TIMEOUT_SECONDS, read_timeout: READ_TIMEOUT_SECONDS))
+    HTTParty.public_send(http_method, url,
+                         options.merge(open_timeout: Whatsapp::GraphApiTimeouts.open_seconds,
+                                       read_timeout: Whatsapp::GraphApiTimeouts.read_seconds))
   rescue Timeout::Error => e
     # Net::OpenTimeout / Net::ReadTimeout are subclasses of Timeout::Error, so this covers connect AND read timeouts.
     raise Whatsapp::GraphApiTimeoutError, "Graph API #{http_method.to_s.upcase} timed out (#{e.class})"

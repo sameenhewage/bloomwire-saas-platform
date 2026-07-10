@@ -416,4 +416,28 @@ describe('useWhatsappEmbeddedSignup — bounded state, overall watchdog, cancel 
     emit({ event: 'FINISH', data: VALID_BUSINESS });
     await expect(result).resolves.toMatchObject({ code: 'auth-code' });
   });
+
+  // ADR-0010 v3 (async flow): the overall 180s watchdog is OPTIONAL and disabled by passing a falsy
+  // overallTimeoutMs, so the async flow relies on Meta's SDK signals + the server-side attempt TTL instead.
+  it('arms the 180s overall watchdog by default (synchronous flow)', async () => {
+    initWhatsAppEmbeddedSignup.mockReturnValue(new Promise(() => {})); // popup never settles
+    const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+    const signup = useWhatsappEmbeddedSignup();
+    signup.runEmbeddedSignup().catch(() => {});
+    await flushPromises();
+    expect(setTimeoutSpy.mock.calls.map(call => call[1])).toContain(180000);
+    signup.cancel();
+    setTimeoutSpy.mockRestore();
+  });
+
+  it('does NOT arm the overall watchdog when overallTimeoutMs is falsy (async flow)', async () => {
+    initWhatsAppEmbeddedSignup.mockReturnValue(new Promise(() => {}));
+    const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+    const signup = useWhatsappEmbeddedSignup();
+    signup.runEmbeddedSignup({ overallTimeoutMs: null }).catch(() => {});
+    await flushPromises();
+    expect(setTimeoutSpy.mock.calls.map(call => call[1])).not.toContain(180000);
+    signup.cancel();
+    setTimeoutSpy.mockRestore();
+  });
 });

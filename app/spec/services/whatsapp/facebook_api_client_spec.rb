@@ -14,6 +14,9 @@ describe Whatsapp::FacebookApiClient do
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_API_VERSION', Whatsapp::GraphApi::DEFAULT_VERSION).and_return(api_version)
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_APP_ID', '').and_return(app_id)
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_APP_SECRET', '').and_return(app_secret)
+    # Graph HTTP timeouts are config-driven via Whatsapp::GraphApiTimeouts; stub the provider so these specs do not
+    # need to also stub the timeout config keys on GlobalConfigService.
+    allow(Whatsapp::GraphApiTimeouts).to receive_messages(open_seconds: 5, read_seconds: 25)
   end
 
   it 'defaults to the approved v25.0 Graph API version' do

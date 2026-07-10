@@ -151,11 +151,16 @@ export function useWhatsappEmbeddedSignup() {
 
       window.addEventListener('message', messageHandler);
 
-      // Overall watchdog FIRST, so even a synchronous never-settling SDK path is bounded.
-      overallTimer = setTimeout(() => {
-        activeTracer.trace('overall_signup_timeout', { result: 'timeout' });
-        settle(reject, new Error('Embedded signup overall timeout'));
-      }, overallTimeoutMs);
+      // Overall watchdog FIRST, so even a synchronous never-settling SDK path is bounded. OPTIONAL: the async
+      // managed flow passes a falsy overallTimeoutMs to DISABLE it — that flow relies on Meta's own SDK signals
+      // plus the server-side attempt TTL (the attempt already exists server-side and is polled), so no arbitrary
+      // client cap is needed. The synchronous flow keeps the default watchdog.
+      if (overallTimeoutMs) {
+        overallTimer = setTimeout(() => {
+          activeTracer.trace('overall_signup_timeout', { result: 'timeout' });
+          settle(reject, new Error('Embedded signup overall timeout'));
+        }, overallTimeoutMs);
+      }
 
       (async () => {
         try {

@@ -354,6 +354,11 @@ Rails.application.routes.draw do
             namespace :whatsapp do
               resource :embedded_signup, only: [:create]
               resource :coexistence_embedded_signup, only: [:create]
+              # ADR-0010 v3: resumable ASYNC managed onboarding. Inert (404) unless async_whatsapp_onboarding is ON
+              # (OFF == the synchronous embedded_signup path). create (open) / submit (code) / show (poll).
+              resources :onboarding_attempts, only: [:create, :show] do
+                member { post :submit }
+              end
               # Advisory duplicate-number preflight (Standard + Coexistence). Admin-only; inert (404) unless managed
               # WhatsApp self-serve is active. Returns only { status: available | already_connected } — no tenant leak.
               resource :phone_availability, only: [:create]

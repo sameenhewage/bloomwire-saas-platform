@@ -147,4 +147,45 @@ RSpec.describe Bloomwire::Features do
       end
     end
   end
+
+  # ADR-0010 v3: async onboarding has NO separate positive flag. It is ON whenever Bloomwire managed onboarding is
+  # available for the account AND the internal emergency kill switch is not set. The kill switch is NOT a
+  # SUB_FEATURE (never shown in the Super Admin Console) and defaults to false.
+  describe 'async WhatsApp onboarding (effective rule + emergency kill switch)' do
+    def enable_managed_onboarding
+      set_toggle(described_class::MASTER, true)
+      set_toggle('BLOOMWIRE_PRIVACY_HARDENING', true)
+      set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true)
+      set_toggle('BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING', true)
+    end
+
+    it 'never exposes the emergency kill switch as a Super Admin Console sub-feature' do
+      expect(described_class::SUB_FEATURES.values).not_to include(described_class::ASYNC_ONBOARDING_KILL_SWITCH)
+    end
+
+    it 'defaults the kill switch OFF, so managed onboarding ON => async ON (no second positive flag)' do
+      enable_managed_onboarding
+      aggregate_failures do
+        expect(described_class.async_whatsapp_onboarding_disabled?).to be(false)
+        expect(described_class.managed_whatsapp_onboarding_available?).to be(true)
+        expect(described_class.async_whatsapp_onboarding?).to be(true)
+      end
+    end
+
+    it 'is OFF when Bloomwire managed onboarding is not available' do
+      set_toggle(described_class::MASTER, true)
+      set_toggle('BLOOMWIRE_RESTRICT_NATIVE_WHATSAPP_SETUP', true) # managed_whatsapp_onboarding stays OFF
+      expect(described_class.async_whatsapp_onboarding?).to be(false)
+    end
+
+    it 'falls back to sync (async OFF) ONLY when the emergency kill switch is set, onboarding stays available' do
+      enable_managed_onboarding
+      set_toggle(described_class::ASYNC_ONBOARDING_KILL_SWITCH, true)
+      aggregate_failures do
+        expect(described_class.async_whatsapp_onboarding_disabled?).to be(true)
+        expect(described_class.async_whatsapp_onboarding?).to be(false)
+        expect(described_class.managed_whatsapp_onboarding_available?).to be(true)
+      end
+    end
+  end
 end

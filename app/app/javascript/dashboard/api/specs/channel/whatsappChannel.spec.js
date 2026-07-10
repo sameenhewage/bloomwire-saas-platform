@@ -13,11 +13,17 @@ describe('#whatsappChannel', () => {
     expect(whatsappChannel).toHaveProperty(
       'createBloomwireCoexistenceEmbeddedSignup'
     );
+    expect(whatsappChannel).toHaveProperty('createBloomwireOnboardingAttempt');
+    expect(whatsappChannel).toHaveProperty('submitBloomwireOnboardingAttempt');
+    expect(whatsappChannel).toHaveProperty('fetchBloomwireOnboardingAttempt');
   });
 
   describe('API calls', () => {
     const originalAxios = window.axios;
-    const axiosMock = { post: vi.fn(() => Promise.resolve()) };
+    const axiosMock = {
+      post: vi.fn(() => Promise.resolve()),
+      get: vi.fn(() => Promise.resolve()),
+    };
 
     const CREDS = {
       code: 'META-CODE',
@@ -29,6 +35,7 @@ describe('#whatsappChannel', () => {
     beforeEach(() => {
       window.axios = axiosMock;
       axiosMock.post.mockClear();
+      axiosMock.get.mockClear();
     });
 
     afterEach(() => {
@@ -79,6 +86,32 @@ describe('#whatsappChannel', () => {
         'api_key',
         'provider_config',
       ].forEach(secret => expect(sentBody).not.toHaveProperty(secret));
+    });
+
+    it('#createBloomwireOnboardingAttempt opens an async attempt (no body, no Meta work)', () => {
+      whatsappChannel.createBloomwireOnboardingAttempt();
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/bloomwire/whatsapp/onboarding_attempts',
+        {},
+        {}
+      );
+    });
+
+    it('#submitBloomwireOnboardingAttempt posts the signup credentials to the attempt submit path', () => {
+      whatsappChannel.submitBloomwireOnboardingAttempt('ATT-UUID', CREDS);
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/bloomwire/whatsapp/onboarding_attempts/ATT-UUID/submit',
+        CREDS,
+        {}
+      );
+    });
+
+    it('#fetchBloomwireOnboardingAttempt GETs the account-scoped attempt status path', () => {
+      whatsappChannel.fetchBloomwireOnboardingAttempt('ATT-UUID');
+      expect(axiosMock.get).toHaveBeenCalledWith(
+        '/api/v1/bloomwire/whatsapp/onboarding_attempts/ATT-UUID',
+        {}
+      );
     });
   });
 });

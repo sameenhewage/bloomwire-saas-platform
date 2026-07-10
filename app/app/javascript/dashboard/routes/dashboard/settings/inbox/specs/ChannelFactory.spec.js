@@ -3,6 +3,7 @@ import { shallowMount } from '@vue/test-utils';
 import ChannelFactory from '../ChannelFactory.vue';
 import Whatsapp from '../channels/Whatsapp.vue';
 import BloomwireWhatsapp from '../channels/BloomwireWhatsapp.vue';
+import BloomwireWhatsappAsync from '../channels/BloomwireWhatsappAsync.vue';
 import { useBloomwireCapabilities } from 'dashboard/composables/useBloomwireCapabilities';
 
 vi.mock('dashboard/composables/useBloomwireCapabilities');
@@ -14,13 +15,19 @@ const mountFactory = (
     canManageNativeWhatsappSetup = true,
     canCreateInbox = true,
     canSelfServeManagedWhatsapp = false,
+    canUseAsyncStandardWhatsappOnboarding = false,
   } = {}
 ) => {
+  // useBloomwireWhatsappOnboarding (the routing orchestrator) reads these same capabilities internally, so mocking
+  // useBloomwireCapabilities drives both the setup-guard checks and the async-vs-sync managed WhatsApp routing.
   useBloomwireCapabilities.mockReturnValue({
     canManageProviderSetup: ref(canManageProviderSetup),
     canManageNativeWhatsappSetup: ref(canManageNativeWhatsappSetup),
     canCreateInbox: ref(canCreateInbox),
     canSelfServeManagedWhatsapp: ref(canSelfServeManagedWhatsapp),
+    canUseAsyncStandardWhatsappOnboarding: ref(
+      canUseAsyncStandardWhatsappOnboarding
+    ),
   });
 
   return shallowMount(ChannelFactory, {
@@ -77,15 +84,48 @@ describe('ChannelFactory.vue (Bloomwire direct-route setup guard)', () => {
 
   // Phase 17C.3: managed self-serve WhatsApp registration wizard.
   describe('managed self-serve WhatsApp (17C.3)', () => {
-    it('renders the Bloomwire registration wizard for whatsapp when self-serve is granted, even with native whatsapp + inbox creation restricted', () => {
+    it('renders the SYNCHRONOUS Bloomwire wizard for whatsapp when self-serve is granted but async is off (kill switch on), even with native whatsapp + inbox creation restricted', () => {
       const wrapper = mountFactory('whatsapp', {
         canManageNativeWhatsappSetup: false,
         canCreateInbox: false,
         canSelfServeManagedWhatsapp: true,
+        canUseAsyncStandardWhatsappOnboarding: false,
       });
       expect(isBlocked(wrapper)).toBe(false);
       expect(wrapper.findComponent(BloomwireWhatsapp).exists()).toBe(true);
+      expect(wrapper.findComponent(BloomwireWhatsappAsync).exists()).toBe(
+        false
+      );
       expect(wrapper.findComponent(Whatsapp).exists()).toBe(false);
+    });
+
+    it('keeps the full Bloomwire chooser entry when async Standard onboarding is granted', () => {
+      const wrapper = mountFactory('whatsapp', {
+        canManageNativeWhatsappSetup: false,
+        canCreateInbox: false,
+        canSelfServeManagedWhatsapp: true,
+        canUseAsyncStandardWhatsappOnboarding: true,
+      });
+      expect(isBlocked(wrapper)).toBe(false);
+      expect(wrapper.findComponent(BloomwireWhatsapp).exists()).toBe(true);
+      expect(wrapper.findComponent(BloomwireWhatsappAsync).exists()).toBe(
+        false
+      );
+      expect(wrapper.findComponent(Whatsapp).exists()).toBe(false);
+    });
+
+    it('blocks both managed modes when managed onboarding is unavailable, even if async Standard is stray-true', () => {
+      const wrapper = mountFactory('whatsapp', {
+        canManageNativeWhatsappSetup: false,
+        canCreateInbox: false,
+        canSelfServeManagedWhatsapp: false,
+        canUseAsyncStandardWhatsappOnboarding: true,
+      });
+      expect(isBlocked(wrapper)).toBe(true);
+      expect(wrapper.findComponent(BloomwireWhatsapp).exists()).toBe(false);
+      expect(wrapper.findComponent(BloomwireWhatsappAsync).exists()).toBe(
+        false
+      );
     });
 
     it('renders the native WhatsApp component (not the managed wizard) when self-serve is not granted', () => {

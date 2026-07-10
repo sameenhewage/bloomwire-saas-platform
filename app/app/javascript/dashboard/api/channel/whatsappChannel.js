@@ -91,6 +91,35 @@ class WhatsappChannel extends ApiClient {
       inbox_id: inboxId,
     });
   }
+
+  // ADR-0010 v3 (async managed onboarding). Opens a resumable attempt BEFORE the Meta popup; returns the opaque
+  // public attempt_id (no secrets). The request does no Meta work. Inert (404) unless the async flag is ON.
+  createBloomwireOnboardingAttempt(config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_attempts`,
+      {},
+      config
+    );
+  }
+
+  // Submits the Meta popup result (code + non-secret signup identifiers) for the given attempt. The backend stores
+  // the code (encrypted), queues the attempt, and enqueues the background worker. Never sends secrets/tokens.
+  submitBloomwireOnboardingAttempt(attemptId, params, config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_attempts/${attemptId}/submit`,
+      params,
+      config
+    );
+  }
+
+  // Poll the attempt's safe status DTO (status / step / masked phone / ids) — never a token/secret. Account-scoped
+  // on the server (a foreign attempt id is a 404).
+  fetchBloomwireOnboardingAttempt(attemptId, config = {}) {
+    return axios.get(
+      `${this.baseUrl()}/bloomwire/whatsapp/onboarding_attempts/${attemptId}`,
+      config
+    );
+  }
 }
 
 export default new WhatsappChannel();

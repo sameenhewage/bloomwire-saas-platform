@@ -64,6 +64,7 @@ describe('useBloomwireCapabilities', () => {
       'canManageBots',
       'canAccessIntegrations',
       'canSelfServeManagedWhatsapp',
+      'canUseAsyncStandardWhatsappOnboarding',
       'canAccessCategoryAdmin',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
@@ -133,6 +134,33 @@ describe('useBloomwireCapabilities', () => {
       mockGetters({ capabilities: { canSelfServeManagedWhatsapp: true } });
       const { canSelfServeManagedWhatsapp } = useBloomwireCapabilities();
       expect(canSelfServeManagedWhatsapp.value).toBe(true);
+    });
+  });
+
+  // ADR-0010 v3: opt-in async-vs-sync routing capability — defaults to FALSE so a stock / older-backend / not-
+  // loaded state routes to the pre-existing SYNCHRONOUS flow (never attempts async against a backend that lacks it).
+  describe('canUseAsyncStandardWhatsappOnboarding (opt-in, default false)', () => {
+    it('defaults to false when the capability map is absent (older backend => sync)', () => {
+      mockGetters({ capabilities: undefined });
+      expect(
+        useBloomwireCapabilities().canUseAsyncStandardWhatsappOnboarding.value
+      ).toBe(false);
+    });
+
+    it('defaults to false when the specific key is missing (other caps present)', () => {
+      mockGetters({ capabilities: { canSelfServeManagedWhatsapp: true } });
+      expect(
+        useBloomwireCapabilities().canUseAsyncStandardWhatsappOnboarding.value
+      ).toBe(false);
+    });
+
+    it('is true only on an explicit server true (async is the path)', () => {
+      mockGetters({
+        capabilities: { canUseAsyncStandardWhatsappOnboarding: true },
+      });
+      expect(
+        useBloomwireCapabilities().canUseAsyncStandardWhatsappOnboarding.value
+      ).toBe(true);
     });
   });
 

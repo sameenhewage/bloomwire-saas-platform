@@ -1,7 +1,9 @@
 import { ref } from 'vue';
 import { mount, RouterLinkStub, flushPromises } from '@vue/test-utils';
 import BloomwireWhatsapp from '../BloomwireWhatsapp.vue';
+import BloomwireWhatsappAsync from '../BloomwireWhatsappAsync.vue';
 import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbeddedSignup';
+import { useBloomwireWhatsappOnboarding } from 'dashboard/composables/useBloomwireWhatsappOnboarding';
 
 // Phase 17C.3 / 17D.3: customer WhatsApp connection wizard. All Meta + store calls are mocked (no real Meta, no
 // HTTP). The wizard opens on a connection-choice screen with two ENABLED options: Coexistence (Connect Existing
@@ -38,6 +40,10 @@ vi.mock('vue-router', () => ({
   onBeforeRouteLeave: fn => routeLeaveGuard(fn),
 }));
 vi.mock('dashboard/composables/useWhatsappEmbeddedSignup');
+vi.mock('dashboard/composables/useBloomwireWhatsappOnboarding');
+vi.mock('dashboard/composables/store', () => ({
+  useStoreGetters: () => ({ getCurrentAccountId: ref(7) }),
+}));
 // Factories are lazily evaluated on first import, so referencing the outer spies is safe.
 vi.mock(
   'dashboard/routes/dashboard/settings/inbox/channels/whatsapp/onboardingTrace',
@@ -67,11 +73,17 @@ const DTO = {
 
 const B = 'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED';
 
-const mountWizard = () => {
+const mountWizard = ({ asyncStandard = false } = {}) => {
+  const asyncStandardRef =
+    typeof asyncStandard === 'object' ? asyncStandard : ref(asyncStandard);
   useWhatsappEmbeddedSignup.mockReturnValue({
     isAuthenticating: ref(false),
     runEmbeddedSignup,
     cancel: cancelEmbeddedSignup,
+  });
+  useBloomwireWhatsappOnboarding.mockReturnValue({
+    usesAsyncStandard: asyncStandardRef,
+    usesSyncStandard: ref(!asyncStandardRef.value),
   });
   return mount(BloomwireWhatsapp, {
     global: {
@@ -94,6 +106,11 @@ const mountWizard = () => {
           ],
         },
         LoadingState: { template: '<div class="loading-state" />' },
+        BloomwireWhatsappAsync: {
+          props: ['canStartNewAsync'],
+          template:
+            '<div data-testid="bloomwire-wa-async-standard" :data-can-start-new="canStartNewAsync" />',
+        },
         Icon: true,
       },
     },
@@ -122,6 +139,7 @@ const submit = async wrapper => {
 };
 
 beforeEach(() => {
+  window.localStorage.clear();
   dispatch.mockReset();
   runEmbeddedSignup.mockReset();
   cancelEmbeddedSignup.mockReset();
@@ -187,6 +205,106 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
       true
     );
     expect(wrapper.findAll('input')).toHaveLength(2);
+  });
+
+  it('keeps both choices visible in normal async mode, then routes only Standard to the async flow', async () => {
+    const wrapper = mountWizard({ asyncStandard: true });
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-choice-standard"]').exists()
+    ).toBe(true);
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-choice-coexistence"]').exists()
+    ).toBe(true);
+
+    await startRegister(wrapper);
+
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-standard"]').exists()
+    ).toBe(true);
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      false
+    );
+  });
+
+  it('keeps Coexistence on its existing flow when async Standard onboarding is enabled', async () => {
+    const wrapper = mountWizard({ asyncStandard: true });
+
+    await startCoexistence(wrapper);
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      true
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-standard"]').exists()
+    ).toBe(false);
+  });
+
+  it('uses the synchronous Standard fallback without removing Coexistence when the emergency switch is on', async () => {
+    const wrapper = mountWizard({ asyncStandard: false });
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-choice-coexistence"]').exists()
+    ).toBe(true);
+
+    await startRegister(wrapper);
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      true
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-standard"]').exists()
+    ).toBe(false);
+  });
+
+  it('keeps an entered async Standard attempt mounted when the switch flips and disables only future new work', async () => {
+    const asyncStandard = ref(true);
+    const wrapper = mountWizard({ asyncStandard });
+    await startRegister(wrapper);
+
+    asyncStandard.value = false;
+    await flushPromises();
+
+    const asyncFlow = wrapper.find(
+      '[data-testid="bloomwire-wa-async-standard"]'
+    );
+    expect(asyncFlow.exists()).toBe(true);
+    expect(asyncFlow.attributes('data-can-start-new')).toBe('false');
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      false
+    );
+  });
+
+  it('resumes a persisted in-flight async Standard attempt after the emergency switch turns on', () => {
+    window.localStorage.setItem(
+      'bloomwire_wa_onboarding_attempt:7',
+      'ATT-IN-FLIGHT'
+    );
+
+    const wrapper = mountWizard({ asyncStandard: false });
+
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-standard"]').exists()
+    ).toBe(true);
+    expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
+      false
+    );
+  });
+
+  it('enters the synchronous Standard fallback when a resumed async child requests new work after rollback', async () => {
+    window.localStorage.setItem(
+      'bloomwire_wa_onboarding_attempt:7',
+      'ATT-IN-FLIGHT'
+    );
+    const wrapper = mountWizard({ asyncStandard: false });
+
+    wrapper.findComponent(BloomwireWhatsappAsync).vm.$emit('useSyncFallback');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      true
+    );
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-async-standard"]').exists()
+    ).toBe(false);
   });
 });
 

@@ -13,13 +13,14 @@ describe Whatsapp::FacebookApiClient do
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_API_VERSION', Whatsapp::GraphApi::DEFAULT_VERSION).and_return(api_version)
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_APP_ID', '').and_return('APP-ID')
     allow(GlobalConfigService).to receive(:load).with('WHATSAPP_APP_SECRET', '').and_return('SECRET-APP-SECRET')
+    allow(Whatsapp::GraphApiTimeouts).to receive_messages(open_seconds: 5, read_seconds: 25)
   end
 
   describe 'explicit Graph API HTTP timeouts' do
     it 'sends open_timeout and read_timeout on every Graph request' do
       expect(HTTParty).to receive(:get)
-        .with(anything, hash_including(open_timeout: described_class::OPEN_TIMEOUT_SECONDS,
-                                       read_timeout: described_class::READ_TIMEOUT_SECONDS))
+        .with(anything, hash_including(open_timeout: Whatsapp::GraphApiTimeouts.open_seconds,
+                                       read_timeout: Whatsapp::GraphApiTimeouts.read_seconds))
         .and_return(instance_double(HTTParty::Response, success?: true, parsed_response: { 'status' => 'CONNECTED' }))
       api_client.phone_number_status('PNID-1')
     end
@@ -27,8 +28,8 @@ describe Whatsapp::FacebookApiClient do
     it 'applies the same timeouts to assigned-user task writes' do
       response = instance_double(HTTParty::Response, success?: true, parsed_response: { 'success' => true })
       expect(HTTParty).to receive(:post)
-        .with(anything, hash_including(open_timeout: described_class::OPEN_TIMEOUT_SECONDS,
-                                       read_timeout: described_class::READ_TIMEOUT_SECONDS))
+        .with(anything, hash_including(open_timeout: Whatsapp::GraphApiTimeouts.open_seconds,
+                                       read_timeout: Whatsapp::GraphApiTimeouts.read_seconds))
         .and_return(response)
 
       api_client.assign_waba_user_tasks('WABA-1', 'USER-1', ['MANAGE'])
