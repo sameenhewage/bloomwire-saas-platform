@@ -26,6 +26,10 @@
         "TITLE": "Create Inbox",
         "BODY": "Authenticate your account and create an inbox."
       },
+      "MANAGED_WHATSAPP": {
+        "TITLE": "Connect WhatsApp",
+        "BODY": "Connect or reconnect your WhatsApp number securely with Meta."
+      },
       "AGENT": {
         "TITLE": "Add Agents",
         "BODY": "Add agents to the created inbox."

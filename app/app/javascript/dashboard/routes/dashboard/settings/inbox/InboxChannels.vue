@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { useMapGetter } from 'dashboard/composables/store';
+import { useBloomwireWhatsappOnboarding } from 'dashboard/composables/useBloomwireWhatsappOnboarding';
 import { useBranding } from 'shared/composables/useBranding';
 
 import PageHeader from '../SettingsSubPageHeader.vue';
@@ -12,12 +13,23 @@ const route = useRoute();
 const { replaceInstallationName } = useBranding();
 
 const globalConfig = useMapGetter('globalConfig/get');
+const { isAvailable: isManagedWhatsappOnboardingAvailable } =
+  useBloomwireWhatsappOnboarding();
+
+const isManagedWhatsappFlow = computed(
+  () =>
+    route.params.sub_page === 'whatsapp' &&
+    isManagedWhatsappOnboardingAvailable.value
+);
 
 const createFlowSteps = computed(() => {
-  const steps = ['CHANNEL', 'INBOX', 'AGENT', 'FINISH'];
+  const steps = isManagedWhatsappFlow.value
+    ? ['CHANNEL', 'MANAGED_WHATSAPP']
+    : ['CHANNEL', 'INBOX', 'AGENT', 'FINISH'];
 
   const routes = {
     CHANNEL: 'settings_inbox_new',
+    MANAGED_WHATSAPP: 'settings_inboxes_page_channel',
     INBOX: 'settings_inboxes_page_channel',
     AGENT: 'settings_inboxes_add_agents',
     FINISH: 'settings_inbox_finish',
