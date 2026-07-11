@@ -1,5 +1,6 @@
 class Whatsapp::HealthService
   BASE_URI = 'https://graph.facebook.com'.freeze
+  BLOOMWIRE_MANAGED_SOURCE = 'bloomwire_managed'.freeze
 
   def initialize(channel)
     @channel = channel
@@ -87,9 +88,15 @@ class Whatsapp::HealthService
   end
 
   def build_expected_webhook_url
+    return Bloomwire::GlobalWhatsappConfig.new.result[:callback_url] if bloomwire_managed_channel?
+
     frontend_url = ENV.fetch('FRONTEND_URL', nil)
     return nil if frontend_url.blank?
 
     "#{frontend_url}/webhooks/whatsapp/#{@channel.phone_number}"
+  end
+
+  def bloomwire_managed_channel?
+    @channel.provider_config['source'] == BLOOMWIRE_MANAGED_SOURCE
   end
 end
