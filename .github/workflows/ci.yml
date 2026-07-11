@@ -98,6 +98,14 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
       - name: Install pnpm dependencies
         run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: Cache Vitest transform cache
+        uses: actions/cache@v4
+        with:
+          path: app/node_modules/.vite
+          key: vitest-${{ runner.os }}-${{ hashFiles('app/pnpm-lock.yaml', 'app/vitest.config.ts', 'app/vite.config.ts') }}-${{ github.sha }}
+          restore-keys: |
+            vitest-${{ runner.os }}-${{ hashFiles('app/pnpm-lock.yaml', 'app/vitest.config.ts', 'app/vite.config.ts') }}-
+            vitest-${{ runner.os }}-
       - name: Run Vitest
         run: pnpm run test
 
@@ -128,6 +136,14 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
       - name: Install pnpm dependencies
         run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: Cache Vite build cache
+        uses: actions/cache@v4
+        with:
+          path: app/node_modules/.vite
+          key: vite-${{ runner.os }}-${{ hashFiles('app/pnpm-lock.yaml', 'app/vite.config.ts', 'app/config/vite.json') }}-${{ github.sha }}
+          restore-keys: |
+            vite-${{ runner.os }}-${{ hashFiles('app/pnpm-lock.yaml', 'app/vite.config.ts', 'app/config/vite.json') }}-
+            vite-${{ runner.os }}-
       - name: Compile assets (Vite)
         run: bundle exec rake assets:precompile
         env:
