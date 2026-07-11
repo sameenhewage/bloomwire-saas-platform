@@ -31,7 +31,8 @@ module Bloomwire::Capabilities
       # Connect/config writes are already blocked server-side (PR #47); this drives the UI hide + route block.
       # The catalog READ (apps#index/show) intentionally stays open — it is consumed by runtime conversation
       # surfaces (ContactPanel Linear, video-call button, label suggestions), so it must not 403.
-      canAccessIntegrations: capability(admin, Bloomwire::Features.restrict_provider_setup?)
+      canAccessIntegrations: capability(admin, Bloomwire::Features.restrict_provider_setup?),
+      canViewChatwootPlanUpsell: !Bloomwire::Features.master_enabled?
     }
   end
 

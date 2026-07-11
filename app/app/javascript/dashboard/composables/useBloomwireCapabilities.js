@@ -80,5 +80,6 @@ export function useBloomwireCapabilities() {
     // page/nav only appear on an explicit server `true` (admin + BLOOMWIRE_CATEGORY_ADMIN_UI on). The backend
     // controller (admin-only + feature-gated 404) remains the enforcement boundary; this only drives UI gating.
     canAccessCategoryAdmin: buildCapability('canAccessCategoryAdmin', false),
+    canViewChatwootPlanUpsell: buildCapability('canViewChatwootPlanUpsell'),
   };
 }

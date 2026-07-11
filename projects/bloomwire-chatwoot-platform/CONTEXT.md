@@ -22,6 +22,9 @@ while tenants use the standard Chatwoot inbox/agent experience.
   `Channel::Whatsapp#provider_config`; secret-at-rest encryption is a Phase 2 decision gate (encrypt or accept+document).
 - **WhatsWay is reference-only.** Concepts may inform design; never copy its code or architecture.
 - **Pricing / billing out of scope.**
+- **No upstream assignment-plan upsell in managed mode.** When the Bloomwire master toggle is ON, the inbox
+  Collaborators UI hides Chatwoot's custom-assignment plan/upgrade prompt without changing default assignment;
+  when Bloomwire is OFF, the stock prompt remains. Future Bloomwire plan packaging requires an explicit decision.
 
 ## QA gate
 

@@ -66,8 +66,25 @@ describe('useBloomwireCapabilities', () => {
       'canSelfServeManagedWhatsapp',
       'canUseAsyncStandardWhatsappOnboarding',
       'canAccessCategoryAdmin',
+      'canViewChatwootPlanUpsell',
     ]);
     expect(caps.canManageProviderSetup.value).toBe(false);
+  });
+
+  describe('canViewChatwootPlanUpsell (stock-safe, default true)', () => {
+    it('reflects an explicit false from the Bloomwire account payload', () => {
+      mockGetters({ capabilities: { canViewChatwootPlanUpsell: false } });
+      expect(useBloomwireCapabilities().canViewChatwootPlanUpsell.value).toBe(
+        false
+      );
+    });
+
+    it('defaults to true when the capability is absent', () => {
+      mockGetters({ capabilities: undefined });
+      expect(useBloomwireCapabilities().canViewChatwootPlanUpsell.value).toBe(
+        true
+      );
+    });
   });
 
   // Universal "Remove inbox" is opt-in (default FALSE) — hidden in stock / older-backend / not-loaded, shown only
