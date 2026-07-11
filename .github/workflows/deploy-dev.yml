@@ -46,6 +46,10 @@ on:
         description: Prune stopped containers/dangling images/build cache (never volumes)
         type: boolean
         default: false
+      force_build:
+        description: Force building the image on the server instead of pulling the prebuilt image
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -122,6 +126,7 @@ jobs:
           RUN_MIGRATIONS: ${{ github.event.inputs.run_migrations }}
           SKIP_SMOKE: ${{ github.event.inputs.skip_smoke }}
           PRUNE: ${{ github.event.inputs.prune }}
+          FORCE_BUILD: ${{ github.event.inputs.force_build }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_USER:-}" ] || [ -z "${DEPLOY_PATH:-}" ]; then
@@ -133,7 +138,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             "${SSH_USER}@${SSH_HOST}" \
-            bash -s -- "$REF" "$RUN_MIGRATIONS" "$SKIP_SMOKE" "$PRUNE" "$DEPLOY_PATH" "${HEALTH_URL:-}" \
+            bash -s -- "$REF" "$RUN_MIGRATIONS" "$SKIP_SMOKE" "$PRUNE" "$DEPLOY_PATH" "${HEALTH_URL:-}" "${FORCE_BUILD:-false}" \
             < .github/scripts/deploy-remote.sh
 
       - name: Remove SSH key

@@ -28,6 +28,7 @@ SKIP_SMOKE="${3:-false}"
 PRUNE="${4:-false}"
 DEPLOY_PATH="${5:?DEPLOY_PATH (arg 5) is required}"
 HEALTH_URL="${6:-}"
+FORCE_BUILD="${7:-false}"
 
 # Compose invocation mirrors the documented manual dev deploy. The
 # docker-compose.bloomwire-production.yaml overlay is server-local + gitignored
@@ -36,12 +37,14 @@ COMPOSE=(docker compose -p app
   -f docker-compose.production.yaml
   -f docker-compose.bloomwire-production.yaml)
 
+IMAGE_REPO="ghcr.io/sameenhewage/bloomwire-app"
+
 log() { printf '==> %s\n' "$*"; }
 
 # --- 1. Update source to the requested ref ---------------------------------
 log "Updating source in ${DEPLOY_PATH} to ref '${REF}'"
 cd "${DEPLOY_PATH}"
-git fetch --all --prune --tags
+git fetch --prune origin "${REF}" 2>/dev/null || git fetch --all --prune
 git checkout "${REF}"
 # Fast-forward when REF is a branch; harmless no-op for a detached commit SHA.
 git pull --ff-only origin "${REF}" 2>/dev/null || true
@@ -50,9 +53,17 @@ log "Deploy SHA: ${DEPLOY_SHA}"
 
 cd app
 
-# --- 2. Build the image with the exact SHA stamped -------------------------
-log "Building image (GIT_SHA=${DEPLOY_SHA})"
-"${COMPOSE[@]}" build --build-arg GIT_SHA="${DEPLOY_SHA}"
+# --- 2. Obtain the image: pull the CI-built image, else build on server ----
+IMAGE_REF="${IMAGE_REPO}:${DEPLOY_SHA}"
+if [ "${FORCE_BUILD}" != "true" ] \
+  && grep -q 'BLOOMWIRE_IMAGE' docker-compose.bloomwire-production.yaml 2>/dev/null \
+  && docker pull "${IMAGE_REF}" >/dev/null 2>&1; then
+  export BLOOMWIRE_IMAGE="${IMAGE_REF}"
+  log "Using prebuilt image ${IMAGE_REF}"
+else
+  log "Building image on server (GIT_SHA=${DEPLOY_SHA})"
+  "${COMPOSE[@]}" build --build-arg GIT_SHA="${DEPLOY_SHA}"
+fi
 
 # --- 3. Optional migrations (run with the freshly built image) -------------
 if [ "${RUN_MIGRATIONS}" = "true" ]; then
