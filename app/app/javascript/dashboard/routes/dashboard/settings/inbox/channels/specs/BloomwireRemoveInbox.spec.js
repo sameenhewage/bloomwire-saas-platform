@@ -1,5 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils';
 import BloomwireRemoveInbox from '../BloomwireRemoveInbox.vue';
+import inboxMgmt from 'dashboard/i18n/locale/en/inboxMgmt.json';
 
 // Universal, destructive "Remove inbox" action + confirmation modal. All store/alert/router calls mocked; no real HTTP.
 const dispatch = vi.fn();
@@ -94,7 +95,7 @@ describe('BloomwireRemoveInbox.vue', () => {
     );
   });
 
-  it('masks the WhatsApp phone number (last 4 only) and shows the Meta-boundary note', async () => {
+  it('masks the WhatsApp phone number and truthfully labels removal local-only with Meta access potentially active', async () => {
     const wrapper = mountComp(waInbox);
     await openModal(wrapper);
     const identifier = find(
@@ -106,6 +107,13 @@ describe('BloomwireRemoveInbox.vue', () => {
     expect(find(wrapper, 'bloomwire-remove-inbox-meta-note').exists()).toBe(
       true
     );
+
+    const copy = inboxMgmt.INBOX_MGMT.BLOOMWIRE_REMOVE.META_NOTE;
+    expect(copy).toMatch(/local-only/i);
+    expect(copy).toMatch(/makes no Meta call/i);
+    expect(copy).toMatch(/remain registered.*connected at Meta/i);
+    expect(copy).toMatch(/provider access.*remain active/i);
+    expect(copy).toMatch(/does not delete.*phone number.*WABA/i);
   });
 
   it('masks the Email address local-part and shows no Meta note', async () => {

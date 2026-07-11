@@ -19,6 +19,13 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  // Set by the chooser after an EXPLICIT provider-migration confirmation: begin the SAME async Standard lifecycle
+  // once on mount when there is no attempt to resume. A persisted in-flight attempt always takes precedence, so a
+  // resume never triggers a second (parallel) start.
+  autoStart: {
+    type: Boolean,
+    default: false,
+  },
 });
 const emit = defineEmits(['back', 'useSyncFallback']);
 
@@ -87,9 +94,11 @@ const restartOnCurrentPath = async () => {
 };
 
 // Resume an in-flight attempt (account-scoped) after a refresh / navigation. Returns false when there is none, so
-// the UI lands on the start screen.
+// the UI lands on the start screen. After an explicit migration confirmation (autoStart) with nothing to resume,
+// begin the SAME Standard lifecycle exactly once — never a second, parallel start alongside a resumed attempt.
 onMounted(() => {
-  resume();
+  const resumed = resume();
+  if (props.autoStart && !resumed) startOnCurrentPath();
 });
 // Stop polling on unmount WITHOUT clearing the resumable attempt (it keeps running server-side; a return resumes).
 onBeforeUnmount(() => {

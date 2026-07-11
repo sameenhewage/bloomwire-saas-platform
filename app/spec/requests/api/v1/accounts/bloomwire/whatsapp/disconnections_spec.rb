@@ -37,10 +37,12 @@ RSpec.describe 'Bloomwire WhatsApp disconnect endpoint', type: :request do
     bw_set_config('BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING', true)
   end
 
-  def stub_meta
-    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(
-      instance_double(Whatsapp::FacebookApiClient, deregister_phone_number: { 'success' => true })
-    )
+  def stub_meta(statuses: %w[CONNECTED DISCONNECTED])
+    client = instance_double(Whatsapp::FacebookApiClient)
+    allow(client).to receive(:phone_number_status).and_return(*statuses)
+    allow(client).to receive(:deregister_phone_number).and_return('success' => true)
+    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(client)
+    client
   end
 
   context 'when managed mode is active and admin (Meta stubbed)' do
@@ -63,17 +65,35 @@ RSpec.describe 'Bloomwire WhatsApp disconnect endpoint', type: :request do
       end
     end
 
-    it 'still disconnects (200) when the Meta deregister raises (non-fatal, WhatsWay parity)' do
+    it 'returns a safe failure and leaves Standard state unchanged when Meta deregistration is unverified' do
       setup
-      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(
-        instance_double(Whatsapp::FacebookApiClient).tap do |client|
-          allow(client).to receive(:deregister_phone_number).and_raise(StandardError, 'boom')
-        end
-      )
+      client = stub_meta(statuses: ['CONNECTED'])
+      allow(client).to receive(:deregister_phone_number).and_raise(StandardError, 'RAW Meta failure')
       post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
       aggregate_failures do
-        expect(response).to have_http_status(:ok)
-        expect(setup.reload.setup_status).to eq('disconnected')
+        expect(response).to have_http_status(:bad_gateway)
+        expect(response.parsed_body['code']).to eq('disconnect_unverified')
+        expect(response.body).not_to include('RAW Meta failure')
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      end
+    end
+
+    it 'enforces Coexistence mobile offboarding on a direct API call without Meta deregister or local state change' do
+      setup
+      channel.provider_config['connection_mode'] = 'coexistence'
+      channel.save!(validate: false)
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
+      post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:conflict)
+        expect(response.parsed_body['code']).to eq('mobile_action_required')
+        expect(response.parsed_body['error']).to include('WhatsApp Business app')
+        expect(response.parsed_body['error']).to include('Settings → Account → Business Platform → Disconnect')
+        expect(response.body).not_to include('PNID-1')
+        expect(response.body).not_to include('FAKE-STORED-TOKEN')
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
       end
     end
 

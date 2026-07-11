@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { mount, flushPromises } from '@vue/test-utils';
 import BloomwireWhatsappStatus from '../BloomwireWhatsappStatus.vue';
+import inboxMgmt from 'dashboard/i18n/locale/en/inboxMgmt.json';
 
 // Phase 5 (resume) — durable managed-WhatsApp capability panel on the Inbox Settings surface. The store + admin
 // capability are mocked (no HTTP). Proves: it loads the PERSISTED status from the backend on mount (durable /
@@ -31,6 +32,8 @@ const T = {
   disconnect: '[data-testid="bloomwire-wa-status-disconnect"]',
   disconnectConfirmBtn:
     '[data-testid="bloomwire-wa-status-disconnect-confirm-button"]',
+  mobileAction: '[data-testid="bloomwire-wa-status-mobile-action-required"]',
+  disconnectFailed: '[data-testid="bloomwire-wa-status-disconnect-failed"]',
   disconnected: '[data-testid="bloomwire-wa-status-disconnected"]',
 };
 
@@ -403,7 +406,91 @@ describe('BloomwireWhatsappStatus (durable Inbox Settings panel)', () => {
 
 // WhatsWay-parity "Disconnect": the ready panel offers a 2-step Disconnect that deregisters the number on Meta and
 // KEEPS the records; a persisted disconnected setup renders reconnect guidance (not ready / not action-required).
-describe('BloomwireWhatsappStatus — Disconnect (WhatsWay parity)', () => {
+describe('BloomwireWhatsappStatus — truthful disconnect', () => {
+  it('uses the exact Coexistence mobile-app offboarding path and states that local state awaits Meta proof', () => {
+    const copy = inboxMgmt.INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT;
+    expect(copy.MOBILE_ACTION_INSTRUCTIONS).toContain(
+      'WhatsApp Business App → Settings → Account → Business Platform → Disconnect'
+    );
+    expect(copy.MOBILE_ACTION_DETAIL).toMatch(
+      /Meta.*confirm.*local.*unchanged/i
+    );
+  });
+
+  it('shows Coexistence mobile instructions without dispatching a false deregistration flow', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(
+      managedInbox({
+        provider_config: {
+          source: 'bloomwire_managed',
+          connection_mode: 'coexistence',
+        },
+      })
+    );
+    await flushPromises();
+
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/disconnectBloomwireWhatsApp',
+      expect.anything()
+    );
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+  });
+
+  it('honors backend mobile_action_required enforcement when frontend mode metadata is stale', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/disconnectBloomwireWhatsApp') {
+        return Promise.reject(
+          Object.assign(new Error('disconnect rejected'), {
+            response: { data: { code: 'mobile_action_required' } },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await wrapper.find(T.disconnectConfirmBtn).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+  });
+
+  it('shows a safe failure and does not claim Standard disconnect success when verification fails', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/disconnectBloomwireWhatsApp') {
+        return Promise.reject(
+          Object.assign(new Error('disconnect rejected'), {
+            response: {
+              data: { code: 'disconnect_unverified', error: 'RAW Meta detail' },
+            },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await wrapper.find(T.disconnectConfirmBtn).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.disconnectFailed).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+    expect(wrapper.html()).not.toContain('RAW Meta detail');
+  });
+
   it('shows a Disconnect button on the ready panel and does NOT disconnect on the first click', async () => {
     mockFetch(readyDto());
     const wrapper = mountPanel();

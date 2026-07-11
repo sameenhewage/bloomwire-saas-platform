@@ -337,6 +337,25 @@
             "TITLE": "Connect WhatsApp Channel",
             "SUBTITLE": "Choose how you want to connect your WhatsApp number to Bloomwire.",
             "BACK": "Back to connection options",
+            "MIGRATION": {
+              "TITLE": "Move Existing Cloud API Number",
+              "BADGE": "Migration",
+              "RECOMMENDED": "Recommended",
+              "STATUS": "Available now",
+              "DESC": "Move a number that is already on the WhatsApp Cloud API with another provider over to Bloomwire.",
+              "CTA": "Move existing number",
+              "CONFIRM": {
+                "TITLE": "Confirm moving this number to Bloomwire",
+                "SUBTITLE": "Before you continue, please understand what happens when you move this number to Bloomwire.",
+                "APPROVAL": "Meta must approve this migration before it completes — you may be asked to confirm it during the Meta window.",
+                "PREVIOUS_PROVIDER": "Your previous provider loses messaging access to this number once the migration completes.",
+                "HISTORY": "Message history from your previous provider is not transferred to Bloomwire.",
+                "CANCEL": "If you reject or cancel the migration at Meta, your existing provider keeps the number and Bloomwire does not take it over.",
+                "ASSET": "This does not delete the phone-number asset or WABA at Meta — only the messaging provider changes.",
+                "CONFIRM_BUTTON": "I understand — continue",
+                "CANCEL_BUTTON": "Cancel"
+              }
+            },
             "COEXISTENCE": {
               "TITLE": "Connect Existing WhatsApp Business App",
               "BADGE": "Coexistence",
@@ -420,7 +439,12 @@
             "CONFIRM_BUTTON": "Confirm disconnect",
             "CANCEL": "Cancel",
             "DISCONNECTED_TITLE": "Number disconnected",
-            "DISCONNECTED_SUBTITLE": "This number is deregistered on WhatsApp. Reconnect it any time from Settings → Inboxes → Add Inbox — your existing inbox and history are reused."
+            "DISCONNECTED_SUBTITLE": "This number is deregistered on WhatsApp. Reconnect it any time from Settings → Inboxes → Add Inbox — your existing inbox and history are reused.",
+            "MOBILE_ACTION_TITLE": "Disconnect from the WhatsApp Business app",
+            "MOBILE_ACTION_INSTRUCTIONS": "This number is connected through the WhatsApp Business app, so it is disconnected from the phone — not from here. On the device, open: WhatsApp Business App → Settings → Account → Business Platform → Disconnect.",
+            "MOBILE_ACTION_DETAIL": "Bloomwire keeps this inbox until Meta confirms the change, so your local inbox and history stay unchanged until then.",
+            "FAILED_TITLE": "Couldn’t confirm disconnect",
+            "FAILED_DETAIL": "We couldn’t confirm this number was disconnected at Meta, so nothing was changed. Please try again in a moment."
           },
           "ASYNC": {
             "STANDARD_FLOW_LABEL": "Standard WhatsApp setup",
@@ -764,7 +788,7 @@
       "INBOX_LABEL": "Inbox",
       "TYPE_LABEL": "Channel",
       "IDENTIFIER_LABEL": "Connected as",
-      "META_NOTE": "Removing a WhatsApp inbox from Bloomwire does not delete the phone number or WhatsApp Business Account from Meta, and makes no changes on Meta.",
+      "META_NOTE": "This removal is local-only: it deletes this inbox and its conversations from Bloomwire and makes no Meta call. Your number can remain registered and connected at Meta, your previous provider access can remain active, and this does not delete the phone number or WABA at Meta.",
       "CANCEL": "Cancel",
       "CONFIRM": "Delete inbox permanently",
       "STARTED": "Inbox removal started. Its conversations and messages are being deleted.",

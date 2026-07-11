@@ -29,6 +29,7 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
 
   before do
     allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(fb_client)
+    allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED', 'DISCONNECTED')
     allow(fb_client).to receive(:deregister_phone_number).and_return('success' => true)
   end
 
@@ -36,16 +37,28 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
     described_class.new(account: target_account, inbox: target_inbox, actor: nil).perform
   end
 
-  it 'deregisters the EXACT number on Meta and marks the setup disconnected, KEEPING all records' do
+  it 'deregisters the exact Standard number, verifies DISCONNECTED, then marks the setup disconnected and keeps records' do
     setup
     result = perform
     aggregate_failures do
       expect(result).to be_success
+      expect(fb_client).to have_received(:phone_number_status).with('PNID-1').twice
       expect(fb_client).to have_received(:deregister_phone_number).with('PNID-1')
       expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
       expect(Channel::Whatsapp.exists?(channel.id)).to be(true)
       expect(Inbox.exists?(inbox.id)).to be(true)
       expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(true)
+    end
+  end
+
+  it 'reconciles an already-DISCONNECTED Standard number without a duplicate deregister call' do
+    setup
+    allow(fb_client).to receive(:phone_number_status).and_return('DISCONNECTED')
+    result = perform
+    aggregate_failures do
+      expect(result).to be_success
+      expect(fb_client).not_to have_received(:deregister_phone_number)
+      expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
     end
   end
 
@@ -55,13 +68,40 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
     expect(Whatsapp::FacebookApiClient).to have_received(:new).with(token)
   end
 
-  it 'is NON-FATAL when the Meta deregister raises: the inbox is still disconnected locally (WhatsWay parity)' do
+  it 'returns disconnect_unverified and leaves Standard setup state unchanged when deregister raises' do
     setup
     allow(fb_client).to receive(:deregister_phone_number).and_raise(StandardError, 'RAW meta 400')
     result = perform
     aggregate_failures do
-      expect(result).to be_success
-      expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+      expect(result.error).to eq(:disconnect_unverified)
+      expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+    end
+  end
+
+  it 'returns disconnect_unverified and leaves Standard setup state unchanged when Meta still reports CONNECTED' do
+    setup
+    allow(fb_client).to receive(:phone_number_status).and_return('CONNECTED')
+    result = perform
+    aggregate_failures do
+      expect(result.error).to eq(:disconnect_unverified)
+      expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+    end
+  end
+
+  it 'returns mobile_action_required for Coexistence without calling Meta or changing setup state' do
+    setup
+    channel.provider_config['connection_mode'] = 'coexistence'
+    channel.save!(validate: false)
+
+    result = perform
+
+    aggregate_failures do
+      expect(result.error).to eq(:mobile_action_required)
+      expect(result.setup).to eq(setup)
+      expect(Whatsapp::FacebookApiClient).not_to have_received(:new)
+      expect(fb_client).not_to have_received(:phone_number_status)
+      expect(fb_client).not_to have_received(:deregister_phone_number)
+      expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
     end
   end
 
@@ -83,6 +123,7 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
     aggregate_failures do
       expect(result.error).to eq(:not_found)
       expect(fb_client).not_to have_received(:deregister_phone_number)
+      expect(fb_client).not_to have_received(:phone_number_status)
     end
   end
 

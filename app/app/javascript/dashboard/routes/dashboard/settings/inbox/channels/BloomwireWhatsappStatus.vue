@@ -47,15 +47,24 @@ const isActionRequired = computed(
 const isReady = computed(
   () => status.value?.managed === true && status.value?.ready === true
 );
-// WhatsWay-parity "Disconnect" state: the number was deregistered on Meta but the records are KEPT
+// "Disconnect" state: the number was deregistered on Meta (verified) and the records are KEPT
 // (setup.status === 'disconnected'), so the owner reconnects via Add Inbox (same records are reused).
 const isDisconnected = computed(
   () =>
     status.value?.managed === true &&
     status.value?.setup?.status === 'disconnected'
 );
+// Coexistence numbers cannot be Cloud-API deregistered from here — the owner offboards from the WhatsApp Business
+// app. We detect it from the (non-secret) provider_config marker and also honor a backend mobile_action_required.
+const isCoexistence = computed(
+  () => props.inbox?.provider_config?.connection_mode === 'coexistence'
+);
 const isDisconnecting = ref(false);
 const confirmingDisconnect = ref(false);
+// Truthful disconnect outcomes: mobile-action needed (coexistence / backend-enforced) and "couldn't confirm"
+// (Standard verification failed → nothing changed locally). Never a false "disconnected".
+const mobileActionRequired = ref(false);
+const disconnectFailed = ref(false);
 
 const actionReasonKey = computed(() => {
   switch (status.value?.action_required?.reason) {
@@ -127,13 +136,28 @@ const recheck = async () => {
   }
 };
 
-// WhatsWay-parity "Disconnect": deregister the number on Meta and mark the setup non-routeable while KEEPING the
-// records. Bound to the displayed inbox so a mid-request inbox switch can't apply a stale result. Best-effort:
-// on failure the panel keeps its current state and the admin can retry.
+// Disconnect entry point. Coexistence never calls the backend — it shows the exact mobile offboarding path and
+// leaves local state untouched (Bloomwire reflects the change after Meta confirms it). Standard shows the 2-step
+// confirm before any dispatch.
+const startDisconnect = () => {
+  disconnectFailed.value = false;
+  if (isCoexistence.value) {
+    mobileActionRequired.value = true;
+    return;
+  }
+  confirmingDisconnect.value = true;
+};
+
+// Standard "Disconnect": the backend deregisters on Meta and only marks local state disconnected AFTER Meta
+// authoritatively confirms it. Bound to the displayed inbox so a mid-request switch can't apply a stale result.
+// We NEVER flip to a local "disconnected" on our own — only an authoritative DTO does. A backend-enforced
+// mobile_action_required (stale frontend mode) shows the mobile path; any other failure shows a safe "couldn't
+// confirm" (nothing changed, retryable) — never a false success.
 const disconnect = async () => {
   const requestedInboxId = props.inbox?.id;
   if (!requestedInboxId || isDisconnecting.value) return;
   isDisconnecting.value = true;
+  disconnectFailed.value = false;
   try {
     const dto = await store.dispatch('inboxes/disconnectBloomwireWhatsApp', {
       inboxId: requestedInboxId,
@@ -143,7 +167,13 @@ const disconnect = async () => {
       confirmingDisconnect.value = false;
     }
   } catch (error) {
-    // best-effort — leave the panel as-is so the admin can retry
+    if (props.inbox?.id !== requestedInboxId) return;
+    confirmingDisconnect.value = false;
+    if (error?.response?.data?.code === 'mobile_action_required') {
+      mobileActionRequired.value = true;
+    } else {
+      disconnectFailed.value = true;
+    }
   } finally {
     if (props.inbox?.id === requestedInboxId) isDisconnecting.value = false;
   }
@@ -157,8 +187,41 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
 </script>
 
 <template>
+  <!-- Mobile offboarding (Coexistence / backend-enforced): the exact WhatsApp Business app path. No local state is
+       changed — Bloomwire reflects the disconnect once Meta confirms it. -->
   <div
-    v-if="isActionRequired"
+    v-if="mobileActionRequired"
+    data-testid="bloomwire-wa-status-mobile-action-required"
+    class="flex flex-col items-start p-4 mb-4 rounded-xl border border-n-weak bg-n-alpha-1"
+  >
+    <div class="flex gap-2 items-center mb-2">
+      <Icon icon="i-lucide-smartphone" class="size-5 text-n-amber-10" />
+      <h4 class="text-sm font-medium text-n-slate-12">
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_ACTION_TITLE'
+          )
+        }}
+      </h4>
+    </div>
+    <p class="mb-2 text-sm leading-6 text-n-slate-11">
+      {{
+        $t(
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_ACTION_INSTRUCTIONS'
+        )
+      }}
+    </p>
+    <p class="text-sm leading-6 text-n-slate-11">
+      {{
+        $t(
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_ACTION_DETAIL'
+        )
+      }}
+    </p>
+  </div>
+
+  <div
+    v-else-if="isActionRequired"
     data-testid="bloomwire-wa-status-action-required"
     class="flex flex-col items-start p-4 mb-4 rounded-xl border border-n-weak bg-n-alpha-1"
   >
@@ -287,6 +350,28 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
       </div>
     </div>
 
+    <!-- Truthful failure: Meta could not confirm the disconnect, so nothing was changed. Retryable, no raw error. -->
+    <div
+      v-if="disconnectFailed"
+      data-testid="bloomwire-wa-status-disconnect-failed"
+      class="mt-4 w-full rounded-lg border border-n-weak p-3"
+    >
+      <p class="text-sm font-medium text-n-ruby-11">
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.FAILED_TITLE'
+          )
+        }}
+      </p>
+      <p class="text-sm text-n-slate-11">
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.FAILED_DETAIL'
+          )
+        }}
+      </p>
+    </div>
+
     <template v-if="confirmingDisconnect">
       <p
         data-testid="bloomwire-wa-status-disconnect-confirm"
@@ -326,7 +411,7 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
       class="mt-4"
       data-testid="bloomwire-wa-status-disconnect"
       :label="$t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.BUTTON')"
-      @click="confirmingDisconnect = true"
+      @click="startDisconnect"
     />
   </div>
 

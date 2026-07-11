@@ -4,6 +4,7 @@ import BloomwireWhatsapp from '../BloomwireWhatsapp.vue';
 import BloomwireWhatsappAsync from '../BloomwireWhatsappAsync.vue';
 import { useWhatsappEmbeddedSignup } from 'dashboard/composables/useWhatsappEmbeddedSignup';
 import { useBloomwireWhatsappOnboarding } from 'dashboard/composables/useBloomwireWhatsappOnboarding';
+import inboxMgmt from 'dashboard/i18n/locale/en/inboxMgmt.json';
 
 // Phase 17C.3 / 17D.3: customer WhatsApp connection wizard. All Meta + store calls are mocked (no real Meta, no
 // HTTP). The wizard opens on a connection-choice screen with two ENABLED options: Coexistence (Connect Existing
@@ -107,14 +108,21 @@ const mountWizard = ({ asyncStandard = false } = {}) => {
         },
         LoadingState: { template: '<div class="loading-state" />' },
         BloomwireWhatsappAsync: {
-          props: ['canStartNewAsync'],
+          props: ['canStartNewAsync', 'autoStart'],
           template:
-            '<div data-testid="bloomwire-wa-async-standard" :data-can-start-new="canStartNewAsync" />',
+            '<div data-testid="bloomwire-wa-async-standard" :data-can-start-new="canStartNewAsync" :data-auto-start="autoStart" />',
         },
         Icon: true,
       },
     },
   });
+};
+
+const startMigration = async wrapper => {
+  await wrapper
+    .find('[data-testid="bloomwire-wa-migration-cta"]')
+    .trigger('click');
+  await flushPromises();
 };
 
 // Advance from the connection-choice screen into the Standard registration form.
@@ -152,19 +160,129 @@ beforeEach(() => {
 });
 
 describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
-  it('opens on the choice screen with exactly two options (Coexistence + Register New Number) and no form', () => {
+  it('opens with exactly three options in migration, Coexistence, Standard order and marks migration recommended', () => {
     const wrapper = mountWizard();
     expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
       true
     );
     expect(
-      wrapper.find('[data-testid="bloomwire-wa-choice-coexistence"]').exists()
-    ).toBe(true);
+      wrapper
+        .findAll('[data-bloomwire-wa-option]')
+        .map(option => option.attributes('data-bloomwire-wa-option'))
+    ).toEqual(['migration', 'coexistence', 'standard']);
     expect(
-      wrapper.find('[data-testid="bloomwire-wa-choice-standard"]').exists()
-    ).toBe(true);
-    // no registration form yet → no inputs (and definitely no credential inputs)
+      wrapper.find('[data-testid="bloomwire-wa-migration-recommended"]').text()
+    ).toBe(`${B}.CHOOSE.MIGRATION.RECOMMENDED`);
     expect(wrapper.findAll('input')).toHaveLength(0);
+  });
+
+  it('uses truthful migration confirmation copy for approval, provider access, history, cancellation, and asset retention', () => {
+    const copy =
+      inboxMgmt.INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION;
+    expect(copy.TITLE).toBe('Move Existing Cloud API Number');
+    expect(copy.CONFIRM.APPROVAL).toMatch(/Meta.*approve.*migration/i);
+    expect(copy.CONFIRM.PREVIOUS_PROVIDER).toMatch(
+      /previous provider.*loses messaging access/i
+    );
+    expect(copy.CONFIRM.HISTORY).toMatch(/history.*not transferred/i);
+    expect(copy.CONFIRM.CANCEL).toMatch(
+      /cancell|reject.*existing provider.*Bloomwire/i
+    );
+    expect(copy.CONFIRM.ASSET).toMatch(/not delete.*phone-number asset.*WABA/i);
+  });
+
+  it('opens migration confirmation without any Meta or store call, and cancel returns with no success state', async () => {
+    const wrapper = mountWizard();
+    await startMigration(wrapper);
+
+    expect(
+      wrapper.find('[data-testid="bloomwire-wa-migration-confirm"]').exists()
+    ).toBe(true);
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-cancel"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
+      true
+    );
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      false
+    );
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('confirmed migration uses coexistence false and only the synchronous Standard backend action', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockResolvedValue(DTO);
+    const wrapper = mountWizard({ asyncStandard: false });
+    await startMigration(wrapper);
+
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(runEmbeddedSignup).toHaveBeenCalledWith(
+      expect.objectContaining({ coexistence: false })
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      'inboxes/createBloomwireWhatsAppEmbeddedSignup',
+      expect.objectContaining(CREDS)
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/createBloomwireWhatsAppCoexistenceEmbeddedSignup',
+      expect.anything()
+    );
+  });
+
+  it('confirmed migration reuses and auto-starts the async Standard lifecycle when available', async () => {
+    const wrapper = mountWizard({ asyncStandard: true });
+    await startMigration(wrapper);
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
+      .trigger('click');
+    await flushPromises();
+
+    const asyncFlow = wrapper.find(
+      '[data-testid="bloomwire-wa-async-standard"]'
+    );
+    expect(asyncFlow.exists()).toBe(true);
+    expect(asyncFlow.attributes('data-auto-start')).toBe('true');
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('cancelled or failed migration never creates a success state', async () => {
+    runEmbeddedSignup.mockResolvedValueOnce(null).mockResolvedValueOnce(CREDS);
+    dispatch.mockRejectedValueOnce(new Error('RAW META failure'));
+    const wrapper = mountWizard({ asyncStandard: false });
+
+    await startMigration(wrapper);
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
+      .trigger('click');
+    await flushPromises();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      false
+    );
+
+    await wrapper.find('[data-testid="bloomwire-wa-back"]').trigger('click');
+    await startMigration(wrapper);
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
+      .trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="bloomwire-wa-success"]').exists()).toBe(
+      false
+    );
+    expect(wrapper.html()).not.toContain('RAW META');
   });
 
   it('shows Coexistence as available/enabled (NOT coming-soon/disabled), lists its prerequisites, and continues to the form', async () => {
