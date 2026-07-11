@@ -157,5 +157,6 @@ jobs:
             echo "| Run migrations | \`${{ github.event.inputs.run_migrations }}\` |"
             echo "| Skip smoke | \`${{ github.event.inputs.skip_smoke }}\` |"
             echo "| Prune | \`${{ github.event.inputs.prune }}\` |"
+            echo "| Force server build | \`${{ github.event.inputs.force_build }}\` |"
             echo "| Result | **${{ job.status }}** |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -25,8 +25,9 @@ Meta/WhatsApp calls in CI**, **Enterprise code not exercised**, **Postgres/Redis
 | File | Purpose |
 | --- | --- |
 | `.github/workflows/ci.yml` | PR validation for pull requests targeting `version_1`. |
+| `.github/workflows/build-image.yml` | Build and push SHA-pinned + `version_1` application images to GHCR after a `version_1` push (or manual dispatch). |
 | `.github/workflows/deploy-dev.yml` | Manual (`workflow_dispatch`) Dev/Staging deploy over SSH. |
-| `.github/scripts/deploy-remote.sh` | The remote deploy logic executed on the server (piped over SSH). |
+| `.github/scripts/deploy-remote.sh` | The remote deploy logic executed on the server (piped over SSH), including guarded GHCR pull with server-build fallback. |
 
 The Rails app lives in `app/`; CI jobs run with `working-directory: app` except the repo-root
 governance/secret jobs.
@@ -78,6 +79,7 @@ Bloomwire specs are picked up automatically.
 | `run_migrations` | `true` | Run `db:migrate` during deploy. Uncheck to skip migrations explicitly (e.g. rollback). |
 | `skip_smoke` | `false` | Skip post-deploy verification (not recommended). |
 | `prune` | `false` | Prune stopped containers / dangling images / build cache (**never volumes**). |
+| `force_build` | `false` | Force the existing server-side image build and skip the GHCR pull path. Use for registry incidents or explicit rollback diagnostics. |
 
 ### 3.2 Required GitHub Environment secrets
 
@@ -98,15 +100,12 @@ you add required-reviewer protection for auditable deploys.
 
 1. **Guard:** refuse any environment other than `dev`/`staging`; validate the `ref`.
 2. **SSH setup:** write the key (chmod 600), populate `known_hosts` (pinned or keyscan).
-3. **Remote (over SSH):** in `DEPLOY_PATH` — `git fetch --all --prune --tags`, `git checkout <ref>`,
-   fast-forward if it's a branch; record `DEPLOY_SHA = git rev-parse HEAD`.
-4. **Build:** `docker compose -p app -f docker-compose.production.yaml -f docker-compose.bloomwire-production.yaml build --build-arg GIT_SHA=<DEPLOY_SHA>` (stamps `/app/.git_sha`).
+3. **Remote source update (over SSH):** in `DEPLOY_PATH` — fetch the requested ref with prune (fall back to a full fetch only when needed), `git checkout <ref>`, fast-forward if it's a branch, then record `DEPLOY_SHA = git rev-parse HEAD`.
+4. **Obtain the SHA image:** derive `ghcr.io/sameenhewage/bloomwire-app:<DEPLOY_SHA>`. Use it only when `force_build=false`, the server-local overlay explicitly references `BLOOMWIRE_IMAGE`, and `docker pull` succeeds. Otherwise run the existing server-side Compose build with `GIT_SHA=<DEPLOY_SHA>`. A registry failure therefore falls back to today's build path; `force_build=true` always selects that path.
 5. **Migrations (optional):** `... run --rm -T rails bundle exec rails db:migrate </dev/null` when `run_migrations=true` (the `-T </dev/null` is required so the SSH-piped script isn't consumed — see §6).
 6. **Recreate app only:** `... up -d --no-deps rails sidekiq` — **postgres/redis are not recreated; their volumes are preserved.**
 7. **Tag for rollback:** best-effort `docker tag <rails image> bloomwire-app:<DEPLOY_SHA>`.
-8. **Smoke (unless `skip_smoke`):** container status → wait for `http://127.0.0.1:3000/health` = 200 →
-   verify container `/app/.git_sha` == `DEPLOY_SHA` → optional public `HEALTH_URL` = 200 → confirm
-   postgres + redis still `Up`.
+8. **Smoke (unless `skip_smoke`):** container status → wait for `http://127.0.0.1:3000/health` = 200 → verify container `/app/.git_sha` == `DEPLOY_SHA` → optional public `HEALTH_URL` = 200 → confirm postgres + redis still `Up`.
 9. **Cleanup (optional):** `docker container prune -f`, `docker image prune -f`, `docker builder prune -f --filter "until=168h"` (build cache older than 7 days only).
 10. **Summary:** written to the job summary (ref, migrations, smoke, prune, result). **No secrets.**
 
@@ -114,9 +113,22 @@ you add required-reviewer protection for auditable deploys.
 
 1. Ensure the target `ref` is green in CI.
 2. Actions → *Deploy Dev/Staging (manual)* → **Run workflow**.
-3. Set `environment=dev`, `ref=version_1` (or a specific SHA), `run_migrations` as needed.
-4. Watch the run; confirm the smoke section reports health 200 + SHA match + postgres/redis `Up`.
+3. Set `environment=dev`, `ref=version_1` (or a specific SHA), `run_migrations` as needed, and normally leave `force_build=false`.
+4. Watch the run; confirm whether it reports `Using prebuilt image` or the safe `Building image on server` fallback, then confirm health 200 + SHA match + postgres/redis `Up`.
 5. Confirm provenance independently if desired: `docker exec app-rails-1 cat /app/.git_sha`.
+
+### 3.5 GHCR image path and one-time server activation
+
+A push to `version_1` runs `build-image.yml`, which builds `app/docker/Dockerfile` with the merge SHA and pushes both `<sha>` and `version_1` tags using GitHub's built-in token. The deploy speedup is intentionally **inert until the target server opts in**; merging the workflow alone does not switch a server away from its existing build path.
+
+One-time activation per target server:
+
+1. Ensure `ghcr.io/sameenhewage/bloomwire-app` exists after a successful image workflow and is readable by the server. Make the package public or authenticate Docker with a least-privilege `read:packages` token via `--password-stdin`; never paste or log that token.
+2. Update only the gitignored server-local `docker-compose.bloomwire-production.yaml` so both `rails` and `sidekiq` use `image: ${BLOOMWIRE_IMAGE:-bloomwire-app:latest}`. Do not commit the overlay.
+3. Run a normal DEV deploy with smoke enabled and prune disabled. Verify `Using prebuilt image`, exact `/app/.git_sha`, local/public health 200, and PostgreSQL/Redis preservation.
+4. If activation or registry access is uncertain, use `force_build=true`; no overlay, failed pull, or forced build retains the server-build path.
+
+Activation is an ops phase separate from merging this workflow. It must not change production, volumes, provider credentials, SMTP, DNS, or Meta configuration.
 
 ---
 
@@ -129,7 +141,8 @@ Deploys are SHA-addressable, so rollback = redeploy a previous good SHA.
 3. **Migrations:** rolling **back** a migration is **not** automatic. `run_migrations` defaults to
    **true**, so on a rollback **uncheck it** unless you have a verified down-path; handle schema changes
    deliberately. Prefer expand/contract migrations so old code runs against the new schema.
-4. Fast manual path (image already built/tagged on the host):
+4. If the previous SHA exists in GHCR and the server is opted in, redeploying that SHA pulls the immutable tag. Otherwise use `force_build=true` to rebuild it from the checked-out source.
+5. Fast manual path (image already built/tagged on the host):
    `docker tag bloomwire-app:<previous-sha> <rails-image-name> && docker compose -p app -f ... up -d --no-deps rails sidekiq`.
 
 ---
@@ -154,7 +167,8 @@ Deploys are SHA-addressable, so rollback = redeploy a previous good SHA.
 | `Missing SSH_* / DEPLOY_PATH secret` | The selected environment has no secrets configured (§3.2). |
 | SSH host-key failure | Set `SSH_KNOWN_HOSTS`, or confirm the host fingerprint for keyscan. |
 | Health never reaches 200 | `docker compose -p app -f ... logs --tail 80 rails` on the host; Postgres reachable? entrypoint waits for it. |
-| SHA mismatch in smoke | Build didn't pick up new code — confirm `git checkout <ref>` updated the server checkout and the overlay defines the build context. |
+| SHA mismatch in smoke | The obtained image does not match the checked-out ref — confirm the requested ref/SHA, GHCR SHA tag, server checkout, and overlay image/build configuration. Never bypass the SHA smoke. |
+| Deploy logs `Building image on server` instead of using GHCR | Expected when `force_build=true`, the overlay has not opted in with `BLOOMWIRE_IMAGE`, or the SHA image pull failed. Verify package/workflow status and presence-only Docker login state; never print registry credentials. |
 | Deploy reports **success** but the app is still on the OLD SHA (recreate + smoke silently skipped) | The deploy script is piped to the server via `bash -s` over SSH, so a `docker compose run` that attaches stdin (no `-T`) **consumes the rest of the script** — `db:migrate` then ate steps 4–6 and bash exited 0 (false success). Fixed: `db:migrate` runs as `compose run --rm -T rails … </dev/null`. Always verify independently: `docker exec app-rails-1 cat /app/.git_sha` equals the target SHA. |
 | `migration-check` red in CI | Run `bundle exec rake db:migrate` locally and commit the updated `db/schema.rb`. |
 | `docs-governance` red in CI | A required Bloomwire doc is missing, or a forbidden root `docs/product`/`docs/adr` was added. |

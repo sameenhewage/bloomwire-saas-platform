@@ -13,6 +13,7 @@
 #   $4 PRUNE           "true" to prune stopped containers / dangling images / build cache
 #   $5 DEPLOY_PATH     repo root on the server (contains .git and app/)
 #   $6 HEALTH_URL      optional public health URL (e.g. https://dev.unecast.com/health)
+#   $7 FORCE_BUILD     "true" to bypass GHCR and build on the server
 #
 # Safety contract (do NOT weaken):
 #   - Only the rails + sidekiq services are recreated (--no-deps).

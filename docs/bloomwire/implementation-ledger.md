@@ -69,6 +69,7 @@
 | 15F.UI | Email Templates UI Polish & Responsive Upgrade (3→2→1 grid, toolbar, preview frame, prominent composer) | #90 | DEV PASS |
 | 15G | CI/CD foundation (PR CI + manual Dev/Staging deploy) | _pending_ | Implemented (infra/docs only) |
 | 15G.1 | Fix false-success dev deploy (stdin-consumed deploy script) | _pending_ | Fixed (infra/docs only) |
+| 15G.CD | GHCR prebuilt image on `version_1` + guarded pull-on-deploy with server-build fallback | #162 | Implemented · server activation OFF · review/CI pending |
 | 15G.2 | Auth Integrity Hardening (admin form can't change password/auth) | _pending_ | Hardened · DEV PASS |
 | 15G.3 | Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook) | _pending_ | Hardened · DEV PASS |
 | 16C | Business-owner activation (Ops "send activation email" → Devise set-password to account admins) | #95 | DEV PASS (end-to-end) · **superseded/removed by 17A** |
@@ -90,7 +91,7 @@
 | ADR-0010 disconnected reconnect hotfix | Finalized crash-resume excludes preserved `disconnected` setups so fresh OAuth runs exchange/register/persist | #156 | Merged `4bbeecda` · DEV run `29095330302` · exact-SHA deploy PASS |
 | ADR-0010 Coexistence reconnect readiness | Official `is_on_biz_app` + `platform_type` readiness and transactional mode correction for reused records | #157 | Merged `ca6086c` · DEV run `29102109973` PASS · one approved provider attempt failed closed (`no_connected_registration`); certification blocked |
 | Managed WhatsApp honest progress | Replace unreachable generic Add Agents/Finish sidebar steps with the real `Choose Channel → Connect WhatsApp` flow; success card owns Done | #159 | Merged `01864f8` · DEV run `29143934928` · authenticated runtime PASS |
-| Managed Account Health webhook ownership | Expect the global callback for `source=bloomwire_managed`; preserve native per-phone callback semantics | _pending_ | Implemented · local review 0/0 · CI/DEV pending |
+| Managed Account Health webhook ownership | Expect the global callback for `source=bloomwire_managed`; preserve native per-phone callback semantics | #163 | Merged `6f4746a` · CI 8/8 · DEV pending |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -104,11 +105,17 @@
 
 ## 3. Phase-by-phase implementation log
 
-### Managed Account Health webhook ownership — `Implemented · local review 0/0 · PR/CI/merge/DEV pending`
+### Phase 15G.CD — GHCR prebuilt-image build + guarded pull-on-deploy — `Implemented · activation OFF · PR #162`
+- **Product/ops truth:** deployment speedup must never make DEV depend on GHCR. The workflow builds immutable SHA images after `version_1` pushes, while the remote script keeps the current on-server build unless the target overlay explicitly opts in and the exact SHA pull succeeds; `force_build=true` always bypasses the pull.
+- **Server truth:** read-only DEV checks found no `BLOOMWIRE_IMAGE` overlay opt-in, no GHCR Docker login, and no accessible `version_1` image. Merge therefore changes no running service and leaves future deploys on the existing build path. Activation is a later explicit ops slice with package readability, gitignored overlay, exact-SHA smoke, health 200, and Postgres/Redis preservation proof.
+- **Safety:** deploy remains manual dev/staging only; no production option, automatic deploy, `down`, volume prune, DB/app/schema/Enterprise/provider/Meta/SMTP/DNS/credential change. Rails/Sidekiq alone are recreated and SHA smoke cannot be skipped by the image path.
+- **Delivery:** original PR head CI **8/8**; branch rebased onto current `version_1` and mandatory deployment runbook/change-log/ledger/session docs added. Shell/YAML/HTML/docs/diff/secret validation passed and isolated mocked deploy acquisition passed **4/4** (no opt-in build, successful SHA pull, pull-failure fallback, forced build). Exact-head review and refreshed CI remain pending before merge.
+
+### Managed Account Health webhook ownership — `Merged · PR #163 · 6f4746a · CI 8/8 · DEV pending`
 - **Product/root-cause truth:** DEV Account Health showed a mismatch while Meta's application callback correctly equalled Bloomwire's global callback and inbound remained healthy. The backend's `Whatsapp::HealthService` always supplied stock Chatwoot's per-phone URL; the unchanged frontend strict comparison therefore reported an intentional route difference as a defect.
 - **Ownership/fix:** explicit channel `source=bloomwire_managed` is the existing routing owner and now selects `Bloomwire::GlobalWhatsappConfig.result[:callback_url]`. Manual and native `embedded_signup` sources keep the per-phone URL. No URL normalization, warning suppression, fallback cache, duplicate state, or router change.
-- **Evidence:** read-only DEV health/runtime proof found global config == Meta callback, router/platform/setup ready, 15 global-route hits in two hours, 11 incoming messages, and no console error. TDD RED **3/1** → GREEN **3/0**; focused backend **57/0**; broader WhatsApp regression **324/0**; unchanged Account Health component **4/0**; RuboCop **2/0**; independent Standards/Spec review **0/0 findings**. Tests made no live provider call.
-- **Boundaries/security:** one deployed health read invoked the existing live Meta GET; no provider/config/credential/DB mutation. Backend service + new spec + docs only; no frontend/API-shape/global-or-native-router/schema/Enterprise/production/dependency change. Diagnostic browser credentials were invalidated and local Meta profile data removed; no secret committed. CI/merge/deploy and authenticated post-deploy DOM proof remain pending.
+- **Evidence/delivery:** read-only DEV health/runtime proof found global config == Meta callback, router/platform/setup ready, 15 global-route hits in two hours, 11 incoming messages, and no console error. TDD RED **3/1** → GREEN **3/0**; focused backend **57/0**; broader WhatsApp regression **324/0**; unchanged Account Health component **4/0**; RuboCop **2/0**; review **0/0**; exact head `796d97a`; CI **8/8**; merge `6f4746a`. Tests made no live provider call; DEV deploy and authenticated post-deploy DOM proof remain pending.
+- **Boundaries/security:** one deployed health read invoked the existing live Meta GET; no provider/config/credential/DB mutation. Backend service + new spec + docs only; no frontend/API-shape/global-or-native-router/schema/Enterprise/production/dependency change. Diagnostic browser credentials were invalidated and local Meta profile data removed; no secret committed.
 
 ### Managed WhatsApp honest progress — `Merged · PR #159 · 01864f8 · DEV authenticated runtime PASS`
 - **Product truth/root cause:** the shared inbox wrapper advertised four generic routes, while the managed WhatsApp wizard deliberately creates/reconnects and confirms success entirely inside `settings_inboxes_page_channel`; it never visits Add Agents or Finish. The sidebar therefore created a false expectation of two remaining tasks.
