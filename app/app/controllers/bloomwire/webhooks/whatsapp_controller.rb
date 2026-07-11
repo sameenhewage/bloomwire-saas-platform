@@ -1,8 +1,8 @@
-# Bloomwire global Meta WhatsApp webhook router endpoint (ADR-0005). A single endpoint that, when the
-# router feature is ON, verifies the Meta signature, resolves a ready_for_webhook Bloomwire::WhatsappSetup
-# by the payload's phone_number_id, and hands the raw payload to the EXISTING Webhooks::WhatsappEventsJob
-# (the stock processing path — no new processing, no duplicate message/conversation storage). It fails
-# closed otherwise and logs only redacted, non-secret diagnostics. With the feature OFF it is inert (404).
+# Bloomwire global Meta WhatsApp webhook router endpoint (ADR-0005). When the router feature is ON, it verifies
+# the Meta signature, splits each batched entry/change exactly once, and separately owns two handoffs: authoritative
+# account_update/PARTNER_REMOVED changes go to PartnerRemovalReconciler; every other handoff-safe single-change
+# payload goes to the EXISTING Webhooks::WhatsappEventsJob (stock processing, no duplicate message/conversation
+# storage). It fails closed otherwise and logs only redacted, non-secret diagnostics. Feature OFF is inert (404).
 #
 # GET serves Meta's webhook-callback verification handshake. Unlike the native per-channel endpoint (which
 # keys on the :phone_number in the URL), this global front-door has no phone_number, so it validates a single
@@ -26,48 +26,74 @@ class Bloomwire::Webhooks::WhatsappController < ActionController::API
 
   def process_payload
     payload = params.to_unsafe_hash
-    # Meta's Coexistence offboarding signal (account_update / PARTNER_REMOVED) is WABA-keyed (no message
-    # phone_number_id), so it is reconciled here and NEVER handed to the message-only events job.
-    return reconcile_account_update(payload) if account_update?(payload)
+    # The native job reads only entry[0].changes[0], so route each non-account_update change as its own payload.
+    # Route before reconciliation: PARTNER_REMOVED can make the same setup non-routeable within this batch.
+    message_event_payloads(payload).each { |event_payload| handoff_message_event(event_payload) }
 
-    # Only hand off when the existing job is guaranteed to re-resolve to this exact mapped channel/inbox.
-    setup = Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)
+    removal_payload = partner_removed_payload(payload)
+    reconcile_partner_removals(removal_payload) if removal_payload
 
-    if setup
-      Webhooks::WhatsappEventsJob.perform_later(payload)
-    else
-      Rails.logger.info("[BLOOMWIRE ROUTER] no handoff-safe setup for phone_number_id #{redacted_phone_number_id(payload)}")
-    end
-
-    # Always 200 so Meta does not retry; routing decision is fail-closed above.
+    # Always 200 so Meta does not retry; each routing decision is fail-closed above.
     head :ok
   end
 
   private
 
-  # True when any change is an account_update (the Coexistence offboarding family, e.g. PARTNER_REMOVED). Safe
-  # against a malformed payload (no raise) so an unexpected shape simply falls through to the message path.
-  def account_update?(payload)
+  def message_event_payloads(payload)
+    payload_entries(payload).flat_map do |entry|
+      entry_changes(entry).filter_map do |change|
+        next if change['field'] == 'account_update'
+
+        single_change_payload(payload, entry, change)
+      end
+    end
+  end
+
+  def partner_removed_payload(payload)
+    entries = payload_entries(payload).filter_map do |entry|
+      changes = entry_changes(entry).select { |change| partner_removed?(change) }
+      entry.merge('changes' => changes) if changes.any?
+    end
+    payload.merge('entry' => entries) if entries.any?
+  end
+
+  def partner_removed?(change)
+    value = change['value']
+    change['field'] == 'account_update' && value.is_a?(Hash) && value['event'] == 'PARTNER_REMOVED'
+  end
+
+  def payload_entries(payload)
     entries = payload.is_a?(Hash) ? payload['entry'] : nil
-    return false unless entries.is_a?(Array)
-
-    entries.any? { |entry| account_update_entry?(entry) }
+    entries.is_a?(Array) ? entries.select { |entry| entry.is_a?(Hash) } : []
   end
 
-  def account_update_entry?(entry)
-    changes = entry.is_a?(Hash) ? entry['changes'] : nil
-    changes.is_a?(Array) && changes.any? { |change| change.is_a?(Hash) && change['field'] == 'account_update' }
+  def entry_changes(entry)
+    changes = entry['changes']
+    changes.is_a?(Array) ? changes.select { |change| change.is_a?(Hash) } : []
   end
 
-  # Reconcile a Coexistence partner-removal (the authoritative offboarding owner) and acknowledge. The message
-  # events job is NEVER enqueued here. Logs a sanitized summary only (masked WABA tail, affected count, reasons).
-  def reconcile_account_update(payload)
+  def single_change_payload(payload, entry, change)
+    payload.merge('entry' => [entry.merge('changes' => [change])])
+  end
+
+  # Only hand off when the existing job is guaranteed to re-resolve to this exact mapped channel/inbox.
+  def handoff_message_event(event_payload)
+    setup = Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(event_payload)
+    return Webhooks::WhatsappEventsJob.perform_later(event_payload) if setup
+
+    Rails.logger.info(
+      "[BLOOMWIRE ROUTER] no handoff-safe setup for phone_number_id #{redacted_phone_number_id(event_payload)}"
+    )
+  end
+
+  # Reconcile Coexistence partner removals from the account_update-only slice. The message events job never receives
+  # this slice. Logs a sanitized summary only (masked WABA tail, affected count, reasons).
+  def reconcile_partner_removals(payload)
     result = Bloomwire::Webhooks::PartnerRemovalReconciler.reconcile(payload)
     Rails.logger.info(
       "[BLOOMWIRE ROUTER] account_update reconciled affected=#{result.disconnected_setup_ids.size} " \
       "waba=#{redacted_waba_ids(result.waba_ids)} reasons=#{result.reasons.join(',').presence || '(none)'}"
     )
-    head :ok
   end
 
   # Only a masked tail of each WABA id ever reaches the log — never the full WABA id.

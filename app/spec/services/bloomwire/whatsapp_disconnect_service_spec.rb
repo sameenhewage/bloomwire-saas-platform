@@ -1,9 +1,9 @@
 require 'rails_helper'
 
-# WhatsWay-parity "Disconnect": deregister the number on Meta (NON-FATAL) + mark the setup `disconnected` while
-# KEEPING the Channel/Inbox/Setup records so a later Embedded Signup reconnect reuses them. Meta is stubbed (no real
-# Meta). Proves the EXACT number is deregistered with the stored token, records survive, a deregister failure still
-# disconnects locally, no token is logged, and cross-account / non-WhatsApp are rejected. Fake values only.
+# Managed WhatsApp "Disconnect": require the preserved account/inbox/channel/phone-aligned Setup before any Meta
+# call. Standard deregisters the exact number with the stored token and marks that same Setup `disconnected` only
+# after Meta verifies DISCONNECTED; any missing/misaligned mapping or provider failure leaves all records unchanged.
+# Coexistence remains phone-offboarded and locally unchanged until authoritative webhook proof. Meta is stubbed.
 RSpec.describe Bloomwire::WhatsappDisconnectService do
   let(:account) { create(:account) }
   let(:token) { 'FAKE-STORED-TOKEN' }
@@ -37,17 +37,81 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
     described_class.new(account: target_account, inbox: target_inbox, actor: nil).perform
   end
 
-  it 'deregisters the exact Standard number, verifies DISCONNECTED, then marks the setup disconnected and keeps records' do
-    setup
+  it 'fails closed before any Meta call when the preserved Setup is missing' do
+    inbox
+    counts_before = [Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+    expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
     result = perform
+
+    aggregate_failures do
+      expect(result).not_to be_success
+      expect(result.error).to eq(:not_found)
+      expect(result.setup).to be_nil
+      expect([Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(counts_before)
+      expect(fb_client).not_to have_received(:phone_number_status)
+      expect(fb_client).not_to have_received(:deregister_phone_number)
+    end
+  end
+
+  it 'fails closed before any Meta call when the Setup is linked to a different inbox and channel' do
+    setup
+    other_channel = Channel::Whatsapp.new(
+      account: account, phone_number: '+15551230002', provider: 'whatsapp_cloud',
+      provider_config: { 'phone_number_id' => 'PNID-2', 'source' => 'bloomwire_managed' }
+    )
+    other_channel.save!(validate: false)
+    other_inbox = Inbox.create!(account: account, name: 'Other WhatsApp', channel: other_channel)
+    setup.inbox_id = other_inbox.id
+    setup.channel_whatsapp_id = other_channel.id
+    setup.save!(validate: false)
+    state_before = [setup.reload.attributes, Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+    expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
+    result = perform
+
+    aggregate_failures do
+      expect(result.error).to eq(:not_found)
+      expect(result).not_to be_success
+      expect(fb_client).not_to have_received(:phone_number_status)
+      expect(fb_client).not_to have_received(:deregister_phone_number)
+      expect([setup.reload.attributes, Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(state_before)
+    end
+  end
+
+  it 'fails closed before any Meta call when the Setup belongs to a different account' do
+    setup
+    setup.account_id = create(:account).id
+    setup.save!(validate: false)
+    state_before = [setup.reload.attributes, Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+    expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
+    result = perform
+
+    aggregate_failures do
+      expect(result.error).to eq(:not_found)
+      expect(result).not_to be_success
+      expect(fb_client).not_to have_received(:phone_number_status)
+      expect(fb_client).not_to have_received(:deregister_phone_number)
+      expect([setup.reload.attributes, Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(state_before)
+    end
+  end
+
+  it 'deregisters the exact aligned Standard number, verifies DISCONNECTED, and reuses the same records' do
+    record_ids = [inbox.id, channel.id, setup.id]
+    counts_before = [Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+
+    result = perform
+
     aggregate_failures do
       expect(result).to be_success
+      expect(result.setup.id).to eq(setup.id)
+      expect(Whatsapp::FacebookApiClient).to have_received(:new).with(token)
       expect(fb_client).to have_received(:phone_number_status).with('PNID-1').twice
-      expect(fb_client).to have_received(:deregister_phone_number).with('PNID-1')
+      expect(fb_client).to have_received(:deregister_phone_number).with('PNID-1').once
       expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
-      expect(Channel::Whatsapp.exists?(channel.id)).to be(true)
-      expect(Inbox.exists?(inbox.id)).to be(true)
-      expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(true)
+      expect([inbox.reload.id, channel.reload.id, setup.reload.id]).to eq(record_ids)
+      expect([Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(counts_before)
     end
   end
 
@@ -88,8 +152,9 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
     end
   end
 
-  it 'returns mobile_action_required for Coexistence without calling Meta or changing setup state' do
-    setup
+  it 'returns mobile_action_required for Coexistence without calling Meta or changing preserved records' do
+    record_ids = [inbox.id, channel.id, setup.id]
+    counts_before = [Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
     channel.provider_config['connection_mode'] = 'coexistence'
     channel.save!(validate: false)
 
@@ -102,6 +167,8 @@ RSpec.describe Bloomwire::WhatsappDisconnectService do
       expect(fb_client).not_to have_received(:phone_number_status)
       expect(fb_client).not_to have_received(:deregister_phone_number)
       expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      expect([inbox.reload.id, channel.reload.id, setup.reload.id]).to eq(record_ids)
+      expect([Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(counts_before)
     end
   end
 

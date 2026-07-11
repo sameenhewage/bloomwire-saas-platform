@@ -17,7 +17,8 @@
 # - Uses ONLY the channel's stored token and makes no other Meta call — the global router owns the shared WABA
 #   webhook subscription, so a disconnect never unsubscribes it. Records are KEPT (this is NOT the delete flow).
 # - A deregister/verify failure NEVER logs the token/phone/WABA/raw body (sanitized class-only log).
-# - Account-scoped: the inbox must belong to the given account and be a Channel::Whatsapp.
+# - Account-scoped: the inbox, WhatsApp channel, setup, channel id, and phone_number_id must align before any
+#   provider request. A missing or stale mapping fails closed without changing Meta or local records.
 class Bloomwire::WhatsappDisconnectService
   EVENT = 'bloomwire.whatsapp.disconnect'.freeze
   DISCONNECTED_META_STATUS = 'DISCONNECTED'.freeze
@@ -40,7 +41,9 @@ class Bloomwire::WhatsappDisconnectService
     channel = @inbox.channel
     return Result.new(error: :not_whatsapp) unless channel.is_a?(Channel::Whatsapp)
 
-    setup = find_setup(channel)
+    setup = find_aligned_setup(channel)
+    return Result.new(error: :not_found) unless setup
+
     # Coexistence: never touch Meta and never change local state — the owner disconnects from the mobile app and
     # Meta confirms it via the account_update / PARTNER_REMOVED webhook (reconciled by PartnerRemovalReconciler).
     # Surface the mobile action so nothing here is silently (and falsely) marked disconnected.
@@ -55,8 +58,16 @@ class Bloomwire::WhatsappDisconnectService
     channel.provider_config.to_h['connection_mode'].to_s == 'coexistence'
   end
 
-  def find_setup(channel)
-    Bloomwire::WhatsappSetup.find_by(channel_whatsapp_id: channel.id)
+  def find_aligned_setup(channel)
+    phone_number_id = channel.provider_config.to_h['phone_number_id'].presence
+    return if channel.account_id != @account.id || phone_number_id.blank?
+
+    Bloomwire::WhatsappSetup.find_by(
+      account_id: @account.id,
+      inbox_id: @inbox.id,
+      channel_whatsapp_id: channel.id,
+      phone_number_id: phone_number_id
+    )
   end
 
   # Standard (Cloud API) disconnect: only mark the setup disconnected once Meta authoritatively confirms it. Any
@@ -89,7 +100,7 @@ class Bloomwire::WhatsappDisconnectService
   # Keep the records; mark the setup non-routeable so the global router (routes only ready_for_webhook) stops
   # immediately. Reconnect finds this SAME row by channel/phone_number_id and promotes it back to ready.
   def mark_disconnected(setup)
-    setup&.update!(setup_status: Bloomwire::WhatsappSetup::DISCONNECTED_STATUS, status_reason: nil)
+    setup.update!(setup_status: Bloomwire::WhatsappSetup::DISCONNECTED_STATUS, status_reason: nil)
     setup
   end
 
