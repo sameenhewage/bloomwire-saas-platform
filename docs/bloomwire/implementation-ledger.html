@@ -163,7 +163,7 @@
         <tr><td>15F.UI</td><td>Email Templates UI Polish & Responsive Upgrade (3&rarr;2&rarr;1 grid, toolbar, preview frame, prominent composer)</td><td>#90</td><td><span class="badge done">DEV PASS</span></td></tr>
         <tr><td>15G</td><td>CI/CD foundation (PR CI + manual Dev/Staging deploy)</td><td><i>pending</i></td><td><span class="badge done">Implemented</span> <span class="badge docs">infra/docs only</span></td></tr>
         <tr><td>15G.1</td><td>Fix false-success dev deploy (stdin-consumed deploy script)</td><td><i>pending</i></td><td><span class="badge done">Fixed</span> <span class="badge docs">infra/docs only</span></td></tr>
-        <tr><td>15G.CD</td><td>GHCR prebuilt image on <code>version_1</code> + guarded pull-on-deploy with server-build fallback</td><td>#162</td><td><span class="badge">Implemented</span> · server activation OFF · review/CI pending</td></tr>
+        <tr><td>15G.CD</td><td>GHCR prebuilt image on <code>version_1</code> + guarded pull-on-deploy with server-build fallback</td><td>#162</td><td><span class="badge">Implemented</span> · review 0/0 · server activation OFF · CI pending</td></tr>
         <tr><td>15G.2</td><td>Auth Integrity Hardening (admin form can't change password/auth)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
         <tr><td>15G.3</td><td>Auth Go-Live Guardrails (admin-edit audit + auth smoke + runbook)</td><td><i>pending</i></td><td><span class="badge done">Hardened</span> <span class="badge done">DEV PASS</span></td></tr>
         <tr><td>16C</td><td>Business-owner activation (Ops "send activation email" &rarr; Devise set-password to account admins)</td><td>#95</td><td><span class="badge done">DEV PASS</span> <span class="badge done">end-to-end</span> <span class="badge docs">superseded/removed by 17A</span></td></tr>
@@ -199,7 +199,7 @@
         <li><b>Product/ops truth:</b> the speedup must never make DEV depend on GHCR. The workflow builds immutable SHA images after <code>version_1</code> pushes, while the remote script keeps the current server build unless the target overlay explicitly opts in and the exact SHA pull succeeds; <code>force_build=true</code> bypasses pull.</li>
         <li><b>Server truth:</b> DEV has no <code>BLOOMWIRE_IMAGE</code> overlay opt-in, GHCR Docker login, or accessible <code>version_1</code> image. Merge changes no running service and leaves deploys on the existing build path. Activation is a later explicit ops slice with package readability, gitignored overlay, SHA/health, and data-service proof.</li>
         <li><b>Safety:</b> deploy remains manual dev/staging only; no production option, automatic deploy, <code>down</code>, volume prune, DB/app/schema/Enterprise/provider/Meta/SMTP/DNS/credential change. Rails/Sidekiq alone are recreated and SHA smoke remains authoritative.</li>
-        <li><b>Delivery:</b> original head CI <b>8/8</b>; branch rebased and mandatory runbook/governance docs added. Shell/YAML/HTML/docs/diff/secret validation and mocked deploy acquisition <b>4/4</b> passed. Exact-head review and refreshed CI remain pending.</li>
+        <li><b>Delivery:</b> original head CI <b>8/8</b>; branch rebased and mandatory runbook/governance docs added. Shell/YAML/HTML/docs/diff/secret validation and mocked deploy acquisition <b>4/4</b> passed. Independent Standards/Spec review found <b>0/0 findings</b>; refreshed CI remains pending.</li>
       </ul>
     </div>
 
