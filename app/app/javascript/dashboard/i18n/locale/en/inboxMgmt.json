@@ -341,7 +341,7 @@
               "TITLE": "Move Existing Cloud API Number",
               "BADGE": "Migration",
               "RECOMMENDED": "Recommended",
-              "STATUS": "Available now",
+              "STATUS": "Bloomwire-assisted setup",
               "DESC": "Move a number that is already on the WhatsApp Cloud API with another provider over to Bloomwire.",
               "CTA": "Move existing number",
               "CONFIRM": {
@@ -352,6 +352,21 @@
                 "HISTORY": "Message history from your previous provider is not transferred to Bloomwire.",
                 "CANCEL": "If you reject or cancel the migration at Meta, your existing provider keeps the number and Bloomwire does not take it over.",
                 "ASSET": "This does not delete the phone-number asset or WABA at Meta — only the messaging provider changes.",
+                "PREREQ_TITLE": "Before you start — your Bloomwire manager confirms these prerequisites",
+                "PREREQ": {
+                  "TWO_STEP": "Two-step verification (the number’s PIN) must be turned off on this number with your current provider before it can be moved — Meta requires this first.",
+                  "SOURCE_ELIGIBLE": "The number must already be live on the WhatsApp Cloud API (or On-Premises API) with your current provider and in good standing.",
+                  "VERIFIED_BUSINESS": "A verified Meta Business and an approved WhatsApp Business Account (WABA).",
+                  "PAYMENT": "An active payment method or message credit line on the destination WhatsApp Business Account.",
+                  "PARTNER": "Any Solution Partner and credit-line obligations Meta requires for partner-to-partner migration are arranged by your Bloomwire manager."
+                },
+                "BLOOMWIRE_TITLE": "What Bloomwire does for you",
+                "BLOOMWIRE": {
+                  "SIGNUP": "Runs Meta’s Embedded Signup migration for this number in the window that opens next.",
+                  "REGISTER": "Registers the number on Bloomwire and sets up message routing once Meta approves the move."
+                },
+                "AVAILABILITY_NOTE": "Migration currently runs as a Bloomwire-assisted setup while our Meta app completes review (Development mode / Standard access) — it is not yet self-serve for every number. Your Bloomwire manager confirms eligibility and completes the Meta-side steps with you.",
+                "ACK": "I understand these prerequisites — including turning off two-step verification on this number — and want to continue.",
                 "CONFIRM_BUTTON": "I understand — continue",
                 "CANCEL_BUTTON": "Cancel"
               }
@@ -442,7 +457,10 @@
             "DISCONNECTED_SUBTITLE": "This number is deregistered on WhatsApp. Reconnect it any time from Settings → Inboxes → Add Inbox — your existing inbox and history are reused.",
             "MOBILE_ACTION_TITLE": "Disconnect from the WhatsApp Business app",
             "MOBILE_ACTION_INSTRUCTIONS": "This number is connected through the WhatsApp Business app, so it is disconnected from the phone — not from here. On the device, open: WhatsApp Business App → Settings → Account → Business Platform → Disconnect.",
-            "MOBILE_ACTION_DETAIL": "Bloomwire keeps this inbox until Meta confirms the change, so your local inbox and history stay unchanged until then.",
+            "MOBILE_ACTION_DETAIL": "Bloomwire keeps this inbox until Meta confirms the change — after you disconnect on the phone, use Recheck below to confirm now. Your local inbox and history stay unchanged until then.",
+            "MOBILE_RECHECK_BUTTON": "I’ve disconnected — Recheck",
+            "MOBILE_STILL_CONNECTED": "This number is still connected at Meta. Finish the steps above in the WhatsApp Business app, then Recheck again.",
+            "MOBILE_RECHECK_FAILED": "We couldn’t check this number’s status at Meta just now. Nothing was changed — please try Recheck again in a moment.",
             "FAILED_TITLE": "Couldn’t confirm disconnect",
             "FAILED_DETAIL": "We couldn’t confirm this number was disconnected at Meta, so nothing was changed. Please try again in a moment."
           },

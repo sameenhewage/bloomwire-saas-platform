@@ -359,6 +359,19 @@ export const actions = {
     await dispatch('get');
     return response.data;
   },
+  // Coexistence offboarding recheck: the SINGLE reconciliation owner. After the owner completes the mobile
+  // Business-Platform disconnect, this confirms with Meta and marks the setup disconnected ONLY on authoritative
+  // proof; a 409/502 (still connected / unverifiable) rejects and leaves state unchanged. Refreshes the inbox list
+  // when the number is now disconnected. Returns the safe DTO ({ managed, disconnected, inbox, setup }); no secrets.
+  recheckBloomwireWhatsAppDisconnection: async (
+    { dispatch },
+    { inboxId } = {}
+  ) => {
+    const response =
+      await WhatsappChannel.recheckBloomwireDisconnection(inboxId);
+    if (response.data?.disconnected) await dispatch('get');
+    return response.data;
+  },
   ...channelActions,
   // TODO: Extract other create channel methods to separate files to reduce file size
   // - createChannel

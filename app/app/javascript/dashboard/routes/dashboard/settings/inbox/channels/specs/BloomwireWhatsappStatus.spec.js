@@ -33,9 +33,22 @@ const T = {
   disconnectConfirmBtn:
     '[data-testid="bloomwire-wa-status-disconnect-confirm-button"]',
   mobileAction: '[data-testid="bloomwire-wa-status-mobile-action-required"]',
+  mobileRecheck: '[data-testid="bloomwire-wa-status-mobile-recheck"]',
+  mobileStillConnected:
+    '[data-testid="bloomwire-wa-status-mobile-still-connected"]',
+  mobileRecheckFailed:
+    '[data-testid="bloomwire-wa-status-mobile-recheck-failed"]',
   disconnectFailed: '[data-testid="bloomwire-wa-status-disconnect-failed"]',
   disconnected: '[data-testid="bloomwire-wa-status-disconnected"]',
 };
+
+const coexistenceInbox = (id = 42) => ({
+  id,
+  provider_config: {
+    source: 'bloomwire_managed',
+    connection_mode: 'coexistence',
+  },
+});
 
 const managedInbox = (overrides = {}) => ({
   id: 42,
@@ -536,5 +549,143 @@ describe('BloomwireWhatsappStatus — truthful disconnect', () => {
     expect(wrapper.find(T.disconnected).exists()).toBe(true);
     expect(wrapper.find(T.ready).exists()).toBe(false);
     expect(wrapper.find(T.actionRequired).exists()).toBe(false);
+  });
+});
+
+// Finding 1 — the Coexistence mobile-action panel owns the reconciliation trigger: after the owner completes the
+// mobile disconnect, Recheck asks the backend (the single authoritative owner) to confirm with Meta. Only an
+// authoritative disconnected DTO flips the panel; a still-connected result keeps the mobile instructions; a failure
+// shows a safe retry. The panel never self-declares disconnected.
+describe('BloomwireWhatsappStatus — Coexistence offboarding recheck (reconciliation owner)', () => {
+  const openMobileAction = async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(coexistenceInbox());
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    return wrapper;
+  };
+
+  it('offers a Recheck action inside the mobile-action panel', async () => {
+    const wrapper = await openMobileAction();
+    expect(wrapper.find(T.mobileRecheck).exists()).toBe(true);
+  });
+
+  it('Recheck dispatches the reconciliation for the displayed inbox and flips to disconnected on Meta proof', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/recheckBloomwireWhatsAppDisconnection') {
+        return Promise.resolve(disconnectedDto());
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel(coexistenceInbox());
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    await wrapper.find(T.mobileRecheck).trigger('click');
+    await flushPromises();
+
+    expect(dispatch).toHaveBeenCalledWith(
+      'inboxes/recheckBloomwireWhatsAppDisconnection',
+      { inboxId: 42 }
+    );
+    expect(wrapper.find(T.disconnected).exists()).toBe(true);
+    expect(wrapper.find(T.mobileAction).exists()).toBe(false);
+  });
+
+  it('keeps the mobile instructions and shows a still-connected note when Meta still reports it connected', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/recheckBloomwireWhatsAppDisconnection') {
+        return Promise.reject(
+          Object.assign(new Error('still connected'), {
+            response: { data: { code: 'still_connected' } },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel(coexistenceInbox());
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    await wrapper.find(T.mobileRecheck).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileStillConnected).exists()).toBe(true);
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+  });
+
+  it('shows a safe retry note (no raw error) when the recheck itself cannot complete', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/recheckBloomwireWhatsAppDisconnection') {
+        return Promise.reject(
+          Object.assign(new Error('boom'), {
+            response: {
+              data: { code: 'recheck_unverified', error: 'RAW meta detail' },
+            },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel(coexistenceInbox());
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    await wrapper.find(T.mobileRecheck).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileRecheckFailed).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+    expect(wrapper.html()).not.toContain('RAW meta detail');
+  });
+});
+
+// Finding 2 — disconnect UI state must not leak across inboxes. The mobile-action block is the top-level v-if, so a
+// stale `mobileActionRequired` from Coexistence Inbox A would hide Standard/non-managed Inbox B's real status. Every
+// load/inbox generation must reset all disconnect UI state; a stale response from A must never change B.
+describe('BloomwireWhatsappStatus — cross-inbox state isolation', () => {
+  it('clears the Coexistence mobile-action panel when switching to a Standard inbox (shows B, not A)', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(coexistenceInbox(42));
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+
+    await wrapper.setProps({ inbox: managedInbox({ id: 43 }) });
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(false);
+    expect(wrapper.find(T.ready).exists()).toBe(true);
+  });
+
+  it('clears the Coexistence mobile-action panel when switching to a non-managed inbox', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(coexistenceInbox(42));
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+
+    await wrapper.setProps({
+      inbox: { id: 44, provider_config: { source: 'whatsapp_cloud' } },
+    });
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(false);
+    expect(wrapper.find(T.ready).exists()).toBe(false);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
   });
 });

@@ -65,6 +65,18 @@ class WhatsappChannel extends ApiClient {
     );
   }
 
+  // Coexistence offboarding recheck (inboxId = Inbox id). POST; the SINGLE reconciliation owner — after the owner
+  // completes the mobile Business-Platform disconnect, it asks the backend to confirm with Meta and marks the setup
+  // disconnected ONLY on authoritative proof (200); 409 still_connected / 502 recheck_unverified leave state as-is.
+  // Returns ONLY the safe DTO ({ managed, disconnected, inbox, setup }) — never a token / secret.
+  recheckBloomwireDisconnection(inboxId, config = {}) {
+    return axios.post(
+      `${this.baseUrl()}/bloomwire/whatsapp/disconnections/recheck`,
+      { inbox_id: inboxId },
+      config
+    );
+  }
+
   // Advisory duplicate-number preflight for the managed WhatsApp wizard. Sends only the typed phone number and
   // receives ONLY { status: "available" | "already_connected" } — never another tenant's account/inbox/channel.
   checkPhoneAvailability(phoneNumber, config = {}) {

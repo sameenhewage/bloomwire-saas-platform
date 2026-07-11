@@ -377,7 +377,11 @@ Rails.application.routes.draw do
               # WhatsWay-parity "Disconnect": deregister the number on Meta (-> DISCONNECTED) and mark the setup
               # non-routeable while KEEPING the Channel/Inbox/Setup records so a later Embedded Signup reconnect reuses
               # them. Admin-only; inert (404) unless managed self-serve. Safe DTO; never a delete/webhook unsubscribe.
-              resources :disconnections, only: [:create]
+              # recheck: the SINGLE Coexistence offboarding reconciliation owner — after the owner completes the mobile
+              # Business-Platform disconnect, it marks the preserved setup disconnected ONLY on authoritative Meta proof.
+              resources :disconnections, only: [:create] do
+                post :recheck, on: :collection
+              end
             end
             # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
             # BLOOMWIRE_CATEGORY_ADMIN_UI feature is enabled. Safe DTO only; no writes; no schema; account-scoped.

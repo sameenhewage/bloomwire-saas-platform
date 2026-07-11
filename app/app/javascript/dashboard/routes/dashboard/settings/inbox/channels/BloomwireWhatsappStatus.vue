@@ -65,6 +65,10 @@ const confirmingDisconnect = ref(false);
 // (Standard verification failed → nothing changed locally). Never a false "disconnected".
 const mobileActionRequired = ref(false);
 const disconnectFailed = ref(false);
+// Coexistence offboarding recheck (the reconciliation owner) outcomes shown inside the mobile-action panel:
+// 'idle' | 'still_connected' (Meta still reports it connected) | 'failed' (recheck itself could not complete).
+const isRecheckingOffboarding = ref(false);
+const offboardingRecheckState = ref('idle');
 
 const actionReasonKey = computed(() => {
   switch (status.value?.action_required?.reason) {
@@ -90,10 +94,18 @@ const loadStatus = async () => {
   const requestedInboxId = props.inbox?.id;
   latestRequestToken += 1;
   const requestToken = latestRequestToken;
-  // Clear immediately so nothing from the previous inbox lingers while the new request loads.
+  // Clear immediately so nothing from the previous inbox lingers while the new request loads. ALL disconnect UI
+  // state is per-inbox and MUST reset here: the mobile-action block is the top-level v-if, so a stale
+  // mobileActionRequired from Coexistence Inbox A would otherwise hide Standard/non-managed Inbox B's real status.
   status.value = null;
   recheckState.value = 'idle';
   isRechecking.value = false;
+  mobileActionRequired.value = false;
+  disconnectFailed.value = false;
+  confirmingDisconnect.value = false;
+  isDisconnecting.value = false;
+  offboardingRecheckState.value = 'idle';
+  isRecheckingOffboarding.value = false;
   if (!shouldQuery.value || !requestedInboxId) return;
 
   const isCurrent = () =>
@@ -179,6 +191,40 @@ const disconnect = async () => {
   }
 };
 
+// Coexistence offboarding recheck — the reconciliation trigger. After the owner completes the mobile
+// Business-Platform disconnect, ask the backend (the SINGLE authoritative owner) to confirm with Meta. Only an
+// authoritative disconnected DTO flips the panel (status → disconnected, mobile-action cleared); a 409
+// still_connected keeps the mobile instructions with a hint; any other failure shows a safe retry. We NEVER
+// self-declare disconnected. Bound to the displayed inbox + load generation so a mid-recheck switch can't apply
+// a stale result to another inbox.
+const recheckOffboarding = async () => {
+  const requestedInboxId = props.inbox?.id;
+  const requestToken = latestRequestToken;
+  if (!requestedInboxId || isRecheckingOffboarding.value) return;
+  isRecheckingOffboarding.value = true;
+  offboardingRecheckState.value = 'idle';
+
+  const isCurrent = () =>
+    requestToken === latestRequestToken && props.inbox?.id === requestedInboxId;
+  try {
+    const dto = await store.dispatch(
+      'inboxes/recheckBloomwireWhatsAppDisconnection',
+      { inboxId: requestedInboxId }
+    );
+    if (!isCurrent()) return;
+    status.value = dto;
+    mobileActionRequired.value = false;
+  } catch (error) {
+    if (!isCurrent()) return;
+    offboardingRecheckState.value =
+      error?.response?.data?.code === 'still_connected'
+        ? 'still_connected'
+        : 'failed';
+  } finally {
+    if (isCurrent()) isRecheckingOffboarding.value = false;
+  }
+};
+
 onMounted(loadStatus);
 // Reload when the inbox changes OR when the admin capability gate hydrates AFTER mount: on a refresh / re-login
 // canSelfServeManagedWhatsapp can be false initially (account payload not yet loaded), so the first load is
@@ -211,13 +257,52 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
         )
       }}
     </p>
-    <p class="text-sm leading-6 text-n-slate-11">
+    <p class="mb-3 text-sm leading-6 text-n-slate-11">
       {{
         $t(
           'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_ACTION_DETAIL'
         )
       }}
     </p>
+
+    <!-- Reconciliation trigger: once the owner has disconnected on the phone, Recheck asks the backend to confirm
+         with Meta. Only an authoritative disconnected result flips the panel; still-connected keeps these steps. -->
+    <p
+      v-if="offboardingRecheckState === 'still_connected'"
+      data-testid="bloomwire-wa-status-mobile-still-connected"
+      class="mb-3 text-sm text-n-amber-11"
+    >
+      {{
+        $t(
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_STILL_CONNECTED'
+        )
+      }}
+    </p>
+    <p
+      v-else-if="offboardingRecheckState === 'failed'"
+      data-testid="bloomwire-wa-status-mobile-recheck-failed"
+      class="mb-3 text-sm text-n-ruby-11"
+    >
+      {{
+        $t(
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_RECHECK_FAILED'
+        )
+      }}
+    </p>
+
+    <NextButton
+      solid
+      teal
+      data-testid="bloomwire-wa-status-mobile-recheck"
+      :is-loading="isRecheckingOffboarding"
+      :disabled="isRecheckingOffboarding"
+      :label="
+        $t(
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_RECHECK_BUTTON'
+        )
+      "
+      @click="recheckOffboarding"
+    />
   </div>
 
   <div

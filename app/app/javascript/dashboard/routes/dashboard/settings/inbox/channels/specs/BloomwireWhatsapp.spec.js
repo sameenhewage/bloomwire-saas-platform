@@ -125,6 +125,14 @@ const startMigration = async wrapper => {
   await flushPromises();
 };
 
+// The migration confirm is gated on acknowledging the prerequisites (two-step verification, eligibility, etc.).
+const acknowledgeMigration = async wrapper => {
+  await wrapper
+    .find('[data-testid="bloomwire-wa-migration-ack"]')
+    .setValue(true);
+  await flushPromises();
+};
+
 // Advance from the connection-choice screen into the Standard registration form.
 const startRegister = async wrapper => {
   await wrapper
@@ -191,6 +199,55 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
     expect(copy.CONFIRM.ASSET).toMatch(/not delete.*phone-number asset.*WABA/i);
   });
 
+  it('surfaces truthful migration prerequisites (two-step verification first), splits manager vs Bloomwire ownership, and does not advertise general availability', () => {
+    const copy =
+      inboxMgmt.INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION;
+    // Meta's migration guide starts with disabling two-step verification.
+    expect(copy.CONFIRM.PREREQ.TWO_STEP).toMatch(/two-step verification/i);
+    // Source eligibility + verified business/WABA + payment/credit line + Solution Partner obligations.
+    expect(copy.CONFIRM.PREREQ.SOURCE_ELIGIBLE).toMatch(/Cloud API/i);
+    expect(copy.CONFIRM.PREREQ.VERIFIED_BUSINESS).toMatch(
+      /verified.*business|WABA/i
+    );
+    expect(copy.CONFIRM.PREREQ.PAYMENT).toMatch(/payment|credit/i);
+    expect(copy.CONFIRM.PREREQ.PARTNER).toMatch(
+      /Solution Partner|credit-line/i
+    );
+    // Ownership is split: manager-owned prerequisites vs what the Bloomwire application does.
+    expect(copy.CONFIRM.PREREQ_TITLE).toMatch(/manager|before you start/i);
+    expect(copy.CONFIRM.BLOOMWIRE_TITLE).toMatch(/Bloomwire/i);
+    // Not advertised as generally available while the Meta app is Development mode / Standard access.
+    expect(copy.STATUS).not.toMatch(/available now/i);
+    expect(copy.CONFIRM.AVAILABILITY_NOTE).toMatch(
+      /Development mode|Standard access|not yet self-serve|Bloomwire-assisted/i
+    );
+  });
+
+  it('gates the migration confirm on acknowledging the prerequisites (no Meta or store call until acknowledged)', async () => {
+    runEmbeddedSignup.mockResolvedValue(CREDS);
+    dispatch.mockResolvedValue(DTO);
+    const wrapper = mountWizard({ asyncStandard: false });
+    await startMigration(wrapper);
+
+    const confirmBtn = wrapper.find(
+      '[data-testid="bloomwire-wa-migration-confirm-button"]'
+    );
+    expect(confirmBtn.attributes('disabled')).toBeDefined();
+    await confirmBtn.trigger('click');
+    await flushPromises();
+    expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+
+    await acknowledgeMigration(wrapper);
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
+      .trigger('click');
+    await flushPromises();
+    expect(runEmbeddedSignup).toHaveBeenCalledWith(
+      expect.objectContaining({ coexistence: false })
+    );
+  });
+
   it('opens migration confirmation without any Meta or store call, and cancel returns with no success state', async () => {
     const wrapper = mountWizard();
     await startMigration(wrapper);
@@ -223,6 +280,7 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
     await startMigration(wrapper);
 
     expect(runEmbeddedSignup).not.toHaveBeenCalled();
+    await acknowledgeMigration(wrapper);
     await wrapper
       .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
       .trigger('click');
@@ -244,6 +302,7 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
   it('confirmed migration reuses and auto-starts the async Standard lifecycle when available', async () => {
     const wrapper = mountWizard({ asyncStandard: true });
     await startMigration(wrapper);
+    await acknowledgeMigration(wrapper);
     await wrapper
       .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
       .trigger('click');
@@ -264,6 +323,7 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
     const wrapper = mountWizard({ asyncStandard: false });
 
     await startMigration(wrapper);
+    await acknowledgeMigration(wrapper);
     await wrapper
       .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
       .trigger('click');
@@ -275,6 +335,7 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
 
     await wrapper.find('[data-testid="bloomwire-wa-back"]').trigger('click');
     await startMigration(wrapper);
+    await acknowledgeMigration(wrapper);
     await wrapper
       .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
       .trigger('click');
