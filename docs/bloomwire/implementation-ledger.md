@@ -90,6 +90,7 @@
 | ADR-0010 disconnected reconnect hotfix | Finalized crash-resume excludes preserved `disconnected` setups so fresh OAuth runs exchange/register/persist | #156 | Merged `4bbeecda` · DEV run `29095330302` · exact-SHA deploy PASS |
 | ADR-0010 Coexistence reconnect readiness | Official `is_on_biz_app` + `platform_type` readiness and transactional mode correction for reused records | #157 | Merged `ca6086c` · DEV run `29102109973` PASS · one approved provider attempt failed closed (`no_connected_registration`); certification blocked |
 | Managed WhatsApp honest progress | Replace unreachable generic Add Agents/Finish sidebar steps with the real `Choose Channel → Connect WhatsApp` flow; success card owns Done | #159 | Merged `01864f8` · DEV run `29143934928` · authenticated runtime PASS |
+| Managed Account Health webhook ownership | Expect the global callback for `source=bloomwire_managed`; preserve native per-phone callback semantics | _pending_ | Implemented · local review 0/0 · CI/DEV pending |
 
 > **Dev QA Sign-off (2026-06-30, owner-confirmed)** — dev `version_1` @ `ea3487b`: Auth 15G.2/15G.3 = **DEV
 > PASS**, Email Settings/SMTP = **DEV PASS**, Email Templates (15F.2) = **100% DEV PASS**. Owner confirmed both
@@ -102,6 +103,12 @@
 ---
 
 ## 3. Phase-by-phase implementation log
+
+### Managed Account Health webhook ownership — `Implemented · local review 0/0 · PR/CI/merge/DEV pending`
+- **Product/root-cause truth:** DEV Account Health showed a mismatch while Meta's application callback correctly equalled Bloomwire's global callback and inbound remained healthy. The backend's `Whatsapp::HealthService` always supplied stock Chatwoot's per-phone URL; the unchanged frontend strict comparison therefore reported an intentional route difference as a defect.
+- **Ownership/fix:** explicit channel `source=bloomwire_managed` is the existing routing owner and now selects `Bloomwire::GlobalWhatsappConfig.result[:callback_url]`. Manual and native `embedded_signup` sources keep the per-phone URL. No URL normalization, warning suppression, fallback cache, duplicate state, or router change.
+- **Evidence:** read-only DEV health/runtime proof found global config == Meta callback, router/platform/setup ready, 15 global-route hits in two hours, 11 incoming messages, and no console error. TDD RED **3/1** → GREEN **3/0**; focused backend **57/0**; broader WhatsApp regression **324/0**; unchanged Account Health component **4/0**; RuboCop **2/0**; independent Standards/Spec review **0/0 findings**. Tests made no live provider call.
+- **Boundaries/security:** one deployed health read invoked the existing live Meta GET; no provider/config/credential/DB mutation. Backend service + new spec + docs only; no frontend/API-shape/global-or-native-router/schema/Enterprise/production/dependency change. Diagnostic browser credentials were invalidated and local Meta profile data removed; no secret committed. CI/merge/deploy and authenticated post-deploy DOM proof remain pending.
 
 ### Managed WhatsApp honest progress — `Merged · PR #159 · 01864f8 · DEV authenticated runtime PASS`
 - **Product truth/root cause:** the shared inbox wrapper advertised four generic routes, while the managed WhatsApp wizard deliberately creates/reconnects and confirms success entirely inside `settings_inboxes_page_channel`; it never visits Add Agents or Finish. The sidebar therefore created a false expectation of two remaining tasks.

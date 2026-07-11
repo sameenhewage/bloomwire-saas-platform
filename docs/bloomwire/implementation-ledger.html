@@ -184,6 +184,7 @@
         <tr><td>ADR-0010 disconnected reconnect hotfix</td><td>Finalized crash-resume excludes preserved <code>disconnected</code> setups so fresh OAuth runs exchange/register/persist</td><td>#156</td><td><span class="badge done">Merged</span> <code>4bbeecda</code> · DEV run <code>29095330302</code> · exact-SHA deploy PASS</td></tr>
         <tr><td>ADR-0010 Coexistence reconnect readiness</td><td>Official <code>is_on_biz_app</code> + <code>platform_type</code> readiness and transactional mode correction for reused records</td><td>#157</td><td><span class="badge done">Merged + DEV deployed</span> <code>ca6086c</code> · run <code>29102109973</code> PASS · one approved provider attempt failed closed (<code>no_connected_registration</code>); certification blocked</td></tr>
         <tr><td>Managed WhatsApp honest progress</td><td>Replace unreachable generic Add Agents/Finish sidebar steps with the real <b>Choose Channel → Connect WhatsApp</b> flow; success card owns Done</td><td>#159</td><td><span class="badge done">Merged + DEV PASS</span> <code>01864f8</code> · run <code>29143934928</code> · authenticated runtime PASS</td></tr>
+        <tr><td>Managed Account Health webhook ownership</td><td>Expect the global callback for <code>source=bloomwire_managed</code>; preserve native per-phone callback semantics</td><td><i>pending</i></td><td><span class="badge">Implemented</span> · local review 0/0 · CI/DEV pending</td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -191,6 +192,15 @@
 
   <section id="s3">
     <h2><a class="anchor" href="#s3"><span class="num">3.</span>Phase-by-phase implementation log</a></h2>
+
+    <div class="card"><h3>Managed Account Health webhook ownership <span class="badge">Implemented · local review 0/0 · PR/CI/merge/DEV pending</span></h3>
+      <ul>
+        <li><b>Product/root-cause truth:</b> DEV Account Health showed a mismatch while Meta's application callback correctly equalled Bloomwire's global callback and inbound remained healthy. <code>Whatsapp::HealthService</code> always supplied stock Chatwoot's per-phone URL; the unchanged frontend strict comparison therefore reported an intentional route difference as a defect.</li>
+        <li><b>Ownership/fix:</b> explicit channel <code>source=bloomwire_managed</code> now selects <code>Bloomwire::GlobalWhatsappConfig.result[:callback_url]</code>. Manual and native <code>embedded_signup</code> sources keep the per-phone URL. No normalization, warning suppression, fallback cache, duplicate state, or router change.</li>
+        <li><b>Evidence:</b> read-only DEV proof found global config == Meta callback, router/platform/setup ready, 15 global-route hits in two hours, 11 incoming messages, and no console error. TDD RED <b>3/1</b> → GREEN <b>3/0</b>; focused backend <b>57/0</b>; broader WhatsApp regression <b>324/0</b>; unchanged Account Health component <b>4/0</b>; RuboCop <b>2/0</b>; independent Standards/Spec review <b>0/0 findings</b>. Tests made no live provider call.</li>
+        <li><b>Boundaries/security:</b> one deployed health read invoked the existing live Meta GET; no provider/config/credential/DB mutation. Backend service + new spec + docs only; no frontend/API-shape/global-or-native-router/schema/Enterprise/production/dependency change. Diagnostic browser credentials were invalidated and local Meta profile data removed; no secret committed. CI/merge/deploy and post-deploy DOM proof remain pending.</li>
+      </ul>
+    </div>
 
     <div class="card green"><h3>Managed WhatsApp honest progress <span class="badge done">Merged · PR #159 · 01864f8 · DEV authenticated runtime PASS</span></h3>
       <ul>
