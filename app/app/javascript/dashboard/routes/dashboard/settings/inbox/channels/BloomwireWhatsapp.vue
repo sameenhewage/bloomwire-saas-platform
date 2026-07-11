@@ -1129,7 +1129,7 @@ onBeforeRouteLeave(() => {
         </ul>
       </div>
 
-      <!-- Availability truth: not self-serve GA while the Meta app is in Development mode / Standard access. -->
+      <!-- Availability truth: migration is a Bloomwire-assisted setup (manager confirms eligibility), not self-serve GA. -->
       <p
         data-testid="bloomwire-wa-migration-availability"
         class="p-3 mb-4 w-full text-sm rounded-lg text-n-slate-11 bg-n-alpha-1"

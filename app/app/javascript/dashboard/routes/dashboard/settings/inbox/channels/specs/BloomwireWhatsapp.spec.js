@@ -204,22 +204,31 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
       inboxMgmt.INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION;
     // Meta's migration guide starts with disabling two-step verification.
     expect(copy.CONFIRM.PREREQ.TWO_STEP).toMatch(/two-step verification/i);
-    // Source eligibility + verified business/WABA + payment/credit line + Solution Partner obligations.
+    // Source eligibility + verified business/WABA. Meta requires the payment method on the SOURCE (existing) WABA
+    // being moved — NOT the destination.
     expect(copy.CONFIRM.PREREQ.SOURCE_ELIGIBLE).toMatch(/Cloud API/i);
     expect(copy.CONFIRM.PREREQ.VERIFIED_BUSINESS).toMatch(
       /verified.*business|WABA/i
     );
-    expect(copy.CONFIRM.PREREQ.PAYMENT).toMatch(/payment|credit/i);
+    expect(copy.CONFIRM.PREREQ.PAYMENT).toMatch(/payment/i);
+    expect(copy.CONFIRM.PREREQ.PAYMENT).toMatch(/existing|source/i);
+    expect(copy.CONFIRM.PREREQ.PAYMENT).not.toMatch(/destination/i);
+    // Partner / destination credit-line sharing is surfaced only as conditional ("when applicable").
     expect(copy.CONFIRM.PREREQ.PARTNER).toMatch(
       /Solution Partner|credit-line/i
     );
+    expect(copy.CONFIRM.PREREQ.PARTNER).toMatch(/when applicable/i);
     // Ownership is split: manager-owned prerequisites vs what the Bloomwire application does.
     expect(copy.CONFIRM.PREREQ_TITLE).toMatch(/manager|before you start/i);
     expect(copy.CONFIRM.BLOOMWIRE_TITLE).toMatch(/Bloomwire/i);
-    // Not advertised as generally available while the Meta app is Development mode / Standard access.
+    // Availability copy is ENVIRONMENT-INDEPENDENT: Bloomwire-assisted / manager-confirmed, never the transient
+    // Meta app state ("Development mode / Standard access") which goes stale when the app changes.
     expect(copy.STATUS).not.toMatch(/available now/i);
     expect(copy.CONFIRM.AVAILABILITY_NOTE).toMatch(
-      /Development mode|Standard access|not yet self-serve|Bloomwire-assisted/i
+      /Bloomwire-assisted|manager/i
+    );
+    expect(copy.CONFIRM.AVAILABILITY_NOTE).not.toMatch(
+      /Development mode|Standard access/i
     );
   });
 

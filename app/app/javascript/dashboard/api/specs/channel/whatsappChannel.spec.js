@@ -135,14 +135,5 @@ describe('#whatsappChannel', () => {
         {}
       );
     });
-
-    it('#recheckBloomwireDisconnection posts the inbox id to the Coexistence offboarding recheck endpoint', () => {
-      whatsappChannel.recheckBloomwireDisconnection(42);
-      expect(axiosMock.post).toHaveBeenCalledWith(
-        '/api/v1/bloomwire/whatsapp/disconnections/recheck',
-        { inbox_id: 42 },
-        {}
-      );
-    });
   });
 });

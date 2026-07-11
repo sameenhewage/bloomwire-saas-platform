@@ -26,6 +26,10 @@ class Bloomwire::Webhooks::WhatsappController < ActionController::API
 
   def process_payload
     payload = params.to_unsafe_hash
+    # Meta's Coexistence offboarding signal (account_update / PARTNER_REMOVED) is WABA-keyed (no message
+    # phone_number_id), so it is reconciled here and NEVER handed to the message-only events job.
+    return reconcile_account_update(payload) if account_update?(payload)
+
     # Only hand off when the existing job is guaranteed to re-resolve to this exact mapped channel/inbox.
     setup = Bloomwire::Webhooks::WhatsappRouter.resolve_handoff_safe_setup(payload)
 
@@ -40,6 +44,38 @@ class Bloomwire::Webhooks::WhatsappController < ActionController::API
   end
 
   private
+
+  # True when any change is an account_update (the Coexistence offboarding family, e.g. PARTNER_REMOVED). Safe
+  # against a malformed payload (no raise) so an unexpected shape simply falls through to the message path.
+  def account_update?(payload)
+    entries = payload.is_a?(Hash) ? payload['entry'] : nil
+    return false unless entries.is_a?(Array)
+
+    entries.any? { |entry| account_update_entry?(entry) }
+  end
+
+  def account_update_entry?(entry)
+    changes = entry.is_a?(Hash) ? entry['changes'] : nil
+    changes.is_a?(Array) && changes.any? { |change| change.is_a?(Hash) && change['field'] == 'account_update' }
+  end
+
+  # Reconcile a Coexistence partner-removal (the authoritative offboarding owner) and acknowledge. The message
+  # events job is NEVER enqueued here. Logs a sanitized summary only (masked WABA tail, affected count, reasons).
+  def reconcile_account_update(payload)
+    result = Bloomwire::Webhooks::PartnerRemovalReconciler.reconcile(payload)
+    Rails.logger.info(
+      "[BLOOMWIRE ROUTER] account_update reconciled affected=#{result.disconnected_setup_ids.size} " \
+      "waba=#{redacted_waba_ids(result.waba_ids)} reasons=#{result.reasons.join(',').presence || '(none)'}"
+    )
+    head :ok
+  end
+
+  # Only a masked tail of each WABA id ever reaches the log — never the full WABA id.
+  def redacted_waba_ids(waba_ids)
+    return '(none)' if waba_ids.blank?
+
+    waba_ids.map { |id| "****#{id.to_s.last(4)}" }.join(',')
+  end
 
   def ensure_router_enabled
     head :not_found unless Bloomwire::Features.enabled?(:global_webhook_router)

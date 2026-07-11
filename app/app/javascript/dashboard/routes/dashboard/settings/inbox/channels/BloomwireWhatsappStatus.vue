@@ -65,10 +65,12 @@ const confirmingDisconnect = ref(false);
 // (Standard verification failed → nothing changed locally). Never a false "disconnected".
 const mobileActionRequired = ref(false);
 const disconnectFailed = ref(false);
-// Coexistence offboarding recheck (the reconciliation owner) outcomes shown inside the mobile-action panel:
-// 'idle' | 'still_connected' (Meta still reports it connected) | 'failed' (recheck itself could not complete).
-const isRecheckingOffboarding = ref(false);
-const offboardingRecheckState = ref('idle');
+// Coexistence offboarding is reconciled by Bloomwire when Meta delivers the account_update / PARTNER_REMOVED
+// webhook (the authoritative owner). The mobile-action panel only REFRESHES the persisted status: 'idle' |
+// 'still_connected' (persisted status still shows the number connected — the removal has not been reported yet) |
+// 'failed' (the refresh itself could not complete). It never asks Meta and never self-declares disconnected.
+const isRefreshingStatus = ref(false);
+const refreshStatusResult = ref('idle');
 
 const actionReasonKey = computed(() => {
   switch (status.value?.action_required?.reason) {
@@ -104,8 +106,8 @@ const loadStatus = async () => {
   disconnectFailed.value = false;
   confirmingDisconnect.value = false;
   isDisconnecting.value = false;
-  offboardingRecheckState.value = 'idle';
-  isRecheckingOffboarding.value = false;
+  refreshStatusResult.value = 'idle';
+  isRefreshingStatus.value = false;
   if (!shouldQuery.value || !requestedInboxId) return;
 
   const isCurrent = () =>
@@ -191,37 +193,38 @@ const disconnect = async () => {
   }
 };
 
-// Coexistence offboarding recheck — the reconciliation trigger. After the owner completes the mobile
-// Business-Platform disconnect, ask the backend (the SINGLE authoritative owner) to confirm with Meta. Only an
-// authoritative disconnected DTO flips the panel (status → disconnected, mobile-action cleared); a 409
-// still_connected keeps the mobile instructions with a hint; any other failure shows a safe retry. We NEVER
-// self-declare disconnected. Bound to the displayed inbox + load generation so a mid-recheck switch can't apply
-// a stale result to another inbox.
-const recheckOffboarding = async () => {
+// Refresh the PERSISTED offboarding status. Coexistence offboarding is reconciled by Bloomwire when Meta delivers
+// the account_update / PARTNER_REMOVED webhook (the authoritative owner) — this button NEVER asks Meta and NEVER
+// self-declares disconnected from an inverse predicate. It re-reads the persisted status: once the webhook has
+// marked the setup disconnected the panel flips to the disconnected view; otherwise it shows a truthful
+// "not detected yet" note. Bound to the displayed inbox + load generation so a mid-refresh inbox switch can never
+// apply a stale result to another inbox.
+const refreshDisconnectStatus = async () => {
   const requestedInboxId = props.inbox?.id;
   const requestToken = latestRequestToken;
-  if (!requestedInboxId || isRecheckingOffboarding.value) return;
-  isRecheckingOffboarding.value = true;
-  offboardingRecheckState.value = 'idle';
+  if (!requestedInboxId || isRefreshingStatus.value) return;
+  isRefreshingStatus.value = true;
+  refreshStatusResult.value = 'idle';
 
   const isCurrent = () =>
     requestToken === latestRequestToken && props.inbox?.id === requestedInboxId;
   try {
     const dto = await store.dispatch(
-      'inboxes/recheckBloomwireWhatsAppDisconnection',
+      'inboxes/fetchBloomwireWhatsAppCapability',
       { inboxId: requestedInboxId }
     );
     if (!isCurrent()) return;
     status.value = dto;
-    mobileActionRequired.value = false;
+    // Only an authoritative persisted 'disconnected' (set by the PARTNER_REMOVED webhook) flips the panel.
+    if (dto?.setup?.status === 'disconnected') {
+      mobileActionRequired.value = false;
+    } else {
+      refreshStatusResult.value = 'still_connected';
+    }
   } catch (error) {
-    if (!isCurrent()) return;
-    offboardingRecheckState.value =
-      error?.response?.data?.code === 'still_connected'
-        ? 'still_connected'
-        : 'failed';
+    if (isCurrent()) refreshStatusResult.value = 'failed';
   } finally {
-    if (isCurrent()) isRecheckingOffboarding.value = false;
+    if (isCurrent()) isRefreshingStatus.value = false;
   }
 };
 
@@ -265,10 +268,12 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
       }}
     </p>
 
-    <!-- Reconciliation trigger: once the owner has disconnected on the phone, Recheck asks the backend to confirm
-         with Meta. Only an authoritative disconnected result flips the panel; still-connected keeps these steps. -->
+    <!-- Coexistence offboarding is reconciled automatically when Meta notifies Bloomwire (account_update /
+         PARTNER_REMOVED). This button only REFRESHES the persisted status: once the webhook has marked the number
+         disconnected the panel flips to the disconnected view; otherwise it shows a truthful "not detected yet"
+         note. It never asks Meta and never self-declares disconnected. -->
     <p
-      v-if="offboardingRecheckState === 'still_connected'"
+      v-if="refreshStatusResult === 'still_connected'"
       data-testid="bloomwire-wa-status-mobile-still-connected"
       class="mb-3 text-sm text-n-amber-11"
     >
@@ -279,13 +284,13 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
       }}
     </p>
     <p
-      v-else-if="offboardingRecheckState === 'failed'"
-      data-testid="bloomwire-wa-status-mobile-recheck-failed"
+      v-else-if="refreshStatusResult === 'failed'"
+      data-testid="bloomwire-wa-status-mobile-refresh-failed"
       class="mb-3 text-sm text-n-ruby-11"
     >
       {{
         $t(
-          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_RECHECK_FAILED'
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_REFRESH_FAILED'
         )
       }}
     </p>
@@ -293,15 +298,15 @@ watch([() => props.inbox?.id, shouldQuery], loadStatus);
     <NextButton
       solid
       teal
-      data-testid="bloomwire-wa-status-mobile-recheck"
-      :is-loading="isRecheckingOffboarding"
-      :disabled="isRecheckingOffboarding"
+      data-testid="bloomwire-wa-status-mobile-refresh"
+      :is-loading="isRefreshingStatus"
+      :disabled="isRefreshingStatus"
       :label="
         $t(
-          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_RECHECK_BUTTON'
+          'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT.MOBILE_REFRESH_BUTTON'
         )
       "
-      @click="recheckOffboarding"
+      @click="refreshDisconnectStatus"
     />
   </div>
 

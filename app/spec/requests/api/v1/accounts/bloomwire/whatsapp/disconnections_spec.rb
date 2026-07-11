@@ -111,83 +111,10 @@ RSpec.describe 'Bloomwire WhatsApp disconnect endpoint', type: :request do
     end
   end
 
-  # Coexistence offboarding recheck: the ONE authoritative reconciliation owner (there is no account_update /
-  # PARTNER_REMOVED webhook handler). Admin + managed-mode only; marks the preserved setup `disconnected` ONLY after
-  # Meta proves the number is no longer coexistence-connected; otherwise leaves state untouched. Safe DTO only.
-  context 'when rechecking with managed mode active and admin (Meta stubbed)' do
-    let(:recheck_url) { "#{url}/recheck" }
-
-    before do
-      enable_managed_mode
-      channel.provider_config['connection_mode'] = 'coexistence'
-      channel.save!(validate: false)
-    end
-
-    def stub_coexistence(onboarded:)
-      client = instance_double(Whatsapp::FacebookApiClient)
-      allow(client).to receive(:coexistence_onboarded?).and_return(onboarded)
-      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(client)
-      client
-    end
-
-    it 'marks the setup disconnected and returns a safe DTO once Meta proves it is no longer coexistence-connected' do
-      setup
-      stub_coexistence(onboarded: false)
-      post recheck_url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
-      aggregate_failures do
-        expect(response).to have_http_status(:ok)
-        expect(response.parsed_body['disconnected']).to be(true)
-        expect(response.parsed_body.dig('setup', 'status')).to eq('disconnected')
-        expect(response.body).not_to include('FAKE-STORED-TOKEN')
-        expect(response.body).not_to include('PNID-1')
-        expect(setup.reload.setup_status).to eq('disconnected')
-        expect(Channel::Whatsapp.exists?(channel.id)).to be(true)
-      end
-    end
-
-    it 'returns 409 still_connected and leaves state unchanged while Meta still reports it connected' do
-      setup
-      stub_coexistence(onboarded: true)
-      post recheck_url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
-      aggregate_failures do
-        expect(response).to have_http_status(:conflict)
-        expect(response.parsed_body['code']).to eq('still_connected')
-        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
-      end
-    end
-
-    it 'returns 502 recheck_unverified and leaves state unchanged when Meta cannot be read (no false disconnect)' do
-      setup
-      client = instance_double(Whatsapp::FacebookApiClient)
-      allow(client).to receive(:coexistence_onboarded?).and_raise(StandardError, 'RAW meta failure')
-      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(client)
-      post recheck_url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
-      aggregate_failures do
-        expect(response).to have_http_status(:bad_gateway)
-        expect(response.parsed_body['code']).to eq('recheck_unverified')
-        expect(response.body).not_to include('RAW meta failure')
-        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
-      end
-    end
-
-    it 'denies an agent' do
-      setup
-      stub_coexistence(onboarded: false)
-      post recheck_url, headers: agent.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
-      expect(response).to have_http_status(:unauthorized).or have_http_status(:forbidden)
-    end
-  end
-
   context 'when managed self-serve is not active (surface inert / 404)' do
     it 'is 404 when Bloomwire mode is OFF (stock)' do
       setup
       post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
-      expect(response).to have_http_status(:not_found)
-    end
-
-    it 'recheck is 404 when Bloomwire mode is OFF (stock)' do
-      setup
-      post "#{url}/recheck", headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
       expect(response).to have_http_status(:not_found)
     end
   end
