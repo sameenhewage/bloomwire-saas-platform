@@ -211,7 +211,9 @@ describe('#actions', () => {
         data: { status: 'pending' },
       });
 
-      await expect(actions.delete({ commit }, inboxList[0].id)).resolves.toEqual({
+      await expect(
+        actions.delete({ commit }, inboxList[0].id)
+      ).resolves.toEqual({
         status: 'pending',
       });
       expect(commit.mock.calls).toEqual([
