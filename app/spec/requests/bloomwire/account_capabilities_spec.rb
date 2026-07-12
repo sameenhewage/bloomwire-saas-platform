@@ -35,7 +35,7 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
                                          canRegisterProviderWebhook canCreateInbox canManageBots
                                          canAccessIntegrations canSelfServeManagedWhatsapp
                                          canUseAsyncStandardWhatsappOnboarding
-                                         canAccessCategoryAdmin canRemoveInbox
+                                         canAccessCategoryAdmin canRemoveInbox canViewChatwootPlanUpsell
                                        ])
       expect(caps.values).to all(be_in([true, false]))
     end
@@ -299,6 +299,17 @@ RSpec.describe 'Bloomwire account capabilities payload', type: :request do
       it 'is false for an administrator' do
         expect(caps_for(administrator)['canAccessCategoryAdmin']).to be(false)
       end
+    end
+  end
+
+  describe 'canViewChatwootPlanUpsell' do
+    it 'is true when Bloomwire mode is OFF (stock)' do
+      expect(caps_for(administrator)['canViewChatwootPlanUpsell']).to be(true)
+    end
+
+    it 'is false when the Bloomwire master mode is ON' do
+      set_toggle('BLOOMWIRE_MODE_ENABLED', true)
+      expect(caps_for(administrator)['canViewChatwootPlanUpsell']).to be(false)
     end
   end
 
