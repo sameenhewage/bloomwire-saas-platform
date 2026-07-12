@@ -142,8 +142,20 @@ class Bloomwire::WhatsappInboxDeprovisionService
   end
 
   def self.onboarding_attempts_for(inbox, channel)
-    Bloomwire::WhatsappOnboardingAttempt.where(inbox_id: inbox.id)
-                                        .or(Bloomwire::WhatsappOnboardingAttempt.where(channel_whatsapp_id: channel.id))
+    account_attempts = Bloomwire::WhatsappOnboardingAttempt.where(account_id: inbox.account_id)
+    linked_attempts = account_attempts.where(inbox_id: inbox.id)
+                                      .or(account_attempts.where(channel_whatsapp_id: channel.id))
+    phone_number_id = target_phone_number_id(inbox, channel)
+    return linked_attempts if phone_number_id.blank?
+
+    linked_attempts.or(account_attempts.active.where(phone_number_id: phone_number_id))
+  end
+
+  def self.target_phone_number_id(inbox, channel)
+    setup_phone_number_ids = setups_for(inbox, channel).distinct.pluck(:phone_number_id)
+    channel_phone_number_id = channel.provider_config&.[]('phone_number_id')
+    phone_number_ids = [channel_phone_number_id, *setup_phone_number_ids].filter_map(&:presence).uniq
+    phone_number_ids.one? ? phone_number_ids.first : nil
   end
 
   def self.detach_setup_requests!(setups)

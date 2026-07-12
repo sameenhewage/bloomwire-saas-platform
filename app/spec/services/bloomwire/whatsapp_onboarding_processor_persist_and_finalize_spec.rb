@@ -22,16 +22,17 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor, '#persist_and_finalize' d
     Account.where(id: account_ids).destroy_all
   end
 
-  def build_context(existing_aggregate: true)
+  def build_context(existing_aggregate: true, bound_audit: false)
     account = create(:account)
     cleanup_account_ids << account.id
     phone_number_id = "PNID-FENCE-#{SecureRandom.hex(4)}"
     phone_digits = "1555#{SecureRandom.random_number(10_000_000).to_s.rjust(7, '0')}"
     setup = build_setup(account, phone_number_id, phone_digits) if existing_aggregate
     seed_original_credential(setup) if setup
-    attempt = build_attempt(account, setup, phone_number_id)
+    bound_attempt = build_bound_attempt(account, setup, phone_number_id) if bound_audit
+    attempt = build_attempt(account, phone_number_id)
     target = persistence_target(phone_number_id, "+#{phone_digits}")
-    { account: account, setup: setup, attempt: attempt, target: target }
+    { account: account, setup: setup, attempt: attempt, bound_attempt: bound_attempt, target: target }
   end
 
   def build_setup(account, phone_number_id, phone_digits)
@@ -50,17 +51,26 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor, '#persist_and_finalize' d
     channel.save!(validate: false)
   end
 
-  def build_attempt(account, setup, phone_number_id)
+  def build_attempt(account, phone_number_id)
     Bloomwire::WhatsappOnboardingAttempt.create!(
       account: account,
       status: Bloomwire::WhatsappOnboardingAttempt::PROCESSING,
       waba_id: 'WABA-FENCE',
       phone_number_id: phone_number_id,
-      inbox: setup&.inbox,
-      channel_whatsapp: setup&.channel_whatsapp,
       processing_owner: owner,
       lease_expires_at: 5.minutes.from_now,
       submission_generation: generation
+    )
+  end
+
+  def build_bound_attempt(account, setup, phone_number_id)
+    Bloomwire::WhatsappOnboardingAttempt.create!(
+      account: account,
+      status: Bloomwire::WhatsappOnboardingAttempt::COMPLETED,
+      waba_id: 'WABA-FENCE',
+      phone_number_id: phone_number_id,
+      inbox: setup.inbox,
+      channel_whatsapp: setup.channel_whatsapp
     )
   end
 
@@ -143,6 +153,8 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor, '#persist_and_finalize' d
     resume = Queue.new
     pause_after_final_renewal(context[:attempt], entered: entered, resume: resume)
     processor = processor_for(context)
+    expect(context[:attempt].inbox_id).to be_nil
+    expect(context[:attempt].channel_whatsapp_id).to be_nil
     expect(Whatsapp::FacebookApiClient).not_to receive(:new)
 
     worker = Thread.new do
@@ -171,11 +183,20 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor, '#persist_and_finalize' d
   end
 
   it 'lets persistence commit under the fence before purge waits and removes the complete aggregate' do
-    context = build_context
+    context = build_context(bound_audit: true)
     fence_acquired = Queue.new
     resume = Queue.new
+    locked_attempt_ids = Queue.new
     persister = pausing_inside_persistence(context[:account], entered: fence_acquired, resume: resume)
     processor = processor_for(context, persister: persister)
+    allow(Bloomwire::WhatsappInboxDeprovisionService).to receive(:delete_inbox!).and_wrap_original do |original, *args, **kwargs|
+      locked_attempt_ids << kwargs.fetch(:attempts).map(&:id)
+      original.call(*args, **kwargs)
+    end
+    expect(context[:attempt].inbox_id).to be_nil
+    expect(context[:attempt].channel_whatsapp_id).to be_nil
+    expect(context[:bound_attempt].id).to be < context[:attempt].id
+    expect(Whatsapp::FacebookApiClient).not_to receive(:new)
     worker = Thread.new do
       ActiveRecord::Base.connection_pool.with_connection { persistence_step(processor, context) }
     end
@@ -196,12 +217,16 @@ RSpec.describe Bloomwire::WhatsappOnboardingProcessor, '#persist_and_finalize' d
     finish_threads(worker, purge)
 
     audit = context[:attempt].reload
+    bound_audit = context[:bound_attempt].reload
     aggregate_failures do
       expect(outcome).to eq(:blocked)
+      expect(locked_attempt_ids.pop(true)).to eq([bound_audit.id, audit.id].sort)
       expect(audit.inbox_id).to be_nil
       expect(audit.channel_whatsapp_id).to be_nil
       expect(audit.processing_owner).to be_nil
       expect(audit.lease_expires_at).to be_nil
+      expect(bound_audit.inbox_id).to be_nil
+      expect(bound_audit.channel_whatsapp_id).to be_nil
       expect(Inbox.where(account_id: context[:account].id)).to be_empty
       expect(Channel::Whatsapp.where(account_id: context[:account].id)).to be_empty
       expect(Bloomwire::WhatsappSetup.where(account_id: context[:account].id)).to be_empty

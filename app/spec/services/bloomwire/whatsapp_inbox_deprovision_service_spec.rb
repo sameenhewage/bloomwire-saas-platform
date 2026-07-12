@@ -210,6 +210,109 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       end
     end
 
+    it 'cancels an active unbound attempt using the exact current Channel phone identity' do
+      inbox, _channel, = managed_inbox(phone_number_id: 'PNID-TARGET', with_setup: false)
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'processing', waba_id: 'WABA-1', phone_number_id: 'PNID-TARGET',
+        processing_owner: 'worker-1', lease_expires_at: 1.minute.from_now
+      )
+      expect(attempt.inbox_id).to be_nil
+      expect(attempt.channel_whatsapp_id).to be_nil
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
+      purge(inbox)
+
+      aggregate_failures do
+        expect(attempt.reload.status).to eq('cancelled')
+        expect(attempt.processing_owner).to be_nil
+        expect(attempt.lease_expires_at).to be_nil
+        expect(Inbox.exists?(inbox.id)).to be(false)
+      end
+    end
+
+    it 'cancels an active unbound attempt using the exact current Setup phone identity' do
+      inbox, channel, = managed_inbox(phone_number_id: 'PNID-TARGET')
+      channel.provider_config = channel.provider_config.except('phone_number_id')
+      channel.save!(validate: false)
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'processing', phone_number_id: 'PNID-TARGET',
+        processing_owner: 'worker-1', lease_expires_at: 1.minute.from_now
+      )
+
+      purge(inbox)
+
+      aggregate_failures do
+        expect(attempt.reload.status).to eq('cancelled')
+        expect(attempt.processing_owner).to be_nil
+        expect(attempt.lease_expires_at).to be_nil
+      end
+    end
+
+    it 'leaves different-phone and cross-account unbound attempts untouched' do
+      inbox, = managed_inbox(phone_number_id: 'PNID-TARGET', waba_id: 'WABA-SHARED')
+      different_phone = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'processing', waba_id: 'WABA-SHARED', phone_number_id: 'PNID-OTHER',
+        processing_owner: 'different-phone-worker', lease_expires_at: 1.minute.from_now
+      )
+      other_account = create(:account)
+      same_phone_other_account = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: other_account, status: 'processing', waba_id: 'WABA-SHARED', phone_number_id: 'PNID-TARGET',
+        processing_owner: 'other-account-worker', lease_expires_at: 1.minute.from_now
+      )
+
+      purge(inbox)
+
+      aggregate_failures do
+        expect(different_phone.reload.status).to eq('processing')
+        expect(different_phone.processing_owner).to eq('different-phone-worker')
+        expect(same_phone_other_account.reload.status).to eq('processing')
+        expect(same_phone_other_account.processing_owner).to eq('other-account-worker')
+      end
+    end
+
+    it 'does not broaden unbound attempt selection when Channel and Setup phone identities conflict' do
+      inbox, channel, setup = managed_inbox(phone_number_id: 'PNID-SETUP')
+      channel.provider_config = channel.provider_config.merge('phone_number_id' => 'PNID-CHANNEL')
+      channel.save!(validate: false)
+      attempts = %w[PNID-SETUP PNID-CHANNEL].map do |phone_number_id|
+        Bloomwire::WhatsappOnboardingAttempt.create!(
+          account: account, status: 'processing', phone_number_id: phone_number_id,
+          processing_owner: "worker-#{phone_number_id}", lease_expires_at: 1.minute.from_now
+        )
+      end
+      expect(setup.reload.phone_number_id).to eq('PNID-SETUP')
+
+      purge(inbox)
+
+      attempts.each do |attempt|
+        aggregate_failures do
+          expect(attempt.reload.status).to eq('processing')
+          expect(attempt.processing_owner).to eq("worker-#{attempt.phone_number_id}")
+        end
+      end
+    end
+
+    it 'does not broaden unbound attempt selection when target phone identity is blank or missing' do
+      [nil, ' '].each_with_index do |phone_number_id, index|
+        inbox, = managed_inbox(
+          phone_number: "+1555000000#{index}", phone_number_id: phone_number_id,
+          waba_id: 'WABA-SHARED', with_setup: false
+        )
+        attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+          account: account, status: 'processing', waba_id: 'WABA-SHARED',
+          phone_number_id: "PNID-UNRELATED-#{index}", processing_owner: "worker-#{index}",
+          lease_expires_at: 1.minute.from_now
+        )
+
+        purge(inbox)
+
+        aggregate_failures do
+          expect(attempt.reload.status).to eq('processing')
+          expect(attempt.processing_owner).to eq("worker-#{index}")
+        end
+      end
+    end
+
     it 'detaches a linked setup request before removing its technical setup' do
       inbox, channel, setup = managed_inbox
       setup_request = Bloomwire::WhatsappSetupRequest.create!(
