@@ -178,7 +178,7 @@ were not reached. No second popup, message test, Standard fallback, manual provi
 router/Enterprise/production change, duplicate, or credential rotation occurred or is approved. The exact reason
 Meta's completion UI did not yield the official readiness pair is not proven and must not be inferred.
 
-### F. Permanent local Inbox removal preserves attempt audit history without preserving live ownership (Accepted — implemented locally; PR/CI pending)
+### F. Permanent local Inbox removal preserves attempt audit history without preserving live ownership (Accepted — PR #166; implementation `52e5524`; final CI pending)
 
 A DEV Remove Inbox failure proved that retained attempts are a database dependency of their bound Inbox/Channel. Five
 terminal rows blocked `inbox.destroy!` after Setup and history had already committed, leaving a partial aggregate. The
