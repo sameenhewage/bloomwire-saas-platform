@@ -116,6 +116,7 @@ const autoStartAsync = ref(false);
 // eligibility, verified business/WABA, payment/credit line, Solution Partner obligations) BEFORE any Meta/store
 // action. Reset whenever the confirmation is (re)opened or left so a fresh confirmation always re-requires it.
 const migrationAcknowledged = ref(false);
+const migrationEntryActive = ref(false);
 const inboxName = ref('');
 const expectedNumber = ref('');
 const isProcessing = ref(false);
@@ -156,6 +157,7 @@ const coexistenceRequirements = computed(() => [
 const startRegister = () => {
   errorMessage.value = '';
   autoStartAsync.value = false;
+  migrationEntryActive.value = false;
   flow.value = 'standard';
   mode.value = useAsyncStandardOnboarding.value ? 'async_standard' : 'register';
 };
@@ -164,6 +166,7 @@ const startRegister = () => {
 const startCoexistence = () => {
   errorMessage.value = '';
   autoStartAsync.value = false;
+  migrationEntryActive.value = false;
   flow.value = 'coexistence';
   mode.value = 'register';
 };
@@ -175,6 +178,7 @@ const startMigration = () => {
   errorMessage.value = '';
   autoStartAsync.value = false;
   migrationAcknowledged.value = false;
+  migrationEntryActive.value = true;
   mode.value = 'migration_confirm';
 };
 
@@ -182,6 +186,7 @@ const backToChoose = () => {
   errorMessage.value = '';
   autoStartAsync.value = false;
   migrationAcknowledged.value = false;
+  migrationEntryActive.value = false;
   mode.value = 'choose';
 };
 
@@ -427,6 +432,10 @@ const register = async () => {
     // Resolves null when the customer dismisses the Meta popup (or the run was cancelled).
     if (!credentials) {
       tracer.trace('attempt_finished', { result: 'cancelled' });
+      if (migrationEntryActive.value) {
+        backToChoose();
+        return;
+      }
       errorMessage.value = t(
         'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CANCELLED'
       );

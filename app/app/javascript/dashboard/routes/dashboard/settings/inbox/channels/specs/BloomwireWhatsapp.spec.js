@@ -326,6 +326,26 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it('returns to the connection choices when the migration Meta popup is cancelled', async () => {
+    runEmbeddedSignup.mockResolvedValue(null);
+    const wrapper = mountWizard({ asyncStandard: false });
+
+    await startMigration(wrapper);
+    await acknowledgeMigration(wrapper);
+    await wrapper
+      .find('[data-testid="bloomwire-wa-migration-confirm-button"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="bloomwire-wa-choose"]').exists()).toBe(
+      true
+    );
+    expect(wrapper.find('[data-testid="bloomwire-wa-register"]').exists()).toBe(
+      false
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it('cancelled or failed migration never creates a success state', async () => {
     runEmbeddedSignup.mockResolvedValueOnce(null).mockResolvedValueOnce(CREDS);
     dispatch.mockRejectedValueOnce(new Error('RAW META failure'));
@@ -342,7 +362,6 @@ describe('BloomwireWhatsapp.vue — connection-choice screen', () => {
       false
     );
 
-    await wrapper.find('[data-testid="bloomwire-wa-back"]').trigger('click');
     await startMigration(wrapper);
     await acknowledgeMigration(wrapper);
     await wrapper

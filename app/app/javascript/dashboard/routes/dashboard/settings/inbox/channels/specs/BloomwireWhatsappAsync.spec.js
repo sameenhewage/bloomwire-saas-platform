@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { mount, RouterLinkStub } from '@vue/test-utils';
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils';
 import BloomwireWhatsappAsync from '../BloomwireWhatsappAsync.vue';
 import { ONBOARDING_STATES } from 'dashboard/composables/useAsyncWhatsappOnboarding';
 
@@ -87,6 +87,42 @@ describe('BloomwireWhatsappAsync.vue (async onboarding wizard UI)', () => {
     flow.resume.mockReturnValue(true);
     mountAsync({ autoStart: true });
     expect(flow.start).not.toHaveBeenCalled();
+  });
+
+  it('returns to the connection choices when an auto-started migration popup is cancelled', async () => {
+    const state = ref(ONBOARDING_STATES.IDLE);
+    flow = makeFlow({
+      state,
+      start: vi.fn(async () => {
+        state.value = ONBOARDING_STATES.CANCELLED;
+        return null;
+      }),
+    });
+
+    const wrapper = mountAsync({ autoStart: true });
+    await flushPromises();
+
+    expect(wrapper.emitted('back')).toHaveLength(1);
+  });
+
+  it('keeps a directly started Standard cancellation on its retry screen', async () => {
+    const state = ref(ONBOARDING_STATES.IDLE);
+    flow = makeFlow({
+      state,
+      start: vi.fn(async () => {
+        state.value = ONBOARDING_STATES.CANCELLED;
+        return null;
+      }),
+    });
+
+    const wrapper = mountAsync();
+    await wrapper
+      .find('[data-testid="bloomwire-wa-async-register"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(wrapper.emitted('back')).toBeUndefined();
+    expect(has(wrapper, 'bloomwire-wa-async-start')).toBe(true);
   });
 
   it('shows a distinct waiting-for-Meta screen with relaunch and server cancellation', async () => {

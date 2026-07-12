@@ -96,9 +96,12 @@ const restartOnCurrentPath = async () => {
 // Resume an in-flight attempt (account-scoped) after a refresh / navigation. Returns false when there is none, so
 // the UI lands on the start screen. After an explicit migration confirmation (autoStart) with nothing to resume,
 // begin the SAME Standard lifecycle exactly once — never a second, parallel start alongside a resumed attempt.
-onMounted(() => {
+onMounted(async () => {
   const resumed = resume();
-  if (props.autoStart && !resumed) startOnCurrentPath();
+  if (props.autoStart && !resumed) {
+    await startOnCurrentPath();
+    if (state.value === S.CANCELLED) emit('back');
+  }
 });
 // Stop polling on unmount WITHOUT clearing the resumable attempt (it keeps running server-side; a return resumes).
 onBeforeUnmount(() => {
