@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { mount, flushPromises } from '@vue/test-utils';
 import BloomwireWhatsappStatus from '../BloomwireWhatsappStatus.vue';
+import inboxMgmt from 'dashboard/i18n/locale/en/inboxMgmt.json';
 
 // Phase 5 (resume) — durable managed-WhatsApp capability panel on the Inbox Settings surface. The store + admin
 // capability are mocked (no HTTP). Proves: it loads the PERSISTED status from the backend on mount (durable /
@@ -31,8 +32,23 @@ const T = {
   disconnect: '[data-testid="bloomwire-wa-status-disconnect"]',
   disconnectConfirmBtn:
     '[data-testid="bloomwire-wa-status-disconnect-confirm-button"]',
+  mobileAction: '[data-testid="bloomwire-wa-status-mobile-action-required"]',
+  mobileRefresh: '[data-testid="bloomwire-wa-status-mobile-refresh"]',
+  mobileStillConnected:
+    '[data-testid="bloomwire-wa-status-mobile-still-connected"]',
+  mobileRefreshFailed:
+    '[data-testid="bloomwire-wa-status-mobile-refresh-failed"]',
+  disconnectFailed: '[data-testid="bloomwire-wa-status-disconnect-failed"]',
   disconnected: '[data-testid="bloomwire-wa-status-disconnected"]',
 };
+
+const coexistenceInbox = (id = 42) => ({
+  id,
+  provider_config: {
+    source: 'bloomwire_managed',
+    connection_mode: 'coexistence',
+  },
+});
 
 const managedInbox = (overrides = {}) => ({
   id: 42,
@@ -403,7 +419,92 @@ describe('BloomwireWhatsappStatus (durable Inbox Settings panel)', () => {
 
 // WhatsWay-parity "Disconnect": the ready panel offers a 2-step Disconnect that deregisters the number on Meta and
 // KEEPS the records; a persisted disconnected setup renders reconnect guidance (not ready / not action-required).
-describe('BloomwireWhatsappStatus — Disconnect (WhatsWay parity)', () => {
+describe('BloomwireWhatsappStatus — truthful disconnect', () => {
+  it('uses the exact Coexistence mobile-app offboarding path and states local state is unchanged until Meta notifies Bloomwire', () => {
+    const copy = inboxMgmt.INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.DISCONNECT;
+    expect(copy.MOBILE_ACTION_INSTRUCTIONS).toContain(
+      'WhatsApp Business App → Settings → Account → Business Platform → Disconnect'
+    );
+    // Truthful: reconciled automatically when Meta notifies Bloomwire (PARTNER_REMOVED); local state unchanged
+    // until then. It must NOT promise an on-demand "recheck/confirm with Meta".
+    expect(copy.MOBILE_ACTION_DETAIL).toMatch(/Meta.*notif.*unchanged/i);
+    expect(copy.MOBILE_ACTION_DETAIL).not.toMatch(/recheck/i);
+  });
+
+  it('shows Coexistence mobile instructions without dispatching a false deregistration flow', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(
+      managedInbox({
+        provider_config: {
+          source: 'bloomwire_managed',
+          connection_mode: 'coexistence',
+        },
+      })
+    );
+    await flushPromises();
+
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/disconnectBloomwireWhatsApp',
+      expect.anything()
+    );
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+  });
+
+  it('honors backend mobile_action_required enforcement when frontend mode metadata is stale', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/disconnectBloomwireWhatsApp') {
+        return Promise.reject(
+          Object.assign(new Error('disconnect rejected'), {
+            response: { data: { code: 'mobile_action_required' } },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await wrapper.find(T.disconnectConfirmBtn).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+  });
+
+  it('shows a safe failure and does not claim Standard disconnect success when verification fails', async () => {
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        return Promise.resolve(readyDto());
+      }
+      if (action === 'inboxes/disconnectBloomwireWhatsApp') {
+        return Promise.reject(
+          Object.assign(new Error('disconnect rejected'), {
+            response: {
+              data: { code: 'disconnect_unverified', error: 'RAW Meta detail' },
+            },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await wrapper.find(T.disconnectConfirmBtn).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.disconnectFailed).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+    expect(wrapper.html()).not.toContain('RAW Meta detail');
+  });
+
   it('shows a Disconnect button on the ready panel and does NOT disconnect on the first click', async () => {
     mockFetch(readyDto());
     const wrapper = mountPanel();
@@ -449,5 +550,140 @@ describe('BloomwireWhatsappStatus — Disconnect (WhatsWay parity)', () => {
     expect(wrapper.find(T.disconnected).exists()).toBe(true);
     expect(wrapper.find(T.ready).exists()).toBe(false);
     expect(wrapper.find(T.actionRequired).exists()).toBe(false);
+  });
+});
+
+// Finding 1 (2nd review) — the Coexistence mobile-action panel offers a persisted-status REFRESH, NOT an unsafe
+// backend recheck. Offboarding is reconciled by Bloomwire when Meta delivers the account_update / PARTNER_REMOVED
+// webhook (the authoritative owner); this button only re-reads the persisted status. It flips to disconnected ONLY
+// when the persisted setup.status is 'disconnected' (set by that webhook) — never from an inverse predicate — and
+// otherwise shows a truthful "not detected yet" note. It never calls a disconnection recheck endpoint.
+describe('BloomwireWhatsappStatus — Coexistence offboarding status refresh', () => {
+  // The mount capability read returns firstDto; the refresh read returns secondDto.
+  const mockCapabilitySequence = (firstDto, secondDto) => {
+    let calls = 0;
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        calls += 1;
+        return Promise.resolve(calls === 1 ? firstDto : secondDto);
+      }
+      return Promise.resolve();
+    });
+  };
+
+  const openMobileAction = async () => {
+    const wrapper = mountPanel(coexistenceInbox());
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    return wrapper;
+  };
+
+  it('offers a Refresh action inside the mobile-action panel', async () => {
+    mockFetch(readyDto());
+    const wrapper = await openMobileAction();
+    expect(wrapper.find(T.mobileRefresh).exists()).toBe(true);
+  });
+
+  it('re-reads the persisted capability status and never calls a disconnection recheck endpoint', async () => {
+    mockCapabilitySequence(readyDto(), disconnectedDto());
+    const wrapper = await openMobileAction();
+    await wrapper.find(T.mobileRefresh).trigger('click');
+    await flushPromises();
+
+    expect(dispatch).toHaveBeenCalledWith(
+      'inboxes/fetchBloomwireWhatsAppCapability',
+      { inboxId: 42 }
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      'inboxes/recheckBloomwireWhatsAppDisconnection',
+      expect.anything()
+    );
+  });
+
+  it('flips to disconnected ONLY when the persisted status is disconnected (webhook-reconciled)', async () => {
+    mockCapabilitySequence(readyDto(), disconnectedDto());
+    const wrapper = await openMobileAction();
+    await wrapper.find(T.mobileRefresh).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.disconnected).exists()).toBe(true);
+    expect(wrapper.find(T.mobileAction).exists()).toBe(false);
+  });
+
+  it('keeps the mobile instructions and shows a "not detected yet" note while the persisted status is still connected', async () => {
+    mockCapabilitySequence(readyDto(), readyDto());
+    const wrapper = await openMobileAction();
+    await wrapper.find(T.mobileRefresh).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileStillConnected).exists()).toBe(true);
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+  });
+
+  it('shows a safe retry note (no raw error) when the status refresh itself cannot complete', async () => {
+    let calls = 0;
+    dispatch.mockImplementation(action => {
+      if (action === 'inboxes/fetchBloomwireWhatsAppCapability') {
+        calls += 1;
+        if (calls === 1) return Promise.resolve(readyDto());
+        return Promise.reject(
+          Object.assign(new Error('boom'), {
+            response: { data: { error: 'RAW meta detail' } },
+          })
+        );
+      }
+      return Promise.resolve();
+    });
+    const wrapper = mountPanel(coexistenceInbox());
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    await wrapper.find(T.mobileRefresh).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileRefreshFailed).exists()).toBe(true);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
+    expect(wrapper.html()).not.toContain('RAW meta detail');
+  });
+});
+
+// Finding 2 — disconnect UI state must not leak across inboxes. The mobile-action block is the top-level v-if, so a
+// stale `mobileActionRequired` from Coexistence Inbox A would hide Standard/non-managed Inbox B's real status. Every
+// load/inbox generation must reset all disconnect UI state; a stale response from A must never change B.
+describe('BloomwireWhatsappStatus — cross-inbox state isolation', () => {
+  it('clears the Coexistence mobile-action panel when switching to a Standard inbox (shows B, not A)', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(coexistenceInbox(42));
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+
+    await wrapper.setProps({ inbox: managedInbox({ id: 43 }) });
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(false);
+    expect(wrapper.find(T.ready).exists()).toBe(true);
+  });
+
+  it('clears the Coexistence mobile-action panel when switching to a non-managed inbox', async () => {
+    mockFetch(readyDto());
+    const wrapper = mountPanel(coexistenceInbox(42));
+    await flushPromises();
+    await wrapper.find(T.disconnect).trigger('click');
+    await flushPromises();
+    expect(wrapper.find(T.mobileAction).exists()).toBe(true);
+
+    await wrapper.setProps({
+      inbox: { id: 44, provider_config: { source: 'whatsapp_cloud' } },
+    });
+    await flushPromises();
+
+    expect(wrapper.find(T.mobileAction).exists()).toBe(false);
+    expect(wrapper.find(T.ready).exists()).toBe(false);
+    expect(wrapper.find(T.disconnected).exists()).toBe(false);
   });
 });

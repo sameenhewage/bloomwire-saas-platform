@@ -109,6 +109,13 @@ const mode = ref(
 // 'standard' = Register New Number (Cloud API); 'coexistence' = Connect Existing WhatsApp Business App (17D.3).
 // Both reuse the same credential-free form + Meta Embedded Signup; only the target endpoint differs.
 const flow = ref('standard');
+// Set true ONLY after an explicit provider-migration confirmation that routes to the async Standard child, so it
+// begins the SAME async Standard lifecycle once on mount. Never set for the normal "Register New Number" entry.
+const autoStartAsync = ref(false);
+// Migration is gated on the admin acknowledging the truthful prerequisites (two-step verification off, source
+// eligibility, verified business/WABA, payment/credit line, Solution Partner obligations) BEFORE any Meta/store
+// action. Reset whenever the confirmation is (re)opened or left so a fresh confirmation always re-requires it.
+const migrationAcknowledged = ref(false);
 const inboxName = ref('');
 const expectedNumber = ref('');
 const isProcessing = ref(false);
@@ -148,6 +155,7 @@ const coexistenceRequirements = computed(() => [
 
 const startRegister = () => {
   errorMessage.value = '';
+  autoStartAsync.value = false;
   flow.value = 'standard';
   mode.value = useAsyncStandardOnboarding.value ? 'async_standard' : 'register';
 };
@@ -155,17 +163,31 @@ const startRegister = () => {
 // Phase 17D.3: enter the same credential-free form for the Coexistence flow (existing WhatsApp Business App).
 const startCoexistence = () => {
   errorMessage.value = '';
+  autoStartAsync.value = false;
   flow.value = 'coexistence';
   mode.value = 'register';
 };
 
+// Provider migration ("Move Existing Cloud API Number") — the recommended path for a number already on the Cloud
+// API with another provider. Show an EXPLICIT confirmation first; no Meta or store call happens until the owner
+// confirms. Migration reuses the EXACT Standard lifecycle (there is no separate endpoint, table, or Meta flag).
+const startMigration = () => {
+  errorMessage.value = '';
+  autoStartAsync.value = false;
+  migrationAcknowledged.value = false;
+  mode.value = 'migration_confirm';
+};
+
 const backToChoose = () => {
   errorMessage.value = '';
+  autoStartAsync.value = false;
+  migrationAcknowledged.value = false;
   mode.value = 'choose';
 };
 
 const useSyncStandardFallback = () => {
   errorMessage.value = '';
+  autoStartAsync.value = false;
   flow.value = 'standard';
   mode.value = 'register';
 };
@@ -484,6 +506,23 @@ const register = async () => {
   }
 };
 
+// Explicit provider-migration confirmation → run the SAME Standard lifecycle (coexistence:false), NOT a separate
+// migration flow. Async Standard (when enabled) hands off to the async child, which auto-starts once; otherwise the
+// synchronous Standard `register()` runs directly. No migration endpoint/table/Meta flag is involved.
+const confirmMigration = async () => {
+  // Gate: no Meta or store action until the admin acknowledges the prerequisites (the button is also disabled).
+  if (!migrationAcknowledged.value) return;
+  errorMessage.value = '';
+  flow.value = 'standard';
+  if (useAsyncStandardOnboarding.value) {
+    autoStartAsync.value = true;
+    mode.value = 'async_standard';
+    return;
+  }
+  mode.value = 'register';
+  await register();
+};
+
 // Guaranteed cleanup on unmount / route change: settle any in-flight signup run, abort the create request, clear
 // its timer, mark the flow left (so any late response is ignored) and stop every loading flag, so
 // listeners/timers/pending/create state can never leak past this component's lifecycle.
@@ -731,7 +770,8 @@ onBeforeRouteLeave(() => {
       </div>
     </div>
 
-    <!-- Connection choice: two options. Both launch Meta Embedded Signup; each posts to its own endpoint. -->
+    <!-- Connection choice: three options (migration, coexistence, standard). Each launches Meta Embedded Signup or,
+         for migration, an explicit confirmation that reuses the Standard lifecycle. -->
     <div v-else-if="mode === 'choose'" data-testid="bloomwire-wa-choose">
       <div class="flex flex-col items-start mb-6 text-start">
         <h3 class="mb-2 text-base font-medium text-n-slate-12">
@@ -743,9 +783,64 @@ onBeforeRouteLeave(() => {
       </div>
 
       <div class="flex flex-col gap-4">
-        <!-- Option 1: Connect Existing WhatsApp Business App (Coexistence) — Phase 17D.3: enabled. -->
+        <!-- Option 1: Move Existing Cloud API Number (Migration) — recommended. Confirmation happens first. -->
+        <div
+          data-testid="bloomwire-wa-choice-migration"
+          data-bloomwire-wa-option="migration"
+          class="rounded-xl border border-n-weak p-4"
+        >
+          <div class="flex flex-wrap items-center gap-2 mb-1">
+            <h4 class="text-sm font-medium text-n-slate-12">
+              {{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.TITLE'
+                )
+              }}
+            </h4>
+            <span
+              data-testid="bloomwire-wa-migration-recommended"
+              class="text-xs px-2 py-0.5 rounded-full bg-n-teal-3 text-n-teal-11"
+            >
+              {{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.RECOMMENDED'
+                )
+              }}
+            </span>
+            <span
+              class="text-xs px-2 py-0.5 rounded-full bg-n-alpha-2 text-n-slate-11"
+            >
+              {{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.BADGE'
+                )
+              }}
+            </span>
+          </div>
+          <p class="text-sm text-n-slate-11 mb-3">
+            {{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.DESC'
+              )
+            }}
+          </p>
+          <NextButton
+            solid
+            teal
+            data-testid="bloomwire-wa-migration-cta"
+            :label="
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CTA'
+              )
+            "
+            @click="startMigration"
+          />
+        </div>
+
+        <!-- Option 2: Connect Existing WhatsApp Business App (Coexistence) — Phase 17D.3: enabled. -->
         <div
           data-testid="bloomwire-wa-choice-coexistence"
+          data-bloomwire-wa-option="coexistence"
           class="rounded-xl border border-n-weak p-4"
         >
           <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -813,9 +908,10 @@ onBeforeRouteLeave(() => {
           />
         </div>
 
-        <!-- Option 2: Register New Number (Standard) — available now; continues to the registration form. -->
+        <!-- Option 3: Register New Number (Standard) — available now; continues to the registration form. -->
         <div
           data-testid="bloomwire-wa-choice-standard"
+          data-bloomwire-wa-option="standard"
           class="rounded-xl border border-n-weak p-4"
         >
           <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -867,9 +963,232 @@ onBeforeRouteLeave(() => {
       </div>
     </div>
 
+    <!-- Migration confirmation: explicit, truthful warnings BEFORE any Meta/store action. Confirm reuses the exact
+         Standard lifecycle (coexistence:false); cancel returns to the chooser with no side effects. -->
+    <div
+      v-else-if="mode === 'migration_confirm'"
+      data-testid="bloomwire-wa-migration-confirm"
+    >
+      <button
+        type="button"
+        data-testid="bloomwire-wa-migration-cancel"
+        class="inline-flex items-center gap-1 text-xs text-n-slate-11 mb-6 hover:text-n-slate-12"
+        @click="backToChoose"
+      >
+        <Icon icon="i-lucide-chevron-left" class="size-3.5" />
+        {{ $t('INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.BACK') }}
+      </button>
+      <div class="flex flex-col items-start mb-6 text-start">
+        <h3 class="mb-2 text-base font-medium text-n-slate-12">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.TITLE'
+            )
+          }}
+        </h3>
+        <p class="text-sm leading-6 text-n-slate-11">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.SUBTITLE'
+            )
+          }}
+        </p>
+      </div>
+
+      <ul class="flex flex-col gap-2 mb-6">
+        <li
+          v-for="key in [
+            'APPROVAL',
+            'PREVIOUS_PROVIDER',
+            'HISTORY',
+            'CANCEL',
+            'ASSET',
+          ]"
+          :key="key"
+          class="flex gap-2 items-start text-sm text-n-slate-11"
+        >
+          <Icon icon="i-lucide-dot" class="size-5 shrink-0" />
+          <span>
+            <template v-if="key === 'APPROVAL'">{{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.APPROVAL'
+              )
+            }}</template>
+            <template v-else-if="key === 'PREVIOUS_PROVIDER'">{{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREVIOUS_PROVIDER'
+              )
+            }}</template>
+            <template v-else-if="key === 'HISTORY'">{{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.HISTORY'
+              )
+            }}</template>
+            <template v-else-if="key === 'CANCEL'">{{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.CANCEL'
+              )
+            }}</template>
+            <template v-else>{{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.ASSET'
+              )
+            }}</template>
+          </span>
+        </li>
+      </ul>
+
+      <!-- Manager-owned prerequisites: what must be true (starting with two-step verification) BEFORE the move. -->
+      <div
+        data-testid="bloomwire-wa-migration-prereq"
+        class="p-4 mb-4 w-full rounded-lg border border-n-weak"
+      >
+        <p class="mb-2 text-sm font-medium text-n-slate-12">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREREQ_TITLE'
+            )
+          }}
+        </p>
+        <ul class="flex flex-col gap-2">
+          <li
+            v-for="key in [
+              'TWO_STEP',
+              'SOURCE_ELIGIBLE',
+              'VERIFIED_BUSINESS',
+              'PAYMENT',
+              'PARTNER',
+            ]"
+            :key="key"
+            class="flex gap-2 items-start text-sm text-n-slate-11"
+          >
+            <Icon icon="i-lucide-dot" class="size-5 shrink-0" />
+            <span>
+              <template v-if="key === 'TWO_STEP'">{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREREQ.TWO_STEP'
+                )
+              }}</template>
+              <template v-else-if="key === 'SOURCE_ELIGIBLE'">{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREREQ.SOURCE_ELIGIBLE'
+                )
+              }}</template>
+              <template v-else-if="key === 'VERIFIED_BUSINESS'">{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREREQ.VERIFIED_BUSINESS'
+                )
+              }}</template>
+              <template v-else-if="key === 'PAYMENT'">{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREREQ.PAYMENT'
+                )
+              }}</template>
+              <template v-else>{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.PREREQ.PARTNER'
+                )
+              }}</template>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Application-owned steps: what Bloomwire itself does once the prerequisites are met. -->
+      <div
+        data-testid="bloomwire-wa-migration-bloomwire-steps"
+        class="p-4 mb-4 w-full rounded-lg border border-n-weak"
+      >
+        <p class="mb-2 text-sm font-medium text-n-slate-12">
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.BLOOMWIRE_TITLE'
+            )
+          }}
+        </p>
+        <ul class="flex flex-col gap-2">
+          <li
+            v-for="key in ['SIGNUP', 'REGISTER']"
+            :key="key"
+            class="flex gap-2 items-start text-sm text-n-slate-11"
+          >
+            <Icon icon="i-lucide-dot" class="size-5 shrink-0" />
+            <span>
+              <template v-if="key === 'SIGNUP'">{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.BLOOMWIRE.SIGNUP'
+                )
+              }}</template>
+              <template v-else>{{
+                $t(
+                  'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.BLOOMWIRE.REGISTER'
+                )
+              }}</template>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Availability truth: migration is a Bloomwire-assisted setup (manager confirms eligibility), not self-serve GA. -->
+      <p
+        data-testid="bloomwire-wa-migration-availability"
+        class="p-3 mb-4 w-full text-sm rounded-lg text-n-slate-11 bg-n-alpha-1"
+      >
+        {{
+          $t(
+            'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.AVAILABILITY_NOTE'
+          )
+        }}
+      </p>
+
+      <label
+        class="flex gap-2 items-start mb-6 text-sm cursor-pointer text-n-slate-11"
+      >
+        <input
+          v-model="migrationAcknowledged"
+          type="checkbox"
+          data-testid="bloomwire-wa-migration-ack"
+          class="mt-0.5"
+        />
+        <span>
+          {{
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.ACK'
+            )
+          }}
+        </span>
+      </label>
+
+      <div class="flex gap-2">
+        <NextButton
+          solid
+          teal
+          data-testid="bloomwire-wa-migration-confirm-button"
+          :disabled="!migrationAcknowledged"
+          :label="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.CONFIRM_BUTTON'
+            )
+          "
+          @click="confirmMigration"
+        />
+        <NextButton
+          faded
+          slate
+          :label="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.BLOOMWIRE_MANAGED.CHOOSE.MIGRATION.CONFIRM.CANCEL_BUTTON'
+            )
+          "
+          @click="backToChoose"
+        />
+      </div>
+    </div>
+
     <BloomwireWhatsappAsync
       v-else-if="mode === 'async_standard'"
       :can-start-new-async="useAsyncStandardOnboarding"
+      :auto-start="autoStartAsync"
       @back="backToChoose"
       @use-sync-fallback="useSyncStandardFallback"
     />

@@ -25,7 +25,7 @@ RSpec.describe 'Bloomwire global WhatsApp webhook router', type: :request do
     set_toggle('WHATSAPP_APP_SECRET', app_secret)
   end
 
-  def meta_payload(phone_number_id:, body: 'hello')
+  def meta_payload(phone_number_id:, body: 'hello', display_phone_number: '15551230001', message_id: 'wamid.X')
     {
       'object' => 'whatsapp_business_account',
       'entry' => [{
@@ -33,8 +33,24 @@ RSpec.describe 'Bloomwire global WhatsApp webhook router', type: :request do
         'changes' => [{
           'field' => 'messages',
           'value' => {
-            'metadata' => { 'display_phone_number' => '15551230001', 'phone_number_id' => phone_number_id },
-            'messages' => [{ 'from' => '15559990001', 'id' => 'wamid.X', 'text' => { 'body' => body } }]
+            'metadata' => { 'display_phone_number' => display_phone_number, 'phone_number_id' => phone_number_id },
+            'messages' => [{ 'from' => '15559990001', 'id' => message_id, 'text' => { 'body' => body } }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def status_payload(phone_number_id:, display_phone_number:, status_id:)
+    {
+      'object' => 'whatsapp_business_account',
+      'entry' => [{
+        'id' => 'WABA-123',
+        'changes' => [{
+          'field' => 'messages',
+          'value' => {
+            'metadata' => { 'display_phone_number' => display_phone_number, 'phone_number_id' => phone_number_id },
+            'statuses' => [{ 'id' => status_id, 'status' => 'delivered' }]
           }
         }]
       }]
@@ -146,6 +162,205 @@ RSpec.describe 'Bloomwire global WhatsApp webhook router', type: :request do
       expect(joined).to include('****1234')
       expect(joined).not_to include('PNID-UNKNOWN-1234')
       expect(joined).not_to include('FAKE-WH-APIKEY')
+    end
+  end
+
+  # account_update / PARTNER_REMOVED is Meta's authoritative Coexistence offboarding signal. It is WABA-keyed
+  # (no message phone_number_id), so it is handled by the reconciler in the signed front door and is NEVER routed
+  # to the message-only Webhooks::WhatsappEventsJob. Signature is still verified first; logs stay redacted.
+  context 'when the router feature is ON (account_update / PARTNER_REMOVED reconciliation)' do
+    before do
+      enable_router
+      set_app_secret
+    end
+
+    def coexistence_setup(waba_id:, phone_number_id:, display_phone_number: '15551230001',
+                          status: 'ready_for_webhook')
+      channel = create(:channel_whatsapp, account: account, provider: 'whatsapp_cloud',
+                                          phone_number: "+#{display_phone_number}", sync_templates: false,
+                                          validate_provider_config: false)
+      channel.update!(provider_config: channel.provider_config.merge(
+        'phone_number_id' => phone_number_id, 'business_account_id' => waba_id,
+        'connection_mode' => 'coexistence', 'source' => 'bloomwire_managed', 'api_key' => 'FAKE-WH-APIKEY'
+      ))
+      create(:bloomwire_whatsapp_setup, account: account, inbox: channel.inbox, channel_whatsapp: channel,
+                                        phone_number_id: phone_number_id, waba_id: waba_id,
+                                        display_phone_number: "+#{display_phone_number}", setup_status: status)
+    end
+
+    def account_update_payload(waba_id:, event: 'PARTNER_REMOVED')
+      { 'object' => 'whatsapp_business_account',
+        'entry' => [{ 'id' => waba_id, 'time' => 1_700_000_000,
+                      'changes' => [{ 'field' => 'account_update',
+                                      'value' => { 'event' => event,
+                                                   'waba_info' => { 'waba_id' => waba_id,
+                                                                    'owner_business_id' => 'BIZ-1' } } }] }] }
+    end
+
+    it 'reconciles PARTNER_REMOVED (marks the coexistence setup disconnected) and never enqueues the message job' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      expect(Webhooks::WhatsappEventsJob).not_to receive(:perform_later)
+
+      post_webhook(account_update_payload(waba_id: 'WABA-RM'))
+
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+      end
+    end
+
+    it 'reconciles PARTNER_REMOVED and preserves a mapped message from the same signed batch' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      payload = account_update_payload(waba_id: 'WABA-RM')
+      payload['entry'][0]['changes'] << meta_payload(phone_number_id: 'PNID-RM')['entry'][0]['changes'][0]
+      enqueued_payloads = []
+      allow(Webhooks::WhatsappEventsJob).to receive(:perform_later) { |job_payload| enqueued_payloads << job_payload }
+
+      post_webhook(payload)
+
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+        expect(enqueued_payloads.size).to eq(1)
+        expect(enqueued_payloads.dig(0, 'entry', 0, 'changes').map { |change| change['field'] }).to eq(['messages'])
+      end
+    end
+
+    it 'ignores an unrelated account_update while preserving a mapped message from the same batch' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      payload = account_update_payload(waba_id: 'WABA-RM', event: 'ACCOUNT_RESTRICTION')
+      payload['entry'][0]['changes'] << meta_payload(phone_number_id: 'PNID-RM')['entry'][0]['changes'][0]
+      enqueued_payloads = []
+      allow(Webhooks::WhatsappEventsJob).to receive(:perform_later) { |job_payload| enqueued_payloads << job_payload }
+      expect(Bloomwire::Webhooks::PartnerRemovalReconciler).not_to receive(:reconcile)
+
+      post_webhook(payload)
+
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+        expect(enqueued_payloads.size).to eq(1)
+        expect(enqueued_payloads.dig(0, 'entry', 0, 'changes', 0, 'field')).to eq('messages')
+      end
+    end
+
+    it 'handles every applicable update exactly once across multiple entries and changes' do
+      first_setup = coexistence_setup(waba_id: 'WABA-FIRST', phone_number_id: 'PNID-FIRST')
+      second_setup = coexistence_setup(waba_id: 'WABA-SECOND', phone_number_id: 'PNID-SECOND',
+                                       display_phone_number: '15551230002')
+      first_entry = account_update_payload(waba_id: 'WABA-FIRST')['entry'][0]
+      first_entry['changes'] << meta_payload(phone_number_id: 'PNID-FIRST', message_id: 'wamid.FIRST')['entry'][0]['changes'][0]
+      first_entry['changes'] << account_update_payload(waba_id: 'WABA-FIRST', event: 'ACCOUNT_RESTRICTION')
+                                .dig('entry', 0, 'changes', 0)
+      second_entry = account_update_payload(waba_id: 'WABA-SECOND')['entry'][0]
+      second_entry['changes'].unshift(
+        status_payload(phone_number_id: 'PNID-SECOND', display_phone_number: '15551230002', status_id: 'wamid.STATUS')
+          .dig('entry', 0, 'changes', 0)
+      )
+      second_entry['changes'] << meta_payload(phone_number_id: 'PNID-SECOND', display_phone_number: '15551230002',
+                                              message_id: 'wamid.SECOND').dig('entry', 0, 'changes', 0)
+      payload = { 'object' => 'whatsapp_business_account', 'entry' => [first_entry, second_entry] }
+      enqueued_payloads = []
+      reconciled_payloads = []
+      allow(Webhooks::WhatsappEventsJob).to receive(:perform_later) { |job_payload| enqueued_payloads << job_payload }
+      allow(Bloomwire::Webhooks::PartnerRemovalReconciler).to receive(:reconcile).and_wrap_original do |method, removal_payload|
+        reconciled_payloads << removal_payload
+        method.call(removal_payload)
+      end
+
+      post_webhook(payload)
+
+      changes = enqueued_payloads.map { |job_payload| job_payload.dig('entry', 0, 'changes', 0) }
+      reconciled_changes = reconciled_payloads.flat_map do |removal_payload|
+        removal_payload['entry'].flat_map { |entry| entry['changes'] }
+      end
+      update_ids = changes.map do |change|
+        change.dig('value', 'messages', 0, 'id') || change.dig('value', 'statuses', 0, 'id')
+      end
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(first_setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+        expect(second_setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+        expect(enqueued_payloads.size).to eq(3)
+        expect(reconciled_payloads.size).to eq(1)
+        expect(reconciled_changes.size).to eq(2)
+        expect(reconciled_changes.map { |change| [change['field'], change.dig('value', 'event')] })
+          .to all(eq(%w[account_update PARTNER_REMOVED]))
+        expect(changes.map { |change| change['field'] }).to eq(%w[messages messages messages])
+        expect(update_ids).to contain_exactly('wamid.FIRST', 'wamid.STATUS', 'wamid.SECOND')
+        expect(update_ids.uniq.size).to eq(3)
+        expect(enqueued_payloads.map { |job_payload| job_payload['entry'].size }).to all(eq(1))
+        expect(enqueued_payloads.map { |job_payload| job_payload.dig('entry', 0, 'changes').size }).to all(eq(1))
+      end
+    end
+
+    it 'rejects an invalid Meta signature for a mixed batch before reconciliation or message handoff' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      payload = account_update_payload(waba_id: 'WABA-RM')
+      payload['entry'][0]['changes'] << meta_payload(phone_number_id: 'PNID-RM')['entry'][0]['changes'][0]
+      expect(Webhooks::WhatsappEventsJob).not_to receive(:perform_later)
+      expect(Bloomwire::Webhooks::PartnerRemovalReconciler).not_to receive(:reconcile)
+
+      post_webhook(payload, signature: 'sha256=deadbeef')
+
+      aggregate_failures do
+        expect(response).to have_http_status(:unauthorized)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      end
+    end
+
+    it 'rejects an invalid Meta signature and changes nothing' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      expect(Webhooks::WhatsappEventsJob).not_to receive(:perform_later)
+
+      post_webhook(account_update_payload(waba_id: 'WABA-RM'), signature: 'sha256=deadbeef')
+
+      aggregate_failures do
+        expect(response).to have_http_status(:unauthorized)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      end
+    end
+
+    it 'does not enqueue the message job for an unrelated account_update event and changes nothing' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      expect(Webhooks::WhatsappEventsJob).not_to receive(:perform_later)
+      expect(Bloomwire::Webhooks::PartnerRemovalReconciler).not_to receive(:reconcile)
+
+      post_webhook(account_update_payload(waba_id: 'WABA-RM', event: 'ACCOUNT_VERIFIED'))
+
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      end
+    end
+
+    it 'is idempotent across a duplicate PARTNER_REMOVED delivery' do
+      setup = coexistence_setup(waba_id: 'WABA-RM', phone_number_id: 'PNID-RM')
+      post_webhook(account_update_payload(waba_id: 'WABA-RM'))
+      post_webhook(account_update_payload(waba_id: 'WABA-RM'))
+
+      aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::DISCONNECTED_STATUS)
+      end
+    end
+
+    it 'logs only redacted diagnostics for the reconciliation (masked WABA tail, no full WABA, no token)' do
+      coexistence_setup(waba_id: 'WABA-SECRET-7788', phone_number_id: 'PNID-RM')
+      router_logs = []
+      %i[info warn error debug].each do |level|
+        allow(Rails.logger).to receive(level) { |msg| router_logs << msg.to_s if msg.to_s.include?('[BLOOMWIRE ROUTER]') }
+      end
+
+      post_webhook(account_update_payload(waba_id: 'WABA-SECRET-7788'))
+
+      joined = router_logs.join("\n")
+      aggregate_failures do
+        expect(joined).to include('[BLOOMWIRE ROUTER]')
+        expect(joined).to include('****7788')
+        expect(joined).not_to include('WABA-SECRET-7788')
+        expect(joined).not_to include('FAKE-WH-APIKEY')
+      end
     end
   end
 

@@ -77,6 +77,18 @@ describe('BloomwireWhatsappAsync.vue (async onboarding wizard UI)', () => {
     expect(wrapper.emitted('back')).toHaveLength(1);
   });
 
+  it('auto-starts the same async Standard lifecycle once after explicit migration confirmation', () => {
+    mountAsync({ autoStart: true });
+    expect(flow.resume).toHaveBeenCalledTimes(1);
+    expect(flow.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not auto-start when a persisted async Standard attempt resumes', () => {
+    flow.resume.mockReturnValue(true);
+    mountAsync({ autoStart: true });
+    expect(flow.start).not.toHaveBeenCalled();
+  });
+
   it('shows a distinct waiting-for-Meta screen with relaunch and server cancellation', async () => {
     flow = makeFlow({ state: ref(ONBOARDING_STATES.WAITING_META) });
     const wrapper = mountAsync();

@@ -1,8 +1,8 @@
 require 'rails_helper'
 
-# WhatsWay-parity "Disconnect" endpoint: admin-only + managed-mode-only; Meta /deregister stubbed; safe DTO. Marks
-# the setup `disconnected` while KEEPING the Channel/Inbox/Setup records (a later Embedded Signup reconnect reuses
-# them). Never a delete, never a webhook unsubscribe, never a secret in the response. Fake values only.
+# Managed WhatsApp "Disconnect" endpoint: admin-only + managed-mode-only; requires the preserved account/inbox/
+# channel/phone-aligned Setup before any Meta call. Standard returns success only after Meta verifies DISCONNECTED
+# and updates that same Setup; Coexistence stays unchanged until webhook proof. Safe DTO, no delete/unsubscribe/secret.
 RSpec.describe 'Bloomwire WhatsApp disconnect endpoint', type: :request do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
@@ -37,43 +37,104 @@ RSpec.describe 'Bloomwire WhatsApp disconnect endpoint', type: :request do
     bw_set_config('BLOOMWIRE_MANAGED_WHATSAPP_ONBOARDING', true)
   end
 
-  def stub_meta
-    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(
-      instance_double(Whatsapp::FacebookApiClient, deregister_phone_number: { 'success' => true })
-    )
+  def stub_meta(statuses: %w[CONNECTED DISCONNECTED])
+    client = instance_double(Whatsapp::FacebookApiClient)
+    allow(client).to receive(:phone_number_status).and_return(*statuses)
+    allow(client).to receive(:deregister_phone_number).and_return('success' => true)
+    allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(client)
+    client
   end
 
   context 'when managed mode is active and admin (Meta stubbed)' do
     before { enable_managed_mode }
 
-    it 'disconnects: marks the setup disconnected, KEEPS records, returns a safe DTO (no secrets)' do
-      setup
-      stub_meta
+    it 'fails closed with no success DTO or Meta call when the preserved Setup is missing' do
+      inbox
+      counts_before = [Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
       post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:not_found)
+        expect(response.parsed_body['code']).to eq('not_found')
+        expect(response.parsed_body['disconnected']).not_to be(true)
+        expect(response.parsed_body).not_to have_key('setup')
+        expect(response.body).not_to include('FAKE-STORED-TOKEN')
+        expect(response.body).not_to include('PNID-1')
+        expect([Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(counts_before)
+      end
+    end
+
+    it 'fails closed before any Meta call when the Setup phone mapping is stale' do
+      setup.phone_number_id = 'PNID-STALE'
+      setup.save!(validate: false)
+      state_before = [setup.reload.attributes, Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
+      post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:not_found)
+        expect(response.parsed_body['code']).to eq('not_found')
+        expect(response.parsed_body['disconnected']).not_to be(true)
+        expect([setup.reload.attributes, Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(state_before)
+      end
+    end
+
+    it 'disconnects the aligned Standard mapping, returns a safe DTO, and reuses the same records' do
+      record_ids = [inbox.id, channel.id, setup.id]
+      counts_before = [Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+      stub_meta
+
+      post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
+
       aggregate_failures do
         expect(response).to have_http_status(:ok)
         expect(response.parsed_body['disconnected']).to be(true)
+        expect(response.parsed_body.dig('setup', 'id')).to eq(setup.id)
         expect(response.parsed_body.dig('setup', 'status')).to eq('disconnected')
         expect(response.body).not_to include('FAKE-STORED-TOKEN')
         expect(response.body).not_to include('api_key')
         expect(response.body).not_to include('PNID-1')
         expect(setup.reload.setup_status).to eq('disconnected')
-        expect(Inbox.exists?(inbox.id)).to be(true)
-        expect(Channel::Whatsapp.exists?(channel.id)).to be(true)
+        expect([inbox.reload.id, channel.reload.id, setup.reload.id]).to eq(record_ids)
+        expect([Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(counts_before)
       end
     end
 
-    it 'still disconnects (200) when the Meta deregister raises (non-fatal, WhatsWay parity)' do
+    it 'returns a safe failure and leaves Standard state unchanged when Meta deregistration is unverified' do
       setup
-      allow(Whatsapp::FacebookApiClient).to receive(:new).and_return(
-        instance_double(Whatsapp::FacebookApiClient).tap do |client|
-          allow(client).to receive(:deregister_phone_number).and_raise(StandardError, 'boom')
-        end
-      )
+      client = stub_meta(statuses: ['CONNECTED'])
+      allow(client).to receive(:deregister_phone_number).and_raise(StandardError, 'RAW Meta failure')
       post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
       aggregate_failures do
-        expect(response).to have_http_status(:ok)
-        expect(setup.reload.setup_status).to eq('disconnected')
+        expect(response).to have_http_status(:bad_gateway)
+        expect(response.parsed_body['code']).to eq('disconnect_unverified')
+        expect(response.body).not_to include('RAW Meta failure')
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+      end
+    end
+
+    it 'enforces Coexistence mobile offboarding without Meta or changing the preserved records' do
+      record_ids = [inbox.id, channel.id, setup.id]
+      counts_before = [Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]
+      channel.provider_config['connection_mode'] = 'coexistence'
+      channel.save!(validate: false)
+      expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+
+      post url, headers: admin.create_new_auth_token, params: { inbox_id: inbox.id }, as: :json
+
+      aggregate_failures do
+        expect(response).to have_http_status(:conflict)
+        expect(response.parsed_body['code']).to eq('mobile_action_required')
+        expect(response.parsed_body['error']).to include('WhatsApp Business app')
+        expect(response.parsed_body['error']).to include('Settings → Account → Business Platform → Disconnect')
+        expect(response.body).not_to include('PNID-1')
+        expect(response.body).not_to include('FAKE-STORED-TOKEN')
+        expect(setup.reload.setup_status).to eq(Bloomwire::WhatsappSetup::ROUTEABLE_STATUS)
+        expect([inbox.reload.id, channel.reload.id, setup.reload.id]).to eq(record_ids)
+        expect([Inbox.count, Channel::Whatsapp.count, Bloomwire::WhatsappSetup.count]).to eq(counts_before)
       end
     end
 

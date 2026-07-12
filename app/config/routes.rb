@@ -377,6 +377,8 @@ Rails.application.routes.draw do
               # WhatsWay-parity "Disconnect": deregister the number on Meta (-> DISCONNECTED) and mark the setup
               # non-routeable while KEEPING the Channel/Inbox/Setup records so a later Embedded Signup reconnect reuses
               # them. Admin-only; inert (404) unless managed self-serve. Safe DTO; never a delete/webhook unsubscribe.
+              # Coexistence offboarding is reconciled by Bloomwire::Webhooks::PartnerRemovalReconciler on the Meta
+              # account_update / PARTNER_REMOVED webhook — NOT by a GET-based recheck here.
               resources :disconnections, only: [:create]
             end
             # Phase 17F.1: administrator-only, READ-ONLY "Categories & Inboxes" overview. Inert (404) unless the
