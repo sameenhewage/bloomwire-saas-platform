@@ -65,19 +65,15 @@ class Bloomwire::WhatsappInboxDeprovisionService
     outcome
   end
 
-  # ASYNC (job entrypoint): idempotent, retry-safe, and atomic. Safe to run twice / concurrently.
+  # ASYNC (job entrypoint): idempotent, retry-safe, and atomic. Related Attempts lock by ID before the Inbox,
+  # matching the persistence fence so either transaction can win without an Attempt↔Inbox deadlock.
   def self.purge!(account_id:, inbox_id:, actor_id: nil)
     channel_id = ActiveRecord::Base.transaction do
-      inbox = Inbox.lock.find_by(id: inbox_id, account_id: account_id)
-      # Already gone (or a foreign id) -> nothing to do. Idempotent path for repeats/retries.
-      next if inbox.nil?
+      target = lock_target_for_purge(account_id: account_id, inbox_id: inbox_id)
+      next if target.nil?
 
-      channel = inbox.channel
-      # Handles ANY Bloomwire WhatsApp inbox (managed, embedded_signup, legacy/manual, or missing source); the delete
-      # is always Meta-safe (webhook teardown is skipped). Non-WhatsApp inboxes never reach here.
-      next unless channel.is_a?(Channel::Whatsapp)
-
-      delete_inbox!(inbox, channel)
+      inbox, channel, attempts = target
+      delete_inbox!(inbox, channel, attempts: attempts)
       channel.id
     end
     return if channel_id.nil?
@@ -97,8 +93,25 @@ class Bloomwire::WhatsappInboxDeprovisionService
     raise
   end
 
-  def self.delete_inbox!(inbox, channel)
-    detach_onboarding_attempts!(inbox, channel)
+  def self.lock_target_for_purge(account_id:, inbox_id:)
+    candidate = Inbox.find_by(id: inbox_id, account_id: account_id)
+    return if candidate.nil?
+
+    candidate_channel = candidate.channel
+    return unless candidate_channel.is_a?(Channel::Whatsapp)
+
+    attempts = onboarding_attempts_for(candidate, candidate_channel).order(:id).lock.to_a
+    inbox = Inbox.lock.find_by(id: inbox_id, account_id: account_id)
+    return if inbox.nil?
+
+    channel = inbox.channel
+    return unless channel.is_a?(Channel::Whatsapp) && channel.id == candidate_channel.id
+
+    [inbox, channel, attempts]
+  end
+
+  def self.delete_inbox!(inbox, channel, attempts: nil)
+    detach_onboarding_attempts!(inbox, channel, attempts: attempts)
     # Remove EVERY routing/setup row that references this inbox or its channel so no orphan survives (a legacy
     # mapping may be keyed by inbox_id only). Keep routing blocked first (a retry may land after a re-create).
     setups = setups_for(inbox, channel).lock.to_a
@@ -115,10 +128,9 @@ class Bloomwire::WhatsappInboxDeprovisionService
     inbox.destroy! # cascades remaining owned dependents + the (teardown-skipped) Channel::Whatsapp
   end
 
-  def self.detach_onboarding_attempts!(inbox, channel)
-    attempts = Bloomwire::WhatsappOnboardingAttempt.where(inbox_id: inbox.id)
-                                                   .or(Bloomwire::WhatsappOnboardingAttempt.where(channel_whatsapp_id: channel.id))
-    attempts.lock.each do |attempt|
+  def self.detach_onboarding_attempts!(inbox, channel, attempts: nil)
+    attempts ||= onboarding_attempts_for(inbox, channel).order(:id).lock.to_a
+    attempts.each do |attempt|
       attributes = { inbox: nil, channel_whatsapp: nil }
       if attempt.active?
         attributes.merge!(status: Bloomwire::WhatsappOnboardingAttempt::CANCELLED,
@@ -127,6 +139,11 @@ class Bloomwire::WhatsappInboxDeprovisionService
       end
       attempt.update!(attributes)
     end
+  end
+
+  def self.onboarding_attempts_for(inbox, channel)
+    Bloomwire::WhatsappOnboardingAttempt.where(inbox_id: inbox.id)
+                                        .or(Bloomwire::WhatsappOnboardingAttempt.where(channel_whatsapp_id: channel.id))
   end
 
   def self.detach_setup_requests!(setups)
