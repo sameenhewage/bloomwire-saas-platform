@@ -78,7 +78,7 @@ class Bloomwire::WhatsappOnboardingProcessor
   end
 
   def mark_processing
-    @attempt.transition!(Attempt::PROCESSING) unless @attempt.status == Attempt::PROCESSING
+    @attempt.owner_guarded_update!({ status: Attempt::PROCESSING }, owner: @owner, expected_generation: @generation)
   end
 
   # ---- Gap 4: resume from persisted-but-not-finalized records --------------------------------------------
@@ -87,26 +87,18 @@ class Bloomwire::WhatsappOnboardingProcessor
     finalized_statuses = [Bloomwire::WhatsappSetup::ROUTEABLE_STATUS, Bloomwire::WhatsappSetup::ACTION_REQUIRED_STATUS]
     return false unless setup&.setup_status.in?(finalized_statuses) && channel_credential_present?(setup)
 
-    bind_attempt_to_setup(setup)
-    @attempt.mark_credential_persisted!(owner: @owner, expected_generation: @generation) if @attempt.access_token.present?
-    finalize_from_setup(setup)
+    @attempt.finalize_persisted_setup!(
+      setup,
+      owner: @owner,
+      expected_generation: @generation,
+      credential_persisted: @attempt.access_token.present?
+    )
     true
   end
 
   def channel_credential_present?(setup)
     channel = setup.channel_whatsapp
     channel.present? && channel.provider_config['api_key'].present?
-  end
-
-  def bind_attempt_to_setup(setup)
-    @attempt.bind_target!(waba_id: setup.waba_id, phone_number_id: setup.phone_number_id,
-                          phone_number: setup.display_phone_number)
-    @attempt.update!(channel_whatsapp_id: setup.channel_whatsapp_id, inbox_id: setup.inbox_id)
-  end
-
-  def finalize_from_setup(setup)
-    status = setup.setup_status == Bloomwire::WhatsappSetup::ROUTEABLE_STATUS ? Attempt::COMPLETED : Attempt::ACTION_REQUIRED
-    @attempt.transition!(status)
   end
 
   # ---- Gap 1: two-stage OAuth token exchange (resumable) ------------------------------------------------
@@ -223,15 +215,17 @@ class Bloomwire::WhatsappOnboardingProcessor
     return unless @attempt.renew_lease!(owner: @owner, expected_generation: @generation) # re-check before local write
 
     setup = safe_meta do
-      @persister.call(token: token, waba_id: target[:waba_id], phone_info: target[:phone_info],
-                      verification_pin: verification_pin, capability: capability)
+      @attempt.with_persistence_fence!(owner: @owner, expected_generation: @generation) do
+        persisted = @persister.call(token: token, waba_id: target[:waba_id], phone_info: target[:phone_info],
+                                    verification_pin: verification_pin, capability: capability)
+        unless persisted.nil? || persisted.is_a?(Symbol)
+          @attempt.finalize_persisted_setup!(persisted, owner: @owner, expected_generation: @generation)
+        end
+        persisted
+      end
     end
     return if setup.nil? # transient persist failure -> retain, retry
     return record_safe_error(setup) if setup.is_a?(Symbol)
-
-    bind_attempt_to_setup(setup)
-    @attempt.mark_credential_persisted!(owner: @owner, expected_generation: @generation)
-    finalize_from_setup(setup)
   end
 
   # ---- Sanitized error handling (never a secret; transient => retain, resumable) -----------------------
@@ -239,6 +233,8 @@ class Bloomwire::WhatsappOnboardingProcessor
   # logs the exception message/body (either can echo a token). Terminal handling is explicit at the call sites.
   def safe_meta
     yield
+  rescue Attempt::StaleWorkerError
+    raise
   rescue Whatsapp::GraphApiTimeoutError
     record_safe_error(:meta_timeout)
     nil
@@ -249,21 +245,23 @@ class Bloomwire::WhatsappOnboardingProcessor
 
   # Records a stable, non-secret error/retry code WITHOUT clearing credentials or marking a terminal failure.
   def record_safe_error(code)
-    @attempt.update!(safe_error_code: code.to_s)
+    @attempt.owner_guarded_update!({ safe_error_code: code.to_s }, owner: @owner, expected_generation: @generation)
     nil
   end
 
   # No code AND no stored token => nothing resumable => terminal (clear per lifecycle).
   def terminal_missing_code
-    @attempt.transition!(Attempt::FAILED, error_code: 'missing_code')
-    @attempt.clear_secrets!
+    @attempt.owner_guarded_terminalize!(
+      Attempt::FAILED, error_code: 'missing_code', owner: @owner, expected_generation: @generation
+    )
     nil
   end
 
   # Meta confirmed the authorization code is unusable: terminal EXPIRED, both secrets cleared, not redrivable.
   def terminal_oauth_expired!
-    @attempt.transition!(Attempt::EXPIRED, error_code: 'oauth_code_expired')
-    @attempt.clear_secrets!
+    @attempt.owner_guarded_terminalize!(
+      Attempt::EXPIRED, error_code: 'oauth_code_expired', owner: @owner, expected_generation: @generation
+    )
     nil
   end
 end

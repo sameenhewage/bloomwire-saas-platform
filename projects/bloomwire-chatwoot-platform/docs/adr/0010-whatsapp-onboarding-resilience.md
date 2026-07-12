@@ -178,6 +178,45 @@ were not reached. No second popup, message test, Standard fallback, manual provi
 router/Enterprise/production change, duplicate, or credential rotation occurred or is approved. The exact reason
 Meta's completion UI did not yield the official readiness pair is not proven and must not be inferred.
 
+### F. Permanent local Inbox removal preserves attempt audit history and fences stale persistence (Accepted — PR #166; base `52e5524`; fence `8403cc5`; review `4679498933` identity `ba62ba7`; refreshed CI/review pending)
+
+A DEV Remove Inbox failure proved that retained attempts are a database dependency of their bound Inbox/Channel. Five
+terminal rows blocked `inbox.destroy!` after Setup and history had already committed, leaving a partial aggregate. The
+attempts must not simply be deleted: this ADR already preserves cancelled/terminal rows as the non-secret audit record of
+an onboarding run, and both target foreign keys are intentionally nullable. The permanent-removal contract is therefore:
+
+- preserve terminal attempts, but clear their optional `inbox_id` and `channel_whatsapp_id` before destroying the target;
+- for a bound active attempt, transition to secret-free `cancelled`, clear code/token/stage plus lease/enqueue/processing
+  ownership, then clear both target references;
+- local Inbox/Channel FKs are not stable pre-persistence identity: submit binds `phone_number_id` first. Purge therefore
+  preserves exact linked-audit matches and also selects only active attempts with the same account and one unambiguous
+  nonblank `phone_number_id` from the current Channel/Setup;
+- blank, missing, whitespace, or conflicting Channel/Setup phone identity adds no match. WABA is never a fallback;
+  different-phone attempts in the same account/WABA and matching-phone attempts in another account remain untouched;
+- cancellation is not itself a persistence fence: async mapping persistence must re-lock the Attempt and validate active
+  status, `processing_owner`, `submission_generation`, and unexpired lease in the same transaction as Channel/Inbox/Setup
+  persistence plus Attempt binding/finalization; mapping-level rollback uses a savepoint within that outer fence;
+- local processor writes (`mark_processing`, safe error, resume binding/finalization, and terminal transitions) use the
+  same owner/generation/lease guard so cancellation cannot be overwritten later;
+- lock related Attempts in ascending ID order before the Inbox, then lock Setup Requests/Setups and owned children. This
+  matches persistence’s Attempt → mapping order and avoids the deterministically reproduced Attempt↔Inbox deadlock;
+- preserve account-level Setup Request intake history while clearing its optional link to the technical Setup;
+- keep every Meta/network call outside DB transactions and row locks. Remove Inbox remains local-only: no register,
+  deregister, reconnect, webhook subscription/unsubscription, credential mutation, or provider API call;
+- return HTTP `202` plus safe `status=pending` when accepted. Automatic completion reconciliation is deferred; refresh
+  reloads the authoritative Inbox list and browser/store state must not claim deletion before completion is known;
+- add no schema/FK change: lifecycle ordering, one transaction, and the existing Attempt lease are the smallest root fix.
+
+The persistence-fence RED/GREEN remains. Review `4679498933` added a production-shaped unbound fixture: identity RED
+**49/3** proved purge-first resurrection, persistence-first absence of blocking/complete locks, and direct failure to
+cancel the exact unbound worker. GREEN is **51/0** and ten repeated deterministic race runs are **100/0**. A lower-ID
+bound audit plus the active unbound worker prove stable ordered locks and no deadlock. All Meta collaborators remain
+mocked/WebMock-blocked and no network executes inside the fence. Implementation `ba62ba7`; refreshed exact-head CI and
+review remain required.
+
+This decision does not restore the existing DEV partial state. Inbox 50 / Channel 17 remain without Setup 17 or history,
+and the five terminal attempts remain bound until a separately approved recovery phase.
+
 ## Consequences
 
 - **Positive:** no more split-state 500s on a slow `/register`; each Meta call is individually bounded; retries

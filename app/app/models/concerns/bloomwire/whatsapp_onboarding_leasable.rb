@@ -1,7 +1,7 @@
-# Short ownership-lease primitives for the async onboarding attempt (Guardrail 2). Extracted so the model stays
-# focused. The lease is claimed/renewed under a SHORT row lock (with_lock) and RELEASED before any Meta HTTP call;
-# the mutation TTL outlasts the maximum bounded Graph call so the lease cannot expire mid-call. Release and renew
-# are guarded by (owner + submission_generation) so a stale worker can never clear or extend a newer worker's lease.
+# Ownership-lease and DB-only persistence-fence primitives for the async onboarding attempt (Guardrail 2).
+# The lease is claimed/renewed under a SHORT row lock and RELEASED before any Meta HTTP call; the mutation TTL
+# outlasts the maximum bounded Graph call. Local persistence/finalization re-locks the Attempt and verifies active
+# status + owner + submission_generation + valid lease in the same transaction as the guarded database writes.
 module Bloomwire::WhatsappOnboardingLeasable
   extend ActiveSupport::Concern
 
@@ -71,5 +71,46 @@ module Bloomwire::WhatsappOnboardingLeasable
       end
     end
     renewed
+  end
+
+  def owner_guarded_update!(attributes, owner:, expected_generation:)
+    owner_guarded_write!(owner, expected_generation) { update!(attributes) }
+  end
+
+  def with_persistence_fence!(owner:, expected_generation:, &)
+    owner_guarded_write!(owner, expected_generation, &)
+  end
+
+  def finalize_persisted_setup!(setup, owner:, expected_generation:, credential_persisted: true)
+    attributes = persisted_setup_attributes(setup, credential_persisted)
+    owner_guarded_update!(attributes, owner: owner, expected_generation: expected_generation)
+  end
+
+  def owner_guarded_terminalize!(status, error_code:, owner:, expected_generation:)
+    owner_guarded_update!(
+      {
+        status: status, safe_error_code: error_code, oauth_code: nil, access_token: nil,
+        token_stage: nil, secrets_cleared_at: Time.current
+      },
+      owner: owner,
+      expected_generation: expected_generation
+    )
+  end
+
+  private
+
+  def persisted_setup_attributes(setup, credential_persisted)
+    attributes = {
+      channel_whatsapp_id: setup.channel_whatsapp_id,
+      inbox_id: setup.inbox_id,
+      status: setup.setup_status == Bloomwire::WhatsappSetup::ROUTEABLE_STATUS ? self.class::COMPLETED : self.class::ACTION_REQUIRED
+    }
+    attributes[:waba_id] = setup.waba_id if setup.waba_id.present?
+    attributes[:phone_number_id] = setup.phone_number_id if setup.phone_number_id.present?
+    attributes[:phone_number_masked] = self.class.mask_phone(setup.display_phone_number) if setup.display_phone_number.present?
+    if credential_persisted
+      attributes.merge!(access_token: nil, token_stage: nil, credential_persisted_at: Time.current, secrets_cleared_at: Time.current)
+    end
+    attributes
   end
 end

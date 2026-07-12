@@ -95,12 +95,12 @@ const confirmRemove = async () => {
   );
 
   try {
-    await store.dispatch('inboxes/delete', props.inbox.id);
+    const result = await store.dispatch('inboxes/delete', props.inbox.id);
     settle(() => {
       // Accepted — the deletion has STARTED (a WhatsApp delete finishes asynchronously).
       useAlert(t('INBOX_MGMT.BLOOMWIRE_REMOVE.STARTED'));
       showConfirm.value = false;
-      emit('removed', props.inbox.id);
+      if (result?.status !== 'pending') emit('removed', props.inbox.id);
     });
   } catch (error) {
     // Safe, generic failure message — never a raw backend / Meta error.

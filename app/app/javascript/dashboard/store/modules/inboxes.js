@@ -404,9 +404,12 @@ export const actions = {
   delete: async ({ commit }, inboxId) => {
     commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: true });
     try {
-      await InboxesAPI.delete(inboxId);
-      commit(types.default.DELETE_INBOXES, inboxId);
+      const response = await InboxesAPI.delete(inboxId);
+      const removalPending =
+        response.status === 202 && response.data?.status === 'pending';
+      if (!removalPending) commit(types.default.DELETE_INBOXES, inboxId);
       commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: false });
+      return response.data;
     } catch (error) {
       commit(types.default.SET_INBOXES_UI_FLAG, { isDeleting: false });
       throw new Error(error);

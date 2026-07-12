@@ -33,7 +33,7 @@ module Bloomwire::WhatsappSignupPersistence
   def commit_mapping
     setup = nil
     error = nil
-    ActiveRecord::Base.transaction do
+    ActiveRecord::Base.transaction(requires_new: true) do
       creator = yield
       if creator.success?
         setup = creator.setup

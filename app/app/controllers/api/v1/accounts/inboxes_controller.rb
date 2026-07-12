@@ -108,9 +108,12 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
         return render status: :service_unavailable,
                       json: { error: 'Could not start inbox removal right now. Please try again.', code: 'enqueue_failed' }
       end
-    else
-      ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip)
+
+      return render status: :accepted,
+                    json: { message: I18n.t('messages.inbox_deletetion_response'), status: 'pending' }
     end
+
+    ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip)
     render status: :ok, json: { message: I18n.t('messages.inbox_deletetion_response') }
   end
 

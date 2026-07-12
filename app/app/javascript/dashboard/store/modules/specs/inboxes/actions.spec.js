@@ -205,6 +205,22 @@ describe('#actions', () => {
         [types.default.SET_INBOXES_UI_FLAG, { isDeleting: false }],
       ]);
     });
+    it('keeps the inbox when async removal is accepted and pending', async () => {
+      axios.delete.mockResolvedValue({
+        status: 202,
+        data: { status: 'pending' },
+      });
+
+      await expect(
+        actions.delete({ commit }, inboxList[0].id)
+      ).resolves.toEqual({
+        status: 'pending',
+      });
+      expect(commit.mock.calls).toEqual([
+        [types.default.SET_INBOXES_UI_FLAG, { isDeleting: true }],
+        [types.default.SET_INBOXES_UI_FLAG, { isDeleting: false }],
+      ]);
+    });
     it('sends correct actions if API is error', async () => {
       axios.delete.mockRejectedValue({ message: 'Incorrect header' });
       await expect(actions.delete({ commit }, inboxList[0].id)).rejects.toThrow(

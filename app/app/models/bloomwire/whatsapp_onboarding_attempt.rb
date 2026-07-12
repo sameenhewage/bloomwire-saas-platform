@@ -252,6 +252,6 @@ class Bloomwire::WhatsappOnboardingAttempt < ApplicationRecord
   end
 
   def active_credential_owner?(owner, expected_generation)
-    !terminal? && submission_generation == expected_generation.to_i && lease_held_by?(owner)
+    active? && submission_generation == expected_generation.to_i && lease_held_by?(owner)
   end
 end
