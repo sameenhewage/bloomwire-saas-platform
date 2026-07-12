@@ -186,6 +186,7 @@
         <tr><td>ADR-0010 Coexistence reconnect readiness</td><td>Official <code>is_on_biz_app</code> + <code>platform_type</code> readiness and transactional mode correction for reused records</td><td>#157</td><td><span class="badge done">Merged + DEV deployed</span> <code>ca6086c</code> · run <code>29102109973</code> PASS · one approved provider attempt failed closed (<code>no_connected_registration</code>); certification blocked</td></tr>
         <tr><td>Managed WhatsApp honest progress</td><td>Replace unreachable generic Add Agents/Finish sidebar steps with the real <b>Choose Channel → Connect WhatsApp</b> flow; success card owns Done</td><td>#159</td><td><span class="badge done">Merged + DEV PASS</span> <code>01864f8</code> · run <code>29143934928</code> · authenticated runtime PASS</td></tr>
         <tr><td>Managed Account Health webhook ownership</td><td>Expect the global callback for <code>source=bloomwire_managed</code>; preserve native per-phone callback semantics</td><td>#163</td><td><span class="badge done">Merged</span> <code>6f4746a</code> · CI 8/8 · DEV pending</td></tr>
+        <tr><td>Atomic WhatsApp Remove Inbox</td><td>Transactional dependency ordering, attempt/Setup Request audit detachment, safe retries, truthful 202 pending UI</td><td><i>pending</i></td><td><span class="badge">Implemented</span> · PR/CI/independent QA pending · DEV recovery not performed</td></tr>
       </tbody>
     </table>
     <p class="muted"><b>Dev QA Sign-off (2026-06-30, owner-confirmed)</b> — dev <code>version_1</code> @ <code>ea3487b</code>: Auth 15G.2/15G.3 = <b>DEV PASS</b>, Email Settings/SMTP = <b>DEV PASS</b>, Email Templates (15F.2) = <b>100% DEV PASS</b>. Owner confirmed both dev QA emails received. No production deploy · audit rows not purged · no WhatsApp/Meta/provider creds touched. <b>Phase 16 is READY to start.</b> Roadmap (authoritative): <b>15F.3</b> = Email Send Feedback UX Polish (PR #86, pending review/deploy); <b>15F.4</b> = Email Deliverability + Domain Authentication (PR #87, report-only/docs-only); <b>15F.5</b> = POST-based composer preview / query-string hardening (future); <b>15G.4</b> = optional auth-audit polish (future). The POST-based preview hardening is <b>15F.5</b>, not 15F.3.</p>
@@ -193,6 +194,17 @@
 
   <section id="s3">
     <h2><a class="anchor" href="#s3"><span class="num">3.</span>Phase-by-phase implementation log</a></h2>
+
+    <div class="card"><h3>Atomic, dependency-safe WhatsApp Remove Inbox <span class="badge">Implemented · PR/CI pending · not deployed</span></h3>
+      <ul>
+        <li><b>Product/root-cause truth:</b> one owner-issued DEV deletion removed Setup 17 and Inbox 50 history, then <code>inbox.destroy!</code> failed because five retained onboarding-attempt audit rows still referenced Inbox 50 through restrictive FK <code>fk_rails_9ac8ff5f9a</code>. Three retries dead-lettered; without an outer transaction, earlier deletes remained committed.</li>
+        <li><b>Current DEV / recovery:</b> Inbox 50 + Channel 17 remain; Setup/binding count is 0; five terminal attempts remain; history is empty; encrypted Channel credential is present. No dead-job retry, deletion completion, Setup recreation, record restore, credential/reconnect/provider mutation, or other recovery occurred; recovery is a separate approved phase.</li>
+        <li><b>Dependency/lifecycle owner:</b> one transaction row-locks the target and owns attempt handling → Setup Request unlink → Setup/history deletion → Inbox/Channel destruction. Terminal attempts remain detached audit rows; bound active attempts first become secret-free <code>cancelled</code> with worker ownership cleared. Account-level Setup Request history remains unlinked. No FK weakening/schema migration.</li>
+        <li><b>Async/API/UI:</b> accepted Bloomwire WhatsApp removal returns safe HTTP <b>202</b> + <code>status=pending</code>; store/UI retain the Inbox and do not emit completed removal. Stock/non-WhatsApp/master-OFF behavior is unchanged.</li>
+        <li><b>TDD/validation:</b> RED terminal FK <b>1/1</b>; rollback <b>1/1</b>; Setup Request FK <b>1/1</b>; active-attempt lifecycle <b>1/1</b>; API <b>1/1</b>; store <b>21/1</b>; UI <b>11/1</b>. GREEN focused backend <b>53/0</b>; relevant frontend <b>53/0</b>; CI-curated backend <b>1166/0 with 41 expected no-key pending</b>; full RuboCop <b>2760/0</b>; full ESLint <b>0 errors</b>; production/test Vite <b>45.91s / 47.72s</b>; migration/schema, docs parity, diff, and secret gates clean. Independent QA/head/PR/GitHub CI pending.</li>
+        <li><b>Security/scope:</b> failure audit excludes exception messages/token/phone/raw payload/customer data; provider boundaries mocked/WebMock-blocked. No Meta/register/deregister/webhook/onboarding-provider call, DEV/production mutation, PR #165/Standard/Coexistence disconnect/Enterprise/dependency change, merge, or deploy.</li>
+      </ul>
+    </div>
 
     <div class="card"><h3>Phase 15G.CD — GHCR prebuilt-image build + guarded pull-on-deploy <span class="badge">Implemented · activation OFF · PR #162</span></h3>
       <ul>

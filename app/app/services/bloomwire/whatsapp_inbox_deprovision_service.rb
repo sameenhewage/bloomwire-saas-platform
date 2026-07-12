@@ -9,12 +9,12 @@
 #     success. If the enqueue is NOT accepted, routing is RESTORED to its prior status (deterministic: nothing was
 #     deleted, the inbox is fully routeable again) and a retriable error is returned — the caller never sees
 #     `removal_started` for an unconfirmed job.
-#   `.purge!` (ASYNCHRONOUS, job): the heavy, retry-safe, idempotent deletion. Re-verifies state on every run,
-#     removes the setup mapping (else orphaned) and destroys the inbox — cascading its owned dependents
-#     (conversations, messages, contact_inboxes, inbox members, reporting events, webhooks) and the
-#     Channel::Whatsapp (Inbox `belongs_to :channel, dependent: :destroy`). Shared Contact records are preserved
-#     (only ContactInbox join rows are removed). The historical purge is done in SMALL BATCHES — there is NO single
-#     giant transaction over the whole message/conversation history.
+#   `.purge!` (ASYNCHRONOUS, job): the heavy, retry-safe, idempotent deletion. Re-verifies and locks the target on
+#     every run, then removes its complete local aggregate in ONE database transaction. Onboarding-attempt audit rows
+#     are preserved but detached from the deleted Inbox/Channel; active attempts are cancelled first so no worker can
+#     repopulate a permanently removed aggregate. The setup mapping and owned history are
+#     removed before the Inbox destroys its Channel::Whatsapp. Any failure rolls every local mutation back. Shared
+#     Contact records are preserved (only ContactInbox join rows are removed).
 #
 # Meta boundary: a local delete makes NO Meta call for ANY source. The channel is flagged
 # `skip_webhook_teardown = true` before destroy so `Channel::Whatsapp#teardown_webhooks` is skipped entirely — even
@@ -65,19 +65,24 @@ class Bloomwire::WhatsappInboxDeprovisionService
     outcome
   end
 
-  # ASYNC (job entrypoint): idempotent, retry-safe, NO giant transaction. Safe to run twice / concurrently.
+  # ASYNC (job entrypoint): idempotent, retry-safe, and atomic. Safe to run twice / concurrently.
   def self.purge!(account_id:, inbox_id:, actor_id: nil)
-    inbox = Inbox.find_by(id: inbox_id)
-    # Already gone (or a foreign id) -> nothing to do. Idempotent path for repeats/retries.
-    return if inbox.nil? || inbox.account_id != account_id
+    channel_id = ActiveRecord::Base.transaction do
+      inbox = Inbox.lock.find_by(id: inbox_id, account_id: account_id)
+      # Already gone (or a foreign id) -> nothing to do. Idempotent path for repeats/retries.
+      next if inbox.nil?
 
-    channel = inbox.channel
-    # Handles ANY Bloomwire WhatsApp inbox (managed, embedded_signup, legacy/manual, or missing source); the delete
-    # is always Meta-safe (webhook teardown is skipped). Non-WhatsApp inboxes never reach here.
-    return unless channel.is_a?(Channel::Whatsapp)
+      channel = inbox.channel
+      # Handles ANY Bloomwire WhatsApp inbox (managed, embedded_signup, legacy/manual, or missing source); the delete
+      # is always Meta-safe (webhook teardown is skipped). Non-WhatsApp inboxes never reach here.
+      next unless channel.is_a?(Channel::Whatsapp)
 
-    delete_inbox!(inbox, channel)
-    audit(:removal_succeeded, account_id: account_id, inbox_id: inbox_id, channel_id: channel.id, actor_id: actor_id)
+      delete_inbox!(inbox, channel)
+      channel.id
+    end
+    return if channel_id.nil?
+
+    audit(:removal_succeeded, account_id: account_id, inbox_id: inbox_id, channel_id: channel_id, actor_id: actor_id)
   rescue ActiveRecord::RecordNotFound, ActiveRecord::RecordNotDestroyed => e
     # Neither exception is proof that another job removed the TARGET inbox — either can come from a vanished child,
     # a halted destroy callback, or a partial purge. Treat as idempotent success ONLY when a fresh DB check proves
@@ -93,14 +98,16 @@ class Bloomwire::WhatsappInboxDeprovisionService
   end
 
   def self.delete_inbox!(inbox, channel)
+    detach_onboarding_attempts!(inbox, channel)
     # Remove EVERY routing/setup row that references this inbox or its channel so no orphan survives (a legacy
     # mapping may be keyed by inbox_id only). Keep routing blocked first (a retry may land after a re-create).
-    setups_for(inbox, channel).each do |setup|
+    setups = setups_for(inbox, channel).lock.to_a
+    detach_setup_requests!(setups)
+    setups.each do |setup|
       block_routing!(setup)
       setup.destroy!
     end
-    # Batched purge — each record destroy! is its own small transaction (no single transaction over the whole
-    # history). Ordered by FK dependency; shared Contacts are never touched (only ContactInbox joins).
+    # Ordered by FK dependency inside the outer purge transaction; shared Contacts are never touched.
     purge_heavy_children(inbox)
     # Meta safety: a Bloomwire local delete must NEVER call Meta (no shared/global WABA webhook unsubscribe), for
     # ANY source, even if the Meta assets are already gone — so skip Channel::Whatsapp#teardown_webhooks entirely.
@@ -108,11 +115,31 @@ class Bloomwire::WhatsappInboxDeprovisionService
     inbox.destroy! # cascades remaining owned dependents + the (teardown-skipped) Channel::Whatsapp
   end
 
+  def self.detach_onboarding_attempts!(inbox, channel)
+    attempts = Bloomwire::WhatsappOnboardingAttempt.where(inbox_id: inbox.id)
+                                                   .or(Bloomwire::WhatsappOnboardingAttempt.where(channel_whatsapp_id: channel.id))
+    attempts.lock.each do |attempt|
+      attributes = { inbox: nil, channel_whatsapp: nil }
+      if attempt.active?
+        attributes.merge!(status: Bloomwire::WhatsappOnboardingAttempt::CANCELLED,
+                          oauth_code: nil, access_token: nil, token_stage: nil, secrets_cleared_at: Time.current,
+                          processing_owner: nil, lease_expires_at: nil, job_enqueued_at: nil, processing_started_at: nil)
+      end
+      attempt.update!(attributes)
+    end
+  end
+
+  def self.detach_setup_requests!(setups)
+    Bloomwire::WhatsappSetupRequest.where(bloomwire_whatsapp_setup_id: setups.map(&:id)).lock.each do |request|
+      request.update!(bloomwire_whatsapp_setup: nil)
+    end
+  end
+
   # Every routing/setup row referencing this inbox or its channel (either key may be set, or both). Destroying all
   # matches guarantees no orphaned Bloomwire::WhatsappSetup survives a legacy/partial mapping.
   def self.setups_for(inbox, channel)
     Bloomwire::WhatsappSetup.where(channel_whatsapp_id: channel.id)
-                            .or(Bloomwire::WhatsappSetup.where(inbox_id: inbox.id)).distinct
+                            .or(Bloomwire::WhatsappSetup.where(inbox_id: inbox.id))
   end
 
   # Commit the routing block immediately (its own statement). The row is still valid at block time, so update!

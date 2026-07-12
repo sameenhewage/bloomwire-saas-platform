@@ -173,6 +173,101 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
   end
 
   describe '.purge! (async deletion)' do
+    it 'detaches a terminal onboarding attempt and removes the complete inbox aggregate' do
+      inbox, channel, setup = managed_inbox
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'completed', inbox: inbox, channel_whatsapp: channel
+      )
+
+      expect { purge(inbox) }.not_to raise_error
+
+      aggregate_failures do
+        expect(attempt.reload.inbox_id).to be_nil
+        expect(attempt.channel_whatsapp_id).to be_nil
+        expect(Inbox.exists?(inbox.id)).to be(false)
+        expect(Channel::Whatsapp.exists?(channel.id)).to be(false)
+        expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(false)
+      end
+    end
+
+    it 'cancels and detaches an active onboarding attempt before removing its aggregate' do
+      inbox, channel, = managed_inbox
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'processing', inbox: inbox, channel_whatsapp: channel,
+        processing_owner: 'worker-1', lease_expires_at: 1.minute.from_now, job_enqueued_at: Time.current
+      )
+
+      purge(inbox)
+
+      aggregate_failures do
+        expect(attempt.reload.status).to eq('cancelled')
+        expect(attempt.inbox_id).to be_nil
+        expect(attempt.channel_whatsapp_id).to be_nil
+        expect(attempt.processing_owner).to be_nil
+        expect(attempt.lease_expires_at).to be_nil
+        expect(attempt.job_enqueued_at).to be_nil
+        expect(attempt.secrets_cleared_at).to be_present
+      end
+    end
+
+    it 'detaches a linked setup request before removing its technical setup' do
+      inbox, channel, setup = managed_inbox
+      setup_request = Bloomwire::WhatsappSetupRequest.create!(
+        account: account, status: 'completed', bloomwire_whatsapp_setup: setup
+      )
+
+      expect { purge(inbox) }.not_to raise_error
+
+      aggregate_failures do
+        expect(setup_request.reload.bloomwire_whatsapp_setup_id).to be_nil
+        expect(Inbox.exists?(inbox.id)).to be(false)
+        expect(Channel::Whatsapp.exists?(channel.id)).to be(false)
+        expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(false)
+      end
+    end
+
+    it 'rolls back every local mutation when a destructive step fails' do
+      inbox, channel, setup = managed_inbox
+      contact = create(:contact, account: account)
+      contact_inbox = create(:contact_inbox, contact: contact, inbox: inbox)
+      conversation = create(:conversation, account: account, inbox: inbox, contact: contact, contact_inbox: contact_inbox)
+      message = create(:message, account: account, inbox: inbox, conversation: conversation)
+      reporting_event = create(:reporting_event, account: account, inbox: inbox, conversation: conversation)
+      setup_request = Bloomwire::WhatsappSetupRequest.create!(
+        account: account, status: 'completed', bloomwire_whatsapp_setup: setup
+      )
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'completed', inbox: inbox, channel_whatsapp: channel
+      )
+      allow(Rails.logger).to receive(:warn)
+      allow(described_class).to receive(:purge_heavy_children).and_wrap_original do |original, target|
+        original.call(target)
+        raise StandardError, 'FAKE-TOKEN +15551230001 RAW-CUSTOMER-PAYLOAD'
+      end
+
+      expect { purge(inbox) }.to raise_error(StandardError)
+
+      aggregate_failures do
+        expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(true)
+        expect(setup.reload.setup_status).to eq('ready_for_webhook')
+        expect(setup_request.reload.bloomwire_whatsapp_setup_id).to eq(setup.id)
+        expect(Inbox.exists?(inbox.id)).to be(true)
+        expect(Channel::Whatsapp.exists?(channel.id)).to be(true)
+        expect(ContactInbox.exists?(contact_inbox.id)).to be(true)
+        expect(Conversation.exists?(conversation.id)).to be(true)
+        expect(Message.exists?(message.id)).to be(true)
+        expect(ReportingEvent.exists?(reporting_event.id)).to be(true)
+        expect(attempt.reload.inbox_id).to eq(inbox.id)
+        expect(attempt.channel_whatsapp_id).to eq(channel.id)
+      end
+      expect(Rails.logger).to have_received(:warn).with(
+        satisfy do |line|
+          line.include?('removal_failed') && line.include?('reason=StandardError') &&
+            line.exclude?('FAKE-TOKEN') && line.exclude?('15551230001') && line.exclude?('RAW-CUSTOMER-PAYLOAD')
+        end
+      )
+    end
+
     it 'destroys the Inbox, Channel::Whatsapp and Bloomwire::WhatsappSetup with no orphans' do
       inbox, channel, setup = managed_inbox
       purge(inbox)
@@ -215,10 +310,16 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       end
     end
 
-    it 'leaves unrelated inboxes and their data untouched' do
+    it 'leaves another account and its inbox aggregate untouched' do
       inbox, = managed_inbox(phone_number: '+15551230001', phone_number_id: 'PNID-1')
-      keep_inbox, keep_channel, keep_setup = managed_inbox(phone_number: '+15559990000', phone_number_id: 'PNID-2')
-      keep_conversation = create(:conversation, account: account, inbox: keep_inbox)
+      other_account = create(:account)
+      keep_inbox, keep_channel, keep_setup = managed_inbox(
+        on: other_account, phone_number: '+15559990000', phone_number_id: 'PNID-2'
+      )
+      keep_conversation = create(:conversation, account: other_account, inbox: keep_inbox)
+      keep_attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: other_account, status: 'completed', inbox: keep_inbox, channel_whatsapp: keep_channel
+      )
 
       purge(inbox)
 
@@ -227,6 +328,8 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
         expect(Channel::Whatsapp.exists?(keep_channel.id)).to be(true)
         expect(Bloomwire::WhatsappSetup.exists?(keep_setup.id)).to be(true)
         expect(Conversation.exists?(keep_conversation.id)).to be(true)
+        expect(keep_attempt.reload.inbox_id).to eq(keep_inbox.id)
+        expect(keep_attempt.channel_whatsapp_id).to eq(keep_channel.id)
       end
     end
 
@@ -240,9 +343,13 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
       expect(Bloomwire::Webhooks::WhatsappRouter.resolve(payload)).to be_nil
     end
 
-    it 'makes NO Meta call (managed-source channels skip the webhook teardown)' do
+    it 'makes no Meta, registration, webhook, onboarding, or provider API call' do
       inbox, = managed_inbox
       expect(Whatsapp::FacebookApiClient).not_to receive(:new)
+      expect(Whatsapp::WebhookTeardownService).not_to receive(:new)
+      expect(Whatsapp::WebhookSetupService).not_to receive(:new)
+      expect(Whatsapp::TokenExchangeService).not_to receive(:new)
+      expect(Bloomwire::WhatsappOnboardingProcessor).not_to receive(:new)
       purge(inbox)
     end
 
@@ -286,14 +393,51 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
 
   describe 'concurrency / repeats / retries' do
     it 'is idempotent: a second .purge! after the inbox is gone is a safe no-op' do
-      inbox, = managed_inbox
+      inbox, channel, = managed_inbox
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'completed', inbox: inbox, channel_whatsapp: channel
+      )
       purge(inbox)
-      expect(Inbox.find_by(id: inbox.id)).to be_nil
+      detached_attributes = attempt.reload.attributes
+
       expect { purge(inbox) }.not_to raise_error
+      aggregate_failures do
+        expect(Inbox.find_by(id: inbox.id)).to be_nil
+        expect(Channel::Whatsapp.find_by(id: channel.id)).to be_nil
+        expect(attempt.reload.attributes).to eq(detached_attributes)
+      end
     end
 
     it 'is a safe no-op for an unknown / already-deleted inbox id' do
       expect { described_class.purge!(account_id: account.id, inbox_id: -1) }.not_to raise_error
+    end
+
+    it 'safely completes on retry after a rolled-back destructive failure' do
+      inbox, channel, setup = managed_inbox
+      conversation = create(:conversation, account: account, inbox: inbox)
+      message = create(:message, account: account, inbox: inbox, conversation: conversation)
+      attempt = Bloomwire::WhatsappOnboardingAttempt.create!(
+        account: account, status: 'completed', inbox: inbox, channel_whatsapp: channel
+      )
+      purge_calls = 0
+      allow(described_class).to receive(:purge_heavy_children).and_wrap_original do |original, target|
+        original.call(target)
+        purge_calls += 1
+        raise StandardError, 'transient database failure' if purge_calls == 1
+      end
+
+      expect { purge(inbox) }.to raise_error(StandardError, 'transient database failure')
+      expect { purge(inbox) }.not_to raise_error
+
+      aggregate_failures do
+        expect(Inbox.exists?(inbox.id)).to be(false)
+        expect(Channel::Whatsapp.exists?(channel.id)).to be(false)
+        expect(Bloomwire::WhatsappSetup.exists?(setup.id)).to be(false)
+        expect(Conversation.exists?(conversation.id)).to be(false)
+        expect(Message.exists?(message.id)).to be(false)
+        expect(attempt.reload.inbox_id).to be_nil
+        expect(attempt.channel_whatsapp_id).to be_nil
+      end
     end
 
     it 'completes on a retry after a partial run (setup already removed)' do
@@ -316,9 +460,7 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
     it 'RE-RAISES RecordNotFound (and logs removal_failed) when the inbox still exists (not a real race)' do
       inbox, = managed_inbox
       allow(Rails.logger).to receive(:warn)
-      allow(Inbox).to receive(:find_by).and_call_original
-      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
-      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotFound)
+      allow(described_class).to receive(:delete_inbox!).and_raise(ActiveRecord::RecordNotFound)
 
       expect { purge(inbox) }.to raise_error(ActiveRecord::RecordNotFound)
       expect(Inbox.exists?(inbox.id)).to be(true) # surviving inbox not falsely marked removed
@@ -327,9 +469,7 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
 
     it 'swallows RecordNotFound ONLY when a fresh DB check proves the inbox is gone (true race)' do
       inbox, = managed_inbox
-      allow(Inbox).to receive(:find_by).and_call_original
-      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
-      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotFound)
+      allow(described_class).to receive(:delete_inbox!).and_raise(ActiveRecord::RecordNotFound)
       allow(Inbox).to receive(:exists?).with(inbox.id).and_return(false) # concurrent job already finished it
 
       expect { purge(inbox) }.not_to raise_error
@@ -340,9 +480,7 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
     it 'RE-RAISES RecordNotDestroyed (and logs removal_failed) when the inbox survives' do
       inbox, = managed_inbox
       allow(Rails.logger).to receive(:warn)
-      allow(Inbox).to receive(:find_by).and_call_original
-      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
-      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotDestroyed.new(inbox))
+      allow(described_class).to receive(:delete_inbox!).and_raise(ActiveRecord::RecordNotDestroyed.new(inbox))
 
       expect { purge(inbox) }.to raise_error(ActiveRecord::RecordNotDestroyed)
       expect(Inbox.exists?(inbox.id)).to be(true) # not falsely removed
@@ -353,9 +491,7 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
     # If a fresh DB check proves the inbox is genuinely gone, a trailing RecordNotDestroyed is idempotent success.
     it 'treats RecordNotDestroyed as a no-op only when a fresh DB check proves the inbox is gone' do
       inbox, = managed_inbox
-      allow(Inbox).to receive(:find_by).and_call_original
-      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
-      allow(inbox).to receive(:destroy!).and_raise(ActiveRecord::RecordNotDestroyed.new(inbox))
+      allow(described_class).to receive(:delete_inbox!).and_raise(ActiveRecord::RecordNotDestroyed.new(inbox))
       allow(Inbox).to receive(:exists?).with(inbox.id).and_return(false) # fresh check: already gone
 
       expect { purge(inbox) }.not_to raise_error
@@ -364,9 +500,7 @@ RSpec.describe Bloomwire::WhatsappInboxDeprovisionService do
     it 'logs removal_failed and re-raises an UNEXPECTED error so Sidekiq retries the job' do
       inbox, = managed_inbox
       allow(Rails.logger).to receive(:warn)
-      allow(Inbox).to receive(:find_by).and_call_original
-      allow(Inbox).to receive(:find_by).with(id: inbox.id).and_return(inbox)
-      allow(inbox).to receive(:destroy!).and_raise(StandardError, 'db down')
+      allow(described_class).to receive(:delete_inbox!).and_raise(StandardError, 'db down')
 
       expect { purge(inbox) }.to raise_error(StandardError, 'db down')
       expect(Rails.logger).to have_received(:warn).with(/removal_failed .*reason=StandardError/)

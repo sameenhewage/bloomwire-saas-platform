@@ -153,6 +153,17 @@ describe('BloomwireRemoveInbox.vue', () => {
     expect(wrapper.emitted('removed')[0]).toEqual([42]);
   });
 
+  it('reports accepted removal as pending without emitting removed', async () => {
+    dispatch.mockResolvedValue({ status: 'pending' });
+    const wrapper = mountComp();
+    await openModal(wrapper);
+    await find(wrapper, 'bloomwire-remove-inbox-confirm').trigger('click');
+    await flushPromises();
+
+    expect(alertSpy).toHaveBeenCalledWith(`${R}.STARTED`);
+    expect(wrapper.emitted('removed')).toBeFalsy();
+  });
+
   it('blocks repeated confirm clicks (one dispatch only)', async () => {
     let resolveDelete;
     dispatch.mockImplementation(

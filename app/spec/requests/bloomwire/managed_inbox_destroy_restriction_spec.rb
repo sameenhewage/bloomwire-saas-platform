@@ -57,8 +57,10 @@ RSpec.describe 'Bloomwire managed inbox destroy + webhook registration restricti
       expect do
         delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
       end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body['managed_by_ops']).to be_nil
+      expect(response).to have_http_status(:accepted)
+      expect(response.parsed_body).to include('status' => 'pending')
+      expect(response.parsed_body['message']).to eq(I18n.t('messages.inbox_deletetion_response'))
+      expect(Inbox.exists?(inbox.id)).to be(true)
     end
 
     {
@@ -152,7 +154,8 @@ RSpec.describe 'Bloomwire managed inbox destroy + webhook registration restricti
       expect do
         delete "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}", headers: administrator.create_new_auth_token, as: :json
       end.to have_enqueued_job(Bloomwire::WhatsappInboxDeprovisionJob)
-      expect(response).to have_http_status(:ok)
+      expect(response).to have_http_status(:accepted)
+      expect(response.parsed_body).to include('status' => 'pending')
     end
   end
 end

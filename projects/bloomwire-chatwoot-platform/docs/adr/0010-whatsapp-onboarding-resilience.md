@@ -178,6 +178,29 @@ were not reached. No second popup, message test, Standard fallback, manual provi
 router/Enterprise/production change, duplicate, or credential rotation occurred or is approved. The exact reason
 Meta's completion UI did not yield the official readiness pair is not proven and must not be inferred.
 
+### F. Permanent local Inbox removal preserves attempt audit history without preserving live ownership (Accepted — implemented locally; PR/CI pending)
+
+A DEV Remove Inbox failure proved that retained attempts are a database dependency of their bound Inbox/Channel. Five
+terminal rows blocked `inbox.destroy!` after Setup and history had already committed, leaving a partial aggregate. The
+attempts must not simply be deleted: this ADR already preserves cancelled/terminal rows as the non-secret audit record of
+an onboarding run, and both target foreign keys are intentionally nullable. The permanent-removal contract is therefore:
+
+- row-lock the account-scoped Inbox and perform all local destructive work in one database transaction;
+- preserve terminal attempts, but clear their optional `inbox_id` and `channel_whatsapp_id` before destroying the target;
+- for a bound active attempt, first transition to secret-free `cancelled`, clear code/token/stage plus lease/enqueue/
+  processing ownership, then clear both target references so a stale worker cannot recreate the removed aggregate;
+- preserve account-level Setup Request intake history while clearing its optional link to the technical Setup;
+- delete Setup, owned history, Inbox, and Channel only after those restrictive dependencies are safe; any failure rolls
+  every local mutation back, and duplicate/retried delivery converges through the locked/idempotent entrypoint;
+- keep the existing local-only Meta boundary: no register, deregister, webhook subscription/unsubscription, credential
+  mutation, or provider API call;
+- return HTTP `202` plus safe `status=pending` when the deprovision job is accepted; browser/store state must not claim
+  completed deletion until completion is independently known;
+- add no schema/FK change: lifecycle ordering and one transaction are the smallest root fix.
+
+This decision does not restore the existing DEV partial state. Inbox 50 / Channel 17 remain without Setup 17 or history,
+and the five terminal attempts remain bound until a separately approved recovery phase.
+
 ## Consequences
 
 - **Positive:** no more split-state 500s on a slow `/register`; each Meta call is individually bounded; retries
